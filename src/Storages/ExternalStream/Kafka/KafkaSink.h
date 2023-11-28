@@ -24,9 +24,12 @@ class ChunkPartitioner
 {
 public:
     ChunkPartitioner(ContextPtr context, const Block & header, const ASTPtr & partitioning_expr_ast);
+    ChunkPartitioner();
+
     BlocksWithShard partition(Block block, Int32 partition_cnt) const;
 
 private:
+    void use_random_paritioning();
     Int32 getNextShardIndex(Int32 partition_cnt) const noexcept { return static_cast<Int32>(rand()) % partition_cnt; }
 
     BlocksWithShard doParition(Block block, Int32 partition_cnt) const;

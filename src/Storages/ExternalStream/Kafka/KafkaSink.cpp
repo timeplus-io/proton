@@ -24,9 +24,15 @@ extern const int TYPE_MISMATCH;
 
 namespace KafkaStream
 {
+void ChunkPartitioner::use_random_paritioning()
+{
+    random_partitioning = true;
+    std::random_device r;
+    rand = std::minstd_rand(r());
+}
+
 ChunkPartitioner::ChunkPartitioner(ContextPtr context, const Block & header, const ASTPtr & partitioning_expr_ast)
 {
-    /// `InterpreterCreateQuery::handleExternalStreamCreation` ensures this
     assert(partitioning_expr_ast);
 
     ASTPtr query = partitioning_expr_ast;
@@ -38,12 +44,13 @@ ChunkPartitioner::ChunkPartitioner(ContextPtr context, const Block & header, con
     if (auto * shard_func = partitioning_expr_ast->as<ASTFunction>())
     {
         if (shard_func->name == "rand" || shard_func->name == "RAND")
-        {
-            random_partitioning = true;
-            std::random_device r;
-            rand = std::minstd_rand(r());
-        }
+            this->use_random_paritioning();
     }
+}
+
+ChunkPartitioner::ChunkPartitioner()
+{
+    this->use_random_paritioning();
 }
 
 BlocksWithShard ChunkPartitioner::partition(Block block, Int32 partition_cnt) const
@@ -236,7 +243,10 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
         writer = FormatFactory::instance().getOutputFormat(data_format, *wb, header, context);
     writer->setAutoFlush();
 
-    partitioner = std::make_unique<KafkaStream::ChunkPartitioner>(context, header, kafka->partitioning_expr_ast());
+    if (kafka->has_custom_partitioning_expr())
+        partitioner = std::make_unique<KafkaStream::ChunkPartitioner>(context, header, kafka->partitioning_expr_ast());
+    else
+        partitioner = std::make_unique<KafkaStream::ChunkPartitioner>();
 
     polling_threads.scheduleOrThrowOnError([this]() {
         while (!is_finished.test())

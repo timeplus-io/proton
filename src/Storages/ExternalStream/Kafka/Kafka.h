@@ -13,7 +13,7 @@ class IStorage;
 class Kafka final : public StorageExternalStreamImpl
 {
 public:
-    Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, ASTPtr partitioning_expr, bool attach);
+    Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach);
     ~Kafka() override = default;
 
     void startup() override { }
@@ -42,7 +42,8 @@ public:
     const String & password() const { return settings->password.value; }
     const String & sslCaCertFile() const { return settings->ssl_ca_cert_file.value; }
     const klog::KConfParams & properties() const { return kafka_properties; }
-    const ASTPtr & partitioning_expr_ast() const { return partitioning_expr; }
+    bool has_custom_partitioning_expr() const { return !engine_args.empty(); }
+    const ASTPtr & partitioning_expr_ast() const { assert(!engine_args.empty()); return engine_args[0]; }
 
 private:
     void calculateDataFormat(const IStorage * storage);
@@ -61,7 +62,7 @@ private:
 
     NamesAndTypesList virtual_column_names_and_types;
     klog::KConfParams kafka_properties;
-    ASTPtr partitioning_expr;
+    const ASTs engine_args;
 
     std::mutex shards_mutex;
     int32_t shards = 0;

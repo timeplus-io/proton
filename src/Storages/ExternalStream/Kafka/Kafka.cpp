@@ -25,12 +25,12 @@ extern const int INVALID_SETTING_VALUE;
 extern const int RESOURCE_NOT_FOUND;
 }
 
-Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, ASTPtr partitioning_expr_, bool attach)
+Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach)
     : storage_id(storage->getStorageID())
     , settings(std::move(settings_))
     , data_format(settings->data_format.value)
     , log(&Poco::Logger::get("External-" + settings->topic.value))
-    , partitioning_expr(std::move(partitioning_expr_))
+    , engine_args(engine_args_)
 {
     assert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);
 
