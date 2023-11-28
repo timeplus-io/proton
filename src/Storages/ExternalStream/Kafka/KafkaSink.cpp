@@ -141,6 +141,7 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
         "queue.buffering.max.messages",
         "queue.buffering.max.kbytes",
         "queue.buffering.max.ms",
+        "message.max.bytes",
         "message.send.max.retries",
         "retries",
         "retry.backoff.ms",
