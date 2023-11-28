@@ -1,0 +1,30 @@
+version: '3.7'
+name: proton-fraud-detection
+services:
+  proton:
+     image: ghcr.io/timeplus-io/proton:latest
+     pull_policy: always
+     healthcheck:
+      test: ["CMD", "curl", "http://localhost:3218/proton/ping"]
+      interval: 2s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  online-payment-data:
+    image: timeplus/fraud:latest
+    pull_policy: always
+    environment:
+      PROTON_HOST: proton
+    depends_on:
+      proton:
+        condition: service_healthy
+
+  note-book:
+    image: jupyter/scipy-notebook:latest
+    entrypoint: jupyter notebook --ip='*' --NotebookApp.token='' --NotebookApp.password=''
+    ports:
+      - 8888:8888
+    volumes:
+      - ./notebooks:/home/jovyan/work
+
