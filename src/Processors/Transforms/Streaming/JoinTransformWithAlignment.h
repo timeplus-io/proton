@@ -54,7 +54,7 @@ private:
             return DB::UTCMilliseconds::now();
     }
 
-    bool isRightInputInQuiesce() const noexcept { return DB::MonotonicMilliseconds::now() - right_input.last_data_ts >= quiesce_threshold; }
+    bool isRightInputInQuiesce() const noexcept { return DB::MonotonicMilliseconds::now() - right_input.last_data_ts >= quiesce_threshold_ms; }
 
     void onCancel() override;
 
@@ -95,7 +95,7 @@ private:
     DataTypePtr left_watermark_column_type;
     DataTypePtr right_watermark_column_type;
     Int64 latency_threshold;
-    Int64 quiesce_threshold;
+    Int64 quiesce_threshold_ms;
 
     mutable std::mutex mutex;
 
@@ -110,6 +110,7 @@ private:
     {
         UInt64 left_input_muted = 0;
         UInt64 right_input_muted = 0;
+        UInt64 quiesce_joins = 0;
     };
     AlignmentStats stats;
 

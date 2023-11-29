@@ -152,6 +152,7 @@ void AsofRowRefs<DataBlock>::insert(
     TypeIndex type,
     const IColumn & asof_column,
     RefCountDataBlockList<DataBlock> * blocks,
+    size_t original_row_num,
     size_t row_num,
     ASOFJoinInequality inequality,
     size_t keep_versions)
@@ -165,7 +166,7 @@ void AsofRowRefs<DataBlock>::insert(
         using ColumnType = ColumnVectorOrDecimal<T>;
         const auto & column = typeid_cast<const ColumnType &>(asof_column);
 
-        T key = column.getElement(row_num);
+        T key = column.getElement(original_row_num);
         bool ascending = (inequality == ASOFJoinInequality::Less) || (inequality == ASOFJoinInequality::LessOrEquals);
         container->insert(Entry<T>(key, RowRefDataBlock(blocks, row_num)), ascending, keep_versions);
     };
@@ -317,14 +318,15 @@ RangeAsofRowRefs<DataBlock>::RangeAsofRowRefs(TypeIndex type)
 }
 
 template <typename DataBlock>
-void RangeAsofRowRefs<DataBlock>::insert(TypeIndex type, const IColumn & asof_column, const DataBlock * block, size_t row_num)
+void RangeAsofRowRefs<DataBlock>::insert(
+    TypeIndex type, const IColumn & asof_column, const DataBlock * block, size_t original_row_num, size_t row_num)
 {
     auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
         using ColumnType = ColumnVectorOrDecimal<T>;
         const auto & column = typeid_cast<const ColumnType &>(asof_column);
 
-        T key = column.getElement(row_num);
+        T key = column.getElement(original_row_num);
         std::get<LookupPtr<T>>(lookups)->emplace(key, RowRefDataBlock(block, row_num));
     };
 

@@ -54,7 +54,7 @@ void commonTest(const std::vector<Case> & cases, const DB::Streaming::RangeAsofJ
     DB::Streaming::RangeAsofRowRefs<DB::LightChunkWithTimestamp> row_refs(asof_col.type->getTypeId());
 
     for (size_t i = 0; i < right_block.rows(); ++i)
-        row_refs.insert(asof_col.type->getTypeId(), *asof_col.column, &right_block, i);
+        row_refs.insert(asof_col.type->getTypeId(), *asof_col.column, &right_block, i, i);
 
     for (const auto & test_case : cases)
     {

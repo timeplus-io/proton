@@ -176,6 +176,9 @@ public:
 
     bool hasDynamicSubcolumns() const;
 
+    /// In-place concat other block to the current block
+    void concat(const Block & other);
+
     /// Copy row to target_block
     void insertRow(size_t row_num, Block & target_block) const;
     int compareAt(size_t lhs_row, size_t rhs_row, const Block & rhs_block, const std::vector<size_t> & skip_columns) const;

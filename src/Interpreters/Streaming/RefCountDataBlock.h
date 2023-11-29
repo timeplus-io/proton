@@ -41,6 +41,24 @@ struct RefCountDataBlock
         refcnt = 0;
     }
 
+    size_t rows() const noexcept { return block.rows(); }
+
+    /// Concat data block to the current data block and return the starting row number
+    /// for the merged data
+    size_t concat(DataBlock && other)
+    {
+        auto current_rows = block.rows();
+        auto added_rows = other.rows();
+        assert(added_rows > 0);
+
+        /// Bump up the ref count for added rows
+        refcnt += added_rows;
+
+        block.concat(other);
+
+        return current_rows;
+    }
+
     DataBlock block;
     uint32_t refcnt;
 };
