@@ -52,7 +52,7 @@ public:
 
 protected:
     StorageExternalStream(
-        const ASTPtr & sharding_key_,
+        const ASTs & engine_args,
         const StorageID & table_id_,
         ContextPtr context_,
         const ColumnsDescription & columns_,

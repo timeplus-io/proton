@@ -24,55 +24,62 @@ extern const int TYPE_MISMATCH;
 
 namespace KafkaStream
 {
-ChunkPartitioner::ChunkPartitioner(ContextPtr context, const Block & header, const ASTPtr & partitioning_expr_ast)
+void ChunkSharder::useRandomSharding()
 {
-    /// `InterpreterCreateQuery::handleExternalStreamCreation` ensures this
-    assert(partitioning_expr_ast);
+    random_sharding = true;
+    std::random_device r;
+    rand = std::minstd_rand(r());
+}
 
-    ASTPtr query = partitioning_expr_ast;
+ChunkSharder::ChunkSharder(ContextPtr context, const Block & header, const ASTPtr & sharding_expr_ast)
+{
+    assert(sharding_expr_ast);
+
+    ASTPtr query = sharding_expr_ast;
     auto syntax_result = TreeRewriter(context).analyze(query, header.getNamesAndTypesList());
-    partitioning_expr = ExpressionAnalyzer(query, syntax_result, context).getActions(false);
+    sharding_expr = ExpressionAnalyzer(query, syntax_result, context).getActions(false);
 
-    partitioning_key_column_name = partitioning_expr_ast->getColumnName();
+    sharding_key_column_name = sharding_expr_ast->getColumnName();
 
-    if (auto * shard_func = partitioning_expr_ast->as<ASTFunction>())
+    if (auto * shard_func = sharding_expr_ast->as<ASTFunction>())
     {
         if (shard_func->name == "rand" || shard_func->name == "RAND")
-        {
-            random_partitioning = true;
-            std::random_device r;
-            rand = std::minstd_rand(r());
-        }
+            this->useRandomSharding();
     }
 }
 
-BlocksWithShard ChunkPartitioner::partition(Block block, Int32 partition_cnt) const
+ChunkSharder::ChunkSharder()
 {
-    /// no topics have zero partitions
-    assert(partition_cnt > 0);
-
-    if (partition_cnt == 1)
-        return {BlockWithShard{Block(std::move(block)), 0}};
-
-    if (random_partitioning)
-        return {BlockWithShard{Block(std::move(block)), getNextShardIndex(partition_cnt)}};
-
-    return doParition(std::move(block), partition_cnt);
+    this->useRandomSharding();
 }
 
-BlocksWithShard ChunkPartitioner::doParition(Block block, Int32 partition_cnt) const
+BlocksWithShard ChunkSharder::shard(Block block, Int32 shard_cnt) const
 {
-    auto selector = createSelector(block, partition_cnt);
+    /// no topics have zero partitions
+    assert(shard_cnt > 0);
 
-    Blocks partitioned_blocks{static_cast<size_t>(partition_cnt)};
+    if (shard_cnt == 1)
+        return {BlockWithShard{Block(std::move(block)), 0}};
 
-    for (Int32 i = 0; i < partition_cnt; ++i)
+    if (random_sharding)
+        return {BlockWithShard{Block(std::move(block)), getNextShardIndex(shard_cnt)}};
+
+    return doSharding(std::move(block), shard_cnt);
+}
+
+BlocksWithShard ChunkSharder::doSharding(Block block, Int32 shard_cnt) const
+{
+    auto selector = createSelector(block, shard_cnt);
+
+    Blocks partitioned_blocks{static_cast<size_t>(shard_cnt)};
+
+    for (Int32 i = 0; i < shard_cnt; ++i)
         partitioned_blocks[i] = block.cloneEmpty();
 
     for (size_t pos = 0; pos < block.columns(); ++pos)
     {
-        MutableColumns partitioned_columns = block.getByPosition(pos).column->scatter(partition_cnt, selector);
-        for (Int32 i = 0; i < partition_cnt; ++i)
+        MutableColumns partitioned_columns = block.getByPosition(pos).column->scatter(shard_cnt, selector);
+        for (Int32 i = 0; i < shard_cnt; ++i)
             partitioned_blocks[i].getByPosition(pos).column = std::move(partitioned_columns[i]);
     }
 
@@ -89,14 +96,14 @@ BlocksWithShard ChunkPartitioner::doParition(Block block, Int32 partition_cnt) c
     return blocks_with_shard;
 }
 
-IColumn::Selector ChunkPartitioner::createSelector(Block block, Int32 partition_cnt) const
+IColumn::Selector ChunkSharder::createSelector(Block block, Int32 shard_cnt) const
 {
-    std::vector<UInt64> slot_to_shard(partition_cnt);
+    std::vector<UInt64> slot_to_shard(shard_cnt);
     std::iota(slot_to_shard.begin(), slot_to_shard.end(), 0);
 
-    partitioning_expr->execute(block);
+    sharding_expr->execute(block);
 
-    const auto & key_column = block.getByName(partitioning_key_column_name);
+    const auto & key_column = block.getByName(sharding_key_column_name);
 
 /// If key_column.type is DataTypeLowCardinality, do shard according to its dictionaryType
 #define CREATE_FOR_TYPE(TYPE) \
@@ -236,7 +243,10 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
         writer = FormatFactory::instance().getOutputFormat(data_format, *wb, header, context);
     writer->setAutoFlush();
 
-    partitioner = std::make_unique<KafkaStream::ChunkPartitioner>(context, header, kafka->partitioning_expr_ast());
+    if (kafka->hasCustomShardingExpr())
+        partitioner = std::make_unique<KafkaStream::ChunkSharder>(context, header, kafka->shardingExprAst());
+    else
+        partitioner = std::make_unique<KafkaStream::ChunkSharder>();
 
     polling_threads.scheduleOrThrowOnError([this]() {
         while (!is_finished.test())
@@ -251,7 +261,7 @@ void KafkaSink::consume(Chunk chunk)
         return;
 
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
-    auto blocks = partitioner->partition(std::move(block), partition_cnt);
+    auto blocks = partitioner->shard(std::move(block), partition_cnt);
 
     for (auto & blockWithShard : blocks)
     {
