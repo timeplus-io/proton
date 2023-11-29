@@ -794,12 +794,11 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(Bool, include_internal_streams, false, "Show internal streams on SHOW streams query.", 0) \
     M(UInt64, join_max_buffered_bytes, 524288000, "Max buffered bytes for stream to stream join", 0) \
     M(UInt64, join_buffered_data_block_size, 0, "For streaming join, when buffered data in memory, the data block size directs to merge small data blocks to form bigger ones to improve memory efficiency. 0 means disable merging small data blocks.", 0) \
-    M(Int64, join_quiesce_threshold_ms, 0, "For streaming join (only works on join alignment), when left or right stream is in quiesce, the maximum time to wait before the join.", 0) \
+    M(Int64, join_quiesce_threshold_ms, 0, "For streaming join, when left or right stream is in quiesce, the maximum time to wait before the join.", 0) \
     M(Int64, max_join_range, 300, "Max join range", 0) \
     M(Bool, compact_kv_stream, true, "Control if compact a changelog kv or versioned kv stream during query", 0) \
     M(UInt64, keep_versions, 3, "Control how many versions for each key kept in memory when joining. Used in versioned_kv join", 0) \
-    M(Int64, join_latency_threshold, 0, "Control when to start join left stream with right stream (only works on join alignment). Zero means automatic system picked threshold", 0) \
-    M(Bool, enable_join_alignment, false, "Enable streaming join with alignment", 0) \
+    M(Int64, join_latency_threshold, 0, "Control when to start join left stream with right stream for alignment join scenarios. Zero means system picked threshold", 0) \
     M(Bool, enforce_append_only, false, "For changelog storage, enforce query it as append only storage", 0) \
     M(UInt64, retract_max, 10000, "Control how many more values to keep around for changelog processing to workaround retract scenarios in min/max etc aggr", 0) \
     M(UInt64, retract_k_multiplier, 2, "Control how many more values to keep around for changelog processing to workaround retract scenarios in min_k/max_k etc aggr", 0) \

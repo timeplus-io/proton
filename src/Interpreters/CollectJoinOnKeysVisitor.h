@@ -48,8 +48,8 @@ public:
         std::optional<bool> is_first_arg_left_identifier_of_range_func{};
         bool range_analyze_finished{false};
 
-        ASTPtr timestamp_left_key{};
-        ASTPtr timestamp_right_key{};
+        ASTPtr left_alignment_key{};
+        ASTPtr right_alignment_key{};
 
         void addJoinKeys(const ASTPtr & left_ast, const ASTPtr & right_ast, JoinIdentifierPosPair table_pos);
         void addAsofJoinKeys(const ASTPtr & left_ast, const ASTPtr & right_ast, JoinIdentifierPosPair table_pos,
@@ -58,8 +58,8 @@ public:
 
         /// proton : starts
         void addLagBehindKeys(const ASTPtr & left_ast, const ASTPtr & right_ast, JoinIdentifierPosPair table_pos, Int64 lag_interval);
-        void addAlignedWithKeys(const ASTPtr & left_ast, const ASTPtr & right_ast, JoinIdentifierPosPair table_pos);
-        void timestampASTToKeys();
+        void addLagBehindKeys(Int64 lag_interval);
+        void alignmentKeysASTToKeys();
         /// proton : ends
     };
 

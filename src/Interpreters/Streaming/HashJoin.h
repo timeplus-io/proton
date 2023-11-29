@@ -138,7 +138,8 @@ public:
     bool emitChangeLog() const override { return emit_changelog; }
     bool bidirectionalHashJoin() const override { return bidirectional_hash_join; }
     bool rangeBidirectionalHashJoin() const override { return range_bidirectional_hash_join; }
-    bool requireWatermarkAlignedStreams() const override { return require_aligned_streams; }
+    bool leftHasBuiltInAlignedBuffer() const override { return range_bidirectional_hash_join; }
+    bool rightHasBuiltInAlignedBuffer() const override { return streaming_strictness == Strictness::Asof || range_bidirectional_hash_join; }
 
     UInt64 keepVersions() const { return right_data.join_stream_desc->keep_versions; }
 
@@ -435,7 +436,6 @@ private:
     bool emit_changelog = false;
     bool bidirectional_hash_join = true;
     bool range_bidirectional_hash_join = true;
-    bool require_aligned_streams = false;
 
     /// Delta column in right-left-join
     /// `rlj` -> right-left-join

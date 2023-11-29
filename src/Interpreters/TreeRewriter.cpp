@@ -739,10 +739,10 @@ void collectJoinedColumns(TableJoin & analyzed_join, ASTTableJoin & table_join,
             analyzed_join.setStrictness(table_join.strictness);
         }
 
-        /// FIXME, validate if the combination of lag_behind(...)/aligned_with(...) + strictness makes sense.
+        /// FIXME, validate if the combination of lag_behind(...) + strictness makes sense.
         if (analyzed_join.requiredJoinAlignment())
-            /// Add alingned with timestamp columns
-            data.timestampASTToKeys();
+            /// Add alignment keys columns if exists
+            data.alignmentKeysASTToKeys();
         /// proton : ends
 
         auto check_keys_empty = [] (auto e) { return e.key_names_left.empty(); };

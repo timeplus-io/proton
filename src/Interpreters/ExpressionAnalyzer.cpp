@@ -2274,28 +2274,19 @@ std::shared_ptr<IJoin> SelectQueryExpressionAnalyzer::chooseJoinAlgorithmStreami
     auto keep_versions = getContext()->getSettingsRef().keep_versions;
     auto max_threads = getContext()->getSettingsRef().max_threads;
 
-    bool enable_join_alignment = getContext()->getSettingsRef().enable_join_alignment.value;
     auto quiesce_threshold_ms = getContext()->getSettingsRef().join_quiesce_threshold_ms.value;
     auto latency_threshold = getContext()->getSettingsRef().join_latency_threshold.value; /// Query global settings
-
-    /// If user explicitly specifies `JOIN ... ON ... AND aligned_with(...), override the query global settings
-    /// and enforce enable join alignment
-    enable_join_alignment |= analyzed_join->requiredJoinAlignment();
 
     /// If user explicitly specifies `JOIN ... ON ... AND lag_behind(10ms, ...), override the query global settings
     /// and enforce enable join alignment
     if (auto lag_interval = analyzed_join->lagBehindInterval(); lag_interval != 0)
-    {
-        assert(enable_join_alignment);
         latency_threshold = lag_interval;
-    }
 
     auto left_join_stream_desc = std::make_shared<Streaming::JoinStreamDescription>(
         tables[0],
         Block{},
         left_input_data_stream_semantic,
         keep_versions,
-        enable_join_alignment,
         latency_threshold,
         quiesce_threshold_ms); /// We don't know the header of the left stream yet since it is not finalized
 
@@ -2304,16 +2295,13 @@ std::shared_ptr<IJoin> SelectQueryExpressionAnalyzer::chooseJoinAlgorithmStreami
         joined_plan->getCurrentDataStream().header,
         right_input_data_stream_semantic,
         keep_versions,
-        enable_join_alignment,
         latency_threshold,
         quiesce_threshold_ms);
 
     if (analyzed_join->requiredJoinAlignment())
     {
-        left_join_stream_desc->timestamp_column = analyzed_join->leftTimestampColumn();
-        assert(!left_join_stream_desc->timestamp_column.empty());
-        right_join_stream_desc->timestamp_column = analyzed_join->rightTimestampColumn();
-        assert(!right_join_stream_desc->timestamp_column.empty());
+        left_join_stream_desc->alignment_column = analyzed_join->leftAlignmentKeyColumn();
+        right_join_stream_desc->alignment_column = analyzed_join->rightAlignmentKeyColumn();
     }
 
     /// Right join stream desc has stream semantic and header set, can evaluate the primary key etc column positions

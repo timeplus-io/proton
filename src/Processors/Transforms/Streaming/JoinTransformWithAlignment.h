@@ -40,6 +40,18 @@ private:
     {
         explicit InputPortWithData(InputPort * input_port_) : input_port(input_port_) { }
 
+        void add(Chunk && chunk);
+
+        bool hasCompleteChunks() const noexcept { return !input_chunks.empty() && !(input_chunks.size() == 1 && required_update_processing); }
+
+        Int64 minTimestamp() const noexcept { return hasCompleteChunks() ? input_chunks.front().second.minTimestamp() : watermark; }
+
+        /// FIXME: allow buffer more ? limited by rows or bytes.
+        bool isFull() const noexcept { return hasCompleteChunks(); }
+
+        void serialize(WriteBuffer & wb) const;
+        void deserialize(ReadBuffer & rb);
+
         InputPort * input_port;
 
         /// Input state
@@ -56,62 +68,14 @@ private:
         /// Input description
         std::optional<size_t> watermark_column_position;
         DataTypePtr watermark_column_type;
-
-        inline void add(Chunk && chunk)
-        {
-            ckpt_ctx = chunk.getCheckpointContext();
-
-            /// If the input needs to update data, currently the input is always two consecutive chunks with _tp_delta `-1 and +1`
-            /// So we have to process them together before processing another input
-            /// NOTE: Assume the first retracted chunk of updated data always set RetractedDataFlag.
-            if (chunk.isRetractedData())
-            {
-                input_chunks.emplace_back(std::move(chunk), LightChunkWithTimestamp{});
-                required_update_processing = true;
-                return;
-            }
-
-            if (watermark_column_position)
-            {
-                if (likely(chunk.hasRows()))
-                {
-                    auto [min_ts, max_ts] = columnMinMaxTimestamp(chunk.getColumns()[*watermark_column_position], watermark_column_type);
-
-                    if (required_update_processing)
-                    {
-                        input_chunks.back().second = LightChunkWithTimestamp{std::move(chunk), min_ts, max_ts};
-                        required_update_processing = false;
-                    }
-                    else
-                        input_chunks.emplace_back(LightChunk{}, LightChunkWithTimestamp{std::move(chunk), min_ts, max_ts});
-                }
-                else
-                    input_chunks.emplace_back(LightChunk{}, LightChunkWithTimestamp{std::move(chunk), watermark, watermark});
-            }
-            else
-            {
-                auto now_ts = DB::UTCMilliseconds::now();
-                if (required_update_processing)
-                {
-                    input_chunks.back().second = LightChunkWithTimestamp{std::move(chunk), now_ts, now_ts};
-                    required_update_processing = false;
-                }
-                else
-                    input_chunks.emplace_back(LightChunk{}, LightChunkWithTimestamp{std::move(chunk), now_ts, now_ts});
-            }
-
-            watermark = std::max(input_chunks.back().second.maxTimestamp(), watermark);
-        }
-
-        bool hasValidInputs() const noexcept { return !input_chunks.empty() && !(input_chunks.size() == 1 && required_update_processing); }
-
-        Int64 minTimestamp() const noexcept { return hasValidInputs() ? input_chunks.front().second.minTimestamp() : watermark; }
+        bool is_changelog_input;
+        bool need_aligned_buffer;
     };
 
     Status prepareInput(InputPortWithData & input_with_data);
 
-    template <bool is_left_block>
-    void processInputData(LightChunk & chunk);
+    void processLeftInputData(LightChunk & chunk);
+    void processRightInputData(LightChunk & chunk);
 
     bool isInputInQuiesce(const InputPortWithData & input_with_data) const noexcept
     {
