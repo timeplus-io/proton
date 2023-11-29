@@ -12,19 +12,12 @@ void TimerService::startup()
 
 void TimerService::shutdown()
 {
-    {
-        std::scoped_lock lock(event_loop_mutex);
-        if (event_loop)
-        {
-            event_loop->quit();
+    event_loop->quit();
 
-            /// Decrement ref count to make sure the last ref count
-            /// of event loop is in the creation thread
-            event_loop = nullptr;
-        }
-    }
-
-    eloop_init_guard.store(nullptr);
+    /// Decrement ref count to make sure the last ref count
+    /// of event loop is in the creation thread
+    event_loop = nullptr;
+    eloop_init_guard = nullptr;
     eloop_init_guard.notify_all();
 
     looper.wait();
@@ -34,14 +27,11 @@ void TimerService::startEventLoop()
 {
     /// Event loop needs run and dtor in the its init thread
     auto eloop = std::make_shared<muduo::net::EventLoop>();
-    {
-        std::scoped_lock lock(event_loop_mutex);
-        event_loop = eloop;
-    }
-    eloop_init_guard.store(eloop.get());
+    event_loop = eloop;
+    eloop_init_guard = eloop.get();
     eloop_init_guard.notify_all();
 
-    eloop->loop();
+    event_loop->loop();
 
     /// Wait until guard is cleared by shutdown
     eloop_init_guard.wait(eloop.get());

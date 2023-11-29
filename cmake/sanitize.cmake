@@ -57,7 +57,7 @@ if (SANITIZE)
         # https://github.com/llvm/llvm-project/issues/59007
         set (TSAN_FLAGS "-fsanitize=thread -lresolv")
         if (COMPILER_CLANG)
-            set (TSAN_FLAGS "${TSAN_FLAGS} -fsanitize-blacklist=${PROJECT_SOURCE_DIR}/tests/tsan_suppressions.txt")
+            set (TSAN_FLAGS "${TSAN_FLAGS} -fsanitize-ignorelist=${PROJECT_SOURCE_DIR}/tests/ignorelist.txt")
         endif()
 
 

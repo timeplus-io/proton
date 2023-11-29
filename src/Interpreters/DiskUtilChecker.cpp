@@ -22,7 +22,7 @@ DiskUtilChecker::DiskUtilChecker(const ContextPtr & global_context_)
 /// We don't need hold locks here since we assume local disk volumes can't be changed
 /// during the lifecycle of proton. We don't even need make the util atomic since slightly
 /// out of sync in different CPUs doesn't matter in this case in practice.
-void DiskUtilChecker::updateUtils(const DisksMap & disks_map)
+void NO_SANITIZE_THREAD DiskUtilChecker::updateUtils(const DisksMap & disks_map)
 {
     for (const auto & [name, disk] : disks_map)
     {
@@ -32,7 +32,7 @@ void DiskUtilChecker::updateUtils(const DisksMap & disks_map)
     }
 }
 
-void DiskUtilChecker::check(const std::string & disk_name) const
+void NO_SANITIZE_THREAD DiskUtilChecker::check(const std::string & disk_name) const
 {
     if (disk_name.empty())
     {
