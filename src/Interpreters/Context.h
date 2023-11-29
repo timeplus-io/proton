@@ -16,6 +16,8 @@
 #include <Common/RemoteHostFilter.h>
 #include <Common/isLocalAddress.h>
 #include <Common/ThreadPool.h>
+#include <Common/SharedMutex.h>
+#include <Common/SharedMutexHelper.h>
 #include <base/types.h>
 #include <Storages/MergeTree/ParallelReplicasReadingCoordinator.h>
 
@@ -212,15 +214,20 @@ private:
     std::unique_ptr<ContextSharedPart> shared;
 };
 
-/** A set of known objects that can be used in the query.
-  * Consists of a shared part (always common to all sessions and queries)
-  *  and copied part (which can be its own for each session or query).
-  *
-  * Everything is encapsulated for all sorts of checks and locks.
-  */
-class Context: public std::enable_shared_from_this<Context>
+class ContextSharedMutex : public SharedMutexHelper<ContextSharedMutex>
 {
 private:
+    using Base = SharedMutexHelper<ContextSharedMutex, SharedMutex>;
+    friend class SharedMutexHelper<ContextSharedMutex, SharedMutex>;
+
+    void lockImpl();
+
+    void lockSharedImpl();
+};
+
+class ContextData
+{
+protected:
     ContextSharedPart * shared;
 
     ClientInfo client_info;
@@ -405,7 +412,7 @@ public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
     OpenTelemetryTraceContext query_trace_context;
 
-private:
+protected:
     using SampleBlockCache = std::unordered_map<std::string, Block>;
     mutable SampleBlockCache sample_block_cache;
 
@@ -438,13 +445,29 @@ private:
     mutable DataStreamSemanticCache data_stream_semantic_cache;
     /// proton: end.
 
+    /// Use copy constructor or createGlobal() instead
+    ContextData();
+    ContextData(const ContextData &);
+};
+
+/** A set of known objects that can be used in the query.
+  * Consists of a shared part (always common to all sessions and queries)
+  *  and copied part (which can be its own for each session or query).
+  *
+  * Everything is encapsulated for all sorts of checks and locks.
+  */
+class Context: public ContextData, public std::enable_shared_from_this<Context>
+{
+private:
+    /// ContextData mutex
+    mutable ContextSharedMutex mutex;
+
     Context();
     Context(const Context &);
-    Context & operator=(const Context &);
 
 public:
     /// Create initial Context with ContextShared and etc.
-    static ContextMutablePtr createGlobal(ContextSharedPart * shared);
+    static ContextMutablePtr createGlobal(ContextSharedPart * shared_part);
     static ContextMutablePtr createCopy(const ContextWeakPtr & other);
     static ContextMutablePtr createCopy(const ContextMutablePtr & other);
     static ContextMutablePtr createCopy(const ContextPtr & other);
@@ -719,12 +742,10 @@ public:
 
     const ExternalModelsLoader & getExternalModelsLoader() const;
     ExternalModelsLoader & getExternalModelsLoader();
-    ExternalModelsLoader & getExternalModelsLoaderUnlocked();
     void loadOrReloadModels(const Poco::Util::AbstractConfiguration & config);
 
     const ExternalDictionariesLoader & getExternalDictionariesLoader() const;
     ExternalDictionariesLoader & getExternalDictionariesLoader();
-    ExternalDictionariesLoader & getExternalDictionariesLoaderUnlocked();
     const EmbeddedDictionaries & getEmbeddedDictionaries() const;
     EmbeddedDictionaries & getEmbeddedDictionaries();
     void tryCreateEmbeddedDictionaries(const Poco::Util::AbstractConfiguration & config) const;
@@ -732,7 +753,6 @@ public:
 
     const ExternalUserDefinedFunctionsLoader & getExternalUserDefinedExecutableFunctionsLoader() const;
     ExternalUserDefinedFunctionsLoader & getExternalUserDefinedExecutableFunctionsLoader();
-    ExternalUserDefinedFunctionsLoader & getExternalUserDefinedExecutableFunctionsLoaderUnlocked();
     const IUserDefinedSQLObjectsLoader & getUserDefinedSQLObjectsLoader() const;
     IUserDefinedSQLObjectsLoader & getUserDefinedSQLObjectsLoader();
     /// proton: starts
@@ -1090,12 +1110,42 @@ public:
     WriteSettings getWriteSettings() const;
 
 private:
-    std::unique_lock<std::recursive_mutex> getLock() const;
+    std::shared_ptr<const SettingsConstraintsAndProfileIDs> getSettingsConstraintsAndCurrentProfilesWithLock() const;
+
+    void setCurrentProfileWithLock(const String & profile_name, const std::lock_guard<ContextSharedMutex> & lock);
+
+    void setCurrentProfileWithLock(const UUID & profile_id, const std::lock_guard<ContextSharedMutex> & lock);
+
+    void setCurrentRolesWithLock(const std::vector<UUID> & current_roles_, const std::lock_guard<ContextSharedMutex> & lock);
+
+    void setSettingWithLock(std::string_view name, const String & value, const std::lock_guard<ContextSharedMutex> & lock);
+
+    void setSettingWithLock(std::string_view name, const Field & value, const std::lock_guard<ContextSharedMutex> & lock);
+
+    void applySettingChangeWithLock(const SettingChange & change, const std::lock_guard<ContextSharedMutex> & lock);
+
+    void applySettingsChangesWithLock(const SettingsChanges & changes, const std::lock_guard<ContextSharedMutex> & lock);
+
+    void setCurrentDatabaseWithLock(const String & name, const std::lock_guard<ContextSharedMutex> & lock);
+
+    void checkSettingsConstraintsWithLock(const SettingChange & change) const;
+
+    void checkSettingsConstraintsWithLock(const SettingsChanges & changes) const;
+
+    void checkSettingsConstraintsWithLock(SettingsChanges & changes) const;
+
+    void clampToSettingsConstraintsWithLock(SettingsChanges & changes) const;
+
+    ExternalDictionariesLoader & getExternalDictionariesLoaderWithLock(const std::lock_guard<std::mutex> & lock);
+
+    ExternalUserDefinedFunctionsLoader & getExternalUserDefinedExecutableFunctionsLoaderWithLock(const std::lock_guard<std::mutex> & lock);
+
+    ExternalModelsLoader & getExternalModelsLoaderWithLock(const std::lock_guard<std::mutex> & lock);
 
     void initGlobal();
 
     /// Compute and set actual user settings, client_info.current_user should be set
-    void calculateAccessRights();
+    void calculateAccessRightsWithLock(const std::lock_guard<ContextSharedMutex> & lock);
 
     template <typename... Args>
     void checkAccessImpl(const Args &... args) const;
@@ -1107,6 +1157,8 @@ private:
     StoragePolicySelectorPtr getStoragePolicySelector(std::lock_guard<std::mutex> & lock) const;
 
     DiskSelectorPtr getDiskSelector(std::lock_guard<std::mutex> & /* lock */) const;
+
+    DisksMap getDisksMap(std::lock_guard<std::mutex> & lock) const;
 };
 
 }
