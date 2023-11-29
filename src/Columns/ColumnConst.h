@@ -207,6 +207,13 @@ public:
         return data->allocatedBytes() + sizeof(s);
     }
 
+    /// proton : starts
+    size_t allocatedMetadataBytes() const override
+    {
+        return data->allocatedMetadataBytes();
+    }
+    /// proton : ends
+
     int compareAt(size_t, size_t, const IColumn & rhs, int nan_direction_hint) const override
     {
         return data->compareAt(0, 0, *assert_cast<const ColumnConst &>(rhs).data, nan_direction_hint);

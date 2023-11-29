@@ -249,6 +249,13 @@ size_t ColumnMap::allocatedBytes() const
     return nested->allocatedBytes();
 }
 
+/// proton : starts
+size_t ColumnMap::allocatedMetadataBytes() const
+{
+    return nested->allocatedMetadataBytes();
+}
+/// proton : ends
+
 void ColumnMap::protect()
 {
     nested->protect();

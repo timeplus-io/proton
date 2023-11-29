@@ -53,6 +53,7 @@ public:
     size_t byteSize() const override { return data.size() * sizeof(data[0]); }
     size_t byteSizeAt(size_t) const override { return sizeof(data[0]); }
     size_t allocatedBytes() const override { return data.allocated_bytes(); }
+    size_t allocatedMetadataBytes() const override { return data.allocated_metadata_bytes() +  + sizeof(scale); } /// proton : starts. Newly added
     void protect() override { data.protect(); }
     void reserve(size_t n) override { data.reserve(n); }
 

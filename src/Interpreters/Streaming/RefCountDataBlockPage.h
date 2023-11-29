@@ -2,6 +2,8 @@
 
 #include <Interpreters/Streaming/RefCountDataBlock.h>
 
+#include <memory>
+
 namespace DB::Streaming
 {
 

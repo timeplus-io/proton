@@ -54,6 +54,7 @@ public:
     size_t byteSize() const override;
     size_t byteSizeAt(size_t n) const override;
     size_t allocatedBytes() const override;
+    size_t allocatedMetadataBytes() const override; /// proton : starts. Newly added
 
     void appendArguments(const ColumnsWithTypeAndName & columns);
     ColumnWithTypeAndName reduce() const;

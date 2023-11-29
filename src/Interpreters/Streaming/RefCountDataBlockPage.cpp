@@ -13,7 +13,7 @@ RefCountDataBlockPage<DataBlock>::RefCountDataBlockPage(RefCountDataBlockPages<D
 }
 
 template <typename DataBlock>
-void RefCountDataBlockPage<DataBlock>::pushBack(DataBlock && data_block)
+ALWAYS_INLINE void RefCountDataBlockPage<DataBlock>::pushBack(DataBlock && data_block)
 {
     page.emplace_back(std::move(data_block));
     assert(page.size() <= pages->pageSize());

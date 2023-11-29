@@ -373,6 +373,40 @@
                     ]
                 }
             ]
+        },
+        {
+            "id": 62,
+            "tags": ["data_enrichment_join", "inner-join"],
+            "name": "append-only_inner_asof_join_append-only-concat",
+            "description": "append-only inner all join append-only, concat buffered events",
+            "steps":[
+                {
+                    "statements": [
+                        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test10_append_left_stream"},
+                        {"client":"python", "query_type": "table","wait":1, "query":"drop stream if exists test10_append_right_stream"},
+                        {"client":"python", "query_type": "table", "wait":2,"exist":"test10_append_left_stream","exist_wait":1, "query":"create stream test10_append_left_stream(i int, k string)"},
+                        {"client":"python", "query_type": "table", "wait":2,"exist":"test10_append_right_stream","exist_wait":1, "query":"create stream test10_append_right_stream(j int, kk string)"},
+                        {"client":"python", "query_type": "stream", "query_id":"1062", "wait":4, "terminate":"manuel", "query":"SELECT i, k, j, kk FROM test10_append_left_stream asof join test10_append_right_stream ON k = kk AND i <= j SETTINGS join_buffered_data_block_size=2, keep_versions=2"},
+                        {"client":"python", "query_type": "table", "depends_on":"1062", "query": "INSERT INTO test10_append_right_stream(j, kk) VALUES (1, 'a')"},
+                        {"client":"python", "query_type": "table", "depends_on":"1062", "query": "INSERT INTO test10_append_right_stream(j, kk) VALUES (2, 'a')"},
+                        {"client":"python", "query_type": "table", "depends_on":"1062", "query": "INSERT INTO test10_append_right_stream(j, kk) VALUES (3, 'a')"},
+                        {"client":"python", "query_type": "table", "depends_on":"1062", "query": "INSERT INTO test10_append_right_stream(j, kk) VALUES (4, 'a')"},
+                        {"client":"python", "query_type": "table", "kill":"1062", "kill_wait":5, "wait":1, "query": "INSERT INTO test10_append_left_stream(i, k) VALUES (0, 'a'), (1, 'a'), (2, 'a'), (3, 'a'), (4, 'a'), (5, 'a')"}
+                    ]
+                }
+            ],
+            "expected_results": [
+                {
+                    "query_id":"1062",
+                    "expected_results":[
+                        [0, "a", 3, "a"],
+                        [1, "a", 3, "a"],
+                        [2, "a", 3, "a"],
+                        [3, "a", 3, "a"],
+                        [4, "a", 4, "a"]
+                    ]
+                }
+            ]
         }
     ]
 }

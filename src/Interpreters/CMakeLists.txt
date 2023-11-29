@@ -2,10 +2,6 @@ if (ENABLE_TESTS)
     add_subdirectory(tests)
 endif()
 
-if (ENABLE_BENCHMARKS)
-    add_subdirectory(benchmarks)
-endif()
-
 if (ENABLE_EXAMPLES)
     add_subdirectory(examples)
 endif()
@@ -13,3 +9,5 @@ endif()
 if (ENABLE_FUZZING)
     add_subdirectory(fuzzers)
 endif()
+
+add_subdirectory(Streaming)

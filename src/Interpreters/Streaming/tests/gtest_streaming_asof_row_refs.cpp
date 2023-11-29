@@ -2,62 +2,59 @@
 #include <Core/Block.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Interpreters/Streaming/CachedBlockMetrics.h>
-#include <Interpreters/Streaming/RefCountBlockList.h>
+#include <Interpreters/Streaming/RefCountDataBlockList.h>
 #include <Interpreters/Streaming/RowRefs.h>
 
 #include <gtest/gtest.h>
 
 namespace
 {
-/// TODO, other types
-std::shared_ptr<DB::Streaming::RefCountBlockList<DB::Block>>
-forEachRightBlock(DB::Streaming::CachedBlockMetrics & join_metrics, std::function<void(DB::Streaming::RefCountBlockList<DB::Block>*)> callback = {})
+
+DB::Block prepareDateTime64Block(std::vector<int64_t> values)
 {
-    auto blocks = std::make_shared<DB::Streaming::RefCountBlockList<DB::Block>>(join_metrics);
+    auto type = std::make_shared<DB::DataTypeDateTime64>(3);
+    auto mutable_col = type->createColumn();
+    auto * col = typeid_cast<DB::ColumnDecimal<DB::DateTime64> *>(mutable_col.get());
+
+    col->reserve(values.size());
+    for (auto value : values)
+        col->insertValue(value);
+
+    return DB::Block{DB::ColumnWithTypeAndName{std::move(mutable_col), type, "_tp_time"}};
+}
+
+void fillDataBlockList(
+    std::shared_ptr<DB::Streaming::RefCountDataBlockList<DB::Block>> blocks,
+    std::vector<int64_t> values,
+    std::function<void(DB::Streaming::RefCountDataBlockList<DB::Block> *, size_t)> callback)
+{
+    auto start_row = blocks->pushBackOrConcat(prepareDateTime64Block(std::move(values)));
+    if (callback)
+        callback(blocks.get(), start_row);
+}
+
+/// TODO, other types
+std::shared_ptr<DB::Streaming::RefCountDataBlockList<DB::Block>> forEachRightBlock(
+    size_t data_block_size,
+    DB::Streaming::CachedBlockMetrics & join_metrics,
+    std::function<void(DB::Streaming::RefCountDataBlockList<DB::Block> *, size_t)> callback = {})
+{
+    auto blocks = std::make_shared<DB::Streaming::RefCountDataBlockList<DB::Block>>(data_block_size, join_metrics);
+
+    if (data_block_size > 0)
     {
-        auto type = std::make_shared<DB::DataTypeDateTime64>(3);
-        auto mutable_col = type->createColumn();
-        auto * col = typeid_cast<DB::ColumnDecimal<DB::DateTime64> *>(mutable_col.get());
-
-        col->insertValue(1'612'286'044'256);
-        col->insertValue(1'612'286'045'256);
-
-        DB::ColumnWithTypeAndName column_with_type{std::move(mutable_col), type, "_tp_time"};
-
-        blocks->push_back(DB::Block{DB::ColumnsWithTypeAndName{{column_with_type}}});
-
-        if (callback)
-            callback(blocks.get());
+        fillDataBlockList(blocks, {1'612'286'044'256}, callback);
+        fillDataBlockList(blocks, {1'612'286'045'256}, callback);
+        fillDataBlockList(blocks, {1'612'286'054'256}, callback);
+        fillDataBlockList(blocks, {1'612'286'059'256}, callback);
+        fillDataBlockList(blocks, {1'612'286'060'256}, callback);
+        fillDataBlockList(blocks, {1'612'286'069'256}, callback);
     }
-
+    else
     {
-        auto type = std::make_shared<DB::DataTypeDateTime64>(3);
-        auto mutable_col = type->createColumn();
-        auto * col = typeid_cast<DB::ColumnDecimal<DB::DateTime64> *>(mutable_col.get());
-
-        col->insertValue(1'612'286'054'256);
-        col->insertValue(1'612'286'059'256);
-
-        DB::ColumnWithTypeAndName column_with_type{std::move(mutable_col), type, "_tp_time"};
-
-        blocks->push_back(DB::Block{DB::ColumnsWithTypeAndName{{column_with_type}}});
-        if (callback)
-            callback(blocks.get());
-    }
-
-    {
-        auto type = std::make_shared<DB::DataTypeDateTime64>(3);
-        auto mutable_col = type->createColumn();
-        auto * col = typeid_cast<DB::ColumnDecimal<DB::DateTime64> *>(mutable_col.get());
-
-        col->insertValue(1'612'286'060'256);
-        col->insertValue(1'612'286'069'256);
-
-        DB::ColumnWithTypeAndName column_with_type{std::move(mutable_col), type, "_tp_time"};
-
-        blocks->push_back(DB::Block{DB::ColumnsWithTypeAndName{{column_with_type}}});
-        if (callback)
-            callback(blocks.get());
+        fillDataBlockList(blocks, {1'612'286'044'256, 1'612'286'045'256}, callback);
+        fillDataBlockList(blocks, {1'612'286'054'256, 1'612'286'059'256}, callback);
+        fillDataBlockList(blocks, {1'612'286'060'256, 1'612'286'069'256}, callback);
     }
 
     return blocks;
@@ -65,7 +62,7 @@ forEachRightBlock(DB::Streaming::CachedBlockMetrics & join_metrics, std::functio
 
 DB::Block prepareLeftBlock(DB::Streaming::CachedBlockMetrics & join_metrics)
 {
-    auto blocks{forEachRightBlock(join_metrics)};
+    auto blocks{forEachRightBlock(/*data_block_size=*/0, join_metrics)};
     DB::Block block;
     for (size_t i = 0; auto & b : *blocks)
     {
@@ -98,50 +95,52 @@ struct Case
     std::optional<uint32_t> expected_matching_row;
 };
 
-void commonTest(const std::vector<Case> & cases)
+void commonTest(size_t data_block_size, const std::vector<Case> & cases)
 {
-    DB::Streaming::CachedBlockMetrics join_metrics;
-
     for (const auto & test_case : cases)
     {
-        std::shared_ptr<DB::Streaming::RefCountBlockList<DB::Block>> ret_right_blocks;
-        auto left_block{prepareLeftBlock(join_metrics)};
-
-        auto & asof_col = left_block.getByPosition(0);
-        DB::Streaming::AsofRowRefs<DB::Block> row_refs(asof_col.type->getTypeId());
-
-        ret_right_blocks = forEachRightBlock(join_metrics, [&](auto * right_blocks) {
-            auto & last_block = right_blocks->lastBlock();
-            auto & right_asof_col = last_block.getByPosition(0);
-            for (size_t i = 0, rows = last_block.rows(); i < rows; ++i)
-                row_refs.insert(
-                    asof_col.type->getTypeId(), *right_asof_col.column, right_blocks, i, test_case.inequality, test_case.keep_versions);
-        });
-
-        auto result{row_refs.findAsof(asof_col.type->getTypeId(), test_case.inequality, *asof_col.column, test_case.row_num)};
-
-        /// std::cout << "keep_versions=" << test_case.keep_versions << "\n";
-
-        ASSERT_EQ(ret_right_blocks->size(), test_case.expected_block_count);
-
-        if (test_case.expected_matching_row)
+        DB::Streaming::CachedBlockMetrics join_metrics;
         {
-            ASSERT_TRUE(result != nullptr);
-            ASSERT_EQ(result->row_num, test_case.expected_matching_row.value());
+            std::shared_ptr<DB::Streaming::RefCountDataBlockList<DB::Block>> ret_right_blocks;
+            auto left_block{prepareLeftBlock(join_metrics)};
 
-            size_t block_idx = 0;
-            for (auto iter = ret_right_blocks->begin(); iter != ret_right_blocks->end(); ++iter)
+            auto & asof_col = left_block.getByPosition(0);
+            DB::Streaming::AsofRowRefs<DB::Block> row_refs(asof_col.type->getTypeId());
+
+            ret_right_blocks = forEachRightBlock(data_block_size, join_metrics, [&](auto * right_blocks, size_t start_row) {
+                auto & last_block = right_blocks->lastDataBlock();
+                auto & right_asof_col = last_block.getByPosition(0);
+                for (size_t i = start_row, rows = last_block.rows(); i < rows; ++i)
+                    row_refs.insert(
+                        asof_col.type->getTypeId(), *right_asof_col.column, right_blocks, i, i, test_case.inequality, test_case.keep_versions);
+            });
+
+            auto result{row_refs.findAsof(asof_col.type->getTypeId(), test_case.inequality, *asof_col.column, test_case.row_num)};
+
+            /// std::cout << "keep_versions=" << test_case.keep_versions << "\n";
+
+            ASSERT_EQ(ret_right_blocks->size(), test_case.expected_block_count);
+
+            if (test_case.expected_matching_row)
             {
-                if (iter == result->block_iter)
-                    break;
+                ASSERT_TRUE(result != nullptr);
+                ASSERT_EQ(result->row_num, test_case.expected_matching_row.value());
 
-                ++block_idx;
+                size_t block_idx = 0;
+                for (auto iter = ret_right_blocks->begin(); iter != ret_right_blocks->end(); ++iter)
+                {
+                    if (iter == result->block_iter)
+                        break;
+
+                    ++block_idx;
+                }
+
+                ASSERT_EQ(block_idx, test_case.expected_block_idx.value());
             }
-
-            ASSERT_EQ(block_idx, test_case.expected_block_idx.value());
+            else
+                ASSERT_TRUE(result == nullptr);
         }
-        else
-            ASSERT_TRUE(result == nullptr);
+        ASSERT_EQ(join_metrics.current_total_blocks, 0);
     }
 }
 }
@@ -285,7 +284,6 @@ TEST(StreamingRowRefs, FindAsof)
          .expected_block_count = 3,
          .expected_block_idx = {0},
          .expected_matching_row = {0}},
-
         {.row_num = 7,
          .keep_versions = 6,
          .inequality = DB::ASOFJoinInequality::Greater,
@@ -312,5 +310,6 @@ TEST(StreamingRowRefs, FindAsof)
          .expected_matching_row = {}},
     };
 
-    commonTest(cases);
+    commonTest(/*data_block_size=*/0, cases);
+    commonTest(/*data_block_size=*/2, cases);
 }

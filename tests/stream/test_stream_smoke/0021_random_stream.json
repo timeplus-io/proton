@@ -440,6 +440,28 @@
                 ]
               }
             ]
+          },
+          {
+            "id": 20,
+            "tags": ["random_in_type"],
+            "name": "random_in_type",
+            "description": "Test random_in_type function, covering supported types",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "query_id":"2200", "query":"select random_in_type('bool'), random_in_type('int8'), random_in_type('int16'), random_in_type('int32'), random_in_type('int64'), random_in_type('int128'), random_in_type('int256'), random_in_type('uint8'), random_in_type('uint16'), random_in_type('uint32'), random_in_type('uint64'), random_in_type('uint128'), random_in_type('uint256')"},
+                  {"client":"python", "query_type": "table", "query_id":"2201", "query":"select random_in_type('string'), random_in_type('fixed_string(3)'), random_in_type('date'), random_in_type('date32', 100), random_in_type('datetime32'), random_in_type('datetime64(3)', 100), random_in_type('float32'), random_in_type('float64'), random_in_type('decimal32(3)'), random_in_type('decimal64(3)'), random_in_type('decimal128(9)'), random_in_type('decimal256(9)'), random_in_type('uuid'), random_in_type('ipv4'), random_in_type('ipv6')"}
+                  ]
+              }
+            ],
+            "expected_results": [
+              {"query_id":"2200", "expected_results":[
+                ["any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value"]
+              ]},
+              {"query_id":"2201", "expected_results":[
+                ["any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value", "any_value"]
+              ]}
+            ]
           }
     ]
   }

@@ -13,11 +13,15 @@ namespace DB::Streaming
 {
 
 template <typename DataBlock>
-struct RefCountBlockList
+struct RefCountDataBlockList
 {
-    explicit RefCountBlockList(CachedBlockMetrics & metrics_) : metrics(metrics_) { }
+    /// \data_block_size_ : Number of rows per data block. If it is not zero, we may merge new data block to a existing one when pushing back new data block.
+    ///    Merging into a bigger data block like (Chunk, LightChunk, Block) etc will have way better memory efficiency.
+    RefCountDataBlockList(size_t data_block_size_, CachedBlockMetrics & metrics_) : data_block_size(data_block_size_), metrics(metrics_) { }
 
-    ~RefCountBlockList()
+    explicit RefCountDataBlockList(CachedBlockMetrics & metrics_) : data_block_size(0), metrics(metrics_) { }
+
+    ~RefCountDataBlockList()
     {
         metrics.current_total_blocks -= blocks.size();
         metrics.current_total_bytes -= total_bytes;
@@ -61,14 +65,14 @@ struct RefCountBlockList
 
     bool empty() const { return blocks.empty(); }
 
-    auto lastBlockIter()
+    auto lastDataBlockIter()
     {
         assert(!blocks.empty());
         /// return std::prev(blocks.end());
         return --blocks.end();
     }
 
-    const DataBlock & lastBlock() const
+    const DataBlock & lastDataBlock() const
     {
         assert(!blocks.empty());
         return blocks.back().block;
@@ -85,10 +89,64 @@ struct RefCountBlockList
     auto begin() const { return blocks.begin(); }
     auto end() const { return blocks.end(); }
 
-    void push_back(DataBlock block)
+    /// Push back the \data_block or merge \data_block to the current data block if concat is enabled.
+    /// Return the starting row position for added \data_bock
+    [[nodiscard]] size_t pushBackOrConcat(DataBlock && data_block)
     {
-        updateMetrics(block);
-        blocks.emplace_back(std::move(block));
+        if (data_block_size != 0)
+        {
+            if (!blocks.empty())
+            {
+                auto & last_data_block = blocks.back();
+                if (last_data_block.rows() + data_block.rows() <= data_block_size)
+                {
+                    /// Merge to the last data block
+                    negateMetrics(last_data_block.block);
+                    auto starting_row = last_data_block.concat(std::move(data_block));
+                    updateMetrics(last_data_block.block);
+                    return starting_row;
+                }
+                else
+                {
+                    /// Eagerly reserve may have bad side effect that if the next data block will cause
+                    /// total rows to exceed data_block_size, the current reservation will be wasted since
+                    /// we will start a new data block.
+                    if (data_block.rows() < data_block_size)
+                        data_block.reserve(data_block_size);
+
+                    /// Insert the current data block and reserve enough room for next merge
+                    updateMetrics(data_block);
+                    blocks.emplace_back(std::move(data_block));
+
+                    return 0;
+                }
+            }
+            else
+            {
+                if (data_block.rows() < data_block_size)
+                    data_block.reserve(data_block_size);
+
+                /// Insert the current data block
+                updateMetrics(data_block);
+                blocks.emplace_back(std::move(data_block));
+                return 0;
+            }
+        }
+        else
+        {
+            /// Merge feature is disabled
+            updateMetrics(data_block);
+            blocks.emplace_back(std::move(data_block));
+
+            return 0;
+        }
+    }
+
+    void pushBack(DataBlock && data_block)
+    {
+        assert(data_block_size == 0);
+        updateMetrics(data_block);
+        blocks.emplace_back(std::move(data_block));
     }
 
     Int64 minTimestamp() const noexcept { return min_ts; }
@@ -99,6 +157,7 @@ struct RefCountBlockList
     deserialize(const Block & header, ReadBuffer & rb, DeserializedIndicesToBlocks<DataBlock> * deserialized_indices_with_block = nullptr);
 
 private:
+    size_t data_block_size;
     SERDE Int64 min_ts = std::numeric_limits<Int64>::max();
     SERDE Int64 max_ts = std::numeric_limits<Int64>::min();
     SERDE size_t total_bytes = 0;

@@ -2,7 +2,7 @@
 
 #include <Interpreters/Streaming/CachedBlockMetrics.h>
 #include <Interpreters/Streaming/RangeAsofJoinContext.h>
-#include <Interpreters/Streaming/RefCountBlockList.h>
+#include <Interpreters/Streaming/RefCountDataBlockList.h>
 #include <Interpreters/Streaming/joinSerder_fwd.h>
 #include <Interpreters/Streaming/joinTuple.h>
 
@@ -14,6 +14,7 @@
 #include <Core/LightChunk.h>
 #include <base/SerdeTag.h>
 #include <Common/Arena.h>
+#include <Common/HashMapSizes.h>
 
 #include <deque>
 #include <map>
@@ -23,21 +24,24 @@ namespace DB
 namespace Streaming
 {
 struct HashJoinMapsVariants;
+class HashJoin;
 
 using JoinDataBlock = LightChunkWithTimestamp;
-using JoinDataBlockList = RefCountBlockList<JoinDataBlock>;
+using JoinDataBlockList = RefCountDataBlockList<JoinDataBlock>;
 using JoinDataBlockRawPtr = const JoinDataBlock *;
 using BlockNullmapList = std::deque<std::pair<JoinDataBlockRawPtr, ColumnPtr>>;
 
 struct HashBlocks
 {
-    HashBlocks(CachedBlockMetrics & metrics);
+    HashBlocks(size_t data_block_size, CachedBlockMetrics & metrics);
 
     ~HashBlocks();
 
-    void addBlock(JoinDataBlock && block) { blocks.push_back(std::move(block)); }
+    [[nodiscard]] size_t addOrConcatDataBlock(JoinDataBlock && block) { return blocks.pushBackOrConcat(std::move(block)); }
 
-    const JoinDataBlock & lastBlock() const { return blocks.lastBlock(); }
+    const JoinDataBlock & lastDataBlock() const { return blocks.lastDataBlock(); }
+
+    HashMapSizes hashMapSizes(const HashJoin * hash_join) const;
 
     /// Buffered data
     JoinDataBlockList blocks;
@@ -52,7 +56,6 @@ struct HashBlocks
 };
 using HashBlocksPtr = std::shared_ptr<HashBlocks>;
 
-class HashJoin;
 SERDE struct BufferedStreamData
 {
     explicit BufferedStreamData(HashJoin * join_);
@@ -61,8 +64,8 @@ SERDE struct BufferedStreamData
     BufferedStreamData(HashJoin * join_, const RangeAsofJoinContext & range_asof_join_ctx_, const String & asof_column_name_);
 
     /// Add block, assign block id and return block id
-    void addBlock(JoinDataBlock && block);
-    void addBlockWithoutLock(JoinDataBlock && block, HashBlocksPtr & target_hash_blocks);
+    [[nodiscard]] size_t addOrConcatDataBlock(JoinDataBlock && block);
+    [[nodiscard]] size_t addOrConcatDataBlockWithoutLock(JoinDataBlock && block, HashBlocksPtr & target_hash_blocks);
 
     struct BucketBlock
     {
@@ -72,11 +75,16 @@ SERDE struct BufferedStreamData
             assert(block.rows());
         }
 
+        HashMapSizes hashMapSizes(const HashJoin * hash_join) const
+        {
+            return hash_blocks ? hash_blocks->hashMapSizes(hash_join) : HashMapSizes{};
+        }
+
         size_t bucket = 0;
         Block block;
         HashBlocksPtr hash_blocks;
     };
-    std::vector<BucketBlock> assignBlockToRangeBuckets(Block && block);
+    std::vector<BucketBlock> assignDataBlockToRangeBuckets(Block && block);
 
     /// Check if [min_ts, max_ts] intersects with range bucket [bucket_start_ts, bucket_start_ts + bucket_size]
     /// The rational behind this is stream data is high temporal, we probably has a good chance to prune the
@@ -143,10 +151,33 @@ SERDE struct BufferedStreamData
         current_hash_blocks = new_current;
     }
 
-    HashBlocksPtr newHashBlocks() { return std::make_shared<HashBlocks>(metrics); }
+    HashBlocksPtr newHashBlocks();
+
+    HashMapSizes hashMapSizes(const HashJoin * hash_join) const
+    {
+        if (!range_bucket_hash_blocks.empty())
+        {
+            HashMapSizes sizes;
+            for (const auto & hash_blocks : range_bucket_hash_blocks)
+            {
+                auto one_sizes = hash_blocks.second->hashMapSizes(join);
+                sizes.keys = one_sizes.keys;
+                sizes.buffer_size_in_bytes = one_sizes.buffer_size_in_bytes;
+                sizes.buffer_bytes_in_cells = one_sizes.buffer_bytes_in_cells;
+            }
+
+            return sizes;
+        }
+        else if (current_hash_blocks)
+        {
+            return current_hash_blocks->hashMapSizes(join);
+        }
+        return {};
+    }
 
     void serialize(WriteBuffer & wb, SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices = nullptr) const;
-    void deserialize(ReadBuffer & rb, DeserializedIndicesToRowRefListMultiple<JoinDataBlock> * deserialized_indices_to_row_ref_list_multiple = nullptr);
+    void deserialize(
+        ReadBuffer & rb, DeserializedIndicesToRowRefListMultiple<JoinDataBlock> * deserialized_indices_to_row_ref_list_multiple = nullptr);
 
     NO_SERDE HashJoin * join;
 
@@ -160,7 +191,8 @@ SERDE struct BufferedStreamData
     std::atomic_int64_t current_watermark = 0;
 
     NO_SERDE Block sample_block; /// Block as it would appear in the BlockList
-    NO_SERDE std::optional<std::vector<size_t>> reserved_column_positions; /// `_tp_delta` etc column positions in sample block if they exist
+    NO_SERDE std::optional<std::vector<size_t>>
+        reserved_column_positions; /// `_tp_delta` etc column positions in sample block if they exist
 
     NO_SERDE mutable std::mutex mutex;
 
@@ -173,8 +205,7 @@ private:
     /// `current_hash_blocks` serves 3 purposes
     /// 1) During query plan phase, we will need it to evaluate the header
     /// 2) Workaround the `joinBlock` API interface for range join, it points the current working right blocks in the range bucket
-    /// 3) For non-range join, it points the global blocks since there is no range bucket in this case
-    /// 4) For global join, it points to the global working blocks since there is not range bucket in this case
+    /// 3) For global join, it points to the global working blocks since there is not range bucket in this case
     HashBlocksPtr current_hash_blocks;
 
     /// Only for range join

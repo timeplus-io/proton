@@ -86,6 +86,13 @@ public:
         return chars.allocated_bytes() + offsets.allocated_bytes();
     }
 
+    /// proton : starts
+    size_t allocatedMetadataBytes() const override
+    {
+        return chars.allocated_metadata_bytes() + offsets.allocated_metadata_bytes();
+    }
+    /// proton : ends
+
     void protect() override;
 
     MutableColumnPtr cloneResized(size_t to_size) const override;

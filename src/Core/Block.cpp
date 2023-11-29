@@ -978,13 +978,24 @@ void Block::reorderColumnsInplace(const Block & header)
     // }
 }
 
+void Block::concat(const Block & other)
+{
+    assert(blocksHaveEqualStructure(*this, other));
+
+    auto added_rows = other.rows();
+    assert(added_rows != 0);
+
+    for (size_t col_pos = 0; auto & col : data)
+        col.column->assumeMutable()->insertRangeFrom(*other.data[col_pos++].column, 0, added_rows);
+}
+
 void Block::insertRow(size_t row_num, Block & target_block) const
 {
     assert(row_num < rows());
     assert(blocksHaveEqualStructure(*this, target_block));
 
     for (size_t col_pos = 0; const auto & col : data)
-        target_block.getByPosition(col_pos++).column->assumeMutable()->insertFrom(*col.column, row_num);
+        target_block.data[col_pos++].column->assumeMutable()->insertFrom(*col.column, row_num);
 }
 
 int Block::compareAt(size_t lhs_row, size_t rhs_row, const Block & rhs_block, const std::vector<size_t> & skip_columns) const

@@ -3385,6 +3385,10 @@ class TestSuite(object):
                                             ]
                                             query_result_field = query_result_row[i]
                                             if (
+                                                expected_result_field == "any_value"
+                                            ):
+                                                expected_result_row_field_check_arry[i] = 1
+                                            elif (
                                                 "array"
                                                 in query_result_column_types[i][1]
                                                 and "array_join"

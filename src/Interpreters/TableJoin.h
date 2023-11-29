@@ -147,6 +147,7 @@ private:
     /// If lag_interval > 0 : left stream lag behind right stream.
     /// If lag_interval < 0 : right stream lag behind left stream.
     Int64 lag_interval = 0;
+    size_t data_block_size = 0;
     String left_table_lag_column;
     String right_table_lag_column;
     /// proton : ends
@@ -346,6 +347,8 @@ public:
     std::shared_ptr<const IKeyValueEntity> getStorageKeyValue() { return right_kv_storage; }
 
     /// proton : starts
+    void setDataBlockSize(size_t data_block_size_) noexcept { data_block_size = data_block_size_; }
+    size_t dataBlockSize() const noexcept { return data_block_size; }
     void addLagBehindKeys(const ASTPtr & left_table_ast, const ASTPtr & right_table_ast);
     /// \lag_interval is milliseconds granularity
     void setLagBehindInterval(Int64 lag_interval_) { lag_interval = lag_interval_; }

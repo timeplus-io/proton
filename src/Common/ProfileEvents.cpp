@@ -152,6 +152,7 @@
     \
     M(RegexpCreated, "Compiled regular expressions. Identical regular expressions compiled just once and cached forever.") \
     M(ContextLock, "Number of times the lock of Context was acquired or tried to acquire. This is global lock.") \
+    M(ContextLockWaitMicroseconds, "Context lock wait time in microseconds") \
     \
     M(StorageBufferFlush, "") \
     M(StorageBufferErrorOnFlush, "") \

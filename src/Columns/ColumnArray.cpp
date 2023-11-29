@@ -457,6 +457,12 @@ size_t ColumnArray::allocatedBytes() const
     return getData().allocatedBytes() + getOffsets().allocated_bytes();
 }
 
+/// proton : starts
+size_t ColumnArray::allocatedMetadataBytes() const
+{
+    return getData().allocatedMetadataBytes() + getOffsets().allocated_metadata_bytes();
+}
+/// proton : ends
 
 void ColumnArray::protect()
 {

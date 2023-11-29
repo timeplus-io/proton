@@ -165,7 +165,7 @@ LightChunkWithTimestamp readLightChunkWithTimestamp(const Block & header, UInt64
     LightChunkWithTimestamp res;
     readIntBinary(res.min_timestamp, istr);
     readIntBinary(res.max_timestamp, istr);
-    readColumns(res.data, header, server_revision, istr);
+    readColumns(res.chunk.data, header, server_revision, istr);
     return res;
 }
 
