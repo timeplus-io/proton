@@ -82,7 +82,6 @@ struct RefCountDataBlockPages
         if (unlikely(block_pages.size() == 1))
         {
             assert(page == block_pages.front().get());
-            assert(page == current_page);
 
             /// If this is the last page, keep it around
             page->clear();
