@@ -42,8 +42,8 @@ public:
     const String & password() const { return settings->password.value; }
     const String & sslCaCertFile() const { return settings->ssl_ca_cert_file.value; }
     const klog::KConfParams & properties() const { return kafka_properties; }
-    bool has_custom_partitioning_expr() const { return !engine_args.empty(); }
-    const ASTPtr & partitioning_expr_ast() const { assert(!engine_args.empty()); return engine_args[0]; }
+    bool hasCustomShardingExpr() const { return !engine_args.empty(); }
+    const ASTPtr & shardingExprAst() const { assert(!engine_args.empty()); return engine_args[0]; }
 
 private:
     void calculateDataFormat(const IStorage * storage);

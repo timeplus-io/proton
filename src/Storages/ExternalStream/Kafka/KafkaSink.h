@@ -19,26 +19,26 @@ namespace DB
 
 namespace KafkaStream
 {
-/// Partition Chunk's to paritions (i.e. shards) by the partitioning expression.
-class ChunkPartitioner
+/// Shard Chunk's to shards (or partitions in Kafka's term) by the sharding expression.
+class ChunkSharder
 {
 public:
-    ChunkPartitioner(ContextPtr context, const Block & header, const ASTPtr & partitioning_expr_ast);
-    ChunkPartitioner();
+    ChunkSharder(ContextPtr context, const Block & header, const ASTPtr & sharding_expr_ast);
+    ChunkSharder();
 
-    BlocksWithShard partition(Block block, Int32 partition_cnt) const;
+    BlocksWithShard shard(Block block, Int32 shard_cnt) const;
 
 private:
-    void use_random_paritioning();
-    Int32 getNextShardIndex(Int32 partition_cnt) const noexcept { return static_cast<Int32>(rand()) % partition_cnt; }
+    void useRandomSharding();
+    Int32 getNextShardIndex(Int32 shard_cnt) const noexcept { return static_cast<Int32>(rand()) % shard_cnt; }
 
-    BlocksWithShard doParition(Block block, Int32 partition_cnt) const;
+    BlocksWithShard doSharding(Block block, Int32 shard_cnt) const;
 
-    IColumn::Selector createSelector(Block block, Int32 partition_cnt) const;
+    IColumn::Selector createSelector(Block block, Int32 shard_cnt) const;
 
-    ExpressionActionsPtr partitioning_expr;
-    String partitioning_key_column_name;
-    bool random_partitioning = false;
+    ExpressionActionsPtr sharding_expr;
+    String sharding_key_column_name;
+    bool random_sharding = false;
     mutable std::minstd_rand rand;
 };
 }
@@ -90,7 +90,7 @@ private:
     ThreadPool polling_threads;
     std::atomic_flag is_finished;
     Int32 partition_cnt;
-    std::unique_ptr<KafkaStream::ChunkPartitioner> partitioner;
+    std::unique_ptr<KafkaStream::ChunkSharder> partitioner;
 
     Poco::Logger * log;
 };
