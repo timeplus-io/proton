@@ -212,7 +212,7 @@ void ChangelogConvertTransform::retractAndIndex(size_t rows, const ColumnRawPtrs
     KeyGetter key_getter(key_columns, key_sizes, nullptr);
 
     size_t num_retractions = 0;
-    const auto & last_inserted_chunk = source_chunks.lastBlock();
+    const auto & last_inserted_chunk = source_chunks.lastDataBlock();
     const auto & last_inserted_chunk_columns = last_inserted_chunk.getColumns();
 
     /// In the same chunk, we may have multiple rows which have same primary key values, in this case

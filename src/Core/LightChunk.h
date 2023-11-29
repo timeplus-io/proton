@@ -17,6 +17,24 @@ struct LightChunk
     LightChunk(Chunk && chunk) : data(chunk.detachColumns()) { }
     LightChunk(const Block & block) : data(block.getColumns()) { }
 
+    void reserve(size_t rows)
+    {
+        for (auto & col : data)
+            col->assumeMutable()->reserve(rows);
+    }
+
+    /// Inplace concat
+    void concat(const LightChunk & other)
+    {
+        auto added_rows = other.rows();
+        assert(columns() == other.columns());
+        for (size_t c = 0; auto & col : data)
+        {
+            assert(col->getName() == other.data[c]->getName());
+            col->assumeMutable()->insertRangeFrom(*other.data[c++], 0, added_rows);
+        }
+    }
+
     size_t rows() const noexcept { return data.empty() ? 0 : data[0]->size(); }
     size_t columns() const noexcept { return data.size(); }
 
@@ -71,6 +89,16 @@ struct LightChunkWithTimestamp
     LightChunkWithTimestamp(Columns && data_) : chunk(std::move(data_)) { }
     LightChunkWithTimestamp(const Block & block)
         : chunk(block), min_timestamp(block.minTimestamp()), max_timestamp(block.maxTimestamp()) { }
+
+    void reserve(size_t rows) { chunk.reserve(rows); }
+
+    /// Inplace concat
+    void concat(const LightChunkWithTimestamp & other)
+    {
+        chunk.concat(other.chunk);
+        min_timestamp = std::min(min_timestamp, other.min_timestamp);
+        max_timestamp = std::max(max_timestamp, other.max_timestamp);
+    }
 
     UInt64 byteSize() const { return chunk.byteSize(); }
     UInt64 allocatedBytes() const { return allocatedMetadataBytes() + allocatedDataBytes(); }

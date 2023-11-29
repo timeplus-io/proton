@@ -3,6 +3,7 @@
 #include <Interpreters/Streaming/PageBasedRowRefWithRefCount.h>
 #include <Interpreters/Streaming/SortedLookupContainer.h>
 
+#include <Columns/IColumn.h>
 #include <Core/Joins.h>
 #include <Core/Types.h>
 

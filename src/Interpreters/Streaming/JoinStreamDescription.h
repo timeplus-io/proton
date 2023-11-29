@@ -21,11 +21,13 @@ struct JoinStreamDescription
         Block input_header_,
         DataStreamSemanticEx data_stream_semantic_,
         UInt64 keep_versions_,
-        Int64 latency_threshold_)
+        Int64 latency_threshold_,
+        Int64 quiesce_threshold_ms_)
         : table_with_columns(table_with_columns_)
         , input_header(std::move(input_header_))
         , data_stream_semantic(data_stream_semantic_)
         , keep_versions(keep_versions_)
+        , quiesce_threshold_ms(quiesce_threshold_ms_)
         , latency_threshold(latency_threshold_)
     {
     }
@@ -67,6 +69,7 @@ struct JoinStreamDescription
     ///       lag_behind(left.ts, right.ts, 20)
     /// SETTINGS keep_versions=16;
     UInt64 keep_versions;
+    Int64 quiesce_threshold_ms;
     Int64 latency_threshold;
     String lag_column;
 

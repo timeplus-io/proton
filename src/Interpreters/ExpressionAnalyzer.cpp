@@ -2274,6 +2274,7 @@ std::shared_ptr<IJoin> SelectQueryExpressionAnalyzer::chooseJoinAlgorithmStreami
     auto keep_versions = getContext()->getSettingsRef().keep_versions;
     auto max_threads = getContext()->getSettingsRef().max_threads;
 
+    auto quiesce_threshold_ms = getContext()->getSettingsRef().join_quiesce_threshold_ms;
     auto latency_threshold = getContext()->getSettingsRef().join_latency_threshold; /// Query global settings
     /// If user explicitly specifies `JOIN ... ON ... AND lag_behind(10ms, ...), override the query global settings
     if (auto lag_interval = analyzed_join->lagBehindInterval(); lag_interval != 0)
@@ -2284,14 +2285,16 @@ std::shared_ptr<IJoin> SelectQueryExpressionAnalyzer::chooseJoinAlgorithmStreami
         Block{},
         left_input_data_stream_semantic,
         keep_versions,
-        latency_threshold); /// We don't know the header of the left stream yet since it is not finalized
+        latency_threshold,
+        quiesce_threshold_ms); /// We don't know the header of the left stream yet since it is not finalized
 
     auto right_join_stream_desc = std::make_shared<Streaming::JoinStreamDescription>(
         tables[1],
         joined_plan->getCurrentDataStream().header,
         right_input_data_stream_semantic,
         keep_versions,
-        latency_threshold);
+        latency_threshold,
+        quiesce_threshold_ms);
 
     if (auto lag_interval = analyzed_join->lagBehindInterval(); lag_interval != 0)
     {
