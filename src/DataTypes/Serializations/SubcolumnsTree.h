@@ -46,6 +46,14 @@ public:
             StringRef key_ref{strings_pool.insert(key.data(), key.length()), key.length()};
             children[key_ref] = std::move(next_node);
         }
+
+        /// proton : starts
+        size_t allocatedMetadataBytes() const
+        {
+            size_t res = sizeof(kind) + sizeof(parent) + sizeof(strings_pool) + sizeof(children) + data.allocatedMetadataBytes();
+            res += path.allocatedSize();
+            return res;
+        }
     };
 
     using NodeKind = typename Node::Kind;
@@ -180,6 +188,16 @@ public:
 
     const_iterator begin() const { return leaves.begin(); }
     const_iterator end() const { return leaves.end(); }
+
+    /// proton : starts
+    size_t allocatedMetadataBytes() const
+    {
+        size_t res = sizeof(root) + sizeof(leaves) + leaves.size() * sizeof(NodePtr);
+        for (const auto & leave : leaves)
+            res += leave->allocatedMetadataBytes();
+        return res;
+    }
+    /// proton : ends
 
 private:
     const Node * findImpl(const PathInData & path, bool find_exact) const

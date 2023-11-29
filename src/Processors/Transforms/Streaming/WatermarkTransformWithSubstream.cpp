@@ -127,36 +127,39 @@ void WatermarkTransformWithSubstream::work()
         checkpoint(process_chunk.getCheckpointContext());
         output_chunks.emplace_back(std::move(process_chunk));
     }
-    else if (avoid_watermark)
-    {
-        output_chunks.emplace_back(std::move(process_chunk));
-    }
     else if (process_chunk.hasRows())
     {
         assert(process_chunk.hasChunkContext());
 
         auto & watermark = getOrCreateSubstreamWatermark(process_chunk.getSubstreamID());
 
-        watermark.process(process_chunk);
-        assert(process_chunk);
+        if (!avoid_watermark)
+            watermark.process(process_chunk);
 
+        assert(process_chunk);
         output_chunks.emplace_back(std::move(process_chunk));
     }
     else
     {
         /// FIXME, we shall establish timer only when necessary instead of blindly generating empty heartbeat chunk
         bool propagated_heartbeat = false;
-        output_chunks.reserve(substream_watermarks.size());
-        for (auto & [id, watermark] : substream_watermarks)
-        {
-            auto chunk = process_chunk.clone();
-            watermark->process(chunk);
 
-            if (chunk.hasChunkContext())
+        /// It's possible to generate periodic or timeout watermark for each substream via an empty chunk
+        /// FIXME: This is a very ugly and inefficient implementation and needs to revisit.
+        if (!avoid_watermark && watermark_template->requiresPeriodicOrTimeoutEmit())
+        {
+            output_chunks.reserve(substream_watermarks.size());
+            for (auto & [id, watermark] : substream_watermarks)
             {
-                chunk.getChunkContext()->setSubstreamID(id);
-                output_chunks.emplace_back(std::move(chunk));
-                propagated_heartbeat = true;
+                process_chunk.setChunkContext(nullptr); /// clear context, act as a heart beat
+                watermark->process(process_chunk);
+
+                if (process_chunk.hasChunkContext())
+                {
+                    process_chunk.trySetSubstreamID(id);
+                    output_chunks.emplace_back(process_chunk.clone());
+                    propagated_heartbeat = true;
+                }
             }
         }
 

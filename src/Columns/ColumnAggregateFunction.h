@@ -184,6 +184,8 @@ public:
 
     size_t allocatedBytes() const override;
 
+    size_t allocatedMetadataBytes() const override; /// proton : starts. Newly added
+
     void protect() override;
 
     void insertRangeFrom(const IColumn & from, size_t start, size_t length) override;

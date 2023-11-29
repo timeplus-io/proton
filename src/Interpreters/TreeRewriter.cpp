@@ -738,6 +738,11 @@ void collectJoinedColumns(TableJoin & analyzed_join, ASTTableJoin & table_join,
             analyzed_join.validateRangeAsof(context->getSettingsRef().max_join_range);
             analyzed_join.setStrictness(table_join.strictness);
         }
+
+        /// FIXME, validate if the combination of lag_behind(...) + strictness makes sense.
+        if (analyzed_join.lagBehindInterval() != 0)
+            /// Add lag behind columns
+            data.lagBehindASTToKeys();
         /// proton : ends
 
         auto check_keys_empty = [] (auto e) { return e.key_names_left.empty(); };

@@ -35,7 +35,8 @@ void UserDefinedEmitStrategyAggregatingTransformWithSubstream::finalize(const Su
     if (params->emit_version && params->final)
         emitVersion(chunk, substream_ctx);
 
-    setCurrentChunk(std::move(chunk), chunk_ctx);
+    chunk.setChunkContext(chunk_ctx);
+    setCurrentChunk(std::move(chunk));
 }
 }
 }

@@ -574,6 +574,13 @@ size_t ColumnNullable::allocatedBytes() const
     return getNestedColumn().allocatedBytes() + getNullMapColumn().allocatedBytes();
 }
 
+/// proton : starts
+size_t ColumnNullable::allocatedMetadataBytes() const
+{
+    return getNestedColumn().allocatedMetadataBytes() + getNullMapColumn().allocatedMetadataBytes();
+}
+/// proton : ends
+
 void ColumnNullable::protect()
 {
     getNestedColumn().protect();

@@ -1579,8 +1579,8 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
                             joined_plan->getCurrentDataStream(),
                             expressions.join,
                             settings.max_block_size,
-                            settings.join_max_cached_bytes,
-                            max_streams);
+                            max_streams,
+                            settings.join_max_buffered_bytes);
                     }
                     else
                     {
@@ -3262,7 +3262,10 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
         : static_cast<size_t>(settings.max_threads);
 
-    if (query_info.hasPartitionByKeys())
+    /// There are two substream categories:
+    /// 1) `parition by`: calculating substream with substream ID (The data have been shuffled by `ShufflingTransform`)
+    /// 2) `shuffle by`: calculating light substream without substream ID (The data have been shuffled by `LightShufflingTransform`)
+    if (query_info.hasPartitionByKeys() || light_shuffled)
         query_plan.addStep(std::make_unique<Streaming::AggregatingStepWithSubstream>(
             query_plan.getCurrentDataStream(), std::move(params), final, emit_version, data_stream_semantic_pair.isChangelogOutput()));
     else
@@ -3414,7 +3417,7 @@ void InterpreterSelectQuery::finalCheckAndOptimizeForStreamingQuery()
         /// For now, for the following scenarios, we disable backfill from historic data store
         /// 1) User select some virtual columns which is only available in streaming store, like `_tp_sn`, `_tp_index_time`
         /// 2) Seek by streaming store sequence number
-        /// 3) Replaying a stream. 
+        /// 3) Replaying a stream.
         /// TODO, ideally we shall check if historical data store has `_tp_sn` etc columns, if they have, we can backfill from
         /// the historical data store as well technically. This will be a future enhancement.
         const auto & settings = context->getSettingsRef();
@@ -3604,10 +3607,12 @@ void InterpreterSelectQuery::handleSeekToSetting()
         if (seek_points.size() != 1)
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It doesn't support time based `seek_to` settings for multiple shards");
 
-        /// Here we rewrite WHERE predicates of SELECT query.
-        /// Example : SELECT * FROM stream SETTINGS seek_to='2022-01-01 00:01:01' =>
-        /// SELECT * FROM stream WHERE _tp_time >= '2022-01-01 00:01:01'
-        addEventTimePredicate(getSelectQuery(), seek_points[0]);
+        /// If the storage can do accurate seek_to (for example, Kafka external streams) no extra work is needed.
+        /// Otherwise, the WHERE predicates of SELECT query will be rewritten by adding a filter for filtering
+        /// records by `_tp_time`. For example: `SELECT * FROM stream SETTINGS seek_to='2022-01-01 00:01:01'` will
+        /// be rewritten to `SELECT * FROM stream WHERE _tp_time >= '2022-01-01 00:01:01'`.
+        if (storage && !storage->supportsAccurateSeekTo())
+            addEventTimePredicate(getSelectQuery(), seek_points[0]);
     }
     else
     {

@@ -1,7 +1,7 @@
 #include <Columns/ColumnDecimal.h>
+#include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnFunction.h>
 #include <Columns/ColumnString.h>
-#include <Columns/ColumnFixedString.h>
 #include <Core/ColumnNumbers.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
@@ -10,6 +10,7 @@
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeFunction.h>
+#include <DataTypes/DataTypeIPv4andIPv6.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypesDecimal.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -60,7 +61,7 @@ DataGenerator createDataGenerator()
             || TYPE_INDEX == TypeIndex::UInt32 || TYPE_INDEX == TypeIndex::UInt64 || TYPE_INDEX == TypeIndex::UInt128
             || TYPE_INDEX == TypeIndex::UInt256 || TYPE_INDEX == TypeIndex::Float32 || TYPE_INDEX == TypeIndex::Float64
             || TYPE_INDEX == TypeIndex::Date || TYPE_INDEX == TypeIndex::Date32 || TYPE_INDEX == TypeIndex::DateTime
-            || TYPE_INDEX == TypeIndex::UUID)
+            || TYPE_INDEX == TypeIndex::UUID || TYPE_INDEX == TypeIndex::IPv4 || TYPE_INDEX == TypeIndex::IPv6)
         {
             auto & data = assert_cast<DB::ColumnVector<TYPE> &>(*res).getData();
             data.resize(rows_num);
@@ -69,7 +70,7 @@ DataGenerator createDataGenerator()
         }
         else if constexpr (
             TYPE_INDEX == TypeIndex::Decimal32 || TYPE_INDEX == TypeIndex::Decimal64 || TYPE_INDEX == TypeIndex::Decimal128
-            || TYPE_INDEX == TypeIndex::DateTime64)
+            || TYPE_INDEX == TypeIndex::Decimal256 || TYPE_INDEX == TypeIndex::DateTime64)
         {
             auto & data = assert_cast<DB::ColumnDecimal<TYPE> &>(*res).getData();
             data.resize(rows_num);
@@ -128,6 +129,8 @@ DataGenerator createDefaultDataGenerator(const DataTypePtr & result_type)
         CREATE_DATA_GENERATOR(TypeIndex::Decimal128, Decimal128)
         CREATE_DATA_GENERATOR(TypeIndex::Decimal256, Decimal256)
         CREATE_DATA_GENERATOR(TypeIndex::UUID, UUID)
+        CREATE_DATA_GENERATOR(TypeIndex::IPv4, DataTypeIPv4::FieldType)
+        CREATE_DATA_GENERATOR(TypeIndex::IPv6, DataTypeIPv6::FieldType)
 #undef CREATE_DATA_GENERATOR
         default:
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "The random_in_type doesn't support argument type '{}'", result_type->getName());
@@ -135,7 +138,7 @@ DataGenerator createDefaultDataGenerator(const DataTypePtr & result_type)
     UNREACHABLE();
 }
 
-class FunctionUniqueRandom : public IFunction
+class FunctionRandomInType : public IFunction
 {
     // usage:random_in_type('int8', [lambda expression] ,[num_of_uniques]), this function will return a Unique and Random 'int8' type data
     // lambda expression and num_of_uniques can switch places
@@ -147,7 +150,7 @@ private:
 public:
     static constexpr auto name = "random_in_type";
 
-    FunctionUniqueRandom(UInt64 num_of_uniques_, int lambda_function_pos_, DataGenerator default_data_generator_)
+    FunctionRandomInType(UInt64 num_of_uniques_, int lambda_function_pos_, DataGenerator default_data_generator_)
         : num_of_uniques(num_of_uniques_), lambda_function_pos(lambda_function_pos_), default_data_generator(default_data_generator_)
     {
     }
@@ -178,7 +181,7 @@ public:
     }
 };
 
-class FunctionUniqueRandomOverloadResolver : public IFunctionOverloadResolver
+class FunctionRandomInTypeOverloadResolver : public IFunctionOverloadResolver
 {
 public:
     static constexpr auto name = "random_in_type";
@@ -191,7 +194,7 @@ public:
     size_t getNumberOfArguments() const override { return 0; }
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
 
-    static FunctionOverloadResolverPtr create(ContextPtr) { return std::make_unique<FunctionUniqueRandomOverloadResolver>(); }
+    static FunctionOverloadResolverPtr create(ContextPtr) { return std::make_unique<FunctionRandomInTypeOverloadResolver>(); }
 
     void getLambdaArgumentTypesImpl(DataTypes & arguments) const override
     {
@@ -272,7 +275,7 @@ public:
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "The argument max unique number must be greater than 0");
 
         return std::make_shared<FunctionToFunctionBaseAdaptor>(
-            std::make_shared<FunctionUniqueRandom>(
+            std::make_shared<FunctionRandomInType>(
                 num_of_uniques, lambda_function_pos, lambda_function_pos == -1 ? createDefaultDataGenerator(result_type) : nullptr),
             collections::map<DataTypes>(arguments, [](const auto & elem) { return elem.type; }),
             result_type);
@@ -280,9 +283,9 @@ public:
 };
 }
 
-REGISTER_FUNCTION(UniqueRandom)
+REGISTER_FUNCTION(RandomInType)
 {
-    factory.registerFunction<FunctionUniqueRandomOverloadResolver>({}, FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionRandomInTypeOverloadResolver>({}, FunctionFactory::CaseInsensitive);
 }
 
 }

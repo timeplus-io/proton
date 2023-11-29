@@ -1,7 +1,5 @@
 #include <Interpreters/Streaming/RowRefs.h>
 
-#include <Columns/IColumn.h>
-#include <Core/Block.h>
 #include <Interpreters/Streaming/joinSerder.h>
 #include <base/types.h>
 #include <Common/ColumnsHashing.h>
@@ -126,7 +124,7 @@ void RowRefWithRefCount<DataBlock>::serialize(const SerializedBlocksToIndices & 
 
 template <typename DataBlock>
 void RowRefWithRefCount<DataBlock>::deserialize(
-    RefCountBlockList<DataBlock> * block_list,
+    RefCountDataBlockList<DataBlock> * block_list,
     const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks,
     ReadBuffer & rb)
 {
@@ -153,7 +151,8 @@ template <typename DataBlock>
 void AsofRowRefs<DataBlock>::insert(
     TypeIndex type,
     const IColumn & asof_column,
-    RefCountBlockList<DataBlock> * blocks,
+    RefCountDataBlockList<DataBlock> * blocks,
+    size_t original_row_num,
     size_t row_num,
     ASOFJoinInequality inequality,
     size_t keep_versions)
@@ -167,10 +166,9 @@ void AsofRowRefs<DataBlock>::insert(
         using ColumnType = ColumnVectorOrDecimal<T>;
         const auto & column = typeid_cast<const ColumnType &>(asof_column);
 
-        T key = column.getElement(row_num);
+        T key = column.getElement(original_row_num);
         bool ascending = (inequality == ASOFJoinInequality::Less) || (inequality == ASOFJoinInequality::LessOrEquals);
-        container->insert(Entry<T>(key, RowRefDataBlock(blocks, row_num)), ascending);
-        container->truncateTo(keep_versions, ascending);
+        container->insert(Entry<T>(key, RowRefDataBlock(blocks, row_num)), ascending, keep_versions);
     };
 
     callWithType(type, call);
@@ -284,7 +282,7 @@ void AsofRowRefs<DataBlock>::serialize(
 template <typename DataBlock>
 void AsofRowRefs<DataBlock>::deserialize(
     TypeIndex type,
-    RefCountBlockList<DataBlock> * block_list,
+    RefCountDataBlockList<DataBlock> * block_list,
     const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks,
     ReadBuffer & rb)
 {
@@ -320,14 +318,15 @@ RangeAsofRowRefs<DataBlock>::RangeAsofRowRefs(TypeIndex type)
 }
 
 template <typename DataBlock>
-void RangeAsofRowRefs<DataBlock>::insert(TypeIndex type, const IColumn & asof_column, const DataBlock * block, size_t row_num)
+void RangeAsofRowRefs<DataBlock>::insert(
+    TypeIndex type, const IColumn & asof_column, const DataBlock * block, size_t original_row_num, size_t row_num)
 {
     auto call = [&](const auto & t) {
         using T = std::decay_t<decltype(t)>;
         using ColumnType = ColumnVectorOrDecimal<T>;
         const auto & column = typeid_cast<const ColumnType &>(asof_column);
 
-        T key = column.getElement(row_num);
+        T key = column.getElement(original_row_num);
         std::get<LookupPtr<T>>(lookups)->emplace(key, RowRefDataBlock(block, row_num));
     };
 
@@ -615,7 +614,7 @@ void RowRefListMultiple<DataBlock>::serialize(
 
 template <typename DataBlock>
 void RowRefListMultiple<DataBlock>::deserialize(
-    RefCountBlockList<DataBlock> * block_list,
+    RefCountDataBlockList<DataBlock> * block_list,
     const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks,
     ReadBuffer & rb,
     DeserializedIndicesToRowRefListMultiple<DataBlock> * deserialized_indices_to_row_ref_list_multiple)
@@ -664,7 +663,7 @@ template class RangeAsofRowRefs<LightChunkWithTimestamp>;
 /// For ChangelogCovertTransform
 template struct RowRefWithRefCount<LightChunk>;
 
-/// For gests
+/// For gtests
 template class AsofRowRefs<Block>;
 }
 }

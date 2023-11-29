@@ -10,6 +10,7 @@
 #include <Interpreters/TableJoin.h>
 #include <base/SerdeTag.h>
 #include <Common/ColumnUtils.h>
+#include <Common/HashMapSizes.h>
 #include <Common/HashMapsTemplate.h>
 #include <Common/HashTable/FixedHashMap.h>
 #include <Common/HashTable/HashMap.h>
@@ -137,6 +138,7 @@ public:
     bool emitChangeLog() const override { return emit_changelog; }
     bool bidirectionalHashJoin() const override { return bidirectional_hash_join; }
     bool rangeBidirectionalHashJoin() const override { return range_bidirectional_hash_join; }
+    bool requireWatermarkAlignedStreams() const override { return require_aligned_streams; }
 
     UInt64 keepVersions() const { return right_data.join_stream_desc->keep_versions; }
 
@@ -186,6 +188,7 @@ public:
         assert(!right_key_column_positions.empty());
     }
 
+    size_t dataBlockSize() const noexcept { return table_join->dataBlockSize(); }
     JoinKind getKind() const { return kind; }
     JoinStrictness getStrictness() const { return strictness; }
     Kind getStreamingKind() const { return streaming_kind; }
@@ -215,7 +218,7 @@ public:
     using MapsRangeAsof = HashMapsTemplate<RangeAsofRowRefs<JoinDataBlock>>;
     using MapsVariant = std::variant<MapsOne, MapsAll, MapsAsof, MapsRangeAsof, MapsMultiple>;
 
-    size_t sizeOfMapsVariant(const MapsVariant & maps_variant) const;
+    HashMapSizes sizesOfMapsVariant(const MapsVariant & maps_variant) const;
     HashType getHashMethodType() const { return hash_method_type; }
 
     /// bool isUsed(size_t off) const { return used_flags.getUsedSafe(off); }
@@ -244,6 +247,9 @@ public:
         /// join blocks quickly by using joined keys
         SERDE std::unique_ptr<HashJoinMapsVariants> maps;
     };
+
+    JoinStreamDescriptionPtr leftJoinStreamDescription() const noexcept override { return left_data.join_stream_desc; }
+    JoinStreamDescriptionPtr rightJoinStreamDescription() const noexcept override { return right_data.join_stream_desc; }
 
 private:
     void checkJoinSemantic() const;
@@ -429,6 +435,7 @@ private:
     bool emit_changelog = false;
     bool bidirectional_hash_join = true;
     bool range_bidirectional_hash_join = true;
+    bool require_aligned_streams = false;
 
     /// Delta column in right-left-join
     /// `rlj` -> right-left-join
@@ -472,7 +479,8 @@ private:
 
 struct HashJoinMapsVariants
 {
-    size_t size(const HashJoin * join) const;
+    /// \return Number of keys in the map
+    HashMapSizes sizes(const HashJoin * join) const;
     std::vector<HashJoin::MapsVariant> map_variants;
 };
 

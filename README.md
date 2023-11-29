@@ -58,6 +58,8 @@ See our [architecture](https://docs.timeplus.com/proton-architecture) doc for te
 
 With [Docker engine](https://docs.docker.com/engine/install/) installed on your local machine, pull and run the latest version of the Proton Docker image.
 
+(For Mac or Linux users, you can also download the [single binary](https://github.com/timeplus-io/proton/wiki/Install-single-binary-Proton) or use [homebrew](https://github.com/timeplus-io/homebrew-timeplus) to use Proton without Docker.)
+
 ```bash
 docker run -d --pull always --name proton ghcr.io/timeplus-io/proton:latest
 ```
@@ -69,14 +71,6 @@ docker exec -it proton proton-client -n
 ```
 
 If you stop the container and want to start it again, run `docker start proton`.
-
-If you are using Mac and homebrew, you can also check [homebrew-timeplus](https://github.com/timeplus-io/homebrew-timeplus) to easily install/upgrade proton.
-
-If you are interested in installing via single binary method, run:
-
-```
-curl -sSf https://raw.githubusercontent.com/timeplus-io/proton/develop/install.sh | sh
-```
 
 ### Query a test stream
 
@@ -115,9 +109,11 @@ The following drivers are available:
 
 Integrations with other systems:
 
-* https://github.com/timeplus-io/proton-grafana-source
-* https://github.com/timeplus-io/homebrew-timeplus
-* https://github.com/timeplus-io/dbt-proton
+* Grafana https://github.com/timeplus-io/proton-grafana-source
+* Metabase  https://github.com/timeplus-io/metabase-proton-driver
+* Pulse UI https://github.com/timeplus-io/pulseui/tree/proton
+* Homebrew https://github.com/timeplus-io/homebrew-timeplus
+* dbt https://github.com/timeplus-io/dbt-proton
 
 ## Get more with Timeplus
 
@@ -136,15 +132,12 @@ We welcome your contributions! If you are looking for issues to work on, try loo
 
 Please see the [wiki](https://github.com/timeplus-io/proton/wiki/Contributing) for more details, and [BUILD.md](https://github.com/timeplus-io/proton/blob/develop/BUILD.md) to compile Proton in different platforms.
 
-We also encourage you to join the `#contributing` channel in the [Timeplus Community Slack](https://timeplus.com/slack) to ask questions and meet other active contributors from Timeplus and beyond.
+We also encourage you to join the [Timeplus Community Slack](https://timeplus.com/slack) to ask questions and meet other active contributors from Timeplus and beyond.
 
 ## Need help?
 
 Join the [Timeplus Community Slack](https://timeplus.com/slack) to connect with Timeplus engineers and other Proton
 users.
-
-- Use the `#proton` channel to ask questions about installing, using, or deploying Proton.
-- Join the `#contributing` channel to connect with other contributors to Proton.
 
 For filing bugs, suggesting improvements, or requesting new features, see the [open issues](https://github.com/timeplus-io/proton/issues) here on GitHub.
 

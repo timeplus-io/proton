@@ -60,6 +60,8 @@ public:
     void preProcess(const Block & header);
     void process(Chunk & chunk);
 
+    bool requiresPeriodicOrTimeoutEmit() const { return periodic_interval || timeout_interval; }
+
     VersionType getVersion() const;
 
     virtual void serialize(WriteBuffer & wb) const;

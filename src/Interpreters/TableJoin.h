@@ -144,6 +144,12 @@ private:
     /// proton : starts.
     Streaming::RangeAsofJoinContext range_asof_join_ctx;
     TablesWithColumns tables_with_columns;
+    /// If lag_interval > 0 : left stream lag behind right stream.
+    /// If lag_interval < 0 : right stream lag behind left stream.
+    Int64 lag_interval = 0;
+    size_t data_block_size = 0;
+    String left_table_lag_column;
+    String right_table_lag_column;
     /// proton : ends
 
     /// All columns which can be read from joined table. Duplicating names are qualified.
@@ -341,17 +347,25 @@ public:
     std::shared_ptr<const IKeyValueEntity> getStorageKeyValue() { return right_kv_storage; }
 
     /// proton : starts
+    void setDataBlockSize(size_t data_block_size_) noexcept { data_block_size = data_block_size_; }
+    size_t dataBlockSize() const noexcept { return data_block_size; }
+    void addLagBehindKeys(const ASTPtr & left_table_ast, const ASTPtr & right_table_ast);
+    /// \lag_interval is milliseconds granularity
+    void setLagBehindInterval(Int64 lag_interval_) { lag_interval = lag_interval_; }
+    auto lagBehindInterval() const noexcept { return lag_interval; }
+    const auto & leftLagBehindColumn() const noexcept { return left_table_lag_column; }
+    const auto & rightLagBehindColumn() const noexcept { return right_table_lag_column; }
     void setTableJoin(ASTTableJoin && table_join_) { table_join = std::move(table_join_); }
     void setTablesWithColumns(const TablesWithColumns & tables_with_columns_) { tables_with_columns = tables_with_columns_; }
-    const TablesWithColumns & getTablesWithColumns() { return tables_with_columns; }
-    void setRangeAsofLeftInequality(ASOFJoinInequality inequality) { range_asof_join_ctx.left_inequality = inequality; }
-    void setRangeAsofRightInequality(ASOFJoinInequality inequality) { range_asof_join_ctx.right_inequality = inequality; }
-    void setRangeAsofLowerBound(Int64 lower_bound) { range_asof_join_ctx.lower_bound = lower_bound; }
-    void setRangeAsofUpperBound(Int64 upper_bound) { range_asof_join_ctx.upper_bound = upper_bound; }
-    void setRangeType(Streaming::RangeType range_type_) { range_asof_join_ctx.type = range_type_; }
-    const Streaming::RangeAsofJoinContext & rangeAsofJoinContext() const { return range_asof_join_ctx; }
+    const TablesWithColumns & getTablesWithColumns() const noexcept { return tables_with_columns; }
+    void setRangeAsofLeftInequality(ASOFJoinInequality inequality) noexcept { range_asof_join_ctx.left_inequality = inequality; }
+    void setRangeAsofRightInequality(ASOFJoinInequality inequality) noexcept { range_asof_join_ctx.right_inequality = inequality; }
+    void setRangeAsofLowerBound(Int64 lower_bound) noexcept { range_asof_join_ctx.lower_bound = lower_bound; }
+    void setRangeAsofUpperBound(Int64 upper_bound) noexcept { range_asof_join_ctx.upper_bound = upper_bound; }
+    void setRangeType(Streaming::RangeType range_type_) noexcept { range_asof_join_ctx.type = range_type_; }
+    const Streaming::RangeAsofJoinContext & rangeAsofJoinContext() const noexcept { return range_asof_join_ctx; }
     void validateRangeAsof(Int64 max_range) const;
-    bool isRangeJoin() const { return range_asof_join_ctx.type != Streaming::RangeType::None; }
+    bool isRangeJoin() const noexcept { return range_asof_join_ctx.type != Streaming::RangeType::None; }
 
     /// For bidirectional hash join
     Block getRequiredLeftKeys(const Block & right_table_keys, std::vector<String> & keys_sources) const;

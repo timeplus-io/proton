@@ -186,6 +186,7 @@ void KafkaWALPool::init(const std::string & key, DB::ContextPtr global_context)
         {".security_protocol", "string", &kafka_settings.auth.security_protocol},
         {".username", "string", &kafka_settings.auth.username},
         {".password", "string", &kafka_settings.auth.password},
+        {".ssl_ca_cert_file", "string", &kafka_settings.auth.ssl_ca_cert_file},
     };
 
     for (const auto & t : settings)
@@ -234,10 +235,11 @@ void KafkaWALPool::init(const std::string & key, DB::ContextPtr global_context)
         throw DB::Exception("Duplicated Kafka cluster id " + kafka_settings.cluster_id, DB::ErrorCodes::BAD_ARGUMENTS);
 
     if (!boost::iequals(kafka_settings.auth.security_protocol, "plaintext")
+        && !boost::iequals(kafka_settings.auth.security_protocol, "sasl_plaintext")
         && !boost::iequals(kafka_settings.auth.security_protocol, "sasl_ssl"))
         throw DB::Exception(
             DB::ErrorCodes::NOT_IMPLEMENTED,
-            "Invalid logstore kafka settings security_protocol: {}. Only plaintext or sasl_ssl are supported",
+            "Invalid logstore kafka settings security_protocol: {}. Only plaintext, sasl_plaintext or sasl_ssl are supported",
             kafka_settings.auth.security_protocol);
 
     /// Create WALs
@@ -416,7 +418,7 @@ KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreamingExternal(const Strin
     for (const auto & consumer : consumers.second)
     {
         const auto & consumer_settings = consumer->getSettings();
-        if (consumer.use_count() == 1 && consumer_settings.fetch_wait_max_ms == fetch_wait_max_ms)
+        if (consumer.use_count() == 1 && consumer_settings.fetch_wait_max_ms == fetch_wait_max_ms && consumer_settings.auth == auth)
         {
             LOG_INFO(log, "Reusing external Kafka consume with settings={}", consumer_settings.string());
             return consumer;
@@ -426,10 +428,12 @@ KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreamingExternal(const Strin
     /// consumer is used up and if we didn't reach maximum
     if (consumers.second.size() < consumers.first)
     {
-        if (!boost::iequals(auth.security_protocol, "plaintext") && !boost::iequals(auth.security_protocol, "sasl_ssl"))
+        if (!boost::iequals(auth.security_protocol, "plaintext")
+            && !boost::iequals(auth.security_protocol, "sasl_plaintext")
+            && !boost::iequals(auth.security_protocol, "sasl_ssl"))
             throw DB::Exception(
                 DB::ErrorCodes::NOT_IMPLEMENTED,
-                "Invalid logstore kafka settings security_protocol: {}. Only plaintext or sasl_ssl are supported",
+                "Invalid logstore kafka settings security_protocol: {}. Only plaintext, sasl_plaintext or sasl_ssl are supported",
                 auth.security_protocol);
 
         /// Create one

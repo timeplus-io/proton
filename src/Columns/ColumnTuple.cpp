@@ -475,6 +475,18 @@ size_t ColumnTuple::allocatedBytes() const
     return res;
 }
 
+/// proton : starts
+size_t ColumnTuple::allocatedMetadataBytes() const
+{
+    size_t res = 0;
+    for (const auto & column : columns)
+        res += column->allocatedMetadataBytes();
+
+    res += sizeof(TupleColumns) + columns.size() * sizeof(WrappedPtr);
+    return res;
+}
+/// proton : ends
+
 void ColumnTuple::protect()
 {
     for (auto & column : columns)

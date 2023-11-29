@@ -167,12 +167,16 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
     /// properies from settings have higher priority
     producer_params.emplace_back("bootstrap.servers", kafka->brokers());
     producer_params.emplace_back("security.protocol", kafka->securityProtocol());
-    if (boost::iequals(kafka->securityProtocol(), "SASL_SSL"))
+    if (boost::iequals(kafka->securityProtocol(), "SASL_PLAINTEXT")
+        || boost::iequals(kafka->securityProtocol(), "SASL_SSL"))
     {
         producer_params.emplace_back("sasl.mechanisms", "PLAIN");
         producer_params.emplace_back("sasl.username", kafka->username());
         producer_params.emplace_back("sasl.password", kafka->password());
     }
+
+    if (boost::iequals(kafka->securityProtocol(), "SASL_SSL") && !kafka->sslCaCertFile().empty())
+        producer_params.emplace_back("ssl.ca.location", kafka->sslCaCertFile());
 
     auto * conf = rd_kafka_conf_new();
     char errstr[512]{'\0'};
@@ -224,8 +228,11 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
         data_format = "JSONEachRow";
 
     /// The callback allows `IRowOutputFormat` based formats produce one Kafka message per row.
-    writer = FormatFactory::instance().getOutputFormat(
-        data_format, *wb, header, context, [this](auto & /*column*/, auto /*row*/) { wb->next(); });
+    if (kafka->produceOneMessagePerRow())
+        writer = FormatFactory::instance().getOutputFormat(
+            data_format, *wb, header, context, [this](auto & /*column*/, auto /*row*/) { wb->next(); });
+    else
+        writer = FormatFactory::instance().getOutputFormat(data_format, *wb, header, context);
     writer->setAutoFlush();
 
     partitioner = std::make_unique<KafkaStream::ChunkPartitioner>(context, header, kafka->partitioning_expr_ast());

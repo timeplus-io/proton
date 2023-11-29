@@ -43,6 +43,7 @@ KafkaSource::KafkaSource(
     , max_block_size(max_block_size_)
     , log(log_)
     , header(header_)
+    , non_virtual_header(storage_snapshot->metadata->getSampleBlockNonMaterialized())
     , consume_ctx(kafka->topic(), shard, offset)
     , read_buffer("", 0)
     , virtual_time_columns_calc(header.columns(), nullptr)
@@ -178,24 +179,29 @@ void KafkaSource::parseRaw(const rd_kafka_message_t * kmessage)
 void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
 {
     assert(format_executor);
+    assert(convert_non_virtual_to_physical_action);
 
     ReadBufferFromMemory buffer(static_cast<const char *>(kmessage->payload), kmessage->len);
     auto new_rows = format_executor->execute(buffer);
     if (!new_rows)
         return;
 
+    auto result_block  = non_virtual_header.cloneWithColumns(format_executor->getResultColumns());
+    convert_non_virtual_to_physical_action->execute(result_block);
+
+    MutableColumns new_data(result_block.mutateColumns());
+
     if (!request_virtual_columns)
     {
         if (!current_batch.empty())
         {
             /// Merge all data in the current batch into the same chunk to avoid too many small chunks
-            auto new_data(format_executor->getResultColumns());
             for (size_t pos = 0; pos < current_batch.size(); ++pos)
                 current_batch[pos]->insertRangeFrom(*new_data[pos], 0, new_rows);
         }
         else
         {
-            current_batch = format_executor->getResultColumns();
+            current_batch = std::move(new_data);
         }
     }
     else
@@ -206,7 +212,6 @@ void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
             assert(current_batch.size() == virtual_time_columns_calc.size());
 
             /// slower path
-            auto new_data(format_executor->getResultColumns());
             for (size_t i = 0, j = 0, n = virtual_time_columns_calc.size(); i < n; ++i)
             {
                 if (!virtual_time_columns_calc[i])
@@ -224,7 +229,6 @@ void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
         else
         {
             /// slower path
-            auto new_data(format_executor->getResultColumns());
             for (size_t i = 0, j = 0, n = virtual_time_columns_calc.size(); i < n; ++i)
             {
                 if (!virtual_time_columns_calc[i])
@@ -260,8 +264,12 @@ void KafkaSource::initConsumer(const Kafka * kafka)
         consume_ctx.auto_offset_reset = "earliest";
 
     consume_ctx.enforce_offset = true;
-    klog::KafkaWALAuth auth
-        = {.security_protocol = kafka->securityProtocol(), .username = kafka->username(), .password = kafka->password()};
+    klog::KafkaWALAuth auth = {
+        .security_protocol = kafka->securityProtocol(),
+        .username = kafka->username(),
+        .password = kafka->password(),
+        .ssl_ca_cert_file = kafka->sslCaCertFile()
+    };
     consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(kafka->brokers(), auth, record_consume_timeout_ms);
     consumer->initTopicHandle(consume_ctx);
 }
@@ -272,10 +280,17 @@ void KafkaSource::initFormatExecutor(const Kafka * kafka)
     if (!data_format.empty())
     {
         auto input_format
-            = FormatFactory::instance().getInputFormat(data_format, read_buffer, physical_header, query_context, max_block_size);
+            = FormatFactory::instance().getInputFormat(data_format, read_buffer, non_virtual_header, query_context, max_block_size);
 
         format_executor = std::make_unique<StreamingFormatExecutor>(
-            physical_header, std::move(input_format), [](const MutableColumns &, Exception &) -> size_t { return 0; });
+            non_virtual_header, std::move(input_format), [](const MutableColumns &, Exception &) -> size_t { return 0; });
+
+        auto converting_dag = ActionsDAG::makeConvertingActions(
+            non_virtual_header.cloneEmpty().getColumnsWithTypeAndName(),
+            physical_header.cloneEmpty().getColumnsWithTypeAndName(),
+            ActionsDAG::MatchColumnsMode::Name);
+
+        convert_non_virtual_to_physical_action = std::make_shared<ExpressionActions>(std::move(converting_dag));
     }
 }
 
@@ -370,9 +385,7 @@ Chunk KafkaSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
 {
     /// Prepare checkpoint barrier chunk
     auto result = header_chunk.clone();
-    auto chunk_ctx = std::make_shared<ChunkContext>();
-    chunk_ctx->setCheckpointContext(ckpt_ctx_);
-    result.setChunkContext(std::move(chunk_ctx));
+    result.setCheckpointContext(ckpt_ctx_);
 
     ckpt_ctx_->coordinator->checkpoint(State::VERSION, getLogicID(), ckpt_ctx_, [&](WriteBuffer & wb) { ckpt_data.serialize(wb); });
 

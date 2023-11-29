@@ -5,7 +5,8 @@
 #include <Columns/IColumn.h>
 #include <Interpreters/RowRefs.h>
 #include <Interpreters/Streaming/RangeAsofJoinContext.h>
-#include <Interpreters/Streaming/RefCountBlockList.h>
+#include <Interpreters/Streaming/RefCountDataBlockList.h>
+#include <Interpreters/Streaming/SortedLookupContainer.h>
 #include <Interpreters/Streaming/joinSerder_fwd.h>
 #include <Interpreters/Streaming/joinTuple.h>
 #include <base/sort.h>
@@ -153,15 +154,15 @@ struct RowRefWithRefCount
 {
     using SizeT = uint32_t; /// Do not use size_t cause of memory economy
 
-    RefCountBlockList<DataBlock> * blocks;
-    typename RefCountBlockList<DataBlock>::iterator block_iter;
+    RefCountDataBlockList<DataBlock> * blocks;
+    typename RefCountDataBlockList<DataBlock>::iterator block_iter;
     SizeT row_num;
 
     /// We need this default ctor since hash table framework will call the default one initially
     RowRefWithRefCount() : blocks(nullptr), row_num(0) { }
 
-    RowRefWithRefCount(RefCountBlockList<DataBlock> * blocks_, size_t row_num_)
-        : blocks(blocks_), block_iter(blocks_->lastBlockIter()), row_num(static_cast<SizeT>(row_num_))
+    RowRefWithRefCount(RefCountDataBlockList<DataBlock> * blocks_, size_t row_num_)
+        : blocks(blocks_), block_iter(blocks_->lastDataBlockIter()), row_num(static_cast<SizeT>(row_num_))
     {
         assert(blocks_);
     }
@@ -209,7 +210,7 @@ struct RowRefWithRefCount
 
     void serialize(const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const;
     void deserialize(
-        RefCountBlockList<DataBlock> * block_list,
+        RefCountDataBlockList<DataBlock> * block_list,
         const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks,
         ReadBuffer & rb);
 
@@ -236,7 +237,7 @@ struct RowRefListMultiple
 
     std::list<RowRefDataBlock> rows;
 
-    Iterator insert(RefCountBlockList<DataBlock> * blocks, size_t row_num) { return rows.emplace(rows.end(), blocks, row_num); }
+    Iterator insert(RefCountDataBlockList<DataBlock> * blocks, size_t row_num) { return rows.emplace(rows.end(), blocks, row_num); }
 
     void erase(Iterator iterator) { rows.erase(iterator); }
 
@@ -245,7 +246,7 @@ struct RowRefListMultiple
         WriteBuffer & wb,
         SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices = nullptr) const;
     void deserialize(
-        RefCountBlockList<DataBlock> * block_list,
+        RefCountDataBlockList<DataBlock> * block_list,
         const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks,
         ReadBuffer & rb,
         DeserializedIndicesToRowRefListMultiple<DataBlock> * deserialized_indices_to_row_ref_list_multiple = nullptr);
@@ -280,67 +281,6 @@ struct RowRefListMultipleRef
 template <typename DataBlock>
 using RowRefListMultipleRefPtr = std::unique_ptr<RowRefListMultipleRef<DataBlock>>;
 
-template <typename RowRefDataBlock, typename TEntry>
-class SortedLookupVector
-{
-public:
-    using Base = std::vector<TEntry>;
-
-    void insert(TEntry entry, bool ascending)
-    {
-        auto it = std::lower_bound(array.begin(), array.end(), entry, (ascending ? less : greater));
-        array.insert(it, entry);
-    }
-
-    const RowRefDataBlock * upperBound(const TEntry & k, bool ascending)
-    {
-        auto it = std::upper_bound(array.cbegin(), array.cend(), k, (ascending ? less : greater));
-        if (it != array.cend())
-            return &(it->row_ref);
-        return nullptr;
-    }
-
-    const RowRefDataBlock * lowerBound(const TEntry & k, bool ascending)
-    {
-        auto it = std::lower_bound(array.cbegin(), array.cend(), k, (ascending ? less : greater));
-        if (it != array.cend())
-            return &(it->row_ref);
-        return nullptr;
-    }
-
-    void truncateTo(size_t max_size, bool ascending)
-    {
-        if (array.size() > max_size)
-        {
-            if (ascending)
-                array.erase(array.begin(), array.begin() + array.size() - max_size);
-            else
-                array.erase(array.end() - (array.size() - max_size), array.end());
-
-            array.shrink_to_fit();
-        }
-    }
-
-    using iterator = typename Base::iterator;
-    using const_iterator = typename Base::const_iterator;
-
-    iterator begin() { return array.begin(); }
-    iterator end() { return array.end(); }
-
-    size_t size() const { return array.size(); }
-    void resize(size_t s) { array.resize(s); }
-
-    const_iterator begin() const { return array.begin(); }
-    const_iterator end() const { return array.end(); }
-
-private:
-    Base array;
-
-    static bool less(const TEntry & a, const TEntry & b) { return a.asof_value < b.asof_value; }
-
-    static bool greater(const TEntry & a, const TEntry & b) { return a.asof_value > b.asof_value; }
-};
-
 template <typename DataBlock>
 class AsofRowRefs
 {
@@ -349,8 +289,9 @@ public:
     template <typename T>
     struct Entry
     {
-        using LookupType = SortedLookupVector<RowRefDataBlock, Entry<T>>;
+        using LookupType = SortedLookupContainer<RowRefDataBlock, Entry<T>>;
         using LookupPtr = std::unique_ptr<LookupType>;
+
         T asof_value;
         RowRefDataBlock row_ref;
 
@@ -383,7 +324,8 @@ public:
     void insert(
         TypeIndex type,
         const IColumn & asof_column,
-        RefCountBlockList<DataBlock> * blocks,
+        RefCountDataBlockList<DataBlock> * blocks,
+        size_t original_row_num,
         size_t row_num,
         ASOFJoinInequality inequality,
         size_t keep_versions);
@@ -394,7 +336,7 @@ public:
     void serialize(TypeIndex type, const SerializedBlocksToIndices & serialized_blocks_to_indices, WriteBuffer & wb) const;
     void deserialize(
         TypeIndex type,
-        RefCountBlockList<DataBlock> * block_list,
+        RefCountDataBlockList<DataBlock> * block_list,
         const DeserializedIndicesToBlocks<DataBlock> & deserialized_indices_to_blocks,
         ReadBuffer & rb);
 
@@ -440,7 +382,7 @@ public:
 
     explicit RangeAsofRowRefs(TypeIndex t);
 
-    void insert(TypeIndex type, const IColumn & asof_column, const DataBlock * block, size_t row_num);
+    void insert(TypeIndex type, const IColumn & asof_column, const DataBlock * block, size_t original_row_num, size_t row_num);
 
     /// Find a range of rows which can be joined
     std::vector<RowRefDataBlock> findRange(

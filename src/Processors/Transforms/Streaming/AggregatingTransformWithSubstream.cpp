@@ -77,7 +77,7 @@ void AggregatingTransformWithSubstream::work()
     auto num_rows = current_chunk.getNumRows();
     if (num_rows == 0 && !current_chunk.hasChunkContext())
     {
-        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0}, nullptr);
+        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0});
         /// Remember to reset `read_current_chunk`
         read_current_chunk = false;
         return;
@@ -89,13 +89,9 @@ void AggregatingTransformWithSubstream::work()
 
     if (likely(!is_consume_finished))
     {
-        SubstreamContextPtr substream_ctx = nullptr;
-        if (const auto & substream_id = current_chunk.getSubstreamID(); substream_id != Streaming::INVALID_SUBSTREAM_ID)
-            substream_ctx = getOrCreateSubstreamContext(substream_id);
-
+        SubstreamContextPtr substream_ctx = getOrCreateSubstreamContext(current_chunk.getSubstreamID());
         if (num_rows > 0)
         {
-            assert(substream_ctx);
             substream_ctx->addRowCount(num_rows);
             src_rows += num_rows;
             src_bytes += chunk_bytes;
@@ -123,19 +119,43 @@ void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamCont
 
     /// Since checkpoint barrier is always standalone, it can't coexist with watermark,
     /// we handle watermark and checkpoint barrier separately
-    if (chunk.hasWatermark() || need_finalization)
+    /// Watermark and need_finalization shall not be true at the same time
+    /// since when UDA has user defined emit strategy, watermark is disabled
+    if (chunk.hasWatermark())
     {
-        /// Watermark and need_finalization shall not be true at the same time
-        /// since when UDA has user defined emit strategy, watermark is disabled
-        assert(!(chunk.hasWatermark() && need_finalization));
+        finalize(substream_ctx, chunk.getChunkContext());
+        /// We always propagate the finalized watermark, since the downstream may depend on it.
+        /// For example:
+        ///     `WITH cte AS (SELECT i, count() FROM test_31_multishards_stream WHERE _tp_time > earliest_ts() PARTITION BY i) SELECT count() FROM cte`
+        /// As you can see, the outer global aggregation depends on the periodic watermark of the inner global aggregation 
+        propagateWatermarkAndClearExpiredStates(substream_ctx);
+    }
+    else if (need_finalization)
+    {
         finalize(substream_ctx, chunk.getChunkContext());
     }
     else if (chunk.requestCheckpoint())
     {
         checkpoint(chunk.getCheckpointContext());
         /// Propagate the checkpoint barrier to all down stream output ports
-        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0}, chunk.getChunkContext());
+        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0, nullptr, chunk.getChunkContext()});
     }
+}
+
+void AggregatingTransformWithSubstream::propagateWatermarkAndClearExpiredStates(const SubstreamContextPtr & substream_ctx)
+{
+    assert(substream_ctx);
+    if (!has_input)
+    {
+        auto chunk_ctx = ChunkContext::create();
+        chunk_ctx->setSubstreamID(substream_ctx->id);
+        chunk_ctx->setWatermark(substream_ctx->finalized_watermark);
+        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0, nullptr, std::move(chunk_ctx)});
+    }
+    else
+        assert(substream_ctx->finalized_watermark == current_chunk_aggregated.getWatermark());
+
+    clearExpiredState(substream_ctx->finalized_watermark, substream_ctx);
 }
 
 void AggregatingTransformWithSubstream::emitVersion(Chunk & chunk, const SubstreamContextPtr & substream_ctx)
@@ -160,7 +180,7 @@ void AggregatingTransformWithSubstream::emitVersion(Chunk & chunk, const Substre
     }
 }
 
-void AggregatingTransformWithSubstream::setCurrentChunk(Chunk chunk, const ChunkContextPtr & chunk_ctx, Chunk retracted_chunk)
+void AggregatingTransformWithSubstream::setCurrentChunk(Chunk chunk, Chunk retracted_chunk)
 {
     if (has_input)
         throw Exception("Current chunk was already set.", ErrorCodes::LOGICAL_ERROR);
@@ -171,21 +191,10 @@ void AggregatingTransformWithSubstream::setCurrentChunk(Chunk chunk, const Chunk
     has_input = true;
     current_chunk_aggregated = std::move(chunk);
 
-    if (chunk_ctx)
-    {
-        /// NOTE: For StremaingShrinkResize of downstream, it's need all inputs propagate watermark then do watermark alignment,
-        /// So the watermark cannot be cleared. On the other hand, if the downstream needs to establish its own watermark,
-        /// the watermark will be cleared and reassigned in another `WatermarkStamper` of downstream.
-        // if (params->final && params->params.group_by != Aggregator::Params::GroupBy::OTHER)
-        //     chunk_ctx->clearWatermark();
-
-        current_chunk_aggregated.setChunkContext(std::move(chunk_ctx));
-    }
-
     if (retracted_chunk.rows())
     {
         current_chunk_retracted = std::move(retracted_chunk);
-        current_chunk_retracted.getOrCreateChunkContext()->setRetractedDataFlag();
+        current_chunk_retracted.setRetractedDataFlag();
     }
 }
 
@@ -205,8 +214,6 @@ std::pair<bool, bool> AggregatingTransformWithSubstream::executeOrMergeColumns(C
 
 SubstreamContextPtr AggregatingTransformWithSubstream::getOrCreateSubstreamContext(const SubstreamID & id)
 {
-    assert(id != INVALID_SUBSTREAM_ID);
-
     auto iter = substream_contexts.find(id);
     if (iter == substream_contexts.end())
         return substream_contexts.emplace(id, std::make_shared<SubstreamContext>(this, id)).first->second;

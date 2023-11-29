@@ -1,8 +1,8 @@
 #pragma once
 
+#include <Core/BlockWithShard.h>
 #include <Interpreters/Streaming/IHashJoin.h>
 #include <Interpreters/Streaming/JoinStreamDescription.h>
-#include <Core/BlockWithShard.h>
 
 namespace DB
 {
@@ -46,6 +46,7 @@ public:
     bool emitChangeLog() const override { return hash_joins[0]->data->emitChangeLog(); }
     bool bidirectionalHashJoin() const override { return hash_joins[0]->data->bidirectionalHashJoin(); }
     bool rangeBidirectionalHashJoin() const override { return hash_joins[0]->data->rangeBidirectionalHashJoin(); }
+    bool requireWatermarkAlignedStreams() const override { return hash_joins[0]->data->requireWatermarkAlignedStreams(); }
 
     /// "Legacy API", use insertRightBlock()
     bool addJoinedBlock(const Block & block, bool check_limits) override;
@@ -61,10 +62,22 @@ public:
     std::shared_ptr<NotJoinedBlocks>
     getNonJoinedBlocks(const Block & left_sample_block, const Block & result_sample_block, UInt64 max_block_size) const override;
 
-    void
-    getKeyColumnPositions(std::vector<size_t> & left_key_column_positions_, std::vector<size_t> & right_key_column_positions_, bool include_asof_key_column) const override
+    void getKeyColumnPositions(
+        std::vector<size_t> & left_key_column_positions_,
+        std::vector<size_t> & right_key_column_positions_,
+        bool include_asof_key_column) const override
     {
         hash_joins[0]->data->getKeyColumnPositions(left_key_column_positions_, right_key_column_positions_, include_asof_key_column);
+    }
+
+    JoinStreamDescriptionPtr leftJoinStreamDescription() const noexcept override
+    {
+        return hash_joins[0]->data->leftJoinStreamDescription();
+    }
+
+    JoinStreamDescriptionPtr rightJoinStreamDescription() const noexcept override
+    {
+        return hash_joins[0]->data->rightJoinStreamDescription();
     }
 
     void serialize(WriteBuffer &) const override;

@@ -584,7 +584,9 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
         return;
     }
 
-    settings.ostr << (settings.hilite ? hilite_function : "") << name;
+    /// proton: starts. show covered_name instead of name
+    settings.ostr << (settings.hilite ? hilite_function : "") << (covered_name.empty() ? name : covered_name);
+    /// proton: ends.
 
     if (parameters)
     {

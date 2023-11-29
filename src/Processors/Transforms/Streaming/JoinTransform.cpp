@@ -201,7 +201,7 @@ void JoinTransform::work()
         /// Propagate request checkpoint
         std::scoped_lock lock(mutex);
         assert(!output_chunks.empty());
-        output_chunks.back().getOrCreateChunkContext()->setCheckpointContext(std::move(requested_ckpt));
+        output_chunks.back().setCheckpointContext(std::move(requested_ckpt));
     }
 }
 
@@ -220,7 +220,7 @@ inline bool JoinTransform::setupWatermark(Chunk & chunk, int64_t local_watermark
         watermark = local_watermark;
 
         /// Propagate it
-        chunk.getOrCreateChunkContext()->setWatermark(local_watermark);
+        chunk.setWatermark(local_watermark);
         return true;
     }
     return false;
@@ -278,7 +278,7 @@ inline void JoinTransform::joinBidirectionally(Chunks chunks)
             if (retracted_block_rows)
             {
                 /// Don't watermark this block. We can concat retracted / result blocks or use avoid watermarking
-                auto chunk_ctx = std::make_shared<ChunkContext>();
+                auto chunk_ctx = ChunkContext::create();
                 chunk_ctx->setRetractedDataFlag();
                 output_chunks.emplace_back(retracted_block.getColumns(), retracted_block_rows, nullptr, std::move(chunk_ctx));
             }

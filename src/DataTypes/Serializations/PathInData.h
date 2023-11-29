@@ -33,6 +33,8 @@ public:
         UInt8 anonymous_array_level = 0;
 
         bool operator==(const Part & other) const = default;
+
+        size_t allocatedSize() const { return sizeof(*this); } /// proton : starts. Newly added
     };
 
     using Parts = std::vector<Part>;
@@ -56,6 +58,18 @@ public:
 
     bool operator==(const PathInData & other) const { return parts == other.parts; }
     struct Hash { size_t operator()(const PathInData & value) const; };
+
+    /// proton : starts
+    size_t allocatedSize() const
+    {
+        size_t res = sizeof(path) + path.size() + sizeof(has_nested);
+        res += sizeof(parts);
+        for (const auto & part : parts)
+            res += part.allocatedSize();
+
+        return res;
+    }
+    /// proton : ends
 
 private:
     /// Creates full path from parts.

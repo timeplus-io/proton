@@ -1,7 +1,5 @@
 #include <Interpreters/Streaming/OptimizeJsonValueVisitor.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
-#include <Parsers/ExpressionListParsers.h>
-#include <Parsers/IAST.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>

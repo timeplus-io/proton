@@ -201,7 +201,7 @@ void ChangelogConvertTransform::retractAndIndex(size_t rows, const ColumnRawPtrs
 {
     /// std::scoped_lock lock(mutex);
 
-    source_chunks.push_back(std::move(input_data.chunk));
+    source_chunks.pushBack(std::move(input_data.chunk));
     assert(!input_data.chunk);
 
     /// Prepare 2 resulting chunks : 1) retracting chunk 2) transformed origin chunk
@@ -212,7 +212,7 @@ void ChangelogConvertTransform::retractAndIndex(size_t rows, const ColumnRawPtrs
     KeyGetter key_getter(key_columns, key_sizes, nullptr);
 
     size_t num_retractions = 0;
-    const auto & last_inserted_chunk = source_chunks.lastBlock();
+    const auto & last_inserted_chunk = source_chunks.lastDataBlock();
     const auto & last_inserted_chunk_columns = last_inserted_chunk.getColumns();
 
     /// In the same chunk, we may have multiple rows which have same primary key values, in this case
@@ -310,7 +310,7 @@ void ChangelogConvertTransform::retractAndIndex(size_t rows, const ColumnRawPtrs
         /// We also can't concat -1 / +1 chunks since downstream join depends on this separation
         /// behavior meaning depends on a chunk is either all retraction or all append which
         /// largely simplify its logic and usually more performant
-        output_chunks.back().getOrCreateChunkContext()->setRetractedDataFlag();
+        output_chunks.back().setRetractedDataFlag();
     }
 
     /// Composing resulting chunk

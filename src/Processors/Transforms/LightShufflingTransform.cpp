@@ -138,10 +138,12 @@ void LightShufflingTransform::consume(Chunk chunk)
 {
     if (chunk.hasRows())
     {
+        auto chunk_ctx = chunk.getChunkContext(); /// save chunk context before split
         auto split_chunks{chunk_splitter.split(chunk)};
         for (auto & chunk_with_shard : split_chunks)
         {
             assert(chunk_with_shard.chunk);
+            chunk_with_shard.chunk.setChunkContext(chunk_ctx);
             shuffled_output_chunks[chunk_with_shard.shard].push(std::move(chunk_with_shard.chunk));
         }
     }

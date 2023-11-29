@@ -21,6 +21,8 @@ GlobalAggregatingTransformWithSubstream::GlobalAggregatingTransformWithSubstream
         ProcessorID::GlobalAggregatingTransformWithSubstreamID)
 {
     assert(params->params.group_by == Aggregator::Params::GroupBy::OTHER);
+    if (params->emit_changelog && params->emit_version)
+        throw Exception(ErrorCodes::UNSUPPORTED, "'emit_version()' is not supported in global aggregation emit changelog");
 }
 
 SubstreamContextPtr GlobalAggregatingTransformWithSubstream::getOrCreateSubstreamContext(const SubstreamID & id)
@@ -28,21 +30,18 @@ SubstreamContextPtr GlobalAggregatingTransformWithSubstream::getOrCreateSubstrea
     auto substream_ctx = AggregatingTransformWithSubstream::getOrCreateSubstreamContext(id);
     if (params->emit_changelog && !substream_ctx->hasField())
     {
-        if (params->emit_version)
-            throw Exception(ErrorCodes::UNSUPPORTED, "'emit_version()' is not supported in global aggregation emit changelog");
-
         substream_ctx->setField(
             {std::make_shared<RetractedDataVariants>(),
-             /// Field serializer
-             [this](const std::any & field, WriteBuffer & wb) {
-                 const auto & data = std::any_cast<const RetractedDataVariantsPtr &>(field);
-                 params->aggregator.checkpoint(*data, wb);
-             },
-             /// Field deserializer
-             [this](std::any & field, ReadBuffer & rb) {
-                 auto & data = std::any_cast<RetractedDataVariantsPtr &>(field);
-                 params->aggregator.recover(*data, rb);
-             }});
+            /// Field serializer
+            [this](const std::any & field, WriteBuffer & wb) {
+                const auto & data = std::any_cast<const RetractedDataVariantsPtr &>(field);
+                params->aggregator.checkpoint(*data, wb);
+            },
+            /// Field deserializer
+            [this](std::any & field, ReadBuffer & rb) {
+                auto & data = std::any_cast<RetractedDataVariantsPtr &>(field);
+                params->aggregator.recover(*data, rb);
+            }});
     }
     return substream_ctx;
 }
@@ -71,9 +70,10 @@ void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
 {
     assert(substream_ctx);
 
+    auto finalized_watermark = chunk_ctx->getWatermark();
     SCOPE_EXIT({
         substream_ctx->resetRowCounts();
-        substream_ctx->finalized_watermark = chunk_ctx->getWatermark();
+        substream_ctx->finalized_watermark = finalized_watermark;
     });
 
     /// If there is no new data, don't emit aggr result
@@ -89,7 +89,8 @@ void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
     {
         auto [retracted_chunk, chunk]
             = AggregatingHelper::convertToChangelogChunk(variants, *substream_ctx->getField<RetractedDataVariantsPtr>(), *params);
-        setCurrentChunk(std::move(chunk), chunk_ctx, std::move(retracted_chunk));
+        chunk.setChunkContext(chunk_ctx);
+        setCurrentChunk(std::move(chunk), std::move(retracted_chunk));
     }
     else
     {
@@ -97,7 +98,8 @@ void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
         if (params->final && params->emit_version)
             emitVersion(chunk, substream_ctx);
 
-        setCurrentChunk(std::move(chunk), chunk_ctx);
+        chunk.setChunkContext(chunk_ctx);
+        setCurrentChunk(std::move(chunk));
     }
     auto end = MonotonicMilliseconds::now();
 

@@ -46,7 +46,8 @@ void UserDefinedEmitStrategyAggregatingTransform::finalize(const ChunkContextPtr
     if (params->emit_version && params->final)
         emitVersion(chunk);
 
-    setCurrentChunk(std::move(chunk), chunk_ctx);
+    chunk.setChunkContext(chunk_ctx);
+    setCurrentChunk(std::move(chunk));
 }
 }
 }

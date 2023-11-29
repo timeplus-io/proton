@@ -228,6 +228,11 @@ public:
     /// to skip using squashing.
     virtual bool squashInsert() const noexcept { return true; }
 
+    /// If a query uses time-based seek_to and the storage does not support accurate seek_to,
+    /// the query will be rewritten by adding a prediction for filtering records by time
+    /// (see InterpreterSelectQuery.cpp).
+    virtual bool supportsAccurateSeekTo() const noexcept { return false; }
+
     virtual bool supportsStreamingQuery() const { return false; }
     /// proton: ends.
 

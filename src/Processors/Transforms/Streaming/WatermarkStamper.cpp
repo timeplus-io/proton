@@ -189,7 +189,7 @@ void WatermarkStamper::processPeriodic(Chunk & chunk)
 
     next_periodic_emit_ts = now + periodic_interval;
 
-    chunk.getOrCreateChunkContext()->setWatermark(now);
+    chunk.setWatermark(now);
 }
 
 void WatermarkStamper::processTimeout(Chunk & chunk)
@@ -213,7 +213,7 @@ void WatermarkStamper::processTimeout(Chunk & chunk)
     watermark_ts = max_event_ts + 1;
     next_timeout_emit_ts = now + timeout_interval;
 
-    chunk.getOrCreateChunkContext()->setWatermark(TIMEOUT_WATERMARK);
+    chunk.setWatermark(TIMEOUT_WATERMARK);
     LOG_DEBUG(log, "Timeout emit time={}, rows={}", now, chunk.getNumRows());
 }
 
@@ -310,8 +310,7 @@ void WatermarkStamper::processWatermark(Chunk & chunk)
     /// Use max event time as new watermark
     if (event_ts_watermark > watermark_ts)
     {
-        auto chunk_ctx = chunk.getOrCreateChunkContext();
-        chunk_ctx->setWatermark(event_ts_watermark);
+        chunk.setWatermark(event_ts_watermark);
         watermark_ts = event_ts_watermark;
     }
 }

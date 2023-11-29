@@ -1,10 +1,9 @@
-#include <Interpreters/Streaming/RefCountBlockList.h>
+#include <Interpreters/Streaming/RefCountDataBlockList.h>
 
 #include <Formats/SimpleNativeReader.h>
 #include <Formats/SimpleNativeWriter.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Processors/Chunk.h>
 #include <Common/VersionRevision.h>
 
 namespace DB
@@ -12,7 +11,7 @@ namespace DB
 namespace Streaming
 {
 template <typename DataBlock>
-void RefCountBlockList<DataBlock>::serialize(
+void RefCountDataBlockList<DataBlock>::serialize(
     const Block & header, WriteBuffer & wb, SerializedBlocksToIndices * serialized_blocks_to_indices) const
 {
     DB::writeIntBinary(min_ts, wb);
@@ -39,7 +38,7 @@ void RefCountBlockList<DataBlock>::serialize(
 }
 
 template <typename DataBlock>
-void RefCountBlockList<DataBlock>::deserialize(
+void RefCountDataBlockList<DataBlock>::deserialize(
     const Block & header, ReadBuffer & rb, DeserializedIndicesToBlocks<DataBlock> * deserialized_indices_with_block)
 {
     DB::readIntBinary(min_ts, rb);
@@ -56,18 +55,18 @@ void RefCountBlockList<DataBlock>::deserialize(
     for (UInt32 i = 0; i < block_size; ++i)
     {
         auto data_block = reader.read();
-        RefCountBlock<DataBlock> elem{std::move(data_block)};
+        RefCountDataBlock<DataBlock> elem{std::move(data_block)};
         DB::readIntBinary(elem.refcnt, rb);
         assert(elem.refcnt > 0);
 
         blocks.push_back(std::move(elem));
 
         if (deserialized_indices_with_block)
-            deserialized_indices_with_block->emplace(i, lastBlockIter());
+            deserialized_indices_with_block->emplace(i, lastDataBlockIter());
     }
 }
 
-template struct RefCountBlockList<LightChunk>;
-template struct RefCountBlockList<LightChunkWithTimestamp>;
+template struct RefCountDataBlockList<LightChunk>;
+template struct RefCountDataBlockList<LightChunkWithTimestamp>;
 }
 }

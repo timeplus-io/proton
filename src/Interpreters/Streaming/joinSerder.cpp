@@ -16,7 +16,7 @@ namespace
 {
 template <typename DataBlock>
 void serializeHashJoinMapsVariants(
-    const RefCountBlockList<DataBlock> & blocks,
+    const RefCountDataBlockList<DataBlock> & blocks,
     const Block & header,
     const HashJoinMapsVariants & maps,
     const HashJoin & join,
@@ -70,7 +70,7 @@ void serializeHashJoinMapsVariants(
 
 template <typename DataBlock>
 void deserializeHashJoinMapsVariants(
-    RefCountBlockList<DataBlock> & blocks,
+    RefCountDataBlockList<DataBlock> & blocks,
     const Block & header,
     HashJoinMapsVariants & maps,
     Arena & pool,

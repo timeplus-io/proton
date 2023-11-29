@@ -4,6 +4,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/formatAST.h>
 #include <Common/ProtonCommon.h>
 
 namespace DB
@@ -81,8 +82,8 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
         auto iter = func_map.find(func.name);
         if (iter != func_map.end())
         {
-            /// Always show original column name
-            func.code_name = func.getColumnNameWithoutAlias();
+            /// Always show original func name
+            func.covered_name = func.name;
             func.name = iter->second;
             return;
         }
@@ -122,8 +123,8 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
             {
                 if (!iter->second.empty())
                 {
-                    /// Always show original column name
-                    func.code_name = func.getColumnNameWithoutAlias();
+                    /// Always show original function
+                    func.code_name = DB::serializeAST(func);
 
                     func.name = iter->second + combinator_suffix;
                     if (!func.arguments)

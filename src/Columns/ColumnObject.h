@@ -69,6 +69,7 @@ public:
         size_t size() const;
         size_t byteSize() const;
         size_t allocatedBytes() const;
+        size_t allocatedMetadataBytes() const; /// proton : starts. Newly added
         void get(size_t n, Field & res) const;
 
         bool isFinalized() const;
@@ -208,6 +209,7 @@ public:
     size_t size() const override;
     size_t byteSize() const override;
     size_t allocatedBytes() const override;
+    size_t allocatedMetadataBytes() const override; /// proton : starts. Newly added
     void forEachSubcolumn(ColumnCallback callback) const override;
     void forEachSubcolumnRecursively(RecursiveColumnCallback callback) const override;
     void insert(const Field & field) override;

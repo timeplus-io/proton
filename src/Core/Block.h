@@ -86,6 +86,10 @@ public:
 
     size_t getPositionByName(const std::string & name) const;
 
+    /// proton : starts
+    std::optional<size_t> tryGetPositionByName(const std::string & name) const;
+    /// proton : ends
+
     const ColumnsWithTypeAndName & getColumnsWithTypeAndName() const;
     NamesAndTypesList getNamesAndTypesList() const;
     NamesAndTypes getNamesAndTypes() const;
@@ -171,6 +175,9 @@ public:
     bool hasWatermark() const { return info.hasWatermark(); }
 
     bool hasDynamicSubcolumns() const;
+
+    /// In-place concat other block to the current block
+    void concat(const Block & other);
 
     /// Copy row to target_block
     void insertRow(size_t row_num, Block & target_block) const;
