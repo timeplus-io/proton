@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cassert>
+#include <utility>
+
 namespace DB::Streaming
 {
 template <typename DataBlock>
