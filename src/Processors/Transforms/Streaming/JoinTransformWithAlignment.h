@@ -44,10 +44,7 @@ private:
 
         bool hasCompleteChunks() const noexcept { return !input_chunks.empty() && !(input_chunks.size() == 1 && required_update_processing); }
 
-        Int64 minTimestamp() const noexcept { return hasCompleteChunks() ? input_chunks.front().second.minTimestamp() : watermark; }
-
-        /// FIXME: allow buffer more ? limited by rows or bytes.
-        bool isFull() const noexcept { return hasCompleteChunks(); }
+        bool isFull() const noexcept { return need_buffer_data_to_align && hasCompleteChunks(); }
 
         void serialize(WriteBuffer & wb) const;
         void deserialize(ReadBuffer & rb);
@@ -56,8 +53,7 @@ private:
 
         /// Input state
         /// NOTE: Assume the input chunk is time-ordered
-        /// pair-<retracted_chunk, chunk>
-        SERDE std::list<std::pair<LightChunk, LightChunkWithTimestamp>> input_chunks;
+        SERDE std::list<LightChunkWithTimestamp> input_chunks;
         /// For join transform, we keep track watermark by itself
         SERDE Int64 watermark = INVALID_WATERMARK;
         NO_SERDE Int64 last_data_ts = 0;
@@ -68,8 +64,7 @@ private:
         /// Input description
         std::optional<size_t> watermark_column_position;
         DataTypePtr watermark_column_type;
-        bool is_changelog_input;
-        bool need_aligned_buffer;
+        bool need_buffer_data_to_align;
     };
 
     Status prepareInput(InputPortWithData & input_with_data);
@@ -94,7 +89,7 @@ private:
         ++stats.right_input_muted;
     }
 
-    void unmuteInput(InputPortWithData & input_with_data) noexcept { input_with_data.muted = false; }
+    static void unmuteInput(InputPortWithData & input_with_data) noexcept { input_with_data.muted = false; }
 
     void onCancel() override;
 

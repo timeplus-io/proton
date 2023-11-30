@@ -58,7 +58,7 @@ public:
 
         /// proton : starts
         void addLagBehindKeys(const ASTPtr & left_ast, const ASTPtr & right_ast, JoinIdentifierPosPair table_pos, Int64 lag_interval);
-        void addLagBehindKeys(Int64 lag_interval);
+        void addLagBehindValue(Int64 lag_interval);
         void alignmentKeysASTToKeys();
         /// proton : ends
     };
@@ -105,7 +105,6 @@ private:
     static std::pair<Int64, bool> handleLeftAndRightArgumentsForRangeBetweenAsOfJoin(const ASTLiteral * literal_arg, ASTPtr non_literal_arg, Data & data);
     /// `lag_behind` is special case as `date_diff_within`
     static void handleLagBehind(const ASTFunction & func, const ASTPtr & ast, Data & data);
-    static void handleAlignedWith(const ASTFunction & func, const ASTPtr & ast, Data & data);
     /// proton : ends
 };
 

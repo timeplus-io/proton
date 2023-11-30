@@ -150,7 +150,6 @@ private:
     size_t data_block_size = 0;
     String left_alignment_key_column;
     String right_alignment_key_column;
-    bool required_join_alignment = false;
     /// proton : ends
 
     /// All columns which can be read from joined table. Duplicating names are qualified.

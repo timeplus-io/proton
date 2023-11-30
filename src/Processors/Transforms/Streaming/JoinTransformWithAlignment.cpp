@@ -2,14 +2,24 @@
 
 #include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
+#include <DataTypes/DataTypeDateTime64.h>
 #include <Formats/SimpleNativeReader.h>
 #include <Formats/SimpleNativeWriter.h>
+#include <Functions/FunctionHelpers.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Common/VersionRevision.h>
 #include <Common/logger_useful.h>
 
-namespace DB::Streaming
+namespace DB
+{
+namespace ErrorCodes
+{
+extern const int UNSUPPORTED;
+extern const int NOT_IMPLEMENTED;
+}
+
+namespace Streaming
 {
 Block JoinTransformWithAlignment::transformHeader(Block header, const HashJoinPtr & join)
 {
@@ -41,14 +51,11 @@ JoinTransformWithAlignment::JoinTransformWithAlignment(
     right_input.watermark_column_position = right_join_stream_desc->alignmentKeyColumnPosition();
     right_input.watermark_column_type = right_join_stream_desc->alignmentKeyColumnType();
 
-    left_input.is_changelog_input = isChangelogDataStream(left_join_stream_desc->data_stream_semantic);
-    right_input.is_changelog_input = isChangelogDataStream(right_join_stream_desc->data_stream_semantic);
-
     /// Some join combinations have builtin buffer to do aligning, so don't build an extra external buffer to align:
     /// 1) For asof join, the right side has builtin buffer to keep multiple versions
     /// 2) For range join, the left and right side both have builtin buffer to keep multiple ranges
-    left_input.need_aligned_buffer = !join->leftHasBuiltInAlignedBuffer();
-    right_input.need_aligned_buffer = !join->rightHasBuiltInAlignedBuffer();
+    left_input.need_buffer_data_to_align = !join->leftStreamRequiresBufferingDataToAlign();
+    right_input.need_buffer_data_to_align = !join->rightStreamRequiresBufferingDataToAlign();
 
     assert(
         (left_input.watermark_column_position && right_input.watermark_column_position)
@@ -59,6 +66,28 @@ JoinTransformWithAlignment::JoinTransformWithAlignment(
         || (!left_input.watermark_column_type && !right_input.watermark_column_type));
 
     latency_threshold = left_join_stream_desc->latency_threshold;
+    if (left_input.watermark_column_type)
+    {
+        if (!left_input.watermark_column_type->equals(*right_input.watermark_column_type)
+            || !(isDateTime64(left_input.watermark_column_type) || isDateTime(left_input.watermark_column_type)))
+            throw Exception(
+                ErrorCodes::UNSUPPORTED,
+                "The join alignement key type must be consistent datetime or datetime64, but got left={}({}) right={}({})",
+                left_join_stream_desc->alignment_column,
+                left_input.watermark_column_type->getName(),
+                right_join_stream_desc->alignment_column,
+                right_input.watermark_column_type->getName());
+
+        /// Convert latency_threshold(ms) to latency_threshold(scale)
+        UInt32 scale = 0;
+        if (auto * data_type_datetime64 = checkAndGetDataType<DataTypeDateTime64>(left_input.watermark_column_type.get()))
+            scale = data_type_datetime64->getScale();
+
+        if (scale > 3)
+            latency_threshold *= intExp10(3 - scale);
+        else if (scale < 3)
+            latency_threshold /= intExp10(scale - 3);
+    }
 
     /// When left stream or right stream is in quiesce, we still need to push execute the join probably
     quiesce_threshold_ms = left_join_stream_desc->quiesce_threshold_ms;
@@ -181,72 +210,67 @@ void JoinTransformWithAlignment::work()
     bool right_input_in_quiesce = isInputInQuiesce(right_input);
 
     /// Right input has buffered data or newly pulled data
-    while (right_input.hasCompleteChunks())
+    if (right_input.hasCompleteChunks())
     {
-        if (isCancelled())
-            return;
-
-        auto & [retracted_chunk, chunk] = right_input.input_chunks.front();
-
         /// We can directly process current input data in followsing scenarios:
         /// 1) Don't need align inputs (right side of join has builtin buffer to align)
-        /// 2) Right input chunk's max timestamp less than left stream's min timestamp
+        /// 2) Right stream's watermark less than or equal left stream's watermark + lantency_threshold
         /// 3) Or left input is in quiesce, we still need to push execute the join probably
-        if (!right_input.need_aligned_buffer || chunk.maxTimestamp() <= left_input.minTimestamp() + latency_threshold
+        if (!right_input.need_buffer_data_to_align || right_input.watermark <= left_input.watermark + latency_threshold
             || left_input_in_quiesce)
         {
-            if (retracted_chunk.rows())
-                processRightInputData(retracted_chunk);
+            do
+            {
+                if (isCancelled())
+                    return;
 
-            if (likely(chunk.rows()))
-                processRightInputData(chunk.chunk);
+                auto & chunk = right_input.input_chunks.front();
+                if (likely(chunk.rows()))
+                    processRightInputData(chunk.chunk);
 
-            right_input.input_chunks.pop_front();
+                right_input.input_chunks.pop_front();
+            } while (right_input.hasCompleteChunks());
 
             if (left_input_in_quiesce)
+            {
                 unmuteInput(left_input);
-
-            stats.left_quiesce_joins = left_input_in_quiesce;
+                ++stats.left_quiesce_joins;
+            }
         }
         else
-        {
             unmuteInput(left_input);
-            break;
-        }
     }
 
     /// Left input has buffered data or newly pulled data
-    while (left_input.hasCompleteChunks())
+    if (left_input.hasCompleteChunks())
     {
-        if (isCancelled())
-            return;
-
         /// We can directly process current input data in followsing scenarios:
         /// 1) Don't need align inputs (left side of join has builtin buffer to align)
-        /// 2) Left input chunk's max timestamp less than right stream's min timestamp
+        /// 2) Left stream's watermark + latency_threshold less than right stream's watermark
         /// 3) Or right input is in quiesce, we still need to push execute the join probably
-        auto & [retracted_chunk, chunk] = left_input.input_chunks.front();
-        if (!left_input.need_aligned_buffer || chunk.maxTimestamp() + latency_threshold < right_input.minTimestamp()
+        if (!left_input.need_buffer_data_to_align || left_input.watermark + latency_threshold < right_input.watermark
             || right_input_in_quiesce)
         {
-            if (retracted_chunk.rows())
-                processLeftInputData(retracted_chunk);
+            do
+            {
+                if (isCancelled())
+                    return;
 
-            if (likely(chunk.rows()))
-                processLeftInputData(chunk.chunk);
+                auto & chunk = left_input.input_chunks.front();
+                if (likely(chunk.rows()))
+                    processLeftInputData(chunk.chunk);
 
-            left_input.input_chunks.pop_front();
+                left_input.input_chunks.pop_front();
+            } while (left_input.hasCompleteChunks());
 
             if (right_input_in_quiesce)
+            {
                 unmuteInput(right_input);
-
-            stats.right_quiesce_joins += right_input_in_quiesce;
+                ++stats.right_quiesce_joins;
+            }
         }
         else
-        {
             unmuteInput(right_input);
-            break;
-        }
     }
 
     if (!left_input.hasCompleteChunks())
@@ -420,7 +444,7 @@ void JoinTransformWithAlignment::InputPortWithData::add(Chunk && chunk)
     /// NOTE: Assume the first retracted chunk of updated data always set RetractedDataFlag.
     if (chunk.isRetractedData())
     {
-        input_chunks.emplace_back(std::move(chunk), LightChunkWithTimestamp{});
+        input_chunks.emplace_back(std::move(chunk), watermark, watermark);
         required_update_processing = true;
         return;
     }
@@ -430,53 +454,28 @@ void JoinTransformWithAlignment::InputPortWithData::add(Chunk && chunk)
         if (likely(chunk.hasRows()))
         {
             auto [min_ts, max_ts] = columnMinMaxTimestamp(chunk.getColumns()[*watermark_column_position], watermark_column_type);
-
-            if (required_update_processing)
-            {
-                input_chunks.back().second = LightChunkWithTimestamp{std::move(chunk), min_ts, max_ts};
-                required_update_processing = false;
-            }
-            else
-                input_chunks.emplace_back(LightChunk{}, LightChunkWithTimestamp{std::move(chunk), min_ts, max_ts});
+            input_chunks.emplace_back(std::move(chunk), min_ts, max_ts);
+            watermark = std::max(max_ts, watermark);
         }
         else
-            input_chunks.emplace_back(LightChunk{}, LightChunkWithTimestamp{std::move(chunk), watermark, watermark});
+            input_chunks.emplace_back(std::move(chunk), watermark, watermark);
     }
     else
     {
         auto now_ts = DB::UTCMilliseconds::now();
-        if (required_update_processing)
-        {
-            input_chunks.back().second = LightChunkWithTimestamp{std::move(chunk), now_ts, now_ts};
-            required_update_processing = false;
-        }
-        else
-            input_chunks.emplace_back(LightChunk{}, LightChunkWithTimestamp{std::move(chunk), now_ts, now_ts});
+        input_chunks.emplace_back(std::move(chunk), now_ts, now_ts);
+        watermark = std::max(now_ts, watermark);
     }
-
-    watermark = std::max(input_chunks.back().second.maxTimestamp(), watermark);
 }
 
 void JoinTransformWithAlignment::InputPortWithData::serialize(WriteBuffer & wb) const
 {
-    if (need_aligned_buffer)
+    if (need_buffer_data_to_align)
     {
         DB::writeVarUInt(input_chunks.size(), wb);
         const auto & header = input_port->getHeader();
-        for (const auto & [retracted_chunk, chunk] : input_chunks)
-        {
-            /// Only changelog input has retracted_chunk
-            if (is_changelog_input)
-            {
-                assert(!required_update_processing);
-                UInt8 has_retracted_data = retracted_chunk ? 1 : 0;
-                DB::writeIntBinary<UInt8>(has_retracted_data, wb);
-                if (has_retracted_data)
-                    DB::writeLightChunk(retracted_chunk, header, ProtonRevision::getVersionRevision(), wb);
-            }
-
+        for (const auto & chunk : input_chunks)
             DB::writeLightChunkWithTimestamp(chunk, header, ProtonRevision::getVersionRevision(), wb);
-        }
     }
     else
     {
@@ -490,28 +489,18 @@ void JoinTransformWithAlignment::InputPortWithData::serialize(WriteBuffer & wb) 
 
 void JoinTransformWithAlignment::InputPortWithData::deserialize(ReadBuffer & rb)
 {
-    if (need_aligned_buffer)
+    if (need_buffer_data_to_align)
     {
         size_t size;
         DB::readVarUInt(size, rb);
         input_chunks.resize(size);
         const auto & header = input_port->getHeader();
-        for (auto & [retracted_chunk, chunk] : input_chunks)
-        {
-            /// Only changelog input has retracted_chunk
-            if (is_changelog_input)
-            {
-                UInt8 has_retracted_data = 0;
-                DB::readIntBinary<UInt8>(has_retracted_data, rb);
-                if (has_retracted_data)
-                    retracted_chunk = DB::readLightChunk(header, ProtonRevision::getVersionRevision(), rb);
-            }
-
+        for (auto & chunk : input_chunks)
             chunk = DB::readLightChunkWithTimestamp(header, ProtonRevision::getVersionRevision(), rb);
-        }
     }
 
     if (watermark_column_position)
         DB::readIntBinary(watermark, rb);
+}
 }
 }

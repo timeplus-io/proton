@@ -38,8 +38,8 @@ public:
         = 0;
 
     /// Whether hash join algorithm has buffer left/right data to align
-    virtual bool leftHasBuiltInAlignedBuffer() const = 0;
-    virtual bool rightHasBuiltInAlignedBuffer() const = 0;
+    virtual bool leftStreamRequiresBufferingDataToAlign() const = 0;
+    virtual bool rightStreamRequiresBufferingDataToAlign() const = 0;
 
     virtual JoinStreamDescriptionPtr leftJoinStreamDescription() const noexcept = 0;
     virtual JoinStreamDescriptionPtr rightJoinStreamDescription() const noexcept = 0;

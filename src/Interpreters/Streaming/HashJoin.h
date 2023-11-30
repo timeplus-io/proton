@@ -138,8 +138,8 @@ public:
     bool emitChangeLog() const override { return emit_changelog; }
     bool bidirectionalHashJoin() const override { return bidirectional_hash_join; }
     bool rangeBidirectionalHashJoin() const override { return range_bidirectional_hash_join; }
-    bool leftHasBuiltInAlignedBuffer() const override { return range_bidirectional_hash_join; }
-    bool rightHasBuiltInAlignedBuffer() const override { return streaming_strictness == Strictness::Asof || range_bidirectional_hash_join; }
+    bool leftStreamRequiresBufferingDataToAlign() const override { return range_bidirectional_hash_join; }
+    bool rightStreamRequiresBufferingDataToAlign() const override { return streaming_strictness == Strictness::Asof || range_bidirectional_hash_join; }
 
     UInt64 keepVersions() const { return right_data.join_stream_desc->keep_versions; }
 

@@ -21,8 +21,8 @@ struct JoinStreamDescription
         Block input_header_,
         DataStreamSemanticEx data_stream_semantic_,
         UInt64 keep_versions_,
-        Int64 latency_threshold_ = 0,
-        Int64 quiesce_threshold_ms_ = 0)
+        Int64 latency_threshold_,
+        Int64 quiesce_threshold_ms_)
         : table_with_columns(table_with_columns_)
         , input_header(std::move(input_header_))
         , data_stream_semantic(data_stream_semantic_)

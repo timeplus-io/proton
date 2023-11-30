@@ -46,8 +46,8 @@ public:
     bool emitChangeLog() const override { return hash_joins[0]->data->emitChangeLog(); }
     bool bidirectionalHashJoin() const override { return hash_joins[0]->data->bidirectionalHashJoin(); }
     bool rangeBidirectionalHashJoin() const override { return hash_joins[0]->data->rangeBidirectionalHashJoin(); }
-    bool leftHasBuiltInAlignedBuffer() const override { return hash_joins[0]->data->leftHasBuiltInAlignedBuffer(); }
-    bool rightHasBuiltInAlignedBuffer() const override { return hash_joins[0]->data->rightHasBuiltInAlignedBuffer(); }
+    bool leftStreamRequiresBufferingDataToAlign() const override { return hash_joins[0]->data->leftStreamRequiresBufferingDataToAlign(); }
+    bool rightStreamRequiresBufferingDataToAlign() const override { return hash_joins[0]->data->rightStreamRequiresBufferingDataToAlign(); }
 
     /// "Legacy API", use insertRightBlock()
     bool addJoinedBlock(const Block & block, bool check_limits) override;
