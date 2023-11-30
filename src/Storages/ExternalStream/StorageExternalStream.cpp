@@ -39,8 +39,8 @@ buildShardingKeyExpression(ASTPtr sharding_key, ContextPtr context, const NamesA
 }
 
 void validateEngineArgs(ContextPtr context, ASTs & engine_args, const ColumnsDescription & columns) {
-    if (engine_args.size() == 0)
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "ExternalStream requires sharding key expression");
+    if (engine_args.empty())
+        return;
 
     auto sharding_expr = buildShardingKeyExpression(engine_args[0], context, columns.getAllPhysical());
     const auto & block = sharding_expr->getSampleBlock();
@@ -55,13 +55,13 @@ void validateEngineArgs(ContextPtr context, ASTs & engine_args, const ColumnsDes
 }
 
 std::unique_ptr<StorageExternalStreamImpl> createExternalStream(
-    IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings, ContextPtr & context [[maybe_unused]], const ASTPtr & sharding_expr, bool attach)
+    IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings, ContextPtr & context [[maybe_unused]], const ASTs & engine_args, bool attach)
 {
     if (settings->type.value.empty())
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream type is required in settings");
 
     if (settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA)
-        return std::make_unique<Kafka>(storage, std::move(settings), sharding_expr, attach);
+        return std::make_unique<Kafka>(storage, std::move(settings), engine_args, attach);
 #ifdef OS_LINUX
     else if (settings->type.value == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)
         return std::make_unique<FileLog>(storage, std::move(settings));
@@ -130,7 +130,7 @@ SinkToStoragePtr StorageExternalStream::write(const ASTPtr & query, const Storag
 }
 
 StorageExternalStream::StorageExternalStream(
-    const ASTPtr & sharding_key_,
+    const ASTs & engine_args,
     const StorageID & table_id_,
     ContextPtr context_,
     const ColumnsDescription & columns_,
@@ -143,7 +143,7 @@ StorageExternalStream::StorageExternalStream(
     setInMemoryMetadata(storage_metadata);
 
 
-    auto stream = createExternalStream(this, std::move(external_stream_settings_), context_, sharding_key_, attach);
+    auto stream = createExternalStream(this, std::move(external_stream_settings_), context_, engine_args, attach);
     external_stream.swap(stream);
 }
 
@@ -161,7 +161,7 @@ void registerStorageExternalStream(StorageFactory & factory)
             external_stream_settings->loadFromQuery(*args.storage_def);
 
             return StorageExternalStream::create(
-                args.engine_args[0], args.table_id, args.getContext(), args.columns, std::move(external_stream_settings), args.attach);
+                args.engine_args, args.table_id, args.getContext(), args.columns, std::move(external_stream_settings), args.attach);
         }
         else
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream requires correct settings setup");

@@ -903,20 +903,20 @@ void InterpreterCreateQuery::handleExternalStreamCreation(ASTCreateQuery & creat
 
     sharding_expr_field.tryGet<String>(sharding_expr);
 
-    ASTPtr sharding_expr_ast;
     if (sharding_expr.empty())
     {
-        sharding_expr_ast = makeASTFunction("rand");
+        create.storage->set(create.storage->engine, makeASTFunction("ExternalStream"));
     }
     else
     {
         ParserFunction parser;
         const char * begin{sharding_expr.data()};
         const char * end{begin + sharding_expr.size()};
-        sharding_expr_ast = parseQuery(parser, begin, end, "", 0, 0);
+        auto sharding_expr_ast = parseQuery(parser, begin, end, "", 0, 0);
+
+        create.storage->set(create.storage->engine, makeASTFunction("ExternalStream", sharding_expr_ast));
     }
 
-    create.storage->set(create.storage->engine, makeASTFunction("ExternalStream", sharding_expr_ast));
 
     if (create.storage->engine->name != "ExternalStream")
         throw Exception(ErrorCodes::INCORRECT_QUERY, "External stream requires ExternalStream engine");
