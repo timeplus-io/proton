@@ -87,6 +87,8 @@ struct LightChunkWithTimestamp
 
     LightChunkWithTimestamp() = default;
     LightChunkWithTimestamp(Columns && data_) : chunk(std::move(data_)) { }
+    LightChunkWithTimestamp(Chunk && chunk_, Int64 min_ts, Int64 max_ts)
+        : chunk(std::move(chunk_)), min_timestamp(min_ts), max_timestamp(max_ts) { }
     LightChunkWithTimestamp(const Block & block)
         : chunk(block), min_timestamp(block.minTimestamp()), max_timestamp(block.maxTimestamp()) { }
 

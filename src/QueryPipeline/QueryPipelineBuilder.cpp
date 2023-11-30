@@ -707,14 +707,10 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     {
         ProcessorPtr joining;
         auto hash_join = std::dynamic_pointer_cast<Streaming::IHashJoin>(join);
-        if (hash_join->requireWatermarkAlignedStreams())
+        if (hash_join->getTableJoin().requiredJoinAlignment())
         {
             joining = std::make_shared<Streaming::JoinTransformWithAlignment>(
-                left->getHeader(),
-                right->getHeader(),
-                out_header,
-                std::move(hash_join),
-                join_max_cached_bytes);
+                left->getHeader(), right->getHeader(), out_header, std::move(hash_join), join_max_cached_bytes);
         }
         else
         {

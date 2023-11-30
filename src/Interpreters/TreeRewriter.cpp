@@ -740,9 +740,9 @@ void collectJoinedColumns(TableJoin & analyzed_join, ASTTableJoin & table_join,
         }
 
         /// FIXME, validate if the combination of lag_behind(...) + strictness makes sense.
-        if (analyzed_join.lagBehindInterval() != 0)
-            /// Add lag behind columns
-            data.lagBehindASTToKeys();
+        if (analyzed_join.requiredJoinAlignment())
+            /// Add alignment keys columns if exists
+            data.alignmentKeysASTToKeys();
         /// proton : ends
 
         auto check_keys_empty = [] (auto e) { return e.key_names_left.empty(); };
