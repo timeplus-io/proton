@@ -488,6 +488,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             begin = recovered_query.data();
             end = recovered_query.data() + recovered_query.size();
         }
+
+        /// In snapshot mode, all stream query (except create query) will be executed in 'table' mode
+        if (settings.query_mode.value == "snapshot")
+            context->setSetting("query_mode", ast->as<ASTCreateQuery>() ? Field{"stream"} : Field{"table"});
         /// proton: ends
 
         if (auto txn = context->getCurrentTransaction())
