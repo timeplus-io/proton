@@ -302,9 +302,15 @@ void JoinTransformWithAlignment::work()
         left_input.ckpt_ctx = right_input.ckpt_ctx = nullptr;
     }
     else if (left_input.ckpt_ctx)
+    {
         muteLeftInput(); /// mute left input to until right input received checkpoint request
+        unmuteInput(right_input);
+    }
     else if (right_input.ckpt_ctx)
+    {
         muteRightInput(); /// mute right input to until left input received checkpoint request
+        unmuteInput(left_input);
+    }
 
     /// We propagate empty chunk without watermark.
     if (need_propagate_heartbeat && output_chunks.empty())
