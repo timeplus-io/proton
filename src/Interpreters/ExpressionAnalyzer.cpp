@@ -122,7 +122,7 @@ void tryTranslateToParametricAggregateFunction(
     assert(node->arguments);
     const ASTs & arguments = node->arguments->children;
     const auto & lower_name = node->name;
-    if (lower_name == "min_k" || lower_name == "max_k")
+    if (lower_name == "min_k" || lower_name == "max_k" || lower_name == "__min_k_retract" || lower_name == "__max_k_retract")
     {
         /// Translate `min_k(key, num[, context...])` to `min_k(num)(key[, context...])`
         /// Make the second argument as a const parameter

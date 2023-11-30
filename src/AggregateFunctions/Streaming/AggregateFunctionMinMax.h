@@ -85,7 +85,7 @@ public:
 
         assert(size >= 0);
 
-        values.setCapacity(std::max(size, values.capacity()));
+        values.setCapacity(std::max<Int64>(size, values.capacity()));
 
         for (Int64 i = 0; i < size; ++i)
         {
@@ -436,7 +436,7 @@ public:
         Int64 size = 0;
         readVarInt(size, buf);
 
-        values.setCapacity(std::max(size, values.capacity()));
+        values.setCapacity(std::max<Int64>(size, values.capacity()));
 
         for (Int64 i = 0; i < size; ++i)
         {
@@ -518,7 +518,7 @@ public:
         Int64 size = 0;
         readVarInt(size, buf);
 
-        values.setCapacity(std::max(size, values.capacity()));
+        values.setCapacity(std::max<Int64>(size, values.capacity()));
 
         for (Int64 i = 0; i < size; ++i)
         {

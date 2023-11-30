@@ -281,11 +281,11 @@ TEST(CountedValueMap, MaxMerge)
             EXPECT_EQ(lhs.firstValue(), 3);
             EXPECT_EQ(lhs.lastValue(), 1);
 
-            for (uint64_t i = 1; const auto & value_count : lhs)
+            for (uint64_t i = 3; const auto & value_count : lhs)
             {
                 EXPECT_EQ(value_count.first, i);
                 EXPECT_EQ(value_count.second, 2);
-                ++i;
+                --i;
             }
         };
 
@@ -317,14 +317,14 @@ TEST(CountedValueMap, MaxMerge)
             EXPECT_EQ(lhs.firstValue(), 4);
             EXPECT_EQ(lhs.lastValue(), 2);
 
-            for (uint64_t i = 2; const auto & value_count : lhs)
+            for (uint64_t i = 4; const auto & value_count : lhs)
             {
                 EXPECT_EQ(value_count.first, i);
                 if (i == 4)
                     EXPECT_EQ(value_count.second, 1);
                 else
                     EXPECT_EQ(value_count.second, 2);
-                ++i;
+                --i;
             }
         };
 
@@ -356,11 +356,11 @@ TEST(CountedValueMap, MaxMerge)
             EXPECT_EQ(lhs.firstValue(), 6);
             EXPECT_EQ(lhs.lastValue(), 4);
 
-            for (uint64_t i = 4; const auto & value_count : lhs)
+            for (uint64_t i = 6; const auto & value_count : lhs)
             {
                 EXPECT_EQ(value_count.first, i);
                 EXPECT_EQ(value_count.second, 1);
-                ++i;
+                --i;
             }
         };
         test_case([](MaxCountedValueMap & lhs, MaxCountedValueMap & rhs) {
@@ -391,11 +391,11 @@ TEST(CountedValueMap, MaxMerge)
             EXPECT_EQ(lhs.firstValue(), 6);
             EXPECT_EQ(lhs.lastValue(), 4);
 
-            for (uint64_t i = 4; const auto & value_count : lhs)
+            for (uint64_t i = 6; const auto & value_count : lhs)
             {
                 EXPECT_EQ(value_count.first, i);
                 EXPECT_EQ(value_count.second, 1);
-                ++i;
+                --i;
             }
         };
         test_case([](MaxCountedValueMap & lhs, MaxCountedValueMap & rhs) {
@@ -426,11 +426,11 @@ TEST(CountedValueMap, MaxMerge)
             EXPECT_EQ(lhs.firstValue(), 6);
             EXPECT_EQ(lhs.lastValue(), 4);
 
-            for (uint64_t i = 4; const auto & value_count : lhs)
+            for (uint64_t i = 6; const auto & value_count : lhs)
             {
                 EXPECT_EQ(value_count.first, i);
                 EXPECT_EQ(value_count.second, 1);
-                ++i;
+                --i;
             }
         };
         test_case([](MaxCountedValueMap & lhs, MaxCountedValueMap & rhs) {
@@ -461,11 +461,11 @@ TEST(CountedValueMap, MaxMerge)
             EXPECT_EQ(lhs.firstValue(), 6);
             EXPECT_EQ(lhs.lastValue(), 4);
 
-            for (uint64_t i = 4; const auto & value_count : lhs)
+            for (uint64_t i = 6; const auto & value_count : lhs)
             {
                 EXPECT_EQ(value_count.first, i);
                 EXPECT_EQ(value_count.second, 1);
-                ++i;
+                --i;
             }
         };
         test_case([](MaxCountedValueMap & lhs, MaxCountedValueMap & rhs) {
@@ -493,11 +493,11 @@ TEST(CountedValueMap, MaxMerge)
             EXPECT_EQ(lhs.firstValue(), 5);
             EXPECT_EQ(lhs.lastValue(), 4);
 
-            for (uint64_t i = 4; const auto & value_count : lhs)
+            for (uint64_t i = 5; const auto & value_count : lhs)
             {
                 EXPECT_EQ(value_count.first, i);
                 EXPECT_EQ(value_count.second, 1);
-                ++i;
+                --i;
             }
         };
         test_case([](MaxCountedValueMap & lhs, MaxCountedValueMap & rhs) {
@@ -526,11 +526,11 @@ TEST(CountedValueMap, MaxMerge)
             EXPECT_EQ(lhs.firstValue(), 6);
             EXPECT_EQ(lhs.lastValue(), 4);
 
-            for (uint64_t i = 4; const auto & value_count : lhs)
+            for (uint64_t i = 6; const auto & value_count : lhs)
             {
                 EXPECT_EQ(value_count.first, i);
                 EXPECT_EQ(value_count.second, 1);
-                ++i;
+                --i;
             }
         };
         test_case([](MaxCountedValueMap & lhs, MaxCountedValueMap & rhs) {
@@ -558,11 +558,11 @@ TEST(CountedValueMap, MaxMerge)
             EXPECT_EQ(lhs.firstValue(), 5);
             EXPECT_EQ(lhs.lastValue(), 4);
 
-            for (uint64_t i = 4; const auto & value_count : lhs)
+            for (uint64_t i = 5; const auto & value_count : lhs)
             {
                 EXPECT_EQ(value_count.first, i);
                 EXPECT_EQ(value_count.second, 1);
-                ++i;
+                --i;
             }
         };
         test_case([](MaxCountedValueMap & lhs, MaxCountedValueMap & rhs) {
@@ -591,11 +591,11 @@ TEST(CountedValueMap, MaxMerge)
             EXPECT_EQ(lhs.firstValue(), 6);
             EXPECT_EQ(lhs.lastValue(), 4);
 
-            for (uint64_t i = 4; const auto & value_count : lhs)
+            for (uint64_t i = 6; const auto & value_count : lhs)
             {
                 EXPECT_EQ(value_count.first, i);
                 EXPECT_EQ(value_count.second, 1);
-                ++i;
+                --i;
             }
         };
         test_case([](MaxCountedValueMap & lhs, MaxCountedValueMap & rhs) {
