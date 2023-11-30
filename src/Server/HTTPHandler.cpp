@@ -990,9 +990,9 @@ bool DynamicQueryHandler::customizeQueryParam(ContextMutablePtr context, const s
 std::string DynamicQueryHandler::getQuery(HTTPServerRequest & request, HTMLForm & params, ContextMutablePtr context)
 {
     /// proton: starts
-    /// set query_mode to 'table' if snapshot_mode is on
+    /// set query_mode to 'snapshot' if snapshot_mode is on
     if (snapshot_mode)
-        context->setSetting("query_mode", Field("table"));
+        context->setSetting("query_mode", Field("snapshot"));
     /// proton: ends
 
     if (likely(!startsWith(request.getContentType(), "multipart/form-data")))
