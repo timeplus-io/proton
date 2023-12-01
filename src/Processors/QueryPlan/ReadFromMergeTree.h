@@ -100,7 +100,8 @@ public:
         Poco::Logger * log_,
         MergeTreeDataSelectAnalysisResultPtr analyzed_result_ptr_,
         bool enable_parallel_reading,
-        std::function<std::shared_ptr<ISource>(Int64 &)> create_streaming_source_ = {});
+        std::function<std::shared_ptr<ISource>(Int64 &)> create_streaming_source_ = {},
+        const Names & column_names_to_return = {});
 
     String getName() const override
     {

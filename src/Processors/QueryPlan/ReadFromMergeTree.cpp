@@ -93,13 +93,15 @@ ReadFromMergeTree::ReadFromMergeTree(
     Poco::Logger * log_,
     MergeTreeDataSelectAnalysisResultPtr analyzed_result_ptr_,
     bool enable_parallel_reading,
-    std::function<std::shared_ptr<ISource>(Int64 &)> create_streaming_source_)
+    std::function<std::shared_ptr<ISource>(Int64 &)> create_streaming_source_,
+    const Names & column_names_to_return)
     : ISourceStep(DataStream{
         .header = MergeTreeBaseSelectProcessor::transformHeader(
             storage_snapshot_->getSampleBlockForColumns(real_column_names_),
             getPrewhereInfo(query_info_),
             data_.getPartitionValueType(),
-            virt_column_names_),
+            virt_column_names_,
+            column_names_to_return),
         .is_streaming = static_cast<bool>(create_streaming_source_)})
     , reader_settings(getMergeTreeReaderSettings(context_, query_info_))
     , prepared_parts(std::move(parts_))
