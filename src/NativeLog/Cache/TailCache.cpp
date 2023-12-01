@@ -32,7 +32,12 @@ void TailCache::put(const StreamShard & stream_shard, RecordPtr record)
     {
         assert(entry);
         std::unique_lock lock(entry->mutex);
-        entry->shard_records.push_back(std::move(record));
+        if (record.use_count() == 1)
+            entry->shard_records.push_back(std::move(record));
+        else
+            /// Cache a copy record to prevent other references modified it
+            entry->shard_records.push_back(record->clone());
+
         if (entry->shard_records.size() > static_cast<size_t>(config.max_cached_entries_per_shard))
         {
             size -= entry->shard_records.front()->totalSerializedBytes();
