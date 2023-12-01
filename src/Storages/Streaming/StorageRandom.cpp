@@ -440,9 +440,8 @@ public:
             block_to_fill.insert(elem);
         }
 
-        Block block_to_fill_as_result(block_to_fill.cloneEmpty());
         auto dag
-            = evaluateMissingDefaults(block_to_fill_as_result, block_full.getNamesAndTypesList(), our_columns, context, true, false, true);
+            = evaluateMissingDefaults(block_to_fill, block_full.getNamesAndTypesList(), our_columns, context, true, false, true);
         if (dag)
         {
             default_actions = std::make_shared<ExpressionActions>(
@@ -775,7 +774,7 @@ Pipe StorageRandom::read(
                 1000,
                 query_info.syntax_analyzer_result->streaming,
                 max_events,
-                1));
+                0));
         }
     }
     else

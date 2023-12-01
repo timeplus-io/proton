@@ -70,8 +70,6 @@ private:
     UInt64 events_per_second;
     UInt64 interval_time;
 
-    NamesAndTypesList virtual_column_names_and_types;
-
 protected:
     StorageRandom(
         const StorageID & table_id_,

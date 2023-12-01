@@ -499,28 +499,78 @@
                 "statements": [
                   {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_stream"},
                   {"client":"python", "query_type": "table", "wait":2, "query": "create stream test22_stream(id int, value int)"},
-                  {"client":"python", "query_type": "stream", "query_id":"2229", "wait":2, "terminate":"manual", "query":"subscribe to select id, value, monotonic(100) from test22_stream settings checkpoint_interval=1"},
-                  {"client":"python", "query_type": "table", "depends_on":"2229", "kill":"2229", "kill_wait":3, "wait":1, "query": "insert into test22_stream(id, value) values (1,1)"},
+                  {"client":"python", "query_type": "stream", "query_id":"2230", "wait":2, "terminate":"manual", "query":"subscribe to select id, value, monotonic(100) from test22_stream settings checkpoint_interval=1"},
+                  {"client":"python", "query_type": "table", "depends_on":"2230", "kill":"2230", "kill_wait":3, "wait":1, "query": "insert into test22_stream(id, value) values (1,1)"},
                   {"client":"python", "query_type": "table", "wait":1, "query": "insert into test22_stream(id, value) values (2,2)"},
-                  {"client":"python", "query_type": "stream","query_id":"2229-1", "terminate": "manual", "query":"recover from '2229'"},
+                  {"client":"python", "query_type": "stream","query_id":"2230-1", "terminate": "manual", "query":"recover from '2230'"},
                   {"client":"python", "query_type": "table", "wait":1, "query": "insert into test22_stream(id, value) values (3,3)"},
-                  {"client":"python", "query_type": "table", "wait":3, "query": "kill query where query_id='2229' sync"},
-                  {"client":"python", "query_type": "table", "query":"unsubscribe to '2229'"}
+                  {"client":"python", "query_type": "table", "wait":3, "query": "kill query where query_id='2230' sync"},
+                  {"client":"python", "query_type": "table", "query":"unsubscribe to '2230'"}
 
                 ]
               }
             ],
             "expected_results": [
               {
-                "query_id":"2229", "expected_results":[
+                "query_id":"2230", "expected_results":[
                     ["1", "1", "100"]
                 ]
               },
               {
-                "query_id":"2229-1", "expected_results":[
+                "query_id":"2230-1", "expected_results":[
                     ["2", "2", "101"],
                     ["3", "3", "102"]
                 ]
+              }
+            ]
+          },
+          {
+            "id": 23,
+            "tags": ["monotonic test"],
+            "name": "test multishard",
+            "description": "test multishard",
+            "steps":[
+              {
+                "statements": [
+                    {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                    {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int default monotonic(2), value int) engine Random() settings eps=10, shards=10"},
+                    {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_stream"},
+                    {"client":"python", "query_type": "table", "wait":2, "query": "create stream if not exists test22_stream(shard int)"},
+                    {"client":"python", "query_type": "table", "wait":2, "query":"insert into test22_stream(shard) select _tp_shard from test22_create_random limit 10"},
+                    {"client":"python", "query_type": "table", "query_id":"2231", "wait":2, "query":"select shard from table(test22_stream) order by shard"}
+
+                ]
+              }
+            ],
+            "expected_results": [
+              {
+                "query_id":"2231", "expected_results":[
+                  ["0"], ["1"], ["2"], ["3"], ["4"], ["5"], ["6"], ["7"], ["8"], ["9"]
+                ]
+              }
+            ]
+          },
+          {
+            "id": 24,
+            "tags": ["monotonic test"],
+            "name": "bad argument test",
+            "description": "bad argument test",
+            "steps":[
+              {
+                "statements": [
+                    {"client":"python", "query_type": "table", "query_id":"2233", "wait":2, "query":"select monotonic(1.0)"},
+                    {"client":"python", "query_type": "table", "query_id":"2234", "wait":2, "query":"select monotonic('1')"}
+
+
+                ]
+              }
+            ],
+            "expected_results": [
+              {
+                "query_id":"2233", "expected_results":"error_code:36"
+              },
+              {
+                "query_id":"2234", "expected_results":"error_code:36"
               }
             ]
           }

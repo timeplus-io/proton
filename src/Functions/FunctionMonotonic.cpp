@@ -1,3 +1,4 @@
+#include <Columns/ColumnConst.h>
 #include <Core/Field.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -15,14 +16,20 @@ namespace DB
 {
 namespace ErrorCodes
 {
+extern const int BAD_ARGUMENTS;
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
 
-class ExecutableFunctionMonotonic : public IFunction
+/**
+ * Function monotonic() returns a monotonically increasing sequence of numbers.
+ * Now the argument range is min(Int64) ~ max(Int64).
+ * So it supports passing uint8, uint16, uint32, int8, int16, int32, int64 as argument.
+*/
+class FuntionMonotonic : public IFunction
 {
 public:
-    explicit ExecutableFunctionMonotonic(Int64 start_num_) : start_num(start_num_) { }
+    explicit FuntionMonotonic(Int64 start_num_) : start_num(start_num_) { }
 
     bool isSuitableForShortCircuitArgumentsExecution(const DataTypesWithConstInfo & /*arguments*/) const override { return false; }
 
@@ -38,8 +45,7 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName &, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
-        auto column = ColumnInt64::create();
-        column->getData().resize(input_rows_count);
+        auto column = ColumnInt64::create(input_rows_count);
         std::iota(column->getData().begin(), column->getData().end(), start_num);
         start_num += input_rows_count;
         return column;
@@ -78,14 +84,22 @@ public:
         if (arguments.size() != 1)
             throw Exception("Function " + getName() + " requires 1 arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
+        if (!isInteger(arguments[0].type))
+            throw Exception(
+                fmt::format("Function {} requires integer argumengt but given {}", getName(), arguments[0].type->getFamilyName()),
+                ErrorCodes::BAD_ARGUMENTS);
+
         return std::make_unique<DataTypeInt64>();
     }
 
     FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & return_type) const override
     {
-        auto start_num = static_cast<Int64>(arguments[0].column->getInt(0));
+        if (!isColumnConst(*arguments[0].column))
+            throw Exception("Function " + getName() + " requires constant argument", ErrorCodes::BAD_ARGUMENTS);
+
+        auto start_num = assert_cast<const ColumnConst &>(*arguments[0].column).getInt(0);
         return std::make_unique<FunctionToFunctionBaseAdaptor>(
-            std::make_unique<ExecutableFunctionMonotonic>(start_num),
+            std::make_unique<FuntionMonotonic>(start_num),
             collections::map<DataTypes>(arguments, [](const auto & elem) { return elem.type; }),
             return_type);
     }
