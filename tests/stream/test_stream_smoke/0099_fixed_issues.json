@@ -577,22 +577,24 @@
           "id": 20,
           "tags": ["backfill", "virtual_column"],
           "name": "#370",
-          "description": "Covering the append time test.The orginal issue is append_time column is 0 while select _tp_time and _tp_append_time together",
+          "description": "Covering backfill from historical with virtual columns test.",
           "steps":[
             {
               "statements": [
                 {"client":"python", "query_type": "table", "query": "drop stream if exists fixed_test_stream_99"},
-                {"client":"python", "query_type": "table", "exist": "fixed_test_stream_99", "exist_wait":2, "wait":1, "query": "create stream if not exists fixed_test_stream_99(id int, value int) settings shards=2;"},
+                {"client":"python", "query_type": "table", "exist": "fixed_test_stream_99", "exist_wait":2, "wait":1, "query": "create stream if not exists fixed_test_stream_99(id int, value int) settings shards=3, sharding_expr='weak_hash32(id)';"},
                 {"client":"python", "query_type": "table", "depends_on_stream": "fixed_test_stream_99", "wait":2, "query": "insert into fixed_test_stream_99(id, value) values(1, 2);"},
                 {"client":"python", "query_type": "stream", "depends_on_stream":"fixed_test_stream_99", "query_id":"9920", "query":"select id, _tp_shard from fixed_test_stream_99 where _tp_time > earliest_ts() settings enable_backfill_from_historical_store=true;"},
-                {"client":"python", "query_type": "table", "kill":9920, "kill_wait":3, "query": "insert into fixed_test_stream_99(id, value) values(6, 2);"}
+                {"client":"python", "query_type": "table", "kill":9920, "kill_wait":3, "query": "insert into fixed_test_stream_99(id, value) values(2, 2)(3, 3);"},
+                {"client":"python", "query_type": "table", "kill":9920, "kill_wait":3, "query": "insert into fixed_test_stream_99(id, value) values(2, 2)(3, 3);"}
               ]
             }
           ],
           "expected_results": [
             {"query_id":"9920", "expected_results":[
               [1, 0],
-              [6, 1]
+              [2, 0],
+              [3, 2]
             ]}
           ]
         }
