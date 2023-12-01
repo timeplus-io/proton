@@ -304,7 +304,7 @@ private:
 
     std::atomic_flag closed;
 
-    bool inmemory = false;
+    std::atomic<bool> inmemory = false;
 
     /// The earliest sn which is part of an incomplete transaction. This is used to compute the
     /// last stable sn (LSN) in ReplicaManager

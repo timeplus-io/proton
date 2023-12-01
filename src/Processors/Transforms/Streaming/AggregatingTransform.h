@@ -65,7 +65,7 @@ SERDE struct ManyAggregatedData
     /// Watermarks for all variants
     /// Acquire lock when update current watemark and find min watermark from all transform
     std::mutex watermarks_mutex;
-    SERDE std::vector<Int64> watermarks;
+    SERDE std::vector<Int64> watermarks TSA_GUARDED_BY(watermarks_mutex);
 
     std::mutex finalizing_mutex;
 
