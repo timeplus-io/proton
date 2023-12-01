@@ -139,10 +139,14 @@ Chunk StreamingStoreSourceBase::generate()
         return {};
 
     CheckpointContextPtr current;
+    if (has_ckpt_request)
     {
-        std::scoped_lock lock(ckpt_mutex);
-        current = std::move(ckpt_ctx);
-        ckpt_ctx.reset();
+        Poco::FastMutex::ScopedLock lock(ckpt_mutex);
+        if (ckpt_ctx)
+        {
+            current.swap(ckpt_ctx);
+            has_ckpt_request = false;
+        }
     }
 
     if (current)
@@ -173,9 +177,13 @@ void StreamingStoreSourceBase::checkpoint(CheckpointContextPtr ckpt_ctx_)
 {
     /// We assume the previous ckpt is already done
     /// Use std::atomic<std::shared_ptr<CheckpointContext>>
-    std::scoped_lock lock(ckpt_mutex);
+    assert(!has_ckpt_request);
+    CheckpointContextPtr new_ckpt = std::make_shared<CheckpointContext>(*ckpt_ctx_);
+
+    Poco::FastMutex::ScopedLock lock(ckpt_mutex);
     assert(!ckpt_ctx);
-    ckpt_ctx = std::make_shared<CheckpointContext>(*ckpt_ctx_);
+    ckpt_ctx.swap(new_ckpt);
+    has_ckpt_request = true;
 }
 
 /// 1) Generate a checkpoint barrier

@@ -5,6 +5,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <NativeLog/Record/Record.h>
 #include <Processors/ISource.h>
+#include <Poco/Mutex.h>
 
 namespace DB
 {
@@ -51,7 +52,8 @@ protected:
     Int64 last_sn = -1;
     Int64 last_epoch = -1;
     /// FIXME, switch to llvm-15 atomic shared_ptr
-    CheckpointContextPtr ckpt_ctx TSA_PT_GUARDED_BY(ckpt_mutex);
-    std::mutex ckpt_mutex;
+    std::atomic<bool> has_ckpt_request = false;
+    Poco::FastMutex ckpt_mutex;
+    CheckpointContextPtr ckpt_ctx;
 };
 }
