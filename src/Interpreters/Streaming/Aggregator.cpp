@@ -792,7 +792,8 @@ template <bool no_more_keys, bool use_compiled_functions, typename Method>
                     },
                     state.getKeyData(),
                     inst->batch_arguments,
-                    aggregates_pool);
+                    aggregates_pool,
+                    inst->delta_column);
 
                 /// Calculate if we need finalization
                 if (!need_finalization && inst->batch_that->isUserDefined())
@@ -3924,6 +3925,9 @@ bool Aggregator::executeAndRetractImpl(
             emplace_result.setMapped(aggregate_data);
 
             /// Save new group without retracted state (used for emit new key group)
+            /// FIXME: There is a bug when use hash table (key8 or key16), it use a optimzed FixedImplicitZeroHashMap that the empty mapped directly means zero (i.e. invalid insertion).
+            /// But in retract group scenario, we need to use an empty mapped to represent no ratracted value for new group
+            /// Use a non-optimized FixedHashMap ? or revisit retract implementation ?
             retracted_state.emplaceKey(retracted_method.data, i, *retracted_pool).setMapped(nullptr);
         }
         else

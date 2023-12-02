@@ -105,32 +105,68 @@ JoinTransformWithAlignment::JoinTransformWithAlignment(
         right_join_stream_desc->alignment_column);
 }
 
-IProcessor::Status JoinTransformWithAlignment::prepareInput(InputPortWithData & input_with_data)
+IProcessor::Status JoinTransformWithAlignment::prepareLeftInput()
 {
-    if (input_with_data.hasCompleteChunks())
+    if (left_input.hasCompleteChunks())
     {
-        /// In case, this input port request checkpoint, so we need wait for other inputs
-        if (input_with_data.ckpt_ctx)
+        /// In case, left input request checkpoint, then we need wait for the right input receive a checkpoint request
+        if (left_input.ckpt_ctx)
             return Status::NeedData;
 
-        /// When we already pulled data from left input and didn't consume them yet,
-        /// consume them.
-        return Status::Ready;
+        /// When we already pulled data from left input and didn't consume them yet, consume them.
+        /// A special case: if right input request checkpoint, we always expect to receive a checkpoint request ourselves
+        if (likely(!right_input.ckpt_ctx))
+            return Status::Ready;
     }
-    else if (input_with_data.input_port->isFinished())
+
+    if (left_input.input_port->isFinished())
     {
         /// Close the other input port
-        left_input.input_port->close();
         right_input.input_port->close();
         return Status::Finished;
     }
-    else if (!input_with_data.muted)
-    {
-        input_with_data.input_port->setNeeded();
 
-        if (input_with_data.input_port->hasData())
+    if (!left_input.muted)
+    {
+        left_input.input_port->setNeeded();
+        if (left_input.input_port->hasData())
         {
-            input_with_data.add(input_with_data.input_port->pull(true));
+            left_input.add(left_input.input_port->pull(true));
+            need_propagate_heartbeat = true;
+            return Status::Ready;
+        }
+    }
+
+    return Status::NeedData;
+}
+
+IProcessor::Status JoinTransformWithAlignment::prepareRightInput()
+{
+    if (right_input.hasCompleteChunks())
+    {
+        /// In case, right input request checkpoint, then we need wait for the left input receive a checkpoint request
+        if (right_input.ckpt_ctx)
+            return Status::NeedData;
+
+        /// When we already pulled data from left input and didn't consume them yet, consume them.
+        /// A special case: if left input request checkpoint, we always expect to receive a checkpoint request ourselves
+        if (likely(!left_input.ckpt_ctx))
+            return Status::Ready;
+    }
+
+    if (right_input.input_port->isFinished())
+    {
+        /// Close the other input port
+        left_input.input_port->close();
+        return Status::Finished;
+    }
+
+    if (!right_input.muted)
+    {
+        right_input.input_port->setNeeded();
+        if (right_input.input_port->hasData())
+        {
+            right_input.add(right_input.input_port->pull(true));
             need_propagate_heartbeat = true;
             return Status::Ready;
         }
@@ -166,8 +202,8 @@ IProcessor::Status JoinTransformWithAlignment::prepare()
     /// Invariant: at any specific time, we can't have both inputs muted
     assert(!right_input.muted || !left_input.muted);
 
-    Status right_input_status = prepareInput(right_input);
-    Status left_input_status = prepareInput(left_input);
+    Status right_input_status = prepareRightInput();
+    Status left_input_status = prepareLeftInput();
 
     if (right_input_status == Status::Ready || left_input_status == Status::Ready)
         /// One of the input still has buffered data, try to consume it
@@ -225,8 +261,8 @@ void JoinTransformWithAlignment::work()
                     return;
 
                 auto & chunk = right_input.input_chunks.front();
-                if (likely(chunk.rows()))
-                    processRightInputData(chunk.chunk);
+                assert(chunk.rows());
+                processRightInputData(chunk.chunk);
 
                 right_input.input_chunks.pop_front();
             } while (right_input.hasCompleteChunks());
@@ -257,8 +293,8 @@ void JoinTransformWithAlignment::work()
                     return;
 
                 auto & chunk = left_input.input_chunks.front();
-                if (likely(chunk.rows()))
-                    processLeftInputData(chunk.chunk);
+                assert(chunk.rows());
+                processLeftInputData(chunk.chunk);
 
                 left_input.input_chunks.pop_front();
             } while (left_input.hasCompleteChunks());
@@ -430,6 +466,9 @@ void JoinTransformWithAlignment::recover(CheckpointContextPtr ckpt_ctx)
 
         /// Deserializing Stats ?
     });
+
+    /// Re-init last data ts
+    left_input.last_data_ts = right_input.last_data_ts = DB::MonotonicMilliseconds::now();
 }
 
 void JoinTransformWithAlignment::onCancel()
@@ -442,35 +481,36 @@ void JoinTransformWithAlignment::InputPortWithData::add(Chunk && chunk)
 {
     ckpt_ctx = chunk.getCheckpointContext();
 
-    if (chunk.hasRows())
-        last_data_ts = DB::MonotonicMilliseconds::now();
-
     /// If the input needs to update data, currently the input is always two consecutive chunks with _tp_delta `-1 and +1`
     /// So we have to process them together before processing another input
     /// NOTE: Assume the first retracted chunk of updated data always set RetractedDataFlag.
     if (chunk.isRetractedData())
     {
+        assert(chunk.hasRows());
+        last_data_ts = DB::MonotonicMilliseconds::now();
         input_chunks.emplace_back(std::move(chunk), watermark, watermark);
         required_update_processing = true;
         return;
     }
+    else if (required_update_processing)
+        required_update_processing = false;
 
-    if (watermark_column_position)
+    if (likely(chunk.hasRows()))
     {
-        if (likely(chunk.hasRows()))
+        if (watermark_column_position)
         {
             auto [min_ts, max_ts] = columnMinMaxTimestamp(chunk.getColumns()[*watermark_column_position], watermark_column_type);
             input_chunks.emplace_back(std::move(chunk), min_ts, max_ts);
             watermark = std::max(max_ts, watermark);
         }
         else
-            input_chunks.emplace_back(std::move(chunk), watermark, watermark);
-    }
-    else
-    {
-        auto now_ts = DB::UTCMilliseconds::now();
-        input_chunks.emplace_back(std::move(chunk), now_ts, now_ts);
-        watermark = std::max(now_ts, watermark);
+        {
+            auto now_ts = DB::UTCMilliseconds::now();
+            input_chunks.emplace_back(std::move(chunk), now_ts, now_ts);
+            watermark = now_ts;
+        }
+
+        last_data_ts = DB::MonotonicMilliseconds::now();
     }
 }
 

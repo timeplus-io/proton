@@ -143,6 +143,7 @@ public:
         std::function<void(AggregateDataPtr &)> init,
         const UInt8 * key,
         const IColumn ** columns,
-        Arena * arena) const override;
+        Arena * arena,
+        const IColumn * delta_col = nullptr) const override;
 };
 }

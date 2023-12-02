@@ -67,7 +67,8 @@ private:
         bool need_buffer_data_to_align;
     };
 
-    Status prepareInput(InputPortWithData & input_with_data);
+    Status prepareLeftInput();
+    Status prepareRightInput();
 
     void processLeftInputData(LightChunk & chunk);
     void processRightInputData(LightChunk & chunk);
