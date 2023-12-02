@@ -978,6 +978,30 @@ void Block::reorderColumnsInplace(const Block & header)
     // }
 }
 
+void Block::reorderColumnsInplace(const Names & names)
+{
+    assert(names.size() >= 1);
+
+    auto num_columns = columns();
+    if (num_columns <= 1)
+        return;
+
+    assert(num_columns >= names.size());
+
+    Block result;
+    result.reserve(names.size());
+
+    for (const auto & name : names)
+    {
+        auto & target_col = getByName(name);
+        result.insert(std::move(target_col));
+    }
+
+    /// Don't swap block.info
+    data.swap(result.data);
+    index_by_name.swap(result.index_by_name);
+}
+
 void Block::concat(const Block & other)
 {
     assert(blocksHaveEqualStructure(*this, other));
