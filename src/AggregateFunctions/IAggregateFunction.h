@@ -342,7 +342,8 @@ public:
         std::function<void(AggregateDataPtr &)> init,
         const UInt8 * key,
         const IColumn ** columns,
-        Arena * arena) const = 0;
+        Arena * arena,
+        const IColumn * delta_col = nullptr) const = 0;
 
     /** Insert result of aggregate function into result column with batch size.
       * The implementation of this method will destroy aggregate place up to -State if insert state into result column was successful.
@@ -787,35 +788,81 @@ public:
         std::function<void(AggregateDataPtr &)> init,
         const UInt8 * key,
         const IColumn ** columns,
-        Arena * arena) const override
+        Arena * arena,
+        const IColumn * delta_col = nullptr) const override
     {
         static constexpr size_t UNROLL_COUNT = 8;
 
-        size_t i = row_begin;
-
-        size_t size_unrolled = (row_end - row_begin) / UNROLL_COUNT * UNROLL_COUNT;
-        for (; i < size_unrolled; i += UNROLL_COUNT)
+        if (delta_col == nullptr)
         {
-            AggregateDataPtr places[UNROLL_COUNT];
-            for (size_t j = 0; j < UNROLL_COUNT; ++j)
-            {
-                AggregateDataPtr & place = map[key[i + j]];
-                if (unlikely(!place))
-                    init(place);
+            /// Fast path. non-changelog
+            size_t i = row_begin;
 
-                places[j] = place;
+            size_t size_unrolled = (row_end - row_begin) / UNROLL_COUNT * UNROLL_COUNT;
+            for (; i < size_unrolled; i += UNROLL_COUNT)
+            {
+                AggregateDataPtr places[UNROLL_COUNT];
+                for (size_t j = 0; j < UNROLL_COUNT; ++j)
+                {
+                    AggregateDataPtr & place = map[key[i + j]];
+                    if (unlikely(!place))
+                        init(place);
+
+                    places[j] = place;
+                }
+
+                for (size_t j = 0; j < UNROLL_COUNT; ++j)
+                    static_cast<const Derived *>(this)->add(places[j] + place_offset, columns, i + j, arena);
             }
 
-            for (size_t j = 0; j < UNROLL_COUNT; ++j)
-                static_cast<const Derived *>(this)->add(places[j] + place_offset, columns, i + j, arena);
+            for (; i < row_end; ++i)
+            {
+                AggregateDataPtr & place = map[key[i]];
+                if (unlikely(!place))
+                    init(place);
+                static_cast<const Derived *>(this)->add(place + place_offset, columns, i, arena);
+            }
         }
-
-        for (; i < row_end; ++i)
+        else
         {
-            AggregateDataPtr & place = map[key[i]];
-            if (unlikely(!place))
-                init(place);
-            static_cast<const Derived *>(this)->add(place + place_offset, columns, i, arena);
+            /// changelog
+            const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
+
+            size_t i = row_begin;
+
+            size_t size_unrolled = (row_end - row_begin) / UNROLL_COUNT * UNROLL_COUNT;
+            for (; i < size_unrolled; i += UNROLL_COUNT)
+            {
+                AggregateDataPtr places[UNROLL_COUNT];
+                for (size_t j = 0; j < UNROLL_COUNT; ++j)
+                {
+                    AggregateDataPtr & place = map[key[i + j]];
+                    if (unlikely(!place))
+                        init(place);
+
+                    places[j] = place;
+                }
+
+                for (size_t j = 0; j < UNROLL_COUNT; ++j)
+                {
+                    if (delta_flags[i] >= 0)
+                        static_cast<const Derived *>(this)->add(places[j] + place_offset, columns, i + j, arena);
+                    else
+                        static_cast<const Derived *>(this)->negate(places[j] + place_offset, columns, i + j, arena);
+                }
+            }
+
+            for (; i < row_end; ++i)
+            {
+                AggregateDataPtr & place = map[key[i]];
+                if (unlikely(!place))
+                    init(place);
+                
+                if (delta_flags[i] >= 0)
+                    static_cast<const Derived *>(this)->add(place + place_offset, columns, i, arena);
+                else
+                    static_cast<const Derived *>(this)->negate(place + place_offset, columns, i, arena);
+            }
         }
     }
 
@@ -940,7 +987,8 @@ public:
         std::function<void(AggregateDataPtr &)> init,
         const UInt8 * key,
         const IColumn ** columns,
-        Arena * arena) const override
+        Arena * arena,
+        const IColumn * delta_col = nullptr) const override
     {
         const Derived & func = *static_cast<const Derived *>(this);
 
@@ -948,7 +996,7 @@ public:
 
         if (func.allocatesMemoryInArena() || sizeof(Data) > 16 || func.sizeOfData() != sizeof(Data))
         {
-            IAggregateFunctionHelper<Derived>::addBatchLookupTable8(row_begin, row_end, map, place_offset, init, key, columns, arena);
+            IAggregateFunctionHelper<Derived>::addBatchLookupTable8(row_begin, row_end, map, place_offset, init, key, columns, arena, delta_col);
             return;
         }
 
@@ -962,50 +1010,109 @@ public:
         size_t i = row_begin;
 
         /// Aggregate data into different lookup tables.
-
-        size_t size_unrolled = (row_end - row_begin) / UNROLL_COUNT * UNROLL_COUNT;
-        for (; i < size_unrolled; i += UNROLL_COUNT)
+        if (delta_col == nullptr)
         {
-            for (size_t j = 0; j < UNROLL_COUNT; ++j)
+            /// Fast path. non-changelog
+            size_t size_unrolled = (row_end - row_begin) / UNROLL_COUNT * UNROLL_COUNT;
+            for (; i < size_unrolled; i += UNROLL_COUNT)
             {
-                size_t idx = j * 256 + key[i + j];
-                if (unlikely(!has_data[idx]))
+                for (size_t j = 0; j < UNROLL_COUNT; ++j)
                 {
-                    new (&places[idx]) Data;
-                    has_data[idx] = true;
-                }
-                func.add(reinterpret_cast<char *>(&places[idx]), columns, i + j, nullptr);
-            }
-        }
-
-        /// Merge data from every lookup table to the final destination.
-
-        for (size_t k = 0; k < 256; ++k)
-        {
-            for (size_t j = 0; j < UNROLL_COUNT; ++j)
-            {
-                size_t idx = j * 256 + k;
-                if (has_data[idx])
-                {
-                    AggregateDataPtr & place = map[k];
-                    if (unlikely(!place))
-                        init(place);
-
-                    func.merge(place + place_offset, reinterpret_cast<const char *>(&places[idx]), nullptr);
+                    size_t idx = j * 256 + key[i + j];
+                    if (unlikely(!has_data[idx]))
+                    {
+                        new (&places[idx]) Data;
+                        has_data[idx] = true;
+                    }
+                    func.add(reinterpret_cast<char *>(&places[idx]), columns, i + j, nullptr);
                 }
             }
+
+            /// Merge data from every lookup table to the final destination.
+
+            for (size_t k = 0; k < 256; ++k)
+            {
+                for (size_t j = 0; j < UNROLL_COUNT; ++j)
+                {
+                    size_t idx = j * 256 + k;
+                    if (has_data[idx])
+                    {
+                        AggregateDataPtr & place = map[k];
+                        if (unlikely(!place))
+                            init(place);
+
+                        func.merge(place + place_offset, reinterpret_cast<const char *>(&places[idx]), nullptr);
+                    }
+                }
+            }
+
+            /// Process tails and add directly to the final destination.
+
+            for (; i < row_end; ++i)
+            {
+                size_t k = key[i];
+                AggregateDataPtr & place = map[k];
+                if (unlikely(!place))
+                    init(place);
+
+                func.add(place + place_offset, columns, i, nullptr);
+            }
         }
-
-        /// Process tails and add directly to the final destination.
-
-        for (; i < row_end; ++i)
+        else
         {
-            size_t k = key[i];
-            AggregateDataPtr & place = map[k];
-            if (unlikely(!place))
-                init(place);
+            /// changelog
+            const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
+            size_t size_unrolled = (row_end - row_begin) / UNROLL_COUNT * UNROLL_COUNT;
+            for (; i < size_unrolled; i += UNROLL_COUNT)
+            {
+                for (size_t j = 0; j < UNROLL_COUNT; ++j)
+                {
+                    size_t idx = j * 256 + key[i + j];
+                    if (unlikely(!has_data[idx]))
+                    {
+                        new (&places[idx]) Data;
+                        has_data[idx] = true;
+                    }
 
-            func.add(place + place_offset, columns, i, nullptr);
+                    if (delta_flags[i] >= 0)
+                        func.add(reinterpret_cast<char *>(&places[idx]), columns, i + j, nullptr);
+                    else
+                        func.negate(reinterpret_cast<char *>(&places[idx]), columns, i + j, nullptr);
+                }
+            }
+
+            /// Merge data from every lookup table to the final destination.
+
+            for (size_t k = 0; k < 256; ++k)
+            {
+                for (size_t j = 0; j < UNROLL_COUNT; ++j)
+                {
+                    size_t idx = j * 256 + k;
+                    if (has_data[idx])
+                    {
+                        AggregateDataPtr & place = map[k];
+                        if (unlikely(!place))
+                            init(place);
+
+                        func.merge(place + place_offset, reinterpret_cast<const char *>(&places[idx]), nullptr);
+                    }
+                }
+            }
+
+            /// Process tails and add directly to the final destination.
+
+            for (; i < row_end; ++i)
+            {
+                size_t k = key[i];
+                AggregateDataPtr & place = map[k];
+                if (unlikely(!place))
+                    init(place);
+
+                if (delta_flags[i] >= 0)
+                    func.add(place + place_offset, columns, i, nullptr);
+                else
+                    func.negate(place + place_offset, columns, i, nullptr);
+            }
         }
     }
 };
