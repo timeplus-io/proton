@@ -1289,6 +1289,13 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
 
     selectColumnNames(column_names_to_return, data, real_column_names, virt_column_names, sample_factor_column_queried);
 
+    /// proton: starts. Add for read concat
+    /// Sometimes, historical source is not compatable with streaming source header
+    /// its format is always `<real columns> + <virtual columns>`, for example:
+    /// `select _tp_shard, i from t1`, historical header is `i, _tp_shard`, but streaming header is `_tp_shard, i`
+    bool required_return_columns_in_order = static_cast<bool>(create_streaming_source);
+    /// proton: ends.
+
     auto read_from_merge_tree = std::make_unique<ReadFromMergeTree>(
         std::move(parts),
         real_column_names,
@@ -1304,7 +1311,8 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
         log,
         merge_tree_select_result_ptr,
         enable_parallel_reading,
-        std::move(create_streaming_source)
+        std::move(create_streaming_source),
+        required_return_columns_in_order ? column_names_to_return : Names{}
     );
 
     QueryPlanPtr plan = std::make_unique<QueryPlan>();

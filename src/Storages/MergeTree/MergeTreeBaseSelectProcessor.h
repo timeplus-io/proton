@@ -50,7 +50,7 @@ public:
     ~MergeTreeBaseSelectProcessor() override;
 
     static Block transformHeader(
-        Block block, const PrewhereInfoPtr & prewhere_info, const DataTypePtr & partition_value_type, const Names & virtual_columns);
+        Block block, const PrewhereInfoPtr & prewhere_info, const DataTypePtr & partition_value_type, const Names & virtual_columns, const Names & columns_to_return = {});
 
     static std::unique_ptr<MergeTreeBlockSizePredictor> getSizePredictor(
         const MergeTreeData::DataPartPtr & data_part,

@@ -633,7 +633,7 @@ void MergeTreeBaseSelectProcessor::injectVirtualColumns(
 }
 
 Block MergeTreeBaseSelectProcessor::transformHeader(
-    Block block, const PrewhereInfoPtr & prewhere_info, const DataTypePtr & partition_value_type, const Names & virtual_columns)
+    Block block, const PrewhereInfoPtr & prewhere_info, const DataTypePtr & partition_value_type, const Names & virtual_columns, const Names & columns_to_return)
 {
     if (prewhere_info)
     {
@@ -676,6 +676,11 @@ Block MergeTreeBaseSelectProcessor::transformHeader(
     }
 
     injectVirtualColumns(block, nullptr, partition_value_type, virtual_columns);
+
+    /// proton: starts. Only for read concat, we requires return columns in order
+    if (!columns_to_return.empty())
+        block.reorderColumnsInplace(columns_to_return);
+    /// proton: ends.
     return block;
 }
 
