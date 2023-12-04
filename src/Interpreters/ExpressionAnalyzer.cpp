@@ -184,25 +184,35 @@ void tryTranslateToParametricAggregateFunction(
     }
 }
 
+/// proton: starts. Add 'is_changelog_input' param to allow aggregate function being aware whether the input stream is a changelog
 AggregateFunctionPtr getAggregateFunction(
-    const ASTFunction * node, DataTypes & types, Array & parameters, Names & argument_names, AggregateFunctionProperties & properties, ContextPtr context, bool is_streaming, bool throw_if_empty = true)
+    const ASTFunction * node,
+    DataTypes & types,
+    Array & parameters,
+    Names & argument_names,
+    AggregateFunctionProperties & properties,
+    ContextPtr context,
+    bool is_streaming,
+    bool is_changelog_input,
+    bool throw_if_empty = true)
+/// proton: ends
 {
     /// We shall replace '<aggr>_distinct' to '<aggr>_distinct_streaming' in streaming query.
     if (is_streaming && endsWith(node->name, "_distinct"))
     {
         if (throw_if_empty)
-            return AggregateFunctionFactory::instance().get(node->name + "_streaming", types, parameters, properties);
+            return AggregateFunctionFactory::instance().get(node->name + "_streaming", types, parameters, properties, is_changelog_input);
         else
-            return AggregateFunctionFactory::instance().tryGet(node->name + "_streaming", types, parameters, properties);
+            return AggregateFunctionFactory::instance().tryGet(node->name + "_streaming", types, parameters, properties, is_changelog_input);
     }
     else
     {
         /// Examples: Translate `quantile(x, 0.5)` to `quantile(0.5)(x)`
         tryTranslateToParametricAggregateFunction(node, types, parameters, argument_names, context);
         if (throw_if_empty)
-            return AggregateFunctionFactory::instance().get(node->name, types, parameters, properties);
+            return AggregateFunctionFactory::instance().get(node->name, types, parameters, properties, is_changelog_input);
         else
-            return AggregateFunctionFactory::instance().tryGet(node->name, types, parameters, properties);
+            return AggregateFunctionFactory::instance().tryGet(node->name, types, parameters, properties, is_changelog_input);
     }
 }
 /// proton: ends.
@@ -695,7 +705,15 @@ void ExpressionAnalyzer::makeAggregateDescriptions(ActionsDAGPtr & actions, Aggr
         aggregate.parameters = (node->parameters) ? getAggregateFunctionParametersArray(node->parameters, "", getContext()) : Array();
 
         /// proton: starts.
-        aggregate.function = getAggregateFunction(node, types, aggregate.parameters, aggregate.argument_names, properties, getContext(), syntax->streaming);
+        aggregate.function = getAggregateFunction(
+            node,
+            types,
+            aggregate.parameters,
+            aggregate.argument_names,
+            properties,
+            getContext(),
+            syntax->streaming,
+            syntax->is_changelog_input);
         /// proton: ends.
 
         descriptions.push_back(aggregate);

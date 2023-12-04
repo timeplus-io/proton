@@ -64,7 +64,11 @@ FunctionOverloadResolverPtr UserDefinedFunctionFactory::get(const String & funct
 
 /// proton: starts
 AggregateFunctionPtr UserDefinedFunctionFactory::getAggregateFunction(
-    const String & function_name, const DataTypes & types, const Array & parameters, AggregateFunctionProperties & /*properties*/)
+    const String & function_name,
+    const DataTypes & types,
+    const Array & parameters,
+    AggregateFunctionProperties & /*properties*/,
+    bool is_changelog_input)
 {
     const auto & loader = ExternalUserDefinedFunctionsLoader::instance(nullptr);
     auto load_result = loader.getLoadResult(function_name);
@@ -114,7 +118,7 @@ AggregateFunctionPtr UserDefinedFunctionFactory::getAggregateFunction(
         }
 
         return std::make_shared<AggregateFunctionJavaScriptAdapter>(
-            config, types, parameters, query_context->getSettingsRef().javascript_max_memory_bytes);
+            config, types, parameters, is_changelog_input, query_context->getSettingsRef().javascript_max_memory_bytes);
     }
 
     return nullptr;

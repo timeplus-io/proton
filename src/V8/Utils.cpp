@@ -154,7 +154,7 @@ fillV8Array(v8::Isolate * isolate, const DataTypePtr & arg_type, const MutableCo
 }
 
 std::vector<v8::Local<v8::Value>> prepareArguments(
-    v8::Isolate * isolate, const std::vector<UserDefinedFunctionConfiguration::Argument> & arguments, const MutableColumns & columns)
+    v8::Isolate * isolate, const std::span<const DB::UserDefinedFunctionConfiguration::Argument> arguments, const MutableColumns & columns)
 {
     std::vector<v8::Local<v8::Value>> argv;
     argv.reserve(arguments.size());
