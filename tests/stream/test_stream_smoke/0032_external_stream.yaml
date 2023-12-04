@@ -1,0 +1,546 @@
+---
+test_suite_name: external_stream
+tag: smoke
+test_suite_config:
+  settings_to_run:
+    - redp
+  tests_2_run:
+    ids_2_run:
+      - all
+    tags_2_run: []
+    tags_2_skip:
+      default:
+        - todo
+        - to_support
+        - change
+        - bug
+        - sample
+comments:
+  Tests covering the streaming join query with join alignment smoke cases,
+  covering watermark alignment and processing time alignment
+tests:
+  - id: 0
+    tags:
+      - external_stream
+    name: test external stream
+    description: test external stream
+    steps:
+      - statements:
+          - client: exec
+            query_type: docker
+            query: docker exec redpanda-1 rpk topic delete test
+
+          - client: exec
+            query_type: docker
+            wait: 2
+            query: docker exec redpanda-1 rpk topic create test
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: drop stream if exists test33_external
+
+          - client: python
+            query_type: table
+            wait: 2
+            query:
+              "create external stream if not exists test33_external(int8_c int8,int16_c
+              int16,int32_c int32,int64_c int64,uint8_c uint8,uint16_c uint16,uint32_c uint32,uint64_c
+              uint64,uuid_c uuid,string_c string,float_c float,decimal_c decimal32(3),date_c
+              date,datetime_c datetime,enum_c enum('a'=1, 'b'=2, 'z'=26),tuple_c tuple(s
+              string, i int),ipv4_c ipv4,ipv6_c ipv6,map_c map(string, int),array_c array(int)
+              ) settings type='kafka', brokers='redpanda-1: 9092', topic='test', data_format='JSONEachRow';"
+          - client: python
+            query_id: "3300"
+            depends_on_stream: test33_external
+            wait: 1
+            terminate: manual
+            query_type: stream
+            query: select * from test33_external
+
+          - client: exec
+            query_type: docker
+            depends_on: "3300"
+            wait: 3
+            query: docker exec -i redpanda-1 rpk topic produce test
+            echo:
+              int8_c: 1
+              int16_c: 2
+              int32_c: 3
+              int64_c: "4"
+              uint8_c: 5
+              uint16_c: 6
+              uint32_c: 7
+              uint64_c: "8"
+              uuid_c: 928c88b9-f37a-41d5-bef5-9cb3663c2445
+              string_c: "{@string}"
+              float_c: 12345.123
+              decimal_c: 123456.123
+              date_c: "2022-03-24"
+              datetime_c: "2022-03-24 17:17:17"
+              enum_c: a
+              tuple_c:
+                s: a
+                i: 0
+              ipv4_c: 192.168.168.168
+              ipv6_c: 2a02:aa08:e000:3100::20
+              map_c:
+                key1: 111
+              array_c:
+                - 1
+                - 2
+                - 3
+
+          - client: python
+            query_type: table
+            depends_on_query: "3300"
+            wait: 3
+            query: kill query where query_id = '3300'
+    expected_results:
+      - query_id: "3300"
+        expected_results:
+          - - "1"
+            - "2"
+            - "3"
+            - "4"
+            - "5"
+            - "6"
+            - "7"
+            - "8"
+            - 928c88b9-f37a-41d5-bef5-9cb3663c2445
+            - "{@string}"
+            - "12345.123046875"
+            - "123456.123"
+            - "2022-03-24"
+            - "2022-03-24 17:17:17"
+            - a
+            - "('a', 0)"
+            - 192.168.168.168
+            - 2a02:aa08:e000:3100::20
+            - "{'key1': 111}"
+            - "[1, 2, 3]"
+  - id: 1
+    tags:
+      - external_stream
+    name: test external stream seek_to earilest
+    description: test external stream seek_to earilest
+    steps:
+      - statements:
+          - client: exec
+            query_type: docker
+            query: docker exec redpanda-1 rpk topic delete test
+
+          - client: exec
+            query_type: docker
+            wait: 2
+            query: docker exec redpanda-1 rpk topic create test
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: drop stream if exists test33_external
+
+          - client: python
+            query_type: table
+            wait: 2
+            query:
+              create external stream if not exists test33_external(id int, value string)
+              settings type = 'kafka', brokers = 'redpanda-1:9092', topic = 'test', data_format='JSONEachRow';
+
+          - client: exec
+            query_type: docker
+            wait: 3
+            query: docker exec -i redpanda-1 rpk topic produce test
+            echo:
+              id: 1
+              value: sometext
+
+          - client: exec
+            query_type: docker
+            wait: 3
+            query: docker exec -i redpanda-1 rpk topic produce test
+            echo:
+              id: 2
+              value: sometext2
+
+          - client: python
+            query_id: "3301"
+            depends_on_stream: test33_external
+            wait: 1
+            terminate: manual
+            query_type: stream
+            query: select * from test33_external settings seek_to = 'earliest'
+
+          - client: exec
+            query_type: docker
+            depends_on: "3301"
+            wait: 3
+            query: docker exec -i redpanda-1 rpk topic produce test
+            echo:
+              id: 3
+              value: sometext3
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: kill query where query_id='3301'
+    expected_results:
+      - query_id: "3301"
+        expected_results:
+          - - "1"
+            - sometext
+          - - "2"
+            - sometext2
+          - - "3"
+            - sometext3
+  - id: 2
+    tags:
+      - external_stream
+    name: test external stream failure handling
+    description: test external stream failure handling
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: drop view if exists test33_mv;
+
+          - client: exec
+            query_type: docker
+            query: docker exec redpanda-1 rpk topic delete test
+
+          - client: exec
+            query_type: docker
+            wait: 2
+            query: docker exec redpanda-1 rpk topic create test
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: drop stream if exists test33_external
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: drop stream if exists test33_stream2
+
+          - client: python
+            query_type: table
+            wait: 2
+            query:
+              create external stream if not exists test33_external(raw string) settings
+              type = 'kafka', brokers = 'redpanda-1:9092', topic = 'test'
+
+          - client: python
+            query_type: table
+            wait: 2
+            query: create stream if not exists test33_stream2(id int, value string)
+
+          - client: python
+            query_type: table
+            wait: 2
+            query:
+              create materialized view if not exists test33_mv into test33_stream2
+              as select to_int(raw:id) as id, raw:value as value from test33_external;
+
+          - client: python
+            query_id: "3302"
+            depends_on_stream: test33_stream2
+            wait: 1
+            terminate: manual
+            query_type: stream
+            query: select id, value from test33_stream2
+
+          - client: exec
+            query_type: docker
+            depends_on: "3302"
+            wait: 3
+            query: docker exec -i redpanda-1 rpk topic produce test
+            echo:
+              id: 1
+              value: sometext
+
+          - client: exec
+            query_type: docker
+            wait: 3
+            query: docker-compose restart redpanda-1 -f ./configs/docker-compose-redp-single.yaml
+
+          - client: exec
+            query_type: docker
+            wait: 3
+            query: docker exec -i redpanda-1 rpk topic produce test
+            echo:
+              id: 3
+              value: sometext3
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: drop view if exists test33_mv;
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: kill query where query_id='3302'
+    expected_results:
+      - query_id: "3302"
+        expected_results:
+          - - "1"
+            - sometext
+          - - "3"
+            - sometext3
+  - id: 3
+    tags:
+      - external_stream
+      - multi_shard
+      - no_sharding_rule
+    name: test external stream multi_shard
+    description: test external stream multi_shard
+    steps:
+      - statements:
+          - client: exec
+            query_type: docker
+            query: docker exec redpanda-1 rpk topic delete test
+
+          - client: exec
+            query_type: docker
+            wait: 2
+            query: docker exec redpanda-1 rpk topic create test -p 3
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: drop stream if exists test33_external
+
+          - client: python
+            query_type: table
+            wait: 2
+            query:
+              create external stream if not exists test33_external(id int, value string)
+              settings type = 'kafka', brokers = 'redpanda-1:9092', topic = 'test', data_format='JSONEachRow'
+
+          - client: python
+            query_id: "3303"
+            depends_on_stream: test33_external
+            wait: 1
+            terminate: manual
+            query_type: stream
+            query: select id, value from test33_external settings shards='1'
+
+          - client: python
+            query_id: "3304"
+            depends_on_stream: test33_external
+            wait: 1
+            terminate: manual
+            query_type: stream
+            query: select id, value from test33_external
+
+          - client: exec
+            query_type: docker
+            depends_on: "3304"
+            wait: 3
+            query: docker exec -i redpanda-1 rpk topic produce test -p 0
+            echo:
+              id: 1
+              value: sometext1
+
+          - client: exec
+            query_type: docker
+            wait: 3
+            query: docker exec -i redpanda-1 rpk topic produce test -p 1
+            echo:
+              id: 2
+              value: sometext2
+
+          - client: exec
+            query_type: docker
+            wait: 3
+            query: docker exec -i redpanda-1 rpk topic produce test -p 2
+            echo:
+              id: 3
+              value: sometext3
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: kill query where query_id='3303'
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: kill query where query_id='3304'
+    expected_results:
+      - query_id: "3303"
+        expected_results:
+          - - "2"
+            - sometext2
+
+      - query_id: "3304"
+        expected_results:
+          - - "1"
+            - sometext1
+          - - "2"
+            - sometext2
+          - - "3"
+            - sometext3
+  - id: 4
+    tags:
+      - external_stream
+      - multi_shard
+      - no_sharding_rule
+      - seek_to
+    name: test external stream multi_shard and seek_to
+    description: test external stream multi_shard and seek_to
+    steps:
+      - statements:
+          - client: exec
+            query_type: docker
+            query: docker exec redpanda-1 rpk topic delete test
+
+          - client: exec
+            query_type: docker
+            wait: 2
+            query: docker exec redpanda-1 rpk topic create test -p 3
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: drop stream if exists test33_external
+
+          - client: python
+            query_type: table
+            wait: 2
+            query:
+              create external stream if not exists test33_external(id int, value string)
+              settings type = 'kafka', brokers = 'redpanda-1:9092', topic = 'test', data_format='JSONEachRow'
+
+          - client: exec
+            query_type: docker
+            wait: 3
+            query: docker exec -i redpanda-1 rpk topic produce test -p 0
+            echo:
+              id: 1
+              value: sometext1
+
+          - client: exec
+            query_type: docker
+            wait: 3
+            query: docker exec -i redpanda-1 rpk topic produce test -p 1
+            echo:
+              id: 2
+              value: sometext2
+
+          - client: python
+            query_id: "3305"
+            depends_on_stream: test33_external
+            wait: 1
+            terminate: manual
+            query_type: stream
+            query: select * from test33_external settings shards='1', seek_to='earliest'
+
+          - client: exec
+            query_type: docker
+            depends_on: "3305"
+            wait: 3
+            query: docker exec -i redpanda-1 rpk topic produce test -p 1
+            echo:
+              id: 3
+              value: sometext3
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: kill query where query_id='3305'
+    expected_results:
+      - query_id: "3305"
+        expected_results:
+          - - "2"
+            - sometext2
+          - - "3"
+            - sometext3
+  - id: 5
+    tags:
+      - external_stream
+      - multi_shard
+      - set_sharding_rule
+    name:
+      test external stream multi_shard and seek_to, now the test framework doesn't
+      support validate the data read from kafkaseek_to result.So we insert data into
+      external stream and read from external stream to validate the result.The data
+      with the same shard_expr result should be divided into the same shard.
+    description: set sharding rule and test external stream multi_shard
+    steps:
+      - statements:
+          - client: exec
+            query_type: docker
+            query: docker exec redpanda-1 rpk topic delete test
+
+          - client: exec
+            query_type: docker
+            wait: 2
+            query: docker exec redpanda-1 rpk topic create test -p 3
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: drop stream if exists test33_external
+
+          - client: python
+            query_type: table
+            wait: 2
+            query:
+              create external stream if not exists test33_external(id int, value string)
+              settings type = 'kafka', brokers = 'redpanda-1:9092', topic = 'test', data_format='JSONEachRow',
+              sharding_expr='to_int(id)'
+
+          - client: python
+            query_id: "3306"
+            depends_on_stream: test33_external
+            wait: 1
+            terminate: manual
+            query_type: stream
+            query: select id, value from test33_external settings shards='1'
+
+          - client: python
+            query_type: table
+            depends_on: "3306"
+            wait: 1
+            query: insert into test33_external(id, value) values (1, 'aaaa')
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: insert into test33_external(id, value) values (2, 'aaaa')
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: insert into test33_external(id, value) values (3, 'aaaa')
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: insert into test33_external(id, value) values (1, 'bbbb')
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: insert into test33_external(id, value) values (2, 'bbbb')
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: insert into test33_external(id, value) values (3, 'bbbb')
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: kill query where query_id='3306'
+    expected_results:
+      - query_id: "3306"
+        expected_results:
+          - - "1"
+            - aaaa
+          - - "1"
+            - bbbb
+
