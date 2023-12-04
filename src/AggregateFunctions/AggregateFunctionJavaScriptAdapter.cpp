@@ -6,6 +6,7 @@
 #include <V8/ConvertDataTypes.h>
 #include <V8/Utils.h>
 #include <Common/logger_useful.h>
+#include <span>
 
 namespace DB
 {
@@ -112,7 +113,10 @@ JavaScriptBlueprint::~JavaScriptBlueprint() noexcept
 }
 
 JavaScriptAggrFunctionState::JavaScriptAggrFunctionState(
-    const JavaScriptBlueprint & blueprint, const std::vector<UserDefinedFunctionConfiguration::Argument> & arguments)
+    const JavaScriptBlueprint & blueprint,
+    const std::vector<UserDefinedFunctionConfiguration::Argument> & arguments,
+    const bool is_changelog_input_)
+    : is_changelog_input(is_changelog_input_)
 {
     columns.reserve(arguments.size());
 
@@ -222,7 +226,8 @@ void JavaScriptAggrFunctionState::add(const IColumn ** src_columns, size_t row_n
         columns[i]->insertFrom(*src_columns[i], row_num);
 
     /// _tp_delta column
-    columns.back()->insert(1);
+    if (is_changelog_input)
+        columns.back()->insert(1);
 }
 
 void JavaScriptAggrFunctionState::negate(const IColumn ** src_columns, size_t row_num)
@@ -234,7 +239,8 @@ void JavaScriptAggrFunctionState::negate(const IColumn ** src_columns, size_t ro
         columns[i]->insertFrom(*src_columns[i], row_num);
 
     /// _tp_delta column
-    columns.back()->insert(-1);
+    if (is_changelog_input)
+        columns.back()->insert(-1);
 }
 
 void JavaScriptAggrFunctionState::reinitCache()
@@ -261,10 +267,12 @@ AggregateFunctionJavaScriptAdapter::AggregateFunctionJavaScriptAdapter(
     JavaScriptUserDefinedFunctionConfigurationPtr config_,
     const DataTypes & types,
     const Array & params_,
+    bool is_changelog_input_,
     size_t max_v8_heap_size_in_bytes_)
     : IAggregateFunctionHelper<AggregateFunctionJavaScriptAdapter>(types, params_)
     , config(config_)
     , num_arguments(types.size())
+    , is_changelog_input(is_changelog_input_)
     , max_v8_heap_size_in_bytes(max_v8_heap_size_in_bytes_)
     , blueprint(config->name, config->source)
 {
@@ -284,7 +292,7 @@ DataTypePtr AggregateFunctionJavaScriptAdapter::getReturnType() const
 void AggregateFunctionJavaScriptAdapter::create(AggregateDataPtr __restrict place) const
 {
     V8::checkHeapLimit(blueprint.isolate.get(), max_v8_heap_size_in_bytes);
-    new (place) Data(blueprint, config->arguments);
+    new (place) Data(blueprint, config->arguments, is_changelog_input);
 }
 
 /// destroy instance of UDF
@@ -405,11 +413,13 @@ size_t AggregateFunctionJavaScriptAdapter::flush(AggregateDataPtr __restrict pla
         v8::Local<v8::Function> local_func = v8::Local<v8::Function>::New(isolate_, data.process_func);
 
         /// Second, convert the input column into the corresponding object used by UDF
-        auto argv = V8::prepareArguments(isolate_, config->arguments, data.columns);
+        /// remove the _tp_delta column if the input stream is not changelog
+        auto column_size = is_changelog_input ? config->arguments.size() : config->arguments.size() - 1;
+        auto argv = V8::prepareArguments(isolate_, std::span(config->arguments.begin(), column_size), data.columns);
 
         /// Third, execute the UDF and get aggregate state (only support the final state now, intermediate state is not supported
         v8::Local<v8::Value> res;
-        if (!local_func->Call(ctx, local_obj, static_cast<int>(config->arguments.size()), argv.data()).ToLocal(&res))
+        if (!local_func->Call(ctx, local_obj, static_cast<int>(column_size), argv.data()).ToLocal(&res))
             V8::throwException(
                 isolate_,
                 try_catch,

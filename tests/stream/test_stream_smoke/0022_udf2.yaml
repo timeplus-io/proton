@@ -208,12 +208,15 @@ tests:
                   },
 
                   process: function(values, deltas) {
+                    let is_changelog = (deltas !== undefined);
                     for (let i = 0; i < values.length; i++) {
-                    if (deltas[i] === 1) {
-                      this.count += 1;
-                    }
-                    else if (deltas[i] === -1)
-                      this.count -= 1;
+                      if (is_changelog) {
+                        if (deltas[i] === 1) {
+                          this.count += 1;
+                        } else if (deltas[i] === -1) 
+                          this.count -= 1;
+                      } else 
+                          this.count += 1;
                     }
                   },
 
@@ -299,12 +302,15 @@ tests:
                   },
 
                   process: function(values, deltas) {
+                    let is_changelog = (deltas !== undefined);
                     for (let i = 0; i < values.length; i++) {
-                    if (deltas[i] === 1) {
-                      this.count += 1;
-                    }
-                    else if (deltas[i] === -1)
-                      this.count -= 1;
+                      if (is_changelog) {
+                        if (deltas[i] === 1) {
+                          this.count += 1;
+                        } else if (deltas[i] === -1) 
+                          this.count -= 1;
+                      } else 
+                          this.count += 1;
                     }
                   },
 
@@ -398,12 +404,15 @@ tests:
                   },
 
                   process: function(values, deltas) {
+                    let is_changelog = (deltas !== undefined);
                     for (let i = 0; i < values.length; i++) {
-                    if (deltas[i] === 1) {
-                      this.count += 1;
-                    }
-                    else if (deltas[i] === -1)
-                      this.count -= 1;
+                      if (is_changelog) {
+                        if (deltas[i] === 1) {
+                          this.count += 1;
+                        } else if (deltas[i] === -1) 
+                          this.count -= 1;
+                      } else 
+                          this.count += 1;
                     }
                   },
 
@@ -497,12 +506,15 @@ tests:
                   },
 
                   process: function(values, deltas) {
+                    let is_changelog = (deltas !== undefined);
                     for (let i = 0; i < values.length; i++) {
-                    if (deltas[i] === 1) {
-                      this.count += 1;
-                    }
-                    else if (deltas[i] === -1)
-                      this.count -= 1;
+                      if (is_changelog) {
+                        if (deltas[i] === 1) {
+                          this.count += 1;
+                        } else if (deltas[i] === -1) 
+                          this.count -= 1;
+                      } else 
+                          this.count += 1;
                     }
                   },
 
@@ -589,33 +601,36 @@ tests:
                   initialize: function() {
                     this.count = 0;
                   },
-
+                  
                   process: function(values, deltas) {
+                    let is_changelog = deltas !== undefined;
                     for (let i = 0; i < values.length; i++) {
-                    if (deltas[i] === 1) {
-                      this.count += 1;
-                    }
-                    else if (deltas[i] === -1)
-                      this.count -= 1;
+                      if (is_changelog) {
+                        if (deltas[i] === 1) {
+                          this.count += 1;
+                        } else if (deltas[i] === -1) 
+                          this.count -= 1;
+                      } else 
+                          this.count += 1;
                     }
                   },
-
+                  
                   finalize: function() {
                     return this.count;
                   },
-
+                  
                   serialize: function() {
                     let s = {
-                      'count': this.count
+                    'count': this.count
                     };
                     return JSON.stringify(s);
                   },
-
+                  
                   deserialize: function(state_str) {
                     let s = JSON.parse(state_str);
                     this.count = s['count'];
                   },
-
+                  
                   merge: function(state_str) {
                     let s = JSON.parse(state_str);
                     this.count += s['count'];
