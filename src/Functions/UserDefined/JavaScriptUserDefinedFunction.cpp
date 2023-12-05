@@ -1,6 +1,7 @@
 #include <Functions/UserDefined/JavaScriptUserDefinedFunction.h>
 #include <V8/ConvertDataTypes.h>
 #include <V8/Utils.h>
+#include <span>
 
 namespace DB
 {
@@ -64,7 +65,7 @@ ColumnPtr JavaScriptUserDefinedFunction::userDefinedExecuteImpl(
         v8::Local<v8::Function> local_func = v8::Local<v8::Function>::New(isolate_, js_ctx->func);
 
         /// Second, convert the input column into the corresponding object used by UDF
-        auto argv = V8::prepareArguments(isolate_, config->arguments, columns);
+        auto argv = V8::prepareArguments(isolate_, std::span(config->arguments), columns);
 
         /// Third, execute the UDF and get result
         v8::Local<v8::Value> res;

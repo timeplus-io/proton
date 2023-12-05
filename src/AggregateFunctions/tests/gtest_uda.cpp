@@ -19,7 +19,7 @@ using namespace DB;
 
 std::unique_ptr<v8::Platform> platform;
 
-String ARGS_CEP1 = R"###([{ "name": "value","type": "int64"}])###";
+String ARGS_CEP1 = R"###([{ "name": "value","type": "int64"}, {"name": "_tp_delta", "type": "int8"}])###";
 String RETURN_CEP1 = "uint32";
 String UDA_CEP1 = R"###(
 {
@@ -49,7 +49,7 @@ String UDA_CEP1 = R"###(
     has_customized_emit : true
 })###";
 
-String ARGS_UDA1 = R"###([{ "name": "value","type": "int64"}])###";
+String ARGS_UDA1 = R"###([{ "name": "value","type": "int64"}, {"name": "_tp_delta", "type": "int8"}])###";
 String RETURN_UDA1 = "float32";
 String UDA1 = R"###(
 {
@@ -202,7 +202,7 @@ TEST_F(UDATestCase, add)
     DataTypes types = getDataTypes(ARGS_CEP1);
     Array params;
     size_t max_heap_size = 100 * 1024 * 1024;
-    auto aggr_function = AggregateFunctionJavaScriptAdapter(config, types, params, max_heap_size);
+    auto aggr_function = AggregateFunctionJavaScriptAdapter(config, types, params, false, max_heap_size);
 
     ASSERT_TRUE(aggr_function.hasUserDefinedEmit());
 
@@ -242,7 +242,7 @@ TEST_F(UDATestCase, CheckPoint)
     DataTypes types = getDataTypes(ARGS_UDA1);
     Array params;
     size_t max_heap_size = 100 * 1024 * 1024;
-    auto aggr_function = AggregateFunctionJavaScriptAdapter(config, types, params, max_heap_size);
+    auto aggr_function = AggregateFunctionJavaScriptAdapter(config, types, params, false, max_heap_size);
 
     std::unique_ptr<AggregateFunctionJavaScriptAdapter::Data[], AggregateFunctionJavaScriptAdapter::DataDeleter> places{
         static_cast<AggregateFunctionJavaScriptAdapter::Data *>(malloc(aggr_function.sizeOfData())),
@@ -284,7 +284,7 @@ TEST_F(UDATestCase, Merge)
     DataTypes types = getDataTypes(ARGS_UDA1);
     Array params;
     size_t max_heap_size = 100 * 1024 * 1024;
-    auto aggr_function = AggregateFunctionJavaScriptAdapter(config, types, params, max_heap_size);
+    auto aggr_function = AggregateFunctionJavaScriptAdapter(config, types, params, false, max_heap_size);
 
     std::unique_ptr<AggregateFunctionJavaScriptAdapter::Data[], AggregateFunctionJavaScriptAdapter::DataDeleter> places{
         static_cast<AggregateFunctionJavaScriptAdapter::Data *>(malloc(2 * aggr_function.sizeOfData())),

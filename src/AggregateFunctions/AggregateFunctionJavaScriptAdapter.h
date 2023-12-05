@@ -42,6 +42,8 @@ struct JavaScriptAggrFunctionState
 
     /// the number of emits, 0 means no emit, >1 means it has some aggregate results to emit
     size_t emit_times = 0;
+    /// whether or not it is used in changelog input stream
+    bool is_changelog_input = false;
 
     /// JavaScript UDA code looks like below. For far, it can only contain member functions and the has_customized_emit bool data member or function
     /// {
@@ -55,11 +57,15 @@ struct JavaScriptAggrFunctionState
     ///    has_customized_emit : false /// Define if the the aggregation has user defined emit strategy
     /// }
     JavaScriptAggrFunctionState(
-        const JavaScriptBlueprint & blueprint, const std::vector<UserDefinedFunctionConfiguration::Argument> & arguments);
+        const JavaScriptBlueprint & blueprint,
+        const std::vector<UserDefinedFunctionConfiguration::Argument> & arguments,
+        const bool is_changelog_input_);
 
     ~JavaScriptAggrFunctionState();
 
     void add(const IColumn ** src_columns, size_t row_num);
+
+    void negate(const IColumn ** src_columns, size_t row_num);
 
     void reinitCache();
 };
@@ -82,6 +88,7 @@ private:
 
     const JavaScriptUserDefinedFunctionConfigurationPtr config;
     size_t num_arguments;
+    bool is_changelog_input = false;
     size_t max_v8_heap_size_in_bytes;
     JavaScriptBlueprint blueprint;
 
@@ -90,6 +97,8 @@ public:
         JavaScriptUserDefinedFunctionConfigurationPtr config_,
         const DataTypes & types,
         const Array & params_,
+        /// If the input stream is changelog, aggregate function will pass _tp_delta column to JavaScript function
+        bool is_changelog_input_,
         size_t max_v8_heap_size_in_bytes_);
 
     String getName() const override;
@@ -112,6 +121,9 @@ public:
 
     /// get instance of UDF from AggregateData and execute UDF
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override;
+
+    /// for changelog processing, delete existing row from current aggregation result
+    void negate(AggregateDataPtr __restrict place, const IColumn ** columns, size_t /*row_num*/, Arena * /*arena*/) const override;
 
     /// Merge with other Aggregate Data, maybe used before finalize result
     void merge(AggregateDataPtr __restrict /*place*/, ConstAggregateDataPtr /*rhs*/, Arena *) const override;
