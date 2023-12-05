@@ -927,7 +927,8 @@ void ExpressionAnalyzer::makeWindowDescriptions(ActionsDAGPtr actions)
                 window_function.argument_names,
                 properties,
                 getContext(),
-                true,
+                /* is_streaming */ true,
+                /* is_changelog_input */ syntax->is_changelog_input,
                 /* throw_if_empty */ false);
             if (!window_function.aggregate_function)
             {
@@ -962,7 +963,8 @@ void ExpressionAnalyzer::makeWindowDescriptions(ActionsDAGPtr actions)
                 window_function.argument_names,
                 properties,
                 getContext(),
-                false,
+                /* is_streaming */ false,
+                /* is_changelog_input */ syntax->is_changelog_input,
                 /* throw_if_empty */ true);
         /// proton: ends.
 
