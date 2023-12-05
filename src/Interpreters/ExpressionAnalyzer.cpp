@@ -122,7 +122,7 @@ void tryTranslateToParametricAggregateFunction(
     assert(node->arguments);
     const ASTs & arguments = node->arguments->children;
     const auto & lower_name = node->name;
-    if (lower_name == "min_k" || lower_name == "max_k")
+    if (lower_name == "min_k" || lower_name == "max_k" || lower_name == "__min_k_retract" || lower_name == "__max_k_retract")
     {
         /// Translate `min_k(key, num[, context...])` to `min_k(num)(key[, context...])`
         /// Make the second argument as a const parameter
@@ -2274,9 +2274,11 @@ std::shared_ptr<IJoin> SelectQueryExpressionAnalyzer::chooseJoinAlgorithmStreami
     auto keep_versions = getContext()->getSettingsRef().keep_versions;
     auto max_threads = getContext()->getSettingsRef().max_threads;
 
-    auto quiesce_threshold_ms = getContext()->getSettingsRef().join_quiesce_threshold_ms;
-    auto latency_threshold = getContext()->getSettingsRef().join_latency_threshold; /// Query global settings
+    auto quiesce_threshold_ms = getContext()->getSettingsRef().join_quiesce_threshold_ms.value;
+    auto latency_threshold = getContext()->getSettingsRef().join_latency_threshold.value; /// Query global settings
+
     /// If user explicitly specifies `JOIN ... ON ... AND lag_behind(10ms, ...), override the query global settings
+    /// and enforce enable join alignment
     if (auto lag_interval = analyzed_join->lagBehindInterval(); lag_interval != 0)
         latency_threshold = lag_interval;
 
@@ -2296,12 +2298,10 @@ std::shared_ptr<IJoin> SelectQueryExpressionAnalyzer::chooseJoinAlgorithmStreami
         latency_threshold,
         quiesce_threshold_ms);
 
-    if (auto lag_interval = analyzed_join->lagBehindInterval(); lag_interval != 0)
+    if (analyzed_join->requiredJoinAlignment())
     {
-        left_join_stream_desc->lag_column = analyzed_join->leftLagBehindColumn();
-        assert(!left_join_stream_desc->lag_column.empty());
-        right_join_stream_desc->lag_column = analyzed_join->rightLagBehindColumn();
-        assert(!right_join_stream_desc->lag_column.empty());
+        left_join_stream_desc->alignment_column = analyzed_join->leftAlignmentKeyColumn();
+        right_join_stream_desc->alignment_column = analyzed_join->rightAlignmentKeyColumn();
     }
 
     /// Right join stream desc has stream semantic and header set, can evaluate the primary key etc column positions

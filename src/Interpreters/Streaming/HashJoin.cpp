@@ -592,24 +592,15 @@ struct Inserter
         JoinDataBlockList * blocks,
         size_t original_row,
         size_t row,
-        Arena & pool,
-        HashJoin::RefListMultipleRef * multiple_ref)
+        Arena & pool)
     {
-        assert(!multiple_ref || (multiple_ref && multiple_ref->row_ref_list == nullptr));
-
         auto emplace_result = key_getter.emplaceKey(map, original_row, pool);
         auto * mapped = &emplace_result.getMapped();
 
         if (emplace_result.isInserted())
             mapped = new (mapped) typename Map::mapped_type(std::make_unique<HashJoin::RefListMultiple>());
 
-        auto iter = (*mapped)->insert(blocks, row);
-
-        if (multiple_ref)
-        {
-            multiple_ref->iterator = iter;
-            multiple_ref->row_ref_list = mapped->get();
-        }
+        [[maybe_unused]] auto iter = (*mapped)->insert(blocks, row);
     }
 
     static ALWAYS_INLINE void insertRangeAsof(
@@ -663,8 +654,7 @@ size_t NO_INLINE insertFromBlockImplTypeCase(
     JoinDataBlockList * blocks,
     size_t start_row,
     ConstNullMapPtr null_map,
-    Arena & pool,
-    std::vector<HashJoin::RefListMultipleRef *> & row_refs)
+    Arena & pool)
 {
     [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<typename Map::mapped_type, typename HashJoin::MapsOne::MappedType>;
     [[maybe_unused]] constexpr bool mapped_multiple
@@ -692,12 +682,7 @@ size_t NO_INLINE insertFromBlockImplTypeCase(
         else if constexpr (mapped_one)
             Inserter<Map, KeyGetter>::insertOne(join, map, key_getter, blocks, i - start_row, i, pool);
         else if constexpr (mapped_multiple)
-        {
-            if (row_refs.empty())
-                Inserter<Map, KeyGetter>::insertMultiple(join, map, key_getter, blocks, i - start_row, i, pool, nullptr);
-            else if (row_refs[i])
-                Inserter<Map, KeyGetter>::insertMultiple(join, map, key_getter, blocks, i - start_row, i, pool, row_refs[i - start_row]);
-        }
+            Inserter<Map, KeyGetter>::insertMultiple(join, map, key_getter, blocks, i - start_row, i, pool);
         else
             Inserter<Map, KeyGetter>::insertAll(join, map, key_getter, &blocks->lastDataBlock(), i - start_row, i, pool);
     }
@@ -714,15 +699,14 @@ size_t insertFromBlockImplType(
     JoinDataBlockList * blocks,
     size_t start_row,
     ConstNullMapPtr null_map,
-    Arena & pool,
-    std::vector<HashJoin::RefListMultipleRef *> & row_refs)
+    Arena & pool)
 {
     if (null_map)
         return insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(
-            join, map, rows, key_columns, key_sizes, blocks, start_row, null_map, pool, row_refs);
+            join, map, rows, key_columns, key_sizes, blocks, start_row, null_map, pool);
     else
         return insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(
-            join, map, rows, key_columns, key_sizes, blocks, start_row, null_map, pool, row_refs);
+            join, map, rows, key_columns, key_sizes, blocks, start_row, null_map, pool);
 }
 
 template <Strictness STRICTNESS, typename Maps>
@@ -736,8 +720,7 @@ size_t insertFromBlockImpl(
     JoinDataBlockList * blocks,
     size_t start_row,
     ConstNullMapPtr null_map,
-    Arena & pool,
-    std::vector<HashJoin::RefListMultipleRef *> & row_refs)
+    Arena & pool)
 {
     switch (type)
     {
@@ -746,7 +729,7 @@ size_t insertFromBlockImpl(
         return insertFromBlockImplType< \
             STRICTNESS, \
             typename KeyGetterForType<HashType::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type>( \
-            join, *maps.TYPE, rows, key_columns, key_sizes, blocks, start_row, null_map, pool, row_refs); \
+            join, *maps.TYPE, rows, key_columns, key_sizes, blocks, start_row, null_map, pool); \
         break;
         APPLY_FOR_HASH_KEY_VARIANTS(M)
 #undef M
@@ -923,9 +906,6 @@ void HashJoin::init()
                                  && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Changelog)
         || streaming_strictness == Strictness::Asof || streaming_strictness == Strictness::Latest;
 
-    /// FIXME, for now, only asof join need align watermark if join latency is not zero
-    // For window join, we shall do same but probably in a different way
-    require_aligned_streams = (streaming_strictness == Strictness::Asof) && (left_data.join_stream_desc->latency_threshold != 0);
     bidirectional_hash_join = !data_enrichment_join;
 
     /// append-only inner join append-only on ... and date_diff_within(10s)
@@ -1346,7 +1326,7 @@ bool HashJoin::addJoinedBlock(const Block & block, bool /*check_limits*/)
 }
 
 template <bool is_left_block>
-void HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, std::vector<HashJoin::RefListMultipleRef *> row_refs)
+void HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks)
 {
     /// FIXME, there are quite some block copies
     /// FIXME, all_key_columns shall hold shared_ptr to columns instead of raw ptr
@@ -1422,8 +1402,7 @@ void HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, std:
                 &target_hash_blocks->blocks,
                 start_row,
                 null_map,
-                target_hash_blocks->pool,
-                row_refs);
+                target_hash_blocks->pool);
         });
 
     if (save_nullmap)

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Checkpoint/CheckpointContextFwd.h>
+#include <Core/LightChunk.h>
 #include <Interpreters/Streaming/IHashJoin.h>
 #include <Processors/IProcessor.h>
 #include <base/ClockUtils.h>
@@ -8,6 +10,7 @@
 
 namespace DB::Streaming
 {
+
 /// Streaming join rows from left stream to right stream
 /// It has 2 inputs, the first one is left stream and the second one is right stream.
 /// These 2 input streams will be pulled concurrently and have watermark / timestamp
@@ -27,81 +30,80 @@ public:
     Status prepare() override;
     void work() override;
 
+    void checkpoint(CheckpointContextPtr ckpt_ctx) override;
+    void recover(CheckpointContextPtr ckpt_ctx) override;
+
     static Block transformHeader(Block header, const HashJoinPtr & join);
 
 private:
+    struct InputPortWithData
+    {
+        explicit InputPortWithData(InputPort * input_port_) : input_port(input_port_) { }
+
+        void add(Chunk && chunk);
+
+        bool hasCompleteChunks() const noexcept { return !input_chunks.empty() && !(input_chunks.size() == 1 && required_update_processing); }
+
+        bool isFull() const noexcept { return need_buffer_data_to_align && hasCompleteChunks(); }
+
+        void serialize(WriteBuffer & wb) const;
+        void deserialize(ReadBuffer & rb);
+
+        InputPort * input_port;
+
+        /// Input state
+        /// NOTE: Assume the input chunk is time-ordered
+        SERDE std::list<LightChunkWithTimestamp> input_chunks;
+        /// For join transform, we keep track watermark by itself
+        SERDE Int64 watermark = INVALID_WATERMARK;
+        NO_SERDE Int64 last_data_ts = 0;
+        NO_SERDE CheckpointContextPtr ckpt_ctx = nullptr;
+        NO_SERDE bool muted = false;
+        NO_SERDE bool required_update_processing = false;
+
+        /// Input description
+        std::optional<size_t> watermark_column_position;
+        DataTypePtr watermark_column_type;
+        bool need_buffer_data_to_align;
+    };
+
     Status prepareLeftInput();
     Status prepareRightInput();
 
-    inline Int64 getRightWatermark(const Chunk & chunk) const
+    void processLeftInputData(LightChunk & chunk);
+    void processRightInputData(LightChunk & chunk);
+
+    bool isInputInQuiesce(const InputPortWithData & input_with_data) const noexcept
     {
-        return getWatermark(chunk, right_watermark_column_position, right_watermark_column_type);
+        return DB::MonotonicMilliseconds::now() - input_with_data.last_data_ts >= quiesce_threshold_ms;
     }
 
-    inline Int64 getLeftWatermark(const Chunk & chunk) const
+    void muteLeftInput() noexcept
     {
-        return getWatermark(chunk, left_watermark_column_position, left_watermark_column_type);
+        left_input.muted = true;
+        ++stats.left_input_muted;
     }
 
-    inline Int64 getWatermark(const Chunk & chunk, std::optional<size_t> col_pos, const DataTypePtr & col_type) const
+    void muteRightInput() noexcept
     {
-        if (col_pos)
-        {
-            auto [_, max_ts] = columnMinMaxTimestamp(chunk.getColumns()[*col_pos], col_type);
-            return max_ts;
-        }
-        else
-            return DB::UTCMilliseconds::now();
+        right_input.muted = true;
+        ++stats.right_input_muted;
     }
 
-    bool isRightInputInQuiesce() const noexcept { return DB::MonotonicMilliseconds::now() - right_input.last_data_ts >= quiesce_threshold_ms; }
+    static void unmuteInput(InputPortWithData & input_with_data) noexcept { input_with_data.muted = false; }
 
     void onCancel() override;
 
 private:
-    struct LeftInputPortWithData
-    {
-        explicit LeftInputPortWithData(InputPort * input_port_) : input_port(input_port_) { }
-
-        InputPort * input_port;
-        std::list<Chunk> input_chunks;
-
-        /// For join transform, we keep track watermark by itself
-        Int64 watermark = INVALID_WATERMARK;
-        Int64 last_data_ts = 0;
-        bool muted = false;
-        bool required_checkpoint = false;
-    };
-
-    struct RightInputPortWithData
-    {
-        explicit RightInputPortWithData(InputPort * input_port_) : input_port(input_port_) { }
-
-        InputPort * input_port;
-        Chunk input_chunk;
-
-        /// For join transform, we keep track watermark by itself
-        Int64 watermark = INVALID_WATERMARK;
-        Int64 last_data_ts = 0;
-        bool muted = false;
-        bool required_checkpoint = false;
-    };
-
     SERDE HashJoinPtr join;
 
     Chunk output_header_chunk;
-    std::optional<size_t> left_watermark_column_position;
-    std::optional<size_t> right_watermark_column_position;
-    DataTypePtr left_watermark_column_type;
-    DataTypePtr right_watermark_column_type;
     Int64 latency_threshold;
     Int64 quiesce_threshold_ms;
 
-    mutable std::mutex mutex;
-
-    /// When received request checkpoint, it's always empty chunk with checkpoint context
-    LeftInputPortWithData left_input;
-    RightInputPortWithData right_input;
+    SERDE InputPortWithData left_input;
+    SERDE InputPortWithData right_input;
+    bool need_propagate_heartbeat = false;
 
     /// We always push output_chunks first, so we can assume no output_chunks when received request checkpoint
     NO_SERDE std::list<Chunk> output_chunks;
@@ -110,7 +112,8 @@ private:
     {
         UInt64 left_input_muted = 0;
         UInt64 right_input_muted = 0;
-        UInt64 quiesce_joins = 0;
+        UInt64 left_quiesce_joins = 0;
+        UInt64 right_quiesce_joins = 0;
     };
     AlignmentStats stats;
 

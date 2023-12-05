@@ -1,0 +1,518 @@
+test_suite_name: join_alignment
+tag: smoke
+test_suite_config:
+  tests_2_run:
+    ids_2_run:
+      - all
+    tags_2_run: []
+    tags_2_skip:
+      default:
+        - todo
+        - to_support
+        - change
+        - bug
+        - sample
+      cluster:
+        - view
+        - cluster_table_bug
+comments: Tests covering the streaming join query with join alignment smoke cases, covering watermark alignment and processing time alignment
+
+tests:
+  - id: 0
+    tags:
+      - "join processing time alignment"
+      - "asof join"
+      - "query state"
+    name: append-asof-join-versioned_kv-with-processing-time-alignment
+    description: streaming append (left) asof join versioned_kv with processing time alignment
+    steps:
+      - statements:
+        - client: python
+          query_type: table
+          query: |
+            drop stream if exists test_32_stream;
+
+        - client: python
+          query_type: table
+          query: |
+            drop stream if exists test_32_stream_vk;
+
+        - client: python
+          query_type: table
+          exist: test_32_stream
+          exist_wait: 2
+          wait: 1
+          query: |
+            create stream test_32_stream(i int, v int);
+
+        - client: python
+          query_type: table
+          exist: test_32_stream_vk
+          exist_wait: 2
+          wait: 1
+          query: |
+            create stream test_32_stream_vk(i int, v int) primary key i settings shards=3;
+
+        - client: python
+          query_type: table
+          depends_on_stream: test_32_stream_vk
+          wait: 1
+          query: |
+            insert into test_32_stream(i, v) values(1, 1);
+
+        - client: python
+          query_type: table
+          query: |
+            insert into test_32_stream_vk(i, v) values(1, 1);
+
+        - client: python
+          query_type: table
+          query: |
+            insert into test_32_stream(i, v) values(1, 2);
+
+        - client: python
+          query_id: 3200
+          query_type: stream
+          depends_on_stream: test_32_stream_vk
+          wait: 1
+          query: |
+            subscribe to with r1 as (select i as id, v from test_32_stream), r2 as (select i as id, v from test_32_stream_vk)
+            select r1.v, r2.v from r1 asof join r2 as r2 on r1.id = r2.id and r1.v >= r2.v and lag_behind(3s)
+            settings checkpoint_interval=1,keep_versions=2,seek_to='earliest'
+
+        - client: python
+          query_id: 3201
+          query_type: stream
+          depends_on_stream: test_32_stream_vk
+          wait: 1
+          query: |
+            subscribe to with r1 as (select i as id, v from test_32_stream), r2 as (select i as id, v from test_32_stream_vk)
+            select r1.v, r2.v from r1 left asof join r2 on r1.id = r2.id and r1.v >= r2.v and lag_behind(3s)
+            settings checkpoint_interval=1,keep_versions=2,seek_to='earliest'
+
+        - client: python
+          query_type: table
+          depends_on: 3201
+          wait: 2
+          kill: 3200,3201
+          kill_wait: 3
+          query: |
+            insert into test_32_stream_vk(i, v) values(1, 3);
+
+        - client: python
+          query_id: 3200-1
+          query_type: stream
+          wait: 1
+          query: |
+            recover from '3200';
+
+        - client: python
+          query_id: 3201-1
+          query_type: stream
+          wait: 1
+          query: |
+            recover from '3201';
+
+        - client: python
+          query_type: table
+          depends_on: 3201
+          wait: 1
+          query: |
+            insert into test_32_stream_vk(i, v) values(1, 2);
+
+        - client: python
+          query_type: table
+          query: |
+            insert into test_32_stream(i, v) values(1, 3)(1, 2)(1, 1);
+
+        - client: python
+          query_type: table
+          wait: 5
+          query: |
+            unsubscribe to '3200';
+  
+        - client: python
+          query_type: table
+          query: |
+            unsubscribe to '3201';
+
+    expected_results:
+      - query_id: '3200'
+        expected_results:
+          - ["1", "1"]
+          - ["2", "1"]
+
+      - query_id: '3200-1'
+        expected_results:
+          - ["3", "3"]
+          - ["2", "2"]
+
+      - query_id: '3201'
+        expected_results:
+          - ["1", "1"]
+          - ["2", "1"]
+
+      - query_id: '3201-1'
+        expected_results:
+          - ["3", "3"]
+          - ["2", "2"]
+          - ["1", "0"]
+
+  - id: 1
+    tags:
+      - "join watermark alignment"
+      - "asof join"
+      - "query state"
+    name: append-asof-join-versioned_kv-with-watermark-alignment
+    description: streaming append (left) asof join versioned_kv with watermark alignment
+    steps:
+      - statements:
+        - client: python
+          query_type: table
+          query: |
+            drop stream if exists test_32_stream;
+
+        - client: python
+          query_type: table
+          query: |
+            drop stream if exists test_32_stream_vk;
+
+        - client: python
+          query_type: table
+          exist: test_32_stream
+          exist_wait: 2
+          wait: 1
+          query: |
+            create stream test_32_stream(i int, v string);
+
+        - client: python
+          query_type: table
+          exist: test_32_stream_vk
+          exist_wait: 2
+          wait: 1
+          query: |
+            create stream test_32_stream_vk(i int, v string) primary key i settings shards=3;
+
+        - client: python
+          query_id: 3202
+          query_type: stream
+          depends_on_stream: test_32_stream_vk
+          wait: 1
+          query: |
+            subscribe to with r1 as (select i as id, v, _tp_time from test_32_stream), r2 as (select i as id, v, _tp_time from test_32_stream_vk)
+            select r1.v, r2.v from r1 asof join r2 on r1.id = r2.id and r1._tp_time > r2._tp_time and lag_behind(1ms, r1._tp_time, r2._tp_time)
+            settings join_quiesce_threshold_ms=10000,checkpoint_interval=1
+
+        - client: python
+          query_id: 3203
+          query_type: stream
+          depends_on_stream: test_32_stream_vk
+          wait: 1
+          query: |
+            subscribe to with r1 as (select i as id, v, _tp_time from test_32_stream), r2 as (select i as id, v, _tp_time from test_32_stream_vk)
+            select r1.v, r2.v from r1 left asof join r2 on r1.id = r2.id and r1._tp_time > r2._tp_time and lag_behind(1ms, r1._tp_time, r2._tp_time)
+            settings join_quiesce_threshold_ms=10000,checkpoint_interval=1
+
+        - client: python
+          query_type: table
+          depends_on: 3203
+          wait: 2
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(1, 't1', '2023-1-1 00:00:04');
+
+        - client: python
+          query_type: table
+          query: |
+            insert into test_32_stream_vk(i, v, _tp_time) values(1, 't2', '2023-1-1 00:00:06');
+
+        - client: python
+          query_type: table
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(1, 'tt1', '2023-1-1 00:00:05');
+
+        - client: python
+          query_type: table
+          kill: 3202,3203
+          kill_wait: 3
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(1, 'ttt1', '2023-1-1 00:00:08');
+
+        - client: python
+          query_id: 3202-1
+          query_type: stream
+          wait: 1
+          query: |
+            recover from '3202'
+
+        - client: python
+          query_id: 3203-1
+          query_type: stream
+          wait: 1
+          query: |
+            recover from '3203'
+
+        - client: python
+          query_type: table
+          wait: 2
+          query: |
+            insert into test_32_stream_vk(i, v, _tp_time) values(1, 'tt2', '2023-1-1 00:00:07');
+
+        - client: python
+          query_type: table
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(1, 'tttt1', '2023-1-1 00:00:09');
+
+        - client: python
+          query_type: table
+          query: |
+            insert into test_32_stream_vk(i, v, _tp_time) values(1, 'ttt2', '2023-1-1 00:00:10');
+  
+        - client: python
+          query_type: table
+          wait: 3
+          query: |
+            unsubscribe to '3202';
+  
+        - client: python
+          query_type: table
+          query: |
+            unsubscribe to '3203';
+
+    expected_results:
+      - query_id: '3202'
+        expected_results: []
+
+      - query_id: '3202-1'
+        expected_results:
+          - ["ttt1", "tt2"]
+          - ["tttt1", "tt2"]
+
+      - query_id: '3203'
+        expected_results:
+          - ["t1", ""]
+          - ["tt1", ""]
+
+      - query_id: '3203-1'
+        expected_results:
+          - ["ttt1", "tt2"]
+          - ["tttt1", "tt2"]
+
+  - id: 2
+    tags:
+      - "join watermark alignment"
+      - "latest join"
+      - "query state"
+    name: latest-join-with-watermark-alignment
+    description: streaming (left) latest join with watermark alignment
+    steps:
+      - statements:
+        - client: python
+          query_type: table
+          query: |
+            drop stream if exists test_32_stream;
+
+        - client: python
+          query_type: table
+          exist: test_32_stream
+          exist_wait: 2
+          wait: 1
+          query: |
+            create stream test_32_stream(i int, v string);
+
+        - client: python
+          query_id: 3204
+          query_type: stream
+          depends_on_stream: test_32_stream
+          wait: 1
+          query: |
+            subscribe to with r1 as (select i % 5 as id, v, _tp_time from test_32_stream where i < 50), r2 as (select i % 5 as id, v, _tp_time from test_32_stream where i >= 50)
+            select r1.v, r2.v from r1 latest join r2 on r1.id = r2.id and lag_behind(1ms, r1._tp_time, r2._tp_time)
+            settings join_quiesce_threshold_ms=10000,checkpoint_interval=1
+
+        - client: python
+          query_id: 3205
+          query_type: stream
+          depends_on_stream: test_32_stream
+          wait: 1
+          query: |
+            subscribe to with r1 as (select i % 5 as id, v, _tp_time from test_32_stream where i < 50), r2 as (select i % 5 as id, v, _tp_time from test_32_stream where i >= 50)
+            select r1.v, r2.v from r1 left latest join r2 on r1.id = r2.id and lag_behind(1ms, r1._tp_time, r2._tp_time)
+            settings join_quiesce_threshold_ms=10000,checkpoint_interval=1
+
+        - client: python
+          query_type: table
+          depends_on: 3205
+          wait: 2
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(1, 't1', '2023-1-1 00:00:04');
+
+        - client: python
+          query_type: table
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(51, 't2', '2023-1-1 00:00:06');
+
+        - client: python
+          query_type: table
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(1, 'tt1', '2023-1-1 00:00:05');
+
+        - client: python
+          query_type: table
+          kill: 3204,3205
+          kill_wait: 3
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(1, 'ttt1', '2023-1-1 00:00:08');
+
+        - client: python
+          query_id: 3204-1
+          query_type: stream
+          wait: 1
+          query: |
+            recover from '3204'
+
+        - client: python
+          query_id: 3205-1
+          query_type: stream
+          wait: 1
+          query: |
+            recover from '3205'
+
+        - client: python
+          query_type: table
+          wait: 2
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(51, 'tt2', '2023-1-1 00:00:07');
+
+        - client: python
+          query_type: table
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(1, 'tttt1', '2023-1-1 00:00:09');
+
+        - client: python
+          query_type: table
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(51, 'ttt2', '2023-1-1 00:00:10');
+
+        - client: python
+          query_type: table
+          wait: 3
+          query: |
+            unsubscribe to '3204';
+  
+        - client: python
+          query_type: table
+          query: |
+            unsubscribe to '3205';
+
+    expected_results:
+      - query_id: '3204'
+        expected_results: []
+
+      - query_id: '3204-1'
+        expected_results:
+          - ["ttt1", "tt2"]
+          - ["tttt1", "tt2"]
+
+      - query_id: '3205'
+        expected_results:
+          - ["t1", ""]
+          - ["tt1", ""]
+
+      - query_id: '3205-1'
+        expected_results:
+          - ["ttt1", "tt2"]
+          - ["tttt1", "tt2"]
+
+  - id: 3
+    tags:
+      - "join watermark alignment"
+      - "changelog join changelog"
+      - "query state"
+    name: changelog-join-changelog-with-watermark-alignment
+    description: streaming changelog all join changelog with watermark alignment (right lag behind left)
+    steps:
+      - statements:
+        - client: python
+          query_type: table
+          query: |
+            drop stream if exists test_32_stream;
+
+        - client: python
+          query_type: table
+          exist: test_32_stream
+          exist_wait: 2
+          wait: 1
+          query: |
+            create stream test_32_stream(i int, v string);
+
+        - client: python
+          query_id: 3206
+          query_type: stream
+          depends_on_stream: test_32_stream
+          wait: 1
+          query: |
+            subscribe to with r1 as (select i % 5 as id, v, _tp_time as time from test_32_stream where i < 50), r2 as (select i % 5 as id, v, _tp_time as time from test_32_stream where i >= 50)
+            select checked, count() from (select r1.v, r2.v, r1.time >= r2.time as checked from changelog(r1, id) as r1 join changelog(r2, id) as r2 on r1.id = r2.id and lag_behind(1ms, r2.time, r1.time))
+            group by checked settings checkpoint_interval=1,join_quiesce_threshold_ms=10000
+
+        - client: python
+          query_type: table
+          depends_on: 3206
+          wait: 2
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(1, 't1', '2023-1-1 00:00:04');
+
+        - client: python
+          query_type: table
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(51, 't2', '2023-1-1 00:00:06');
+
+        - client: python
+          query_type: table
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(1, 'tt1', '2023-1-1 00:00:06');
+
+        - client: python
+          query_type: table
+          kill: 3206
+          kill_wait: 3
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(1, 'ttt1', '2023-1-1 00:00:07');
+
+        - client: python
+          query_id: 3206-1
+          query_type: stream
+          wait: 1
+          query: |
+            recover from '3206'
+
+        - client: python
+          query_type: table
+          wait: 2
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(51, 'tt2', '2023-1-1 00:00:07');
+
+        - client: python
+          query_type: table
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(1, 'tttt1', '2023-1-1 00:00:09');
+
+        - client: python
+          query_type: table
+          query: |
+            insert into test_32_stream(i, v, _tp_time) values(51, 'ttt2', '2023-1-1 00:00:09');
+
+        - client: python
+          query_type: table
+          wait: 3
+          query: |
+            unsubscribe to '3206';
+
+    expected_results:
+      - query_id: '3206'
+        expected_results:
+          - ["True", 1]
+
+      - query_id: '3206-1'
+        expected_results:
+          - ["True", 1]

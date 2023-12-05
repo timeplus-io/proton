@@ -13,7 +13,7 @@ Please note port 8123 from the Proton container is exposed to the host. You need
 
 ## Connect to Proton via JDBC driver
 
-Proton JDBC driver is available on maven central repository. `com.timeplus:proton-jdbc:0.4.0`
+Proton JDBC driver is available on maven central repository. `com.timeplus:proton-jdbc:0.6.0`
 
 You can also download the latest JDBC driver from https://github.com/timeplus-io/proton-java-driver/releases
 
@@ -85,7 +85,7 @@ First add the Proton JDBC driver to DBeaver. Taking DBeaver 23.2.3 as an example
 * Default User: default
 * Allow Empty Password
 
-In the "Libaries" tab, click "Add Artifact" and type `com.timeplus:proton-jdbc:0.4.0`. Click the "Find Class" button to load the class. 
+In the "Libaries" tab, click "Add Artifact" and type `com.timeplus:proton-jdbc:0.6.0`. Click the "Find Class" button to load the class. 
 
 Create a new database connection, choose "Timeplus Proton" and accept the default settings. Click the "Test Connection.." to verify the connection is okay.
 

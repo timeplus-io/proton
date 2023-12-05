@@ -167,6 +167,9 @@ public:
     /// in-place sort columns according to header
     void reorderColumnsInplace(const Block & header);
 
+    /// in-place sort columns according to names
+    void reorderColumnsInplace(const Names & names);
+
     void renameColumn(String new_name, size_t column_pos);
 
     /// Deep clone, use cautiously. Most of time, we don't need deepClone

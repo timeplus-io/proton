@@ -58,6 +58,11 @@ public:
         setCodec(DB::CompressionMethodByte::NONE);
     }
 
+    RecordPtr clone() const
+    {
+        return std::make_shared<Record>(*this);
+    }
+
     RecordPtr clone(DB::Block && block_) const
     {
         auto r{std::make_shared<Record>(sn, std::move(block_))};

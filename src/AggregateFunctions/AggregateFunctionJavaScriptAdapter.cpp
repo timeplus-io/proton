@@ -292,10 +292,11 @@ void AggregateFunctionJavaScriptAdapter::addBatchLookupTable8(
     std::function<void(AggregateDataPtr &)> init,
     const UInt8 * key,
     const IColumn ** columns,
-    Arena * arena) const
+    Arena * arena,
+    const IColumn * delta_col) const
 {
     IAggregateFunctionHelper<AggregateFunctionJavaScriptAdapter>::addBatchLookupTable8(
-        row_begin, row_end, map, place_offset, init, key, columns, arena);
+        row_begin, row_end, map, place_offset, init, key, columns, arena, delta_col);
 
     for (size_t cur = row_begin; cur < row_end; ++cur)
         flush(map[key[cur]] + place_offset);

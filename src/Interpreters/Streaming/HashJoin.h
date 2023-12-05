@@ -138,7 +138,8 @@ public:
     bool emitChangeLog() const override { return emit_changelog; }
     bool bidirectionalHashJoin() const override { return bidirectional_hash_join; }
     bool rangeBidirectionalHashJoin() const override { return range_bidirectional_hash_join; }
-    bool requireWatermarkAlignedStreams() const override { return require_aligned_streams; }
+    bool leftStreamRequiresBufferingDataToAlign() const override { return range_bidirectional_hash_join; }
+    bool rightStreamRequiresBufferingDataToAlign() const override { return streaming_strictness == Strictness::Asof || range_bidirectional_hash_join; }
 
     UInt64 keepVersions() const { return right_data.join_stream_desc->keep_versions; }
 
@@ -289,7 +290,7 @@ private:
     std::vector<Block> insertBlockToRangeBucketsAndJoin(Block block);
 
     template <bool is_left_block>
-    void doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, std::vector<RefListMultipleRef *> row_refs = {});
+    void doInsertBlock(Block block, HashBlocksPtr target_hash_blocks);
 
     /// For bidirectional hash join
     /// Return retracted block if needs emit changelog, otherwise empty block
@@ -435,7 +436,6 @@ private:
     bool emit_changelog = false;
     bool bidirectional_hash_join = true;
     bool range_bidirectional_hash_join = true;
-    bool require_aligned_streams = false;
 
     /// Delta column in right-left-join
     /// `rlj` -> right-left-join

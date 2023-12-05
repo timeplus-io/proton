@@ -1390,11 +1390,9 @@ void TCPHandler::receiveQuery()
     }
     query_context->applySettingsChanges(settings_changes);
 
-    /// If TCP server runs in snapshot mode, all stream query will be executed in 'hist' mode mode
+    /// set query_mode to 'snapshot' if snapshot_mode is on
     if (snapshot_mode)
-    {
-        query_context->setSetting("query_mode", Field{"table"});
-    }
+        query_context->setSetting("query_mode", Field{"snapshot"});
 
     /// Use the received query id, or generate a random default. It is convenient
     /// to also generate the default OpenTelemetry trace id at the same time, and

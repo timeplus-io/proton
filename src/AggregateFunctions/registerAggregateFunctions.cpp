@@ -104,6 +104,7 @@ void registerAggregateFunctionSumRetract(AggregateFunctionFactory & factory);
 void registerAggregateFunctionAvgRetract(AggregateFunctionFactory & factory);
 void registerAggregateFunctionsMaxRetract(AggregateFunctionFactory & factory);
 void registerAggregateFunctionsMinRetract(AggregateFunctionFactory & factory);
+void registerAggregateFunctionMinMaxKRetract(AggregateFunctionFactory & factory);
 
 #if USE_ARG_MIN_MAX_FUNCS
 void registerAggregateFunctionsArgMaxRetract(AggregateFunctionFactory & factory);
@@ -195,6 +196,7 @@ void registerAggregateFunctions()
         Streaming::registerAggregateFunctionAvgRetract(factory);
         Streaming::registerAggregateFunctionsMaxRetract(factory);
         Streaming::registerAggregateFunctionsMinRetract(factory);
+        Streaming::registerAggregateFunctionMinMaxKRetract(factory);
 
         #if USE_ARG_MIN_MAX_FUNCS
         Streaming::registerAggregateFunctionsArgMaxRetract(factory);
