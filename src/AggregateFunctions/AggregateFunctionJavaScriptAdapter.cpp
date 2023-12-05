@@ -6,6 +6,7 @@
 #include <V8/ConvertDataTypes.h>
 #include <V8/Utils.h>
 #include <Common/logger_useful.h>
+#include <span>
 
 namespace DB
 {
@@ -86,10 +87,12 @@ JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & sou
 
         {
             v8::Local<v8::Value> val;
-            if (!obj->Get(local_ctx, V8::to_v8(isolate_, "has_customized_emit")).ToLocal(&val) || !val->IsUndefined())
+            if (obj->Get(local_ctx, V8::to_v8(isolate_, "has_customized_emit")).ToLocal(&val) && !val->IsUndefined())
             {
-                LOG_INFO(&Poco::Logger::get("JavaScriptAggregateFunction"), "JavaScript UDA '{}' has defined its own emit strategy", name);
-                has_user_defined_emit_strategy = true;
+                has_user_defined_emit_strategy = V8::from_v8<bool>(isolate_, val);
+                if (has_user_defined_emit_strategy)
+                    LOG_INFO(
+                        &Poco::Logger::get("JavaScriptAggregateFunction"), "JavaScript UDA '{}' has defined its own emit strategy", name);
             }
         }
 
@@ -110,9 +113,19 @@ JavaScriptBlueprint::~JavaScriptBlueprint() noexcept
 }
 
 JavaScriptAggrFunctionState::JavaScriptAggrFunctionState(
-    const JavaScriptBlueprint & blueprint, const std::vector<UserDefinedFunctionConfiguration::Argument> & arguments)
+    const JavaScriptBlueprint & blueprint,
+    const std::vector<UserDefinedFunctionConfiguration::Argument> & arguments,
+    const bool is_changelog_input_)
+    : is_changelog_input(is_changelog_input_)
 {
     columns.reserve(arguments.size());
+
+    /// check _tp_delta column
+    if (unlikely(arguments.back().type->getTypeId() != TypeIndex::Int8))
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "Tha last argument of JavaScript UDA is '_tp_delta' column, which should be 'int8'. Invalid type.");
+
     for (const auto & arg : arguments)
     {
         auto col = arg.type->createColumn();
@@ -206,11 +219,28 @@ JavaScriptAggrFunctionState::~JavaScriptAggrFunctionState()
 
 void JavaScriptAggrFunctionState::add(const IColumn ** src_columns, size_t row_num)
 {
-    for (size_t i = 0; auto & col : columns)
-    {
-        col->insertFrom(*src_columns[i], row_num);
-        i++;
-    }
+    assert(columns.size() >= 1);
+    size_t num_of_input_columns = columns.size() - 1;
+
+    for (size_t i = 0; i < num_of_input_columns; i++)
+        columns[i]->insertFrom(*src_columns[i], row_num);
+
+    /// _tp_delta column
+    if (is_changelog_input)
+        columns.back()->insert(1);
+}
+
+void JavaScriptAggrFunctionState::negate(const IColumn ** src_columns, size_t row_num)
+{
+    assert(columns.size() >= 1);
+    size_t num_of_input_columns = columns.size() - 1;
+
+    for (size_t i = 0; i < num_of_input_columns; i++)
+        columns[i]->insertFrom(*src_columns[i], row_num);
+
+    /// _tp_delta column
+    if (is_changelog_input)
+        columns.back()->insert(-1);
 }
 
 void JavaScriptAggrFunctionState::reinitCache()
@@ -237,10 +267,12 @@ AggregateFunctionJavaScriptAdapter::AggregateFunctionJavaScriptAdapter(
     JavaScriptUserDefinedFunctionConfigurationPtr config_,
     const DataTypes & types,
     const Array & params_,
+    bool is_changelog_input_,
     size_t max_v8_heap_size_in_bytes_)
     : IAggregateFunctionHelper<AggregateFunctionJavaScriptAdapter>(types, params_)
     , config(config_)
     , num_arguments(types.size())
+    , is_changelog_input(is_changelog_input_)
     , max_v8_heap_size_in_bytes(max_v8_heap_size_in_bytes_)
     , blueprint(config->name, config->source)
 {
@@ -260,7 +292,7 @@ DataTypePtr AggregateFunctionJavaScriptAdapter::getReturnType() const
 void AggregateFunctionJavaScriptAdapter::create(AggregateDataPtr __restrict place) const
 {
     V8::checkHeapLimit(blueprint.isolate.get(), max_v8_heap_size_in_bytes);
-    new (place) Data(blueprint, config->arguments);
+    new (place) Data(blueprint, config->arguments, is_changelog_input);
 }
 
 /// destroy instance of UDF
@@ -305,6 +337,11 @@ void AggregateFunctionJavaScriptAdapter::addBatchLookupTable8(
 void AggregateFunctionJavaScriptAdapter::add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const
 {
     this->data(place).add(columns, row_num);
+}
+
+void AggregateFunctionJavaScriptAdapter::negate(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const
+{
+    this->data(place).negate(columns, row_num);
 }
 
 void AggregateFunctionJavaScriptAdapter::merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const
@@ -376,11 +413,13 @@ size_t AggregateFunctionJavaScriptAdapter::flush(AggregateDataPtr __restrict pla
         v8::Local<v8::Function> local_func = v8::Local<v8::Function>::New(isolate_, data.process_func);
 
         /// Second, convert the input column into the corresponding object used by UDF
-        auto argv = V8::prepareArguments(isolate_, config->arguments, data.columns);
+        /// remove the _tp_delta column if the input stream is not changelog
+        auto column_size = is_changelog_input ? config->arguments.size() : config->arguments.size() - 1;
+        auto argv = V8::prepareArguments(isolate_, std::span(config->arguments.begin(), column_size), data.columns);
 
         /// Third, execute the UDF and get aggregate state (only support the final state now, intermediate state is not supported
         v8::Local<v8::Value> res;
-        if (!local_func->Call(ctx, local_obj, static_cast<int>(config->arguments.size()), argv.data()).ToLocal(&res))
+        if (!local_func->Call(ctx, local_obj, static_cast<int>(column_size), argv.data()).ToLocal(&res))
             V8::throwException(
                 isolate_,
                 try_catch,

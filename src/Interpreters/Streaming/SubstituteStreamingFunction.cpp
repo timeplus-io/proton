@@ -6,6 +6,7 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/formatAST.h>
 #include <Common/ProtonCommon.h>
+#include <Functions/UserDefined/UserDefinedFunctionFactory.h>
 
 namespace DB
 {
@@ -69,6 +70,51 @@ std::unordered_map<String, String> StreamingFunctionData::changelog_func_map = {
     {"moving_sum", ""},
 };
 
+std::optional<String> StreamingFunctionData::supportChangelog(const String & function_name)
+{
+    auto iter = changelog_func_map.find(function_name);
+
+    /// Support combinator suffix, for example:
+    /// `count`                 => `__count_retract`
+    /// `count_if`              => `__count_retract_if`
+    /// `count_distinct`        => `__count_retract_distinct`
+    /// `count_distinct_if`     => `__count_retract_distinct_if`
+    String combinator_suffix;
+    auto nested_func_name = function_name;
+    while (iter == changelog_func_map.end())
+    {
+        if (auto combinator = AggregateFunctionCombinatorFactory::instance().tryFindSuffix(nested_func_name))
+        {
+            const std::string combinator_name = combinator->getName();
+            /// TODO: support more combinators
+            if (combinator_name != "_if")
+                throw Exception(
+                    ErrorCodes::NOT_IMPLEMENTED, "{} aggregation function is not supported in changelog query processing", function_name);
+
+            nested_func_name = nested_func_name.substr(0, nested_func_name.size() - combinator_name.size());
+            combinator_suffix = combinator_name + combinator_suffix;
+            iter = changelog_func_map.find(nested_func_name);
+            continue;
+        }
+        break;
+    }
+
+    if (iter != changelog_func_map.end())
+    {
+        if (!iter->second.empty())
+            return iter->second + combinator_suffix;
+        else
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED, "{} aggregation function is not supported in changelog query processing", function_name);
+    }
+
+    /// UDA by default support changelog
+    if (UserDefinedFunctionFactory::isAggregateFunctionName(function_name))
+        return function_name;
+
+    return {};
+}
+
 void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
 {
     if (func.name == "emit_version")
@@ -90,43 +136,17 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
 
         if (is_changelog)
         {
-            iter = changelog_func_map.find(func.name);
-
-            /// Support combinator suffix, for example:
-            /// `count`                 => `__count_retract`
-            /// `count_if`              => `__count_retract_if`
-            /// `count_distinct`        => `__count_retract_distinct`
-            /// `count_distinct_if`     => `__count_retract_distinct_if`
-            String combinator_suffix;
-            auto nested_func_name = func.name;
-            while (iter == changelog_func_map.end())
+            /// Whether the function support 'retract' for changelog, also return the alias name of
+            /// function used in rewritten query
+            auto func_alias_name = supportChangelog(func.name);
+            if (func_alias_name.has_value())
             {
-                if (auto combinator = AggregateFunctionCombinatorFactory::instance().tryFindSuffix(nested_func_name))
-                {
-                    const std::string & combinator_name = combinator->getName();
-                    /// TODO: support more combinators
-                    if (combinator_name != "_if")
-                        throw Exception(
-                            ErrorCodes::NOT_IMPLEMENTED,
-                            "{} aggregation function is not supported in changelog query processing",
-                            func.name);
-
-                    nested_func_name = nested_func_name.substr(0, nested_func_name.size() - combinator_name.size());
-                    combinator_suffix = combinator_name + combinator_suffix;
-                    iter = changelog_func_map.find(nested_func_name);
-                    continue;
-                }
-                break;
-            }
-
-            if (iter != changelog_func_map.end())
-            {
-                if (!iter->second.empty())
+                if (!func_alias_name->empty())
                 {
                     /// Always show original function
                     func.code_name = DB::serializeAST(func);
 
-                    func.name = iter->second + combinator_suffix;
+                    func.name = *func_alias_name;
                     if (!func.arguments)
                         func.arguments = std::make_shared<ASTExpressionList>();
 
@@ -145,9 +165,6 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
                     else
                         func.arguments->children.insert(delta_pos, std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG));
                 }
-                else
-                    throw Exception(
-                        ErrorCodes::NOT_IMPLEMENTED, "{} aggregation function is not supported in changelog query processing", func.name);
 
                 return;
             }

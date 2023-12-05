@@ -70,8 +70,14 @@ static DataTypes convertLowCardinalityTypesToNested(const DataTypes & types)
     return res_types;
 }
 
+/// proton: starts
 AggregateFunctionPtr AggregateFunctionFactory::get(
-    const String & name, const DataTypes & argument_types, const Array & parameters, AggregateFunctionProperties & out_properties) const
+    const String & name,
+    const DataTypes & argument_types,
+    const Array & parameters,
+    AggregateFunctionProperties & out_properties,
+    bool is_changelog_input) const
+/// proton: ends
 {
     auto types_without_low_cardinality = convertLowCardinalityTypesToNested(argument_types);
 
@@ -92,7 +98,7 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
             [](const auto & type) { return type->onlyNull(); });
 
         AggregateFunctionPtr nested_function = getImpl(
-            name, nested_types, nested_parameters, out_properties, has_null_arguments);
+            name, nested_types, nested_parameters, out_properties, has_null_arguments, is_changelog_input);
 
         // Pure window functions are not real aggregate functions. Applying
         // combinators doesn't make sense for them, they must handle the
@@ -103,20 +109,22 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
             return combinator->transformAggregateFunction(nested_function, out_properties, types_without_low_cardinality, parameters);
     }
 
-    auto with_original_arguments = getImpl(name, types_without_low_cardinality, parameters, out_properties, false);
+    auto with_original_arguments = getImpl(name, types_without_low_cardinality, parameters, out_properties, false, is_changelog_input);
 
     if (!with_original_arguments)
         throw Exception("Logical error: AggregateFunctionFactory returned nullptr", ErrorCodes::LOGICAL_ERROR);
     return with_original_arguments;
 }
 
-
+/// proton: starts
 AggregateFunctionPtr AggregateFunctionFactory::getImpl(
     const String & name_param,
     const DataTypes & argument_types,
     const Array & parameters,
     AggregateFunctionProperties & out_properties,
-    bool has_null_arguments) const
+    bool has_null_arguments,
+    bool is_changelog_input) const
+/// proton: ends
 {
     String name = getAliasToOrName(name_param);
     bool is_case_insensitive = false;
@@ -194,7 +202,7 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
     }
 
     /// proton: starts. Check user defined aggr function
-    auto aggr = UserDefinedFunctionFactory::getAggregateFunction(name, argument_types, parameters, out_properties);
+    auto aggr = UserDefinedFunctionFactory::getAggregateFunction(name, argument_types, parameters, out_properties, is_changelog_input);
     if (aggr)
         return aggr;
     /// proton: ends
@@ -211,12 +219,19 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
         throw Exception(ErrorCodes::UNKNOWN_AGGREGATE_FUNCTION, "Unknown aggregate function {}{}", name, extra_info);
 }
 
-
+/// proton: starts
 AggregateFunctionPtr AggregateFunctionFactory::tryGet(
-    const String & name, const DataTypes & argument_types, const Array & parameters, AggregateFunctionProperties & out_properties) const
+    const String & name,
+    const DataTypes & argument_types,
+    const Array & parameters,
+    AggregateFunctionProperties & out_properties,
+    bool is_changelog_input) const
+/// proton: ends
 {
     return isAggregateFunctionName(name)
-        ? get(name, argument_types, parameters, out_properties)
+        /// proton: starts
+        ? get(name, argument_types, parameters, out_properties, is_changelog_input)
+        /// proton: ends
         : nullptr;
 }
 

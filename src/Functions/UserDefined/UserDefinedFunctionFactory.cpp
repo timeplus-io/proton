@@ -64,7 +64,11 @@ FunctionOverloadResolverPtr UserDefinedFunctionFactory::get(const String & funct
 
 /// proton: starts
 AggregateFunctionPtr UserDefinedFunctionFactory::getAggregateFunction(
-    const String & function_name, const DataTypes & types, const Array & parameters, AggregateFunctionProperties & /*properties*/)
+    const String & function_name,
+    const DataTypes & types,
+    const Array & parameters,
+    AggregateFunctionProperties & /*properties*/,
+    bool is_changelog_input)
 {
     const auto & loader = ExternalUserDefinedFunctionsLoader::instance(nullptr);
     auto load_result = loader.getLoadResult(function_name);
@@ -77,26 +81,31 @@ AggregateFunctionPtr UserDefinedFunctionFactory::getAggregateFunction(
         if (!config || !config->is_aggregation)
             return nullptr;
 
-        /// check arguments
-        if (types.size() != config->arguments.size())
-            throw Exception(
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
-                "expect {} arguments but get {} for UDF {}",
-                config->arguments.size(),
-                types.size(),
-                config->name);
-
-        for (size_t i = 0; i < config->arguments.size(); i++)
-        {
-            if (types[i]->getTypeId() != config->arguments[i].type->getTypeId())
+        auto validate_arguments = [&](size_t num_args) {
+            if (types.size() != num_args)
                 throw Exception(
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                    "argument {} of UDF {}: expect type '{}' but get '{}'",
-                    i,
-                    config->name,
-                    config->arguments[i].type->getName(),
-                    types[i]->getName());
-        }
+                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                    "expect {} arguments but get {} for UDF {}",
+                    config->arguments.size(),
+                    types.size(),
+                    config->name);
+
+            for (size_t i = 0; i < num_args; i++)
+            {
+                if (types[i]->getTypeId() != config->arguments[i].type->getTypeId())
+                    throw Exception(
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                        "argument {} of UDF {}: expect type '{}' but get '{}'",
+                        i,
+                        config->name,
+                        config->arguments[i].type->getName(),
+                        types[i]->getName());
+            }
+        };
+
+        /// check arguments
+        size_t num_of_args = config->arguments.size();
+        validate_arguments(types.back()->getName() == "int8" ? num_of_args : num_of_args - 1);
 
         ContextPtr query_context;
         if (CurrentThread::isInitialized())
@@ -109,7 +118,7 @@ AggregateFunctionPtr UserDefinedFunctionFactory::getAggregateFunction(
         }
 
         return std::make_shared<AggregateFunctionJavaScriptAdapter>(
-            config, types, parameters, query_context->getSettingsRef().javascript_max_memory_bytes);
+            config, types, parameters, is_changelog_input, query_context->getSettingsRef().javascript_max_memory_bytes);
     }
 
     return nullptr;
@@ -189,14 +198,14 @@ std::vector<String> UserDefinedFunctionFactory::getRegisteredNames(ContextPtr co
 bool UserDefinedFunctionFactory::registerFunction(
     ContextPtr context,
     const String & function_name,
-    const Poco::JSON::Object::Ptr & json_func,
+    Poco::JSON::Object::Ptr json_func,
     bool throw_if_exists,
     bool replace_if_exists)
 {
     Streaming::validateUDFName(function_name);
 
     assert(json_func->has("function"));
-    const Poco::JSON::Object::Ptr & config = json_func->getObject("function");
+    Poco::JSON::Object::Ptr config = json_func->getObject("function");
     assert(config);
 
     if (config->get("type") == "javascript")
@@ -207,8 +216,36 @@ bool UserDefinedFunctionFactory::registerFunction(
 
         /// check whether the source can be compiled
         if (config->has("is_aggregation") && config->getValue<bool>("is_aggregation"))
+        {
             /// UDA
             V8::validateAggregationFunctionSource(function_name, {"initialize", "process", "finalize"}, config->get("source"));
+
+            /// add _tp_delta column as the last argument
+            assert(config->has("arguments"));
+            assert(config->isArray("arguments"));
+
+            bool has_delta_column = false;
+            /// Below is a workaround, because Poco::JSON::Object::getArray cannot work well
+            Poco::JSON::Array::Ptr json_arguments = config->get("arguments").extract<Poco::JSON::Array::Ptr>();
+            for (size_t i = 0; i < json_arguments->size(); i++)
+            {
+                const auto & arg = json_arguments->getObject(i);
+                if (arg->has("name") && arg->get("name") == "_tp_delta")
+                {
+                    has_delta_column = true;
+                    break;
+                }
+            }
+
+            if (!has_delta_column)
+            {
+                Poco::JSON::Object delta_col;
+                delta_col.set("name", "_tp_delta");
+                delta_col.set("type", "int8");
+                json_arguments->add(delta_col);
+                config->set("arguments", json_arguments);
+            }
+        }
         else
             /// UDF
             V8::validateStatelessFunctionSource(function_name, config->get("source"));

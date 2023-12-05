@@ -680,6 +680,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         TreeRewriterResult tree_rewriter_result(source_header.getNamesAndTypesList(), storage, storage_snapshot);
         tree_rewriter_result.streaming = isStreamingQuery();
         tree_rewriter_result.emit_changelog = data_stream_semantic_pair.isChangelogOutput();
+        tree_rewriter_result.is_changelog_input = data_stream_semantic_pair.isChangelogInput();
 
         syntax_analyzer_result = TreeRewriter(context).analyzeSelect(
             query_ptr,
