@@ -597,6 +597,38 @@
               [3, 2]
             ]}
           ]
-        }
+        },
+        {
+            "id": 21,
+            "tags": ["parser", "tree-rewriter"],
+            "name": "#356",
+            "description": "Fix parser opt bug. below 2 select query only change the order.",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "query": "drop stream if exists cte1"},
+                  {"client":"python", "query_type": "table", "query": "drop stream if exists cte2"},
+                  {"client":"python", "query_type": "table", "exist": "cte1", "wait":1, "query": "create stream if not exists cte1(`Id` int32, `OrderQty` float, `LastQty` float);"},
+                  {"client":"python", "query_type": "table", "exist": "cte2", "wait":1, "query": "create stream if not exists cte2(`Id` int32, `OrderQty` float, `LastQty` float);"},
+                  {"client":"python", "query_type": "stream", "depends_on_stream":"cte1", "query_id":"9921_1", "query_end_timer":"3", "query":" SELECT least(cte1.LastQty, cte2.LastQty) AS OrderQty, cte1.LastQty + cte1.OrderQty AS LastQty FROM cte1 INNER JOIN cte2 ON cte1.Id = cte2.Id;"},
+                  {"client":"python", "query_type": "stream", "depends_on_stream":"cte1", "query_id":"9921_2", "query_end_timer":"3", "query":" SELECT cte1.LastQty + cte1.OrderQty AS LastQty, least(cte1.LastQty, cte2.LastQty) AS OrderQty FROM cte1 INNER JOIN cte2 ON cte1.Id = cte2.Id;"},
+                  {"client":"python", "query_type": "table", "depends_on_stream": "cte1", "wait":1, "query": "insert into cte1(Id, OrderQty, LastQty) values(1, 10, 2)(2, 15, 3)(3,20,4)"},
+                  {"client":"python", "query_type": "table", "depends_on_stream": "cte2", "wait":1, "query": "insert into cte2(Id, OrderQty, LastQty) values(1, 10, 2)(2, 15, 3)(3,20,4)"}
+                ]
+              }
+            ],
+            "expected_results": [
+              {"query_id":"9921_1", "expected_results":[
+                [2.0, 12.0],
+                [3.0, 18.0],
+                [4.0, 24.0]
+              ]},
+              {"query_id":"9921_2", "expected_results":[
+                [12.0, 2.0],
+                [18.0, 3.0],
+                [24.0, 4.0]
+              ]}
+            ]
+          }
   ]
 }
