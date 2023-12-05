@@ -290,7 +290,7 @@ private:
     std::vector<Block> insertBlockToRangeBucketsAndJoin(Block block);
 
     template <bool is_left_block>
-    void doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, std::vector<RefListMultipleRef *> row_refs = {});
+    void doInsertBlock(Block block, HashBlocksPtr target_hash_blocks);
 
     /// For bidirectional hash join
     /// Return retracted block if needs emit changelog, otherwise empty block
