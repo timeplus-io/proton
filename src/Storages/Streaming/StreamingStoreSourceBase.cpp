@@ -141,12 +141,11 @@ Chunk StreamingStoreSourceBase::generate()
     CheckpointContextPtr current;
     if (has_ckpt_request)
     {
-        Poco::FastMutex::ScopedLock lock(ckpt_mutex);
-        if (ckpt_ctx)
         {
+            std::scoped_lock lock(ckpt_mutex);
             current.swap(ckpt_ctx);
-            has_ckpt_request = false;
         }
+        has_ckpt_request = false;
     }
 
     if (current)
@@ -180,9 +179,11 @@ void StreamingStoreSourceBase::checkpoint(CheckpointContextPtr ckpt_ctx_)
     assert(!has_ckpt_request);
     CheckpointContextPtr new_ckpt = std::make_shared<CheckpointContext>(*ckpt_ctx_);
 
-    Poco::FastMutex::ScopedLock lock(ckpt_mutex);
-    assert(!ckpt_ctx);
-    ckpt_ctx.swap(new_ckpt);
+    {
+        std::scoped_lock lock(ckpt_mutex);
+        assert(!ckpt_ctx);
+        ckpt_ctx.swap(new_ckpt);
+    }
     has_ckpt_request = true;
 }
 

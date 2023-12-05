@@ -88,8 +88,9 @@ private:
 
     /// For checkpoint
     /// FIXME, switch to llvm-15 atomic shared_ptr
-    CheckpointContextPtr ckpt_ctx TSA_PT_GUARDED_BY(ckpt_mutex);
+    std::atomic<bool> has_ckpt_request = false;
     std::mutex ckpt_mutex;
+    CheckpointContextPtr ckpt_ctx TSA_PT_GUARDED_BY(ckpt_mutex);
     struct State
     {
         void serialize(WriteBuffer & wb) const;
