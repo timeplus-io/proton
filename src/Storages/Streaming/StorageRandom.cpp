@@ -36,7 +36,6 @@
 #include <Common/logger_useful.h>
 #include <Common/randomSeed.h>
 
-
 namespace DB
 {
 
@@ -65,7 +64,6 @@ void fillBufferWithRandomData(char * __restrict data, size_t size, pcg64 & rng)
         data += sizeof(UInt64); /// We assume that data has at least 7-byte padding (see PaddedPODArray)
     }
 }
-
 
 ColumnPtr fillColumnWithRandomData(const DataTypePtr type, UInt64 limit, pcg64 & rng, ContextPtr context)
 {
@@ -353,6 +351,28 @@ ColumnPtr fillColumnWithRandomData(const DataTypePtr type, UInt64 limit, pcg64 &
     }
 }
 
+ColumnPtr
+fillColumnWithData(const DataTypePtr type, UInt64 limit, std::tuple<Int64, Int32, pcg64> & data, ContextPtr context, String col_name)
+{
+    if (col_name == ProtonConsts::RESERVED_SHARD)
+    {
+        auto & shard_num = std::get<0>(data);
+        auto column = type->createColumnConst(limit, shard_num)->convertToFullColumnIfConst();
+        return column;
+    }
+    else if (col_name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID)
+    {
+        auto & sn = std::get<1>(data);
+        auto column = type->createColumnConst(limit, sn)->convertToFullColumnIfConst();
+        sn++;
+        return column;
+    }
+    else
+    {
+        auto & rng = std::get<2>(data);
+        return fillColumnWithRandomData(type, limit, rng, context);
+    }
+}
 
 class GenerateRandomSource final : public ISource
 {
@@ -366,12 +386,12 @@ public:
         UInt64 events_per_second_,
         UInt64 interval_time_,
         bool is_streaming_,
-        UInt64 total_events_)
+        UInt64 total_events_,
+        size_t shard_num_)
         : ISource(Nested::flatten(prepareBlockToFill(block_header_)), true, ProcessorID::GenerateRandomSourceID)
         , block_size(block_size_)
         , block_full(std::move(block_header_))
         , our_columns(our_columns_)
-        , rng(random_seed_)
         , context(context_)
         , events_per_second(events_per_second_)
         , header_chunk(Nested::flatten(block_full.cloneEmpty()).getColumns(), 0)
@@ -380,7 +400,7 @@ public:
         , log(&Poco::Logger::get("GenerateRandSource"))
     {
         is_streaming = is_streaming_;
-
+        data_generate_helper = std::make_tuple(shard_num_, 1, pcg64(random_seed_));
         if (total_events == 0 && !is_streaming)
             total_events = events_per_second ? events_per_second : block_size;
 
@@ -414,7 +434,16 @@ public:
                 != ProtonConsts::RESERVED_COLUMN_NAMES.end();
             if (is_reserved_column || our_columns.hasDefault(elem.name))
                 continue;
+
             block_to_fill.insert(elem);
+        }
+
+        auto dag
+            = evaluateMissingDefaults(block_to_fill, block_full.getNamesAndTypesList(), our_columns, context, true, false, true);
+        if (dag)
+        {
+            default_actions = std::make_shared<ExpressionActions>(
+                std::move(dag), ExpressionActionsSettings::fromContext(context, CompileExpressions::yes));
         }
     }
 
@@ -493,7 +522,7 @@ protected:
         Block block_to_fill_as_result(block_to_fill.cloneEmpty());
 
         for (const auto & elem : block_to_fill_as_result)
-            columns.emplace_back(fillColumnWithRandomData(elem.type, block_size_, rng, context));
+            columns.emplace_back(fillColumnWithData(elem.type, block_size_, data_generate_helper, context, elem.name));
 
         block_to_fill_as_result.setColumns(columns);
 
@@ -504,13 +533,8 @@ protected:
             block_to_fill_as_result.insert(
                 {ColumnConst::create(ColumnUInt8::create(1, 0), block_size_), std::make_shared<DataTypeUInt8>(), "_dummy"});
 
-        auto dag = evaluateMissingDefaults(block_to_fill_as_result, block_full.getNamesAndTypesList(), our_columns, context);
-        if (dag)
-        {
-            auto actions = std::make_shared<ExpressionActions>(
-                std::move(dag), ExpressionActionsSettings::fromContext(context, CompileExpressions::yes));
-            actions->execute(block_to_fill_as_result);
-        }
+        if (default_actions)
+            default_actions->execute(block_to_fill_as_result);
 
         if (block_to_fill_as_result.has(ProtonConsts::RESERVED_COLUMN_NAMES[0])
             && block_to_fill_as_result.has(ProtonConsts::RESERVED_COLUMN_NAMES[1]))
@@ -528,7 +552,6 @@ private:
     Block block_full;
     Block block_to_fill;
     const ColumnsDescription our_columns;
-    pcg64 rng;
     ContextPtr context;
     Int64 boundary_time;
     UInt64 block_idx_in_window;
@@ -546,6 +569,9 @@ private:
     UInt64 total_events;
     UInt64 generated_events = 0;
     Poco::Logger * log;
+    std::shared_ptr<ExpressionActions> default_actions = nullptr;
+    // <shard_num, sequence_num, rng>
+    std::tuple<Int64, Int32, pcg64> data_generate_helper;
 
     static Block & prepareBlockToFill(Block & block)
     {
@@ -717,7 +743,8 @@ Pipe StorageRandom::read(
                     0,
                     1000,
                     query_info.syntax_analyzer_result->streaming,
-                    events_share));
+                    events_share,
+                    i));
             }
 
             pipes.emplace_back(std::make_shared<GenerateRandomSource>(
@@ -729,7 +756,8 @@ Pipe StorageRandom::read(
                 0,
                 1000,
                 query_info.syntax_analyzer_result->streaming,
-                events_share + events_remainder));
+                events_share + events_remainder,
+                shards - 1));
         }
         else
         {
@@ -743,7 +771,8 @@ Pipe StorageRandom::read(
                 eps,
                 1000,
                 query_info.syntax_analyzer_result->streaming,
-                max_events));
+                max_events,
+                0));
         }
     }
     else
@@ -762,7 +791,8 @@ Pipe StorageRandom::read(
                 eps_thread,
                 interval_time,
                 query_info.syntax_analyzer_result->streaming,
-                events_share));
+                events_share,
+                i));
         }
 
         /// The last thread will do the remaining work
@@ -775,9 +805,17 @@ Pipe StorageRandom::read(
             eps_thread + remainder,
             interval_time,
             query_info.syntax_analyzer_result->streaming,
-            events_share + events_remainder));
+            events_share + events_remainder,
+            shards - 1));
     }
     return Pipe::unitePipes(std::move(pipes));
 }
 
+NamesAndTypesList StorageRandom::getVirtuals() const
+{
+    return NamesAndTypesList {
+        {ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, std::make_shared<DataTypeInt64>()},
+        {ProtonConsts::RESERVED_SHARD, std::make_shared<DataTypeInt32>()},
+    };
+}
 }

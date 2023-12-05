@@ -59,6 +59,8 @@ public:
         size_t max_block_size,
         size_t num_streams) override;
 
+    NamesAndTypesList getVirtuals() const override;
+
     bool supportsStreamingQuery() const override { return true; }
     bool hasEvenlyDistributedRead() const override { return true; }
 
