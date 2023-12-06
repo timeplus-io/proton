@@ -1,5 +1,3 @@
-#include <benchmark/benchmark.h>
-
 #include <Poco/Mutex.h>
 
 #include <atomic>
@@ -8,7 +6,10 @@
 #include <mutex>
 #include <thread>
 
+#include <benchmark/benchmark.h>
 
+namespace
+{
 class ComplexSharedResource
 {
     [[maybe_unused]] std::list<int> lst;
@@ -16,7 +17,7 @@ class ComplexSharedResource
     [[maybe_unused]] int valid_num;
 };
 
-static void BM_ScopedLockOnly(benchmark::State & state)
+void BM_ScopedLockOnly(benchmark::State & state)
 {
     std::mutex m;
 
@@ -55,9 +56,8 @@ static void BM_ScopedLockOnly(benchmark::State & state)
     done = true;
     schedule_ckpt.join();
 }
-BENCHMARK(BM_ScopedLockOnly)->MinTime(3);
 
-static void BM_AtomicWithScopedLockOnStdMutex(benchmark::State & state)
+void BM_AtomicWithScopedLockOnStdMutex(benchmark::State & state)
 {
     std::mutex m;
 
@@ -98,10 +98,8 @@ static void BM_AtomicWithScopedLockOnStdMutex(benchmark::State & state)
     done = true;
     schedule_ckpt.join();
 }
-BENCHMARK(BM_AtomicWithScopedLockOnStdMutex)->MinTime(3);
 
-
-static void BM_AtomicWithScopedLockOnPocoFastMutex(benchmark::State & state)
+void BM_AtomicWithScopedLockOnPocoFastMutex(benchmark::State & state)
 {
     Poco::FastMutex m;
 
@@ -142,4 +140,8 @@ static void BM_AtomicWithScopedLockOnPocoFastMutex(benchmark::State & state)
     done = true;
     schedule_ckpt.join();
 }
+}
+
+BENCHMARK(BM_ScopedLockOnly)->MinTime(3);
+BENCHMARK(BM_AtomicWithScopedLockOnStdMutex)->MinTime(3);
 BENCHMARK(BM_AtomicWithScopedLockOnPocoFastMutex)->MinTime(3);
