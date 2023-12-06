@@ -550,7 +550,7 @@ void ASTAlterQuery::formatQueryImpl(const FormatSettings & settings, FormatState
 {
     frame.need_parens = false;
 
-    std::string indent_str = settings.one_line ? "" : std::string(4u * frame.indent, ' ');
+    std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' '); /// proton: updated
     settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str;
 
     switch (alter_object)

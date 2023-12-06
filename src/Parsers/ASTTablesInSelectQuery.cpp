@@ -105,7 +105,7 @@ ASTPtr ASTTablesInSelectQuery::clone() const
 void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     frame.current_select = this;
-    std::string indent_str = settings.one_line ? "" : std::string(2 * (frame.indent + 1), ' '); /// proton: updated
+    std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' '); /// proton: updated
 
     if (database_and_table_name)
     {
@@ -145,7 +145,7 @@ void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState
 void ASTTableJoin::formatImplBeforeTable(const FormatSettings & settings, FormatState &, FormatStateStacked frame) const
 {
     settings.ostr << (settings.hilite ? hilite_keyword : "");
-    std::string indent_str = settings.one_line ? "" : std::string(2 * frame.indent, ' '); /// proton: updated
+    std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' '); /// proton: updated
 
     if (kind != JoinKind::Comma)
     {
@@ -196,19 +196,19 @@ void ASTTableJoin::formatImplBeforeTable(const FormatSettings & settings, Format
     switch (kind)
     {
         case JoinKind::Inner:
-            settings.ostr << "INNER JOIN ";  /// proton: updated
+            settings.ostr << "INNER JOIN";
             break;
         case JoinKind::Left:
-            settings.ostr << "LEFT JOIN ";  /// proton: updated
+            settings.ostr << "LEFT JOIN";
             break;
         case JoinKind::Right:
-            settings.ostr << "RIGHT JOIN ";  /// proton: updated
+            settings.ostr << "RIGHT JOIN";
             break;
         case JoinKind::Full:
-            settings.ostr << "FULL OUTER JOIN ";  /// proton: updated
+            settings.ostr << "FULL OUTER JOIN";
             break;
         case JoinKind::Cross:
-            settings.ostr << "CROSS JOIN ";  /// proton: updated
+            settings.ostr << "CROSS JOIN";
             break;
         case JoinKind::Comma:
             settings.ostr << ",";
@@ -250,10 +250,14 @@ void ASTTableJoin::formatImpl(const FormatSettings & settings, FormatState & sta
 void ASTArrayJoin::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     frame.expression_list_prepend_whitespace = true;
+    /// proton: starts.
+    frame.expression_list_always_start_on_new_line = false;
+    std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' ');
 
     settings.ostr << (settings.hilite ? hilite_keyword : "")
-        << settings.nl_or_ws
+        << settings.nl_or_ws << indent_str
         << (kind == Kind::Left ? "LEFT " : "") << "ARRAY JOIN" << (settings.hilite ? hilite_none : "");
+    /// proton: ends.
 
     settings.one_line
         ? expression_list->formatImpl(settings, state, frame)
@@ -265,8 +269,19 @@ void ASTTablesInSelectQueryElement::formatImpl(const FormatSettings & settings, 
 {
     if (table_expression)
     {
+        /// proton: starts.
         if (table_join)
+        {
             table_join->as<ASTTableJoin &>().formatImplBeforeTable(settings, state, frame);
+            settings.ostr << ' ';
+        }
+        else
+        {
+            /// First table always start on new line
+            ++frame.indent;
+            settings.ostr << settings.nl_or_ws << (settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' '));
+        }
+        /// proton: ends.
 
         table_expression->formatImpl(settings, state, frame);
 
@@ -282,8 +297,6 @@ void ASTTablesInSelectQueryElement::formatImpl(const FormatSettings & settings, 
 
 void ASTTablesInSelectQuery::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
-    std::string indent_str = settings.one_line ? "" : std::string(2 * frame.indent, ' '); /// proton: updated
-
     for (const auto & child : children)
         child->formatImpl(settings, state, frame);
 }

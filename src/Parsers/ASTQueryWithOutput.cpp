@@ -26,9 +26,7 @@ void ASTQueryWithOutput::formatImpl(const FormatSettings & s, FormatState & stat
 {
     formatQueryImpl(s, state, frame);
 
-    /// proton: starts
-    std::string indent_str = s.one_line ? "" : std::string(2u * frame.indent, ' ');
-    /// proton: ends
+    std::string indent_str = s.one_line ? "" : std::string(s.indent_size * frame.indent, ' '); /// proton: updated
 
     if (out_file)
     {

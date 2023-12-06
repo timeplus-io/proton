@@ -40,7 +40,7 @@ public:
 protected:
     void formatQueryImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const override
     {
-        std::string indent_str = s.one_line ? "" : std::string(4 * frame.indent, ' ');
+        std::string indent_str = s.one_line ? "" : std::string(s.indent_size * frame.indent, ' '); /// proton: updated
 
         s.ostr << (s.hilite ? hilite_keyword : "") << "WATCH " << (s.hilite ? hilite_none : "")
             << (database ? backQuoteIfNeed(getDatabase()) + "." : "") << backQuoteIfNeed(getTable());

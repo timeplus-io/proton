@@ -51,7 +51,7 @@ void ASTProjectionSelectQuery::formatImpl(const FormatSettings & s, FormatState 
 {
     frame.current_select = this;
     frame.need_parens = false;
-    std::string indent_str = s.one_line ? "" : std::string(4 * frame.indent, ' ');
+    std::string indent_str = s.one_line ? "" : std::string(s.indent_size * frame.indent, ' '); /// proton: updated
 
     if (with())
     {

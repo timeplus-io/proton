@@ -185,6 +185,9 @@ public:
         bool one_line;
         bool always_quote_identifiers = false;
         IdentifierQuotingStyle identifier_quoting_style = IdentifierQuotingStyle::Backticks;
+        /// proton: starts.
+        static constexpr uint8_t indent_size = 2; /// one indent - two whitespace
+        /// proton: ends.
 
         // Newline or whitespace.
         char nl_or_ws;
@@ -224,6 +227,7 @@ public:
         bool need_parens = false;
         bool expression_list_always_start_on_new_line = false;  /// Line feed and indent before expression list even if it's of single element.
         bool expression_list_prepend_whitespace = false; /// Prepend whitespace (if it is required)
+        bool expression_list_elements_are_always_on_one_line = false;  /// proton: added
         bool surround_each_list_element_with_parens = false;
         const IAST * current_select = nullptr;
     };

@@ -18,7 +18,7 @@ ASTPtr ASTProjectionDeclaration::clone() const
 void ASTProjectionDeclaration::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     settings.ostr << backQuoteIfNeed(name);
-    std::string indent_str = settings.one_line ? "" : std::string(4u * frame.indent, ' ');
+    std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' '); /// proton: updated
     std::string nl_or_nothing = settings.one_line ? "" : "\n";
     settings.ostr << nl_or_nothing << indent_str << "(" << nl_or_nothing;
     FormatStateStacked frame_nested = frame;

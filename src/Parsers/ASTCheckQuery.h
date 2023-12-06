@@ -28,7 +28,7 @@ protected:
     {
         std::string nl_or_nothing = settings.one_line ? "" : "\n";
 
-        std::string indent_str = settings.one_line ? "" : std::string(4 * frame.indent, ' ');
+        std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' '); /// proton: updated
         std::string nl_or_ws = settings.one_line ? " " : "\n";
 
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "CHECK TABLE " << (settings.hilite ? hilite_none : "");
