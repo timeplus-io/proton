@@ -5,6 +5,7 @@
 #include <IO/ReadBufferFromMemory.h>
 #include <Processors/ISource.h>
 #include <Storages/StorageSnapshot.h>
+#include <Checkpoint/CheckpointRequest.h>
 
 namespace Poco
 {
@@ -87,10 +88,7 @@ private:
     Int32 record_consume_timeout_ms = 100;
 
     /// For checkpoint
-    /// FIXME, switch to llvm-15 atomic shared_ptr
-    std::atomic<bool> has_ckpt_request = false;
-    std::mutex ckpt_mutex;
-    CheckpointContextPtr ckpt_ctx TSA_PT_GUARDED_BY(ckpt_mutex);
+    CheckpointRequest ckpt_request;
     struct State
     {
         void serialize(WriteBuffer & wb) const;
