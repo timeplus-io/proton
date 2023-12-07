@@ -1,46 +1,46 @@
 0.1
-SELECT 
+SELECT
   cast(\'0.1\', \'decimal(38, 38)\') AS c
 [1,2,3]
-SELECT 
+SELECT
   cast(\'[1, 2, 3]\', \'array(uint32)\') AS c
 abc
-SELECT 
+SELECT
   cast(\'abc\', \'fixed_string(3)\') AS c
 123
-SELECT 
+SELECT
   cast(\'123\', \'string\') AS c
 1
-SELECT 
+SELECT
   cast(\'1\', \'int8\') AS c
 [1,2,3]
-SELECT 
+SELECT
   cast([1, 1 + 1, 1 + 2], \'array(uint32)\') AS c
 2010-10-10
-SELECT 
+SELECT
   cast(\'2010-10-10\', \'Date\') AS c
 2010-10-10 00:00:00
-SELECT 
+SELECT
   cast(\'2010-10-10\', \'DateTime(\\\'UTC\\\')\') AS c
 ['2010-10-10','2010-10-10']
-SELECT 
+SELECT
   cast(\'[\\\'2010-10-10\\\', \\\'2010-10-10\\\']\', \'array(Date)\')
 3
-SELECT 
+SELECT
   cast(1 + 2, \'uint32\') AS c
 0.5
-SELECT 
+SELECT
   cast(cast(\'0.1\', \'decimal(4, 4)\') * 5, \'float64\') AS c
 0	uint8
-SELECT 
+SELECT
   cast(number, \'uint8\') AS c, to_type_name(c)
-FROM 
+FROM
   numbers(1)
 1970-01-11
-SELECT 
+SELECT
   cast((((0 + 1) + 2) + 3) + 4, \'Date\') AS c
 0.6
-SELECT 
+SELECT
   cast((cast(\'0.1\', \'decimal(4, 4)\') + cast(\'0.2\', \'decimal(4, 4)\')) + cast(\'0.3\', \'decimal(4, 4)\'), \'decimal(4, 4)\') AS c
 [1]
 [[1,2,3],[],[1]]

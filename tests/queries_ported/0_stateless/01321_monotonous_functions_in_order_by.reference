@@ -37,83 +37,83 @@
 2
 1
 0
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   number ASC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   abs(to_float32(number)) ASC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   to_float32(abs(number)) ASC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   number DESC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   exp(number) ASC
-SELECT 
+SELECT
   round_to_exp2(number) AS x
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   number ASC
-SELECT 
+SELECT
   number AS x
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   number ASC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   number DESC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   abs(to_float32(number)) DESC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   to_float32(abs(number)) DESC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   number ASC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   exp(number) DESC
-SELECT 
+SELECT
   round_to_exp2(number) AS x
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   number DESC
 0
 1
@@ -154,81 +154,81 @@ ORDER BY
 2
 1
 0
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   to_float32(to_float64(number)) ASC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   abs(to_float32(number)) ASC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   to_float32(abs(number)) ASC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   -number ASC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   exp(number) ASC
-SELECT 
+SELECT
   round_to_exp2(number) AS x
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   x ASC, to_float32(x) ASC
-SELECT 
+SELECT
   number AS x
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   to_float32(x) AS k ASC, to_float64(k) ASC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   to_float32(to_float64(number)) DESC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   abs(to_float32(number)) DESC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   to_float32(abs(number)) DESC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   -number DESC
-SELECT 
+SELECT
   number
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   exp(number) DESC
-SELECT 
+SELECT
   round_to_exp2(number) AS x
-FROM 
+FROM
   numbers(3)
-ORDER BY 
+ORDER BY
   x DESC, to_float32(x) DESC

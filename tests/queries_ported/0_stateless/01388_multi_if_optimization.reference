@@ -1,8 +1,8 @@
-SELECT 
+SELECT
   if(number = 1, \'hello\', if(number = 2, \'world\', \'xyz\'))
-FROM 
+FROM
   numbers(10)
-SELECT 
+SELECT
   multi_if(number = 1, \'hello\', number = 2, \'world\', \'xyz\')
-FROM 
+FROM
   numbers(10)

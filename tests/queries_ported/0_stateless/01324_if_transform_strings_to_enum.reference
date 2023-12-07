@@ -8,9 +8,9 @@ yahoo
 other
 other
 other
-SELECT 
+SELECT
   transform(number, [2, 4, 6], [\'google\', \'yandex\', \'yahoo\'], \'other\')
-FROM 
+FROM
   system.numbers
 LIMIT 10
 google
@@ -23,9 +23,9 @@ yandex
 yandex
 yandex
 yandex
-SELECT 
+SELECT
   if(number > 5, \'yandex\', \'google\')
-FROM 
+FROM
   system.numbers
 LIMIT 10
 other
@@ -38,9 +38,9 @@ yahoo
 other
 other
 other
-SELECT 
+SELECT
   transform(number, [2, 4, 6], [\'google\', \'yandex\', \'yahoo\'], \'other\')
-FROM 
+FROM
   system.numbers
 LIMIT 10
 google
@@ -53,8 +53,8 @@ yandex
 yandex
 yandex
 yandex
-SELECT 
+SELECT
   if(number > 5, \'yandex\', \'google\')
-FROM 
+FROM
   system.numbers
 LIMIT 10

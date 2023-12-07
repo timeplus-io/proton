@@ -45,7 +45,7 @@
                 {
                     "query_id": "401",
                     "expected_results": {
-                        "query": "SELECT \n  a.id, b.type, max(a.value), window_start AS joined_w_start, window_end AS joined_w_end\nFROM \n  hop(test_rest, timestamp, INTERVAL 3 SECOND, INTERVAL 5 SECOND) AS a\nINNER JOIN table(test_rest_d) AS b ON a.id = b.id\nWHERE \n  (b.type = 'roof') OR (b.type = 'field') OR (b.type = 'wall')\nGROUP BY \n  a.id, b.type, window_start, window_end",
+                        "query": "SELECT\n  a.id, b.type, max(a.value), window_start AS joined_w_start, window_end AS joined_w_end\nFROM\n  hop(test_rest, timestamp, INTERVAL 3 SECOND, INTERVAL 5 SECOND) AS a\nINNER JOIN table(test_rest_d) AS b ON a.id = b.id\nWHERE\n  (b.type = 'roof') OR (b.type = 'field') OR (b.type = 'wall')\nGROUP BY\n  a.id, b.type, window_start, window_end",
                         "request_id": "any_value"
                     }
                 }
@@ -79,7 +79,7 @@
                 {
                     "query_id": "401",
                     "expected_results": {
-                        "query": "WITH transformed AS\n  (\n    SELECT \n      id, location, value, to_datetime64(json_extract_string(json, 'create_time'), 3, 'UTC') AS transformed_timestamp\n    FROM \n      test_session\n  )\nSELECT \n  top_k(value, 5, true, 30), array_join(max_k(value, 5)), window_start, window_end, __tp_session_id, id, location\nFROM \n  session(transformed, transformed_timestamp, 2s, id, location)\nGROUP BY \n  __tp_session_id, window_start, window_end, id, location",
+                        "query": "WITH transformed AS\n  (\n    SELECT\n      id, location, value, to_datetime64(json_extract_string(json, 'create_time'), 3, 'UTC') AS transformed_timestamp\n    FROM\n      test_session\n  )\nSELECT\n  top_k(value, 5, true, 30), array_join(max_k(value, 5)), window_start, window_end, __tp_session_id, id, location\nFROM\n  session(transformed, transformed_timestamp, 2s, id, location)\nGROUP BY\n  __tp_session_id, window_start, window_end, id, location",
                         "request_id": "any_value"
                     }
                 }
@@ -88,11 +88,10 @@
         {
             "id": 2,
             "tags": [
-                "sqlformat",
-                "bug"
+                "sqlformat"
             ],
             "name": "sqlformat",
-            "description": "send a sqlformat request of insert into",
+            "description": "send a sqlformat request of complex query",
             "steps": [
                 {
                     "statements": [
@@ -104,7 +103,7 @@
                             "query_url": "/proton/v1/sqlformat",
                             "http_method": "POST",
                             "data": {
-                                "query": "insert into test_session_d (id, type) values ('dev1', 'roof') ('dev2', 'field') ('dev3', 'window') ('dev4', 'wall') ('dev5', 'roof') ('dev6', 'window') ('dev7', 'wall') ('dev8', 'floor')"
+                                "query": "WITH cte1 as (select 1 from t), cte2 as (select 2 from t2) SELECT tags['tenant'] AS tenant, extract(array_element(tags, 'stream'), '[source|sink]-(.*)') AS id, extract(array_element(tags, 'stream'), '(source|sink)-*') AS metrics_type, 'orbit_stream_output_throughput' AS metrics_name, window_start AS time, (max(value) - min(value)) / 60 AS value FROM tumble(default.k8s_metrics, 60s),k8s_metrics INNER JOIN default.k8s_metrics USING (_tp_time) ARRAY JOIN _tp_time AS time WHERE name = 'output_sent_bytes' GROUP BY tenant, name, window_start, tags['stream'] UNION ALL SELECT tags['tenant'] AS tenant, extract(array_element(tags, 'stream'), '[source|sink]-(.*)') AS id, extract(array_element(tags, 'stream'), '(source|sink)-*') AS metrics_type, if((tags['label']) = 'sink', 'orbit_stream_output_sent', 'orbit_stream_output_error') AS metrics_name, window_start AS time, latest(value) AS value FROM  tumble(default.k8s_metrics, 60s) WHERE (name = 'output_sent') AND (((tags['label']) = 'sink') OR ((tags['label']) = 'sink_fails')) GROUP BY tenant, name, tags['label'], window_start, tags['stream']"
                             }
                         }
                     ]
@@ -114,7 +113,7 @@
                 {
                     "query_id": "401",
                     "expected_results": {
-                        "query": "WITH transformed AS\n  (\n    SELECT\n      id, location, value, to_datetime64(json_extract_string(json, 'create_time'), 3, 'UTC') AS transformed_timestamp\n    FROM\n test_session\n  )\nSELECT\n  top_k(value, 5, true, 30), array_join(max_k(value, 5)), window_start, window_end, __tp_session_id, id, location\nFROM\n session(transformed, transformed_timestamp, 2s, id, location)\nGROUP BY\n  __tp_session_id, window_start, window_end, id, location",
+                        "query": "WITH cte1 AS\n  (\n    SELECT\n      1\n    FROM\n      t\n  ), cte2 AS\n  (\n    SELECT\n      2\n    FROM\n      t2\n  )\nSELECT\n  tags['tenant'] AS tenant, extract(tags['stream'], '[source|sink]-(.*)') AS id, extract(tags['stream'], '(source|sink)-*') AS metrics_type, 'orbit_stream_output_throughput' AS metrics_name, window_start AS time, (max(value) - min(value)) / 60 AS value\nFROM\n  tumble(default.k8s_metrics, 60s), k8s_metrics\nINNER JOIN default.k8s_metrics USING (_tp_time)\nARRAY JOIN _tp_time AS time\nWHERE\n  name = 'output_sent_bytes'\nGROUP BY\n  tenant, name, window_start, tags['stream']\nUNION ALL\nSELECT\n  tags['tenant'] AS tenant, extract(tags['stream'], '[source|sink]-(.*)') AS id, extract(tags['stream'], '(source|sink)-*') AS metrics_type, if((tags['label']) = 'sink', 'orbit_stream_output_sent', 'orbit_stream_output_error') AS metrics_name, window_start AS time, latest(value) AS value\nFROM\n  tumble(default.k8s_metrics, 60s)\nWHERE\n  (name = 'output_sent') AND (((tags['label']) = 'sink') OR ((tags['label']) = 'sink_fails'))\nGROUP BY\n  tenant, name, tags['label'], window_start, tags['stream']",
                         "request_id": "any_value"
                     }
                 }

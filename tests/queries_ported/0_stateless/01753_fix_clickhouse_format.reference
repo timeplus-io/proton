@@ -1,31 +1,31 @@
-SELECT 
+SELECT
   1
 ;
 
-SELECT 
+SELECT
   1
 UNION ALL
 (
-  SELECT 
+  SELECT
     1
   UNION DISTINCT
-  SELECT 
+  SELECT
     1
 )
 ;
 
-SELECT 
+SELECT
   1
 ;
 
-SELECT 
+SELECT
   1
 UNION ALL
 (
-  SELECT 
+  SELECT
     1
   UNION DISTINCT
-  SELECT 
+  SELECT
     1
 )
 ;
