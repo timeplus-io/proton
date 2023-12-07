@@ -1,0 +1,2 @@
+proton_add_executable (atomic_lock_double_check_perf atomic_lock_double_check_perf.cpp)
+target_link_libraries (atomic_lock_double_check_perf PRIVATE ch_contrib::gbenchmark_all dbms)

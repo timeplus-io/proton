@@ -74,8 +74,8 @@ Chunk KafkaSource::generate()
     if (isCancelled())
         return {};
 
-    if (auto * current = ckpt_ctx.exchange(nullptr, std::memory_order_relaxed); current)
-        return doCheckpoint(CheckpointContextPtr{current});
+    if (auto current_ckpt_ctx = ckpt_request.poll(); current_ckpt_ctx)
+        return doCheckpoint(std::move(current_ckpt_ctx));
 
     if (result_chunks.empty() || iter == result_chunks.end())
     {
@@ -374,9 +374,7 @@ void KafkaSource::calculateColumnPositions()
 void KafkaSource::checkpoint(CheckpointContextPtr ckpt_ctx_)
 {
     /// We assume the previous ckpt is already done
-    /// Use std::atomic<std::shared_ptr<CheckpointContext>>
-    assert(!ckpt_ctx.load(std::memory_order_relaxed));
-    ckpt_ctx = new CheckpointContext(*ckpt_ctx_);
+    ckpt_request.setCheckpointRequestCtx(ckpt_ctx_);
 }
 
 /// 1) Generate a checkpoint barrier

@@ -49,6 +49,11 @@ def get_run_command(check_name, output_path):
     env.append("-e MAX_CONCURRENT_SELECT_QUERIES=200")
     env.append("-e TELEMETRY_ENABLED=false")
 
+    # Add TSAN_OPTIONS if sanitize environment variable is set to 'thread'
+    if os.getenv('sanitize') == 'thread':
+        env.append("-e TSAN_OPTIONS='suppressions={GITHUB_WORKSPACE}/tests/proton_ci/sanitizer-thread-suppressions.txt'")
+        logging.info("Using thread sanitizer suppressions.")
+
     env_str = " ".join(env)
 
     return (

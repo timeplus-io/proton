@@ -1,7 +1,8 @@
 #pragma once
 
-#include "SourceColumnsDescription.h"
+#include <Storages/Streaming/SourceColumnsDescription.h>
 
+#include <Checkpoint/CheckpointRequest.h>
 #include <Interpreters/Context_fwd.h>
 #include <NativeLog/Record/Record.h>
 #include <Processors/ISource.h>
@@ -50,7 +51,7 @@ protected:
 
     Int64 last_sn = -1;
     Int64 last_epoch = -1;
-    /// FIXME, switch to llvm-15
-    std::atomic<CheckpointContext *> ckpt_ctx;
+    /// For checkpoint
+    CheckpointRequest ckpt_request;
 };
 }

@@ -41,6 +41,9 @@ if (SANITIZE)
         # RelWithDebInfo, and downgrade optimizations to -O1 but not to -Og, to
         # keep the binary size down.
         # TODO: try compiling with -Og and with ld.gold.
+
+        # > Looks like -fsanitize-blacklist broke with the upgrade to Clang 16.
+        # https://github.com/ClickHouse/ClickHouse/pull/49829
         set (MSAN_FLAGS "-fsanitize=memory -fsanitize-memory-use-after-dtor -fsanitize-memory-track-origins -fno-optimize-sibling-calls -fsanitize-blacklist=${PROJECT_SOURCE_DIR}/tests/msan_suppressions.txt")
 
         set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SAN_FLAGS} ${MSAN_FLAGS}")
@@ -54,8 +57,11 @@ if (SANITIZE)
         endif ()
 
     elseif (SANITIZE STREQUAL "thread")
-        set (TSAN_FLAGS "-fsanitize=thread")
+        # https://github.com/llvm/llvm-project/issues/59007
+        set (TSAN_FLAGS "-fsanitize=thread -lresolv")
         if (COMPILER_CLANG)
+        # > Looks like -fsanitize-blacklist broke with the upgrade to Clang 16.
+        # https://github.com/ClickHouse/ClickHouse/pull/49829
             set (TSAN_FLAGS "${TSAN_FLAGS} -fsanitize-blacklist=${PROJECT_SOURCE_DIR}/tests/tsan_suppressions.txt")
         endif()
 

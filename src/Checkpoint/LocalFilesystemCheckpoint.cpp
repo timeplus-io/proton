@@ -115,11 +115,10 @@ int64_t LocalFileSystemCheckpoint::recover(const std::string & qid)
         const auto & path = dir_entry.path();
         try
         {
-            auto epoch = std::stoll(path.stem().string());
             /// check if `committed` exists
             if (std::filesystem::exists(path / COMMITTED_FILE))
             {
-                if (epoch > max_epoch)
+                if (auto epoch = std::stoll(path.stem().string()); epoch > max_epoch)
                     max_epoch = epoch;
             }
             else
