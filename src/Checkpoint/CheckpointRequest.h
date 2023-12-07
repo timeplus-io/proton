@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointContextFwd.h>
 
 #include <base/defines.h>
@@ -32,15 +31,10 @@ public:
     void setCheckpointRequestCtx(CheckpointContextPtr ckpt_ctx_) noexcept
     {
         assert(!has_ckpt_request);
-        /// Perform a deep copy to ensure that the checkpoint file is stored in a distinct path.
-        CheckpointContextPtr new_ckpt = std::make_shared<CheckpointContext>(*ckpt_ctx_);
-
-        {
-            std::scoped_lock lock(ckpt_mutex);
-            assert(!ckpt_ctx);
-            ckpt_ctx.swap(new_ckpt);
-            has_ckpt_request.store(true);
-        }
+        std::scoped_lock lock(ckpt_mutex);
+        assert(!ckpt_ctx);
+        ckpt_ctx.swap(ckpt_ctx_);
+        has_ckpt_request.store(true);
     }
 
     bool hasRequest() const noexcept { return has_ckpt_request; }
