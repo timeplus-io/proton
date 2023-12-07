@@ -105,7 +105,9 @@ ASTPtr ASTTablesInSelectQuery::clone() const
 void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     frame.current_select = this;
-    std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' '); /// proton: updated
+    /// proton: starts
+    std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' ');
+    /// proton: ends
 
     if (database_and_table_name)
     {
@@ -145,7 +147,9 @@ void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState
 void ASTTableJoin::formatImplBeforeTable(const FormatSettings & settings, FormatState &, FormatStateStacked frame) const
 {
     settings.ostr << (settings.hilite ? hilite_keyword : "");
-    std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' '); /// proton: updated
+    /// proton: starts.
+    std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * (frame.indent > 0 ? frame.indent - 1 : 0), ' ');
+    /// proton: ends.
 
     if (kind != JoinKind::Comma)
     {
@@ -251,7 +255,16 @@ void ASTArrayJoin::formatImpl(const FormatSettings & settings, FormatState & sta
 {
     frame.expression_list_prepend_whitespace = true;
     /// proton: starts.
+    /// Expected format:
+    /// SELECT
+    ///   *
+    /// FROM
+    ///   t1
+    /// ARRAY JOIN ...
     frame.expression_list_always_start_on_new_line = false;
+    if (frame.indent > 0)
+        frame.indent--;
+
     std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' ');
 
     settings.ostr << (settings.hilite ? hilite_keyword : "")
@@ -269,19 +282,13 @@ void ASTTablesInSelectQueryElement::formatImpl(const FormatSettings & settings, 
 {
     if (table_expression)
     {
-        /// proton: starts.
+        /// proton: starts
         if (table_join)
         {
             table_join->as<ASTTableJoin &>().formatImplBeforeTable(settings, state, frame);
             settings.ostr << ' ';
         }
-        else
-        {
-            /// First table always start on new line
-            ++frame.indent;
-            settings.ostr << settings.nl_or_ws << (settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' '));
-        }
-        /// proton: ends.
+        /// proton: ends
 
         table_expression->formatImpl(settings, state, frame);
 
@@ -297,6 +304,10 @@ void ASTTablesInSelectQueryElement::formatImpl(const FormatSettings & settings, 
 
 void ASTTablesInSelectQuery::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
+    /// Tables always start on new line
+    ++frame.indent;
+    settings.ostr << settings.nl_or_ws << (settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' '));
+
     for (const auto & child : children)
         child->formatImpl(settings, state, frame);
 }

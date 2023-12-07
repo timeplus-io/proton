@@ -28,7 +28,9 @@ ASTPtr ASTSelectWithUnionQuery::clone() const
 
 void ASTSelectWithUnionQuery::formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
-    std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' '); /// proton: updated
+    /// proton: starts
+    std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' ');
+    /// proton: ends
 
     auto mode_to_str = [&](auto mode)
     {
@@ -40,7 +42,9 @@ void ASTSelectWithUnionQuery::formatQueryImpl(const FormatSettings & settings, F
             return "INTERSECT";
         else if (mode == SelectUnionMode::EXCEPT)
             return "EXCEPT";
-        return "UNION"; /// proton: updated
+        /// proton: starts
+        return "UNION";
+        /// proton: ends
     };
 
     for (ASTs::const_iterator it = list_of_selects->children.begin(); it != list_of_selects->children.end(); ++it)

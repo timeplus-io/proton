@@ -238,7 +238,9 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
     if (auto * query = tryGetQueryArgument())
     {
         std::string nl_or_nothing = settings.one_line ? "" : "\n";
-        std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' '); /// proton: updated
+        /// proton: starts
+        std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' ');
+        /// proton: ends
         settings.ostr << (settings.hilite ? hilite_function : "") << name << "(" << nl_or_nothing;
         FormatStateStacked frame_nested = frame;
         frame_nested.need_parens = false;

@@ -44,7 +44,9 @@ void ASTTableOverride::formatImpl(const FormatSettings & settings_, FormatState 
         ++override_frame.indent;
         settings.ostr << nl_or_ws << '(' << nl_or_nothing;
     }
-    String indent_str = settings.one_line ? "" : String(settings.indent_size * override_frame.indent, ' '); /// proton: updated
+    /// proton: starts
+    String indent_str = settings.one_line ? "" : String(settings.indent_size * override_frame.indent, ' ');
+    /// proton: ends
     size_t override_elems = 0;
     if (columns)
     {

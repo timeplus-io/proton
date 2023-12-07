@@ -1,43 +1,43 @@
-SELECT 
+SELECT
   any(number) + (any(number) * 2)
-FROM 
+FROM
   numbers(1, 2)
 3
-SELECT 
+SELECT
   any_last(number) + (any_last(number) * 2)
-FROM 
+FROM
   numbers(1, 2)
 6
 WITH any(number) * 3 AS x
-SELECT 
+SELECT
   x
-FROM 
+FROM
   numbers(1, 2)
 3
-SELECT 
+SELECT
   any_last(number) * 3 AS x, x
-FROM 
+FROM
   numbers(1, 2)
 6	6
-SELECT 
+SELECT
   any(number + (number * 2))
-FROM 
+FROM
   numbers(1, 2)
 3
-SELECT 
+SELECT
   any_last(number + (number * 2))
-FROM 
+FROM
   numbers(1, 2)
 6
 WITH any(number * 3) AS x
-SELECT 
+SELECT
   x
-FROM 
+FROM
   numbers(1, 2)
 3
-SELECT 
+SELECT
   any_last(number * 3) AS x, x
-FROM 
+FROM
   numbers(1, 2)
 6	6
 array_join

@@ -20,7 +20,9 @@ ASTPtr ASTSelectIntersectExceptQuery::clone() const
 
 void ASTSelectIntersectExceptQuery::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
-    std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' '); /// proton: updated
+    /// proton: starts
+    std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' ');
+    /// proton: ends
 
     for (ASTs::const_iterator it = children.begin(); it != children.end(); ++it)
     {
