@@ -550,7 +550,9 @@ void ASTAlterQuery::formatQueryImpl(const FormatSettings & settings, FormatState
 {
     frame.need_parens = false;
 
-    std::string indent_str = settings.one_line ? "" : std::string(4u * frame.indent, ' ');
+    /// proton: starts
+    std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' ');
+    /// proton: ends
     settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str;
 
     switch (alter_object)
@@ -576,7 +578,7 @@ void ASTAlterQuery::formatQueryImpl(const FormatSettings & settings, FormatState
             settings.ostr << indent_str << backQuoteIfNeed(getDatabase());
             settings.ostr << ".";
         }
-        settings.ostr << indent_str << backQuoteIfNeed(getTable()) << " ";
+        settings.ostr << indent_str << backQuoteIfNeed(getTable());
     }
     else if (alter_object == AlterObjectType::DATABASE && database)
     {

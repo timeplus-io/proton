@@ -25,9 +25,8 @@ void ASTQueryWithOutput::cloneOutputOptions(ASTQueryWithOutput & cloned) const
 void ASTQueryWithOutput::formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const
 {
     formatQueryImpl(s, state, frame);
-
     /// proton: starts
-    std::string indent_str = s.one_line ? "" : std::string(2u * frame.indent, ' ');
+    std::string indent_str = s.one_line ? "" : std::string(s.indent_size * frame.indent, ' ');
     /// proton: ends
 
     if (out_file)

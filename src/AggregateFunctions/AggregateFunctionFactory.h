@@ -63,18 +63,22 @@ public:
         CaseSensitiveness case_sensitiveness = CaseSensitive);
 
     /// Throws an exception if not found.
+    /// proton: starts. Add 'is_changelog_input' param to allow aggregate function being aware whether the input stream is a changelog
     AggregateFunctionPtr
     get(const String & name,
         const DataTypes & argument_types,
         const Array & parameters,
-        AggregateFunctionProperties & out_properties) const;
+        AggregateFunctionProperties & out_properties,
+        bool is_changelog_input = false) const;
 
     /// Returns nullptr if not found.
     AggregateFunctionPtr tryGet(
         const String & name,
         const DataTypes & argument_types,
         const Array & parameters,
-        AggregateFunctionProperties & out_properties) const;
+        AggregateFunctionProperties & out_properties,
+        bool is_changelog_input = false) const;
+    /// proton: ends
 
     /// Get properties if the aggregate function exists.
     std::optional<AggregateFunctionProperties> tryGetProperties(const String & name) const;
@@ -86,12 +90,15 @@ public:
     /// proton: ends
 
 private:
+    /// proton: starts
     AggregateFunctionPtr getImpl(
         const String & name,
         const DataTypes & argument_types,
         const Array & parameters,
         AggregateFunctionProperties & out_properties,
-        bool has_null_arguments) const;
+        bool has_null_arguments,
+        bool is_changelog_input = false) const;
+    /// proton: ends
 
     std::optional<AggregateFunctionProperties> tryGetPropertiesImpl(const String & name) const;
 

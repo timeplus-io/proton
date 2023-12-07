@@ -239,7 +239,7 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
     {
         std::string nl_or_nothing = settings.one_line ? "" : "\n";
         /// proton: starts
-        std::string indent_str = settings.one_line ? "" : std::string(2u * frame.indent, ' ');
+        std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' ');
         /// proton: ends
         settings.ostr << (settings.hilite ? hilite_function : "") << name << "(" << nl_or_nothing;
         FormatStateStacked frame_nested = frame;

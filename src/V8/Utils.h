@@ -3,6 +3,7 @@
 #include <Functions/UserDefined/UserDefinedFunctionConfiguration.h>
 #include <base/types.h>
 
+#include <span>
 #include <v8.h>
 
 namespace DB
@@ -18,7 +19,7 @@ namespace V8
 /// - row_num: the source row to convert, if row_num = -1, means convert all rows
 /// - argv: the result v8 variants
 std::vector<v8::Local<v8::Value>> prepareArguments(
-    v8::Isolate * isolate, const std::vector<UserDefinedFunctionConfiguration::Argument> & arguments, const MutableColumns & columns);
+    v8::Isolate * isolate, const std::span<const DB::UserDefinedFunctionConfiguration::Argument> arguments, const MutableColumns & columns);
 
 /// convert the v8 variant to corresponding DataType and insert into to column
 /// - is_result_array: the result is multiple values or single value, normally for UDF and UDA with own emit strategy, it is true
@@ -64,11 +65,9 @@ inline void run(
     func(isolate, local_ctx, try_catch);
 }
 
-/// Validate UDA
 void validateAggregationFunctionSource(
     const std::string & func_name, const std::vector<std::string> & required_member_funcs, const std::string & source);
 
-/// Validate UDF
 void validateStatelessFunctionSource(const std::string & func_name, const std::string & source);
 
 /// Check v8 heap size and throw exception if exceeds limit

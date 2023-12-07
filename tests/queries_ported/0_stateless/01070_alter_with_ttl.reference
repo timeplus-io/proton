@@ -1,2 +1,2 @@
-CREATE STREAM default.alter_ttl\n(`i` int32, `s` string TTL to_date16(\'2020-01-01\')\n)\nENGINE = MergeTree\nORDER BY i\nTTL to_date16(\'2020-05-05\')\nSETTINGS index_granularity = 8192
-CREATE STREAM default.alter_ttl\n(`d` date, `s` string TTL d + INTERVAL 1 DAY\n)\nENGINE = MergeTree\nORDER BY d\nTTL d + INTERVAL 1 MONTH\nSETTINGS index_granularity = 8192
+CREATE STREAM default.alter_ttl\n(\n  `i` int32,\n  `s` string TTL to_date16(\'2020-01-01\')\n)\nENGINE = MergeTree\nORDER BY i\nTTL to_date16(\'2020-05-05\')\nSETTINGS index_granularity = 8192
+CREATE STREAM default.alter_ttl\n(\n  `d` date,\n  `s` string TTL d + INTERVAL 1 DAY\n)\nENGINE = MergeTree\nORDER BY d\nTTL d + INTERVAL 1 MONTH\nSETTINGS index_granularity = 8192

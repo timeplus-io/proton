@@ -1,15 +1,15 @@
 -1
-SELECT 
+SELECT
   cast(\'-1\', \'int32\')
 -0.1
-SELECT 
+SELECT
   cast(\'-0.1\', \'decimal(38, 38)\')
 -0.111
-SELECT 
+SELECT
   cast(\'-0.111\', \'float64\')
 [-1,2,-3]
-SELECT 
+SELECT
   cast(\'[-1, 2, -3]\', \'array(int32)\')
 [-1.1,2,-3]
-SELECT 
+SELECT
   cast(\'[-1.1, 2, -3]\', \'array(float64)\')

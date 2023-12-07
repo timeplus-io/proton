@@ -1,0 +1,23 @@
+# Sanitizer Suppressions File For Proton
+# This file contains suppressions for known race conditions in the codebase.
+# More in https://github.com/google/sanitizers/wiki/ThreadSanitizerSuppressions
+# Usage: TSAN_OPTIONS="suppressions=/path/to/your/sanitizer-thread-suppressions.txt" ./proton-server
+
+# Known issue: The TimerService is not thread-safe. Future implementations will address this.
+# Suppressing race conditions in various TimerService methods.
+race:TimerService::startup
+race:TimerService::shutdown
+race:TimerService::runAt
+race:TimerService::runAfter
+race:TimerService::runEvery
+race:TimerService::cancel
+
+# Known tolerance: The `bool inmemory` in nlog::Log::fetch is not thread-safe.
+# This is a deliberate design choice as per the discussion in the following GitHub issue:
+# Issue Link: https://github.com/timeplus-io/proton/issues/320#issuecomment-1842414990
+race:nlog::Log::fetch
+
+# Potential false positive: GlobalAggregatingTransform::prepareFinalization originally holds a mutex.
+# This might be a false positive as the external context ensures thread safety.
+# Relevant discussion: https://github.com/timeplus-io/proton/issues/320#issuecomment-1842414632
+race:GlobalAggregatingTransform::prepareFinalization

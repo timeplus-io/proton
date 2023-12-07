@@ -65,7 +65,7 @@ TEST(EliminateSubquery, OptimizedQuery)
     EXPECT_EQ(
         optimizeSubquery("SELECT count(a.productid) FROM (SELECT a.*, b.* FROM access1 as a, db2.product_info as b WHERE (a.productid = "
                          "b.productid))"),
-        "SELECT count(a.productid) FROM access1 AS a,db2.product_info AS b WHERE a.productid = b.productid");
+        "SELECT count(a.productid) FROM access1 AS a, db2.product_info AS b WHERE a.productid = b.productid");
     EXPECT_EQ(
         optimizeSubquery("SELECT count(*) FROM (SELECT SIGN FROM (SELECT SIGN, query FROM tablea WHERE query_id='mock-1') WHERE "
                          "query = "
@@ -76,7 +76,7 @@ TEST(EliminateSubquery, OptimizedQuery)
         optimizeSubquery("SELECT sum(a.price), sum(b.sale) FROM (SELECT a.*, b.* FROM access1 as a, product_info as b WHERE (a.productid "
                          "= "
                          "b.productid)) GROUP BY a.name, b.sign"),
-        "SELECT sum(a.price), sum(b.sale) FROM access1 AS a,product_info AS b WHERE a.productid = b.productid GROUP BY a.name, b.sign");
+        "SELECT sum(a.price), sum(b.sale) FROM access1 AS a, product_info AS b WHERE a.productid = b.productid GROUP BY a.name, b.sign");
     EXPECT_EQ(
         optimizeSubquery("SELECT sum(a.price), sum(b.sale) FROM (SELECT a.*, b.* FROM access1 as a JOIN product_info as b ON a.productid "
                          "= "
@@ -97,11 +97,11 @@ TEST(EliminateSubquery, OptimizedQuery)
     EXPECT_EQ(
         optimizeSubquery("SELECT count(b.code) FROM (SELECT a.code, b.code FROM product_info as a, product_info as b WHERE (a.productid = "
                          "b.productid))"),
-        "SELECT count(b.code) FROM product_info AS a,product_info AS b WHERE a.productid = b.productid");
+        "SELECT count(b.code) FROM product_info AS a, product_info AS b WHERE a.productid = b.productid");
     EXPECT_EQ(
         optimizeSubquery("SELECT count(a.code) FROM (SELECT a.code, b.code FROM product_info as a, product_info as b WHERE (a.productid = "
                          "b.productid))"),
-        "SELECT count(a.code) FROM product_info AS a,product_info AS b WHERE a.productid = b.productid");
+        "SELECT count(a.code) FROM product_info AS a, product_info AS b WHERE a.productid = b.productid");
     EXPECT_EQ(
         optimizeSubquery("SELECT * FROM (SELECT _raw AS c, t._raw FROM default.frontier_integration_test AS t)"),
         "SELECT _raw AS c, t._raw FROM default.frontier_integration_test AS t");
@@ -187,19 +187,19 @@ TEST(EliminateSubquery, FailedOptimizedQuery)
     EXPECT_EQ(
         optimizeSubquery("SELECT count(t.code) FROM (SELECT a.code, b.code FROM product_info as a, product_info as b WHERE a.productid = "
                          "b.productid) AS t"),
-        "SELECT count(t.code) FROM (SELECT a.code, b.code FROM product_info AS a,product_info AS b WHERE a.productid = b.productid) AS t");
+        "SELECT count(t.code) FROM (SELECT a.code, b.code FROM product_info AS a, product_info AS b WHERE a.productid = b.productid) AS t");
     EXPECT_EQ(
         optimizeSubquery("SELECT count(t.b.code) FROM (SELECT a.code, b.code FROM product_info as a, product_info as b WHERE a.productid = "
                          "b.productid) AS t"),
-        "SELECT count(t.b.code) FROM (SELECT a.code, b.code FROM product_info AS a,product_info AS b WHERE a.productid = b.productid) AS t");
+        "SELECT count(t.b.code) FROM (SELECT a.code, b.code FROM product_info AS a, product_info AS b WHERE a.productid = b.productid) AS t");
     EXPECT_EQ(
         optimizeSubquery(
             "SELECT count(t.code) FROM (SELECT code, code FROM product_info as a, product_info as b WHERE a.productid = b.productid) AS t"),
-        "SELECT count(t.code) FROM (SELECT code, code FROM product_info AS a,product_info AS b WHERE a.productid = b.productid) AS t");
+        "SELECT count(t.code) FROM (SELECT code, code FROM product_info AS a, product_info AS b WHERE a.productid = b.productid) AS t");
     EXPECT_EQ(optimizeSubquery("SELECT _time FROM (SELECT name FROM price)"), "SELECT _time FROM (SELECT name FROM price)");
     EXPECT_EQ(
         optimizeSubquery(
             "SELECT count(code) FROM (SELECT a.code, b.code FROM product_info as a, product_info as b WHERE a.productid = b.productid)"),
-        "SELECT count(code) FROM (SELECT a.code, b.code FROM product_info AS a,product_info AS b WHERE a.productid = b.productid)");
+        "SELECT count(code) FROM (SELECT a.code, b.code FROM product_info AS a, product_info AS b WHERE a.productid = b.productid)");
     EXPECT_EQ(optimizeSubquery("SELECT b FROM (SELECT b AS a FROM product)"), "SELECT b FROM (SELECT b AS a FROM product)");
 }

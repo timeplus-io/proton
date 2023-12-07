@@ -160,7 +160,9 @@ LIFETIME(MIN 0 MAX 1000)
 COMMENT 'Test dictionary with comment';
 )sql",
         R"sql(CREATE DICTIONARY `2024_dictionary_with_comment`
-(`id` uint64, `value` string
+(
+  `id` uint64,
+  `value` string
 )
 PRIMARY KEY id
 SOURCE(CLICKHOUSE(HOST 'localhost' PORT tcpPort() TABLE 'source_table'))
@@ -180,31 +182,31 @@ INSTANTIATE_TEST_SUITE_P(ParserCreateDatabaseQuery, ParserTest,
         },
         {
             "CREATE DATABASE db ENGINE=MaterializeMySQL('addr:port', 'db', 'user', 'pw') TABLE OVERRIDE `tbl`\n(PARTITION BY toYYYYMM(created))",
-            "CREATE DATABASE db\nENGINE = MaterializeMySQL('addr:port', 'db', 'user', 'pw')\nTABLE OVERRIDE `tbl`\n(\n    PARTITION BY toYYYYMM(`created`)\n)"
+            "CREATE DATABASE db\nENGINE = MaterializeMySQL('addr:port', 'db', 'user', 'pw')\nTABLE OVERRIDE `tbl`\n(\n  PARTITION BY toYYYYMM(`created`)\n)"
         },
         {
             "CREATE DATABASE db ENGINE=Foo TABLE OVERRIDE `tbl` (), TABLE OVERRIDE a (COLUMNS (_created DateTime MATERIALIZED now())), TABLE OVERRIDE b (PARTITION BY rand())",
-            "CREATE DATABASE db\nENGINE = Foo\nTABLE OVERRIDE `tbl`,\nTABLE OVERRIDE `a`\n(\n    COLUMNS\n    (`_created` DateTime MATERIALIZED now()\n    )\n),\nTABLE OVERRIDE `b`\n(\n    PARTITION BY rand()\n)"
+            "CREATE DATABASE db\nENGINE = Foo\nTABLE OVERRIDE `tbl`,\nTABLE OVERRIDE `a`\n(\n  COLUMNS\n  (\n    `_created` DateTime MATERIALIZED now()\n  )\n),\nTABLE OVERRIDE `b`\n(\n  PARTITION BY rand()\n)"
         },
         {
             "CREATE DATABASE db ENGINE=MaterializeMySQL('addr:port', 'db', 'user', 'pw') TABLE OVERRIDE tbl (COLUMNS (id UUID) PARTITION BY toYYYYMM(created))",
-            "CREATE DATABASE db\nENGINE = MaterializeMySQL('addr:port', 'db', 'user', 'pw')\nTABLE OVERRIDE `tbl`\n(\n    COLUMNS\n    (`id` UUID\n    )\n    PARTITION BY toYYYYMM(`created`)\n)"
+            "CREATE DATABASE db\nENGINE = MaterializeMySQL('addr:port', 'db', 'user', 'pw')\nTABLE OVERRIDE `tbl`\n(\n  COLUMNS\n  (\n    `id` UUID\n  )\n  PARTITION BY toYYYYMM(`created`)\n)"
         },
         {
             "CREATE DATABASE db TABLE OVERRIDE tbl (COLUMNS (INDEX foo foo TYPE minmax GRANULARITY 1) PARTITION BY if(_staged = 1, 'staging', toYYYYMM(created)))",
-            "CREATE DATABASE db\nTABLE OVERRIDE `tbl`\n(\n    COLUMNS\n    (INDEX foo `foo` TYPE minmax GRANULARITY 1\n    )\n    PARTITION BY if(`_staged` = 1, 'staging', toYYYYMM(`created`))\n)"
+            "CREATE DATABASE db\nTABLE OVERRIDE `tbl`\n(\n  COLUMNS\n  (\n    INDEX foo `foo` TYPE minmax GRANULARITY 1\n  )\n  PARTITION BY if(`_staged` = 1, 'staging', toYYYYMM(`created`))\n)"
         },
         {
             "CREATE DATABASE db TABLE OVERRIDE t1 (TTL inserted + INTERVAL 1 MONTH DELETE), TABLE OVERRIDE t2 (TTL `inserted` + INTERVAL 2 MONTH DELETE)",
-            "CREATE DATABASE db\nTABLE OVERRIDE `t1`\n(\n    TTL `inserted` + INTERVAL 1 MONTH\n),\nTABLE OVERRIDE `t2`\n(\n    TTL `inserted` + INTERVAL 2 MONTH\n)"
+            "CREATE DATABASE db\nTABLE OVERRIDE `t1`\n(\n  TTL `inserted` + INTERVAL 1 MONTH\n),\nTABLE OVERRIDE `t2`\n(\n  TTL `inserted` + INTERVAL 2 MONTH\n)"
         },
-        { // i donot think the modication here is good/right
+        {
             "CREATE DATABASE db ENGINE = MaterializeMySQL('127.0.0.1:3306', 'db', 'root', 'pw') TABLE OVERRIDE tab3 (COLUMNS (_staged UInt8 MATERIALIZED 1) PARTITION BY (c3) TTL c3 + INTERVAL 10 minute), TABLE OVERRIDE tab5 (PARTITION BY (c3) TTL c3 + INTERVAL 10 minute)",
-            "CREATE DATABASE db\nENGINE = MaterializeMySQL('127.0.0.1:3306', 'db', 'root', 'pw')\nTABLE OVERRIDE `tab3`\n(\n    COLUMNS\n    (`_staged` UInt8 MATERIALIZED 1\n    )\n    PARTITION BY `c3`\n    TTL `c3` + INTERVAL 10 MINUTE\n),\nTABLE OVERRIDE `tab5`\n(\n    PARTITION BY `c3`\n    TTL `c3` + INTERVAL 10 MINUTE\n)"
+            "CREATE DATABASE db\nENGINE = MaterializeMySQL('127.0.0.1:3306', 'db', 'root', 'pw')\nTABLE OVERRIDE `tab3`\n(\n  COLUMNS\n  (\n    `_staged` UInt8 MATERIALIZED 1\n  )\n  PARTITION BY `c3`\n  TTL `c3` + INTERVAL 10 MINUTE\n),\nTABLE OVERRIDE `tab5`\n(\n  PARTITION BY `c3`\n  TTL `c3` + INTERVAL 10 MINUTE\n)"
         },
         {
             "CREATE DATABASE db TABLE OVERRIDE tbl (PARTITION BY toYYYYMM(created) COLUMNS (created DateTime CODEC(Delta)))",
-            "CREATE DATABASE db\nTABLE OVERRIDE `tbl`\n(\n    COLUMNS\n    (`created` DateTime CODEC(Delta)\n    )\n    PARTITION BY toYYYYMM(`created`)\n)"
+            "CREATE DATABASE db\nTABLE OVERRIDE `tbl`\n(\n  COLUMNS\n  (\n    `created` DateTime CODEC(Delta)\n  )\n  PARTITION BY toYYYYMM(`created`)\n)"
         },
         {
             "CREATE DATABASE db ENGINE = Foo() ",
@@ -216,11 +218,11 @@ INSTANTIATE_TEST_SUITE_P(ParserCreateDatabaseQuery, ParserTest,
         },
         {
             "CREATE DATABASE db ENGINE = Foo() TABLE OVERRIDE a (ORDER BY (id, version))",
-            "CREATE DATABASE db\nENGINE = Foo\nTABLE OVERRIDE `a`\n(\n    ORDER BY (`id`, `version`)\n)"
+            "CREATE DATABASE db\nENGINE = Foo\nTABLE OVERRIDE `a`\n(\n  ORDER BY (`id`, `version`)\n)"
         },
         {
             "CREATE DATABASE db ENGINE = Foo() COMMENT 'db comment' TABLE OVERRIDE a (ORDER BY (id, version))",
-            "CREATE DATABASE db\nENGINE = Foo\nTABLE OVERRIDE `a`\n(\n    ORDER BY (`id`, `version`)\n)\nCOMMENT 'db comment'"
+            "CREATE DATABASE db\nENGINE = Foo\nTABLE OVERRIDE `a`\n(\n  ORDER BY (`id`, `version`)\n)\nCOMMENT 'db comment'"
         }
 })));
 
@@ -231,7 +233,7 @@ INSTANTIATE_TEST_SUITE_P(ParserCreateStreamQuery, ParserTest,
                              ::testing::ValuesIn(std::initializer_list<ParserTestCase>{
                                  {
                                      "CREATE STREAM tests (`device` string)",
-                                     "CREATE STREAM tests\n(`device` string\n)"
+                                     "CREATE STREAM tests\n(\n  `device` string\n)"
                                  }
                              })));
 /// proton: ends
@@ -243,19 +245,19 @@ INSTANTIATE_TEST_SUITE_P(ParserAlterStreamQuery, ParserTest,
                              ::testing::ValuesIn(std::initializer_list<ParserTestCase>{
                                  {
                                      "ALTER STREAM tests MODIFY TTL ttl + INTERVAL 1 DAY",
-                                     "ALTER STREAM tests MODIFY TTL ttl + INTERVAL 1 DAY"
+                                     "ALTER STREAM tests\n  MODIFY TTL ttl + INTERVAL 1 DAY"
                                  },
                                  {
                                      "ALTER stream tests MODIFY COLUMN id uint64 DEFAULT 64",
-                                     "ALTER STREAM tests MODIFY COLUMN `id` uint64 DEFAULT 64"
+                                     "ALTER STREAM tests\n  MODIFY COLUMN `id` uint64 DEFAULT 64"
                                  },
                                  {
                                      "ALTER STREAM tests RENAME COLUMN id to id1",
-                                     "ALTER STREAM tests RENAME COLUMN id TO id1"
+                                     "ALTER STREAM tests\n  RENAME COLUMN id TO id1"
                                  },
                                  {
                                      "ALTER STREAM tests DROP COLUMN id1",
-                                     "ALTER STREAM tests DROP COLUMN id1"
+                                     "ALTER STREAM tests\n  DROP COLUMN id1"
                                  }
                              })));
 /// proton: ends
