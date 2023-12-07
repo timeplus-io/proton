@@ -51,6 +51,21 @@ struct RequiredSourceColumnsData
 
     NameSet requiredColumns() const;
     size_t nameInclusion(const String & name) const;
+
+    /// proton: starts
+    bool needsScanAgain() const
+    {
+        if (complex_aliases.empty())
+            return false;
+
+        for (const auto & alias : complex_aliases)
+        {
+            if (required_names.contains(alias))
+                return true;
+        }
+        return false;
+    }
+    /// proton: ends
 };
 
 std::ostream & operator << (std::ostream & os, const RequiredSourceColumnsData & cols);

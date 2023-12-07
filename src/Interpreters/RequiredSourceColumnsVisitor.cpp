@@ -145,8 +145,11 @@ void RequiredSourceColumnsMatcher::visit(const ASTSelectQuery & select, const AS
     /// revisit select_expression_list (with children) when all the aliases are set
     Visitor(data).visit(select.select());
 
+    /// proton: starts
     /// revisit select_expression_list again (see issue https://github.com/timeplus-io/proton/issues/356 )
-    Visitor(data).visit(select.select());
+    if (data.needsScanAgain())
+        Visitor(data).visit(select.select());
+    /// proton: ends
 }
 
 void RequiredSourceColumnsMatcher::visit(const ASTIdentifier & node, const ASTPtr &, Data & data)
