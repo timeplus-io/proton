@@ -89,7 +89,7 @@ private:
 
     /// Query UUID -> QueryContext mapping
     mutable std::mutex mutex;
-    absl::flat_hash_map<String, CheckpointableQueryPtr> queries;
+    absl::flat_hash_map<String, CheckpointableQueryPtr> queries TSA_GUARDED_BY(mutex);
 
     TimerService timer_service;
 

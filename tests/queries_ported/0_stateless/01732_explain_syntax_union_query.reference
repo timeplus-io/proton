@@ -1,94 +1,94 @@
-SELECT 
+SELECT
   1
 UNION ALL
-SELECT 
+SELECT
   1
 UNION ALL
-SELECT 
+SELECT
   1
 UNION ALL
-SELECT 
+SELECT
   1
 UNION ALL
-SELECT 
+SELECT
   1
 -
-SELECT 
+SELECT
   1
 UNION ALL
 (
-  SELECT 
+  SELECT
     1
   UNION DISTINCT
-  SELECT 
+  SELECT
     1
   UNION DISTINCT
-  SELECT 
+  SELECT
     1
 )
 UNION ALL
-SELECT 
+SELECT
   1
 -
-SELECT 
+SELECT
   x
-FROM 
+FROM
   (
-  SELECT 
-    1 AS x
-  UNION ALL
-  (
-    SELECT 
-      1
-    UNION DISTINCT
-    SELECT 
-      1
-    UNION DISTINCT
-    SELECT 
+    SELECT
+      1 AS x
+    UNION ALL
+    (
+      SELECT
+        1
+      UNION DISTINCT
+      SELECT
+        1
+      UNION DISTINCT
+      SELECT
+        1
+    )
+    UNION ALL
+    SELECT
       1
   )
-  UNION ALL
-  SELECT 
-    1
-)
 -
-SELECT 
+SELECT
   x
-FROM 
+FROM
   (
-  SELECT 
-    1 AS x
-  UNION ALL
-  SELECT 
-    1
-  UNION ALL
-  SELECT 
-    1
-)
+    SELECT
+      1 AS x
+    UNION ALL
+    SELECT
+      1
+    UNION ALL
+    SELECT
+      1
+  )
 -
-SELECT 
+SELECT
   1
 UNION DISTINCT
-SELECT 
+SELECT
   1
 UNION DISTINCT
-SELECT 
+SELECT
   1
 -
-SELECT 
+SELECT
   1
 -
 
 (
-  SELECT 
+  SELECT
     1
   UNION DISTINCT
-  SELECT 
+  SELECT
     1
   UNION DISTINCT
-  SELECT 
+  SELECT
     1
 )
 UNION ALL
-SELECT 
+SELECT
   1

@@ -1,23 +1,23 @@
-SELECT  \
+SELECT \
   * \
-FROM  \
+FROM \
   ( \
-  SELECT  \
-    1 AS x \
-  UNION ALL \
-  SELECT  \
-    1 \
-  UNION DISTINCT \
-  SELECT  \
-    3 \
-)
-SELECT  \
+    SELECT \
+      1 AS x \
+    UNION ALL \
+    SELECT \
+      1 \
+    UNION DISTINCT \
+    SELECT \
+      3 \
+  )
+SELECT \
   1 \
 UNION ALL \
 ( \
-  SELECT  \
+  SELECT \
     1 \
   UNION DISTINCT \
-  SELECT  \
+  SELECT \
     1 \
 )

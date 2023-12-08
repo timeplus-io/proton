@@ -1,21 +1,21 @@
-SELECT 
+SELECT
   n.k, r.k, r.name
-FROM 
+FROM
   n
 ALL INNER JOIN r ON n.k = r.k
-WHERE 
+WHERE
   (n.k = r.k) AND (r.name = \'A\')
-SELECT 
+SELECT
   n.k, r.k, r.name
-FROM 
+FROM
   n
 ALL INNER JOIN r ON n.k = r.k
-WHERE 
+WHERE
   (n.k = r.k) AND (r.name LIKE \'A%\')
-SELECT 
+SELECT
   n.k, r.k, r.name
-FROM 
+FROM
   n
 ALL INNER JOIN r ON n.k = r.k
-WHERE 
+WHERE
   (n.k = r.k) AND (r.name NOT LIKE \'A%\')

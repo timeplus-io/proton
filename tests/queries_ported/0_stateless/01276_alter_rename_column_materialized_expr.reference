@@ -7,7 +7,7 @@
 2019-10-01	6	6	7
 2019-10-02	7	7	8
 2019-10-03	8	8	9
-CREATE STREAM default.stream_for_rename\n(`date` date, `key` uint64, `value4` string, `value5` string, `value3` string MATERIALIZED concat(value4, \' + \', value5)\n)\nENGINE = MergeTree\nPARTITION BY date\nORDER BY key\nSETTINGS index_granularity = 8192
+CREATE STREAM default.stream_for_rename\n(\n  `date` date,\n  `key` uint64,\n  `value4` string,\n  `value5` string,\n  `value3` string MATERIALIZED concat(value4, \' + \', value5)\n)\nENGINE = MergeTree\nPARTITION BY date\nORDER BY key\nSETTINGS index_granularity = 8192
 2019-10-01	0	0	1
 2019-10-02	1	1	2
 2019-10-03	2	2	3
@@ -38,7 +38,7 @@ CREATE STREAM default.stream_for_rename\n(`date` date, `key` uint64, `value4` st
 2019-10-01	18	18	19
 2019-10-02	19	19	20
 -- rename columns back --
-CREATE STREAM default.stream_for_rename\n(`date` date, `key` uint64, `value1` string, `value2` string, `value3` string MATERIALIZED concat(value1, \' + \', value2)\n)\nENGINE = MergeTree\nPARTITION BY date\nORDER BY key\nSETTINGS index_granularity = 8192
+CREATE STREAM default.stream_for_rename\n(\n  `date` date,\n  `key` uint64,\n  `value1` string,\n  `value2` string,\n  `value3` string MATERIALIZED concat(value1, \' + \', value2)\n)\nENGINE = MergeTree\nPARTITION BY date\nORDER BY key\nSETTINGS index_granularity = 8192
 2019-10-01	0	0	1
 2019-10-02	1	1	2
 2019-10-03	2	2	3

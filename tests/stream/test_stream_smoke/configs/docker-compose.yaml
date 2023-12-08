@@ -7,6 +7,7 @@ services:
     volumes:
       - ../../proton-server/datas:/var/lib/proton
       - ../../proton-server/log:/var/log/proton-server
+      - ../../../sanitizer-thread-suppressions.txt:/var/sanitizer-thread-suppressions.txt
     ports:
       - "3218:3218" # HTTP Streaming
       - "8123:8123" # HTTP Snapshot
@@ -28,6 +29,7 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - TSAN_OPTIONS=suppressions=/var/sanitizer-thread-suppressions.txt
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -39,6 +41,7 @@ services:
     volumes:
       - ../../proton-server1/datas:/var/lib/proton
       - ../../proton-server1/log:/var/log/proton-server
+      - ../../../sanitizer-thread-suppressions.txt:/var/sanitizer-thread-suppressions.txt
     ports:
       - "3219:3218" # HTTP Streaming
       - "8124:8123" # HTTP Snapshot
@@ -60,6 +63,7 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - TSAN_OPTIONS=suppressions=/var/sanitizer-thread-suppressions.txt
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"      
@@ -72,6 +76,7 @@ services:
     volumes:
       - ../../proton-server2/datas:/var/lib/proton
       - ../../proton-server2/log:/var/log/proton-server
+      - ../../../sanitizer-thread-suppressions.txt:/var/sanitizer-thread-suppressions.txt
     ports:
       - "3220:3218" # HTTP Streaming
       - "8125:8123" # HTTP Snapshot
@@ -93,6 +98,7 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - TSAN_OPTIONS=suppressions=/var/sanitizer-thread-suppressions.txt
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"  
@@ -104,6 +110,7 @@ services:
     volumes:
       - ../../proton-redp/datas:/var/lib/proton
       - ../../proton-redp/log:/var/log/proton-server
+      - ../../../sanitizer-thread-suppressions.txt:/var/sanitizer-thread-suppressions.txt
     ports:
       - "13218:3218" # HTTP Streaming
       - "18123:8123" # HTTP Snapshot
@@ -126,6 +133,7 @@ services:
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - STREAM_STORAGE_TYPE=kafka
       - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - TSAN_OPTIONS=suppressions=/var/sanitizer-thread-suppressions.txt
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -139,6 +147,7 @@ services:
     volumes:
       - ../../proton-redp1/datas:/var/lib/proton
       - ../../proton-redp1/log:/var/log/proton-server
+      - ../../../sanitizer-thread-suppressions.txt:/var/sanitizer-thread-suppressions.txt
     ports:
       - "13219:3218" # HTTP Streaming
       - "18124:8123" # HTTP Snapshot
@@ -161,6 +170,7 @@ services:
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - STREAM_STORAGE_TYPE=kafka
       - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - TSAN_OPTIONS=suppressions=/var/sanitizer-thread-suppressions.txt
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -175,6 +185,7 @@ services:
     volumes:
       - ../../proton-redp2/datas:/var/lib/proton
       - ../../proton-redp2/log:/var/log/proton-server
+      - ../../../sanitizer-thread-suppressions.txt:/var/sanitizer-thread-suppressions.txt
     ports:
       - "13220:3218" # HTTP Streaming
       - "18125:8123" # HTTP Snapshot
@@ -197,6 +208,7 @@ services:
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - STREAM_STORAGE_TYPE=kafka
       - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - TSAN_OPTIONS=suppressions=/var/sanitizer-thread-suppressions.txt
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -210,6 +222,7 @@ services:
     volumes:
       - ../../proton-redp3/datas:/var/lib/proton
       - ../../proton-redp3/log:/var/log/proton-server
+      - ../../../sanitizer-thread-suppressions.txt:/var/sanitizer-thread-suppressions.txt
     ports:
       - "13221:3218" # HTTP Streaming
       - "18126:8123" # HTTP Snapshot
@@ -232,6 +245,7 @@ services:
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - STREAM_STORAGE_TYPE=kafka
       - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - TSAN_OPTIONS=suppressions=/var/sanitizer-thread-suppressions.txt
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -245,6 +259,7 @@ services:
     volumes:
       - ../../proton-redp4/datas:/var/lib/proton
       - ../../proton-redp4/log:/var/log/proton-server
+      - ../../../sanitizer-thread-suppressions.txt:/var/sanitizer-thread-suppressions.txt
     ports:
       - "13222:3218" # HTTP Streaming
       - "18127:8123" # HTTP Snapshot
@@ -267,6 +282,7 @@ services:
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - STREAM_STORAGE_TYPE=kafka
       - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - TSAN_OPTIONS=suppressions=/var/sanitizer-thread-suppressions.txt
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
