@@ -12,7 +12,7 @@ services:
       start_period: 10s
 
   online-payment-data:
-    image: timeplus/fraud:latest
+    image: timeplus/fraud:2cfdfbc
     pull_policy: always
     environment:
       PROTON_HOST: proton
