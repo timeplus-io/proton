@@ -7,7 +7,6 @@ on: # yamllint disable-line rule:truthy
       - reopened
       - opened
       - ready_for_review
-      - labeled
     branches:
       - develop
     paths-ignore:
@@ -21,8 +20,8 @@ jobs:
   verify:
     name: Labels check
     runs-on: ubuntu-latest
-    # Either the PR is not a draft OR it has the label 'pr-test'
-    if: github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'pr-test')
+    # CI is triggered for untrusted contributors only when the `pr-test` label is present and a new commit is pushed.
+    if: github.event.pull_request.draft == false
     env:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
     steps:
@@ -163,6 +162,10 @@ jobs:
 
         # FIXME: remove this line after pyyaml community fixed install bug
         pip install pyyaml==5.3.1
+
+        # FIXME(yokofly): docker 7.0.0 introduce a breaking change
+        # https://github.com/docker/docker-py/issues/3194
+        pip install docker==6.1.3
 
         pip install -r helpers/requirements.txt
         df -h

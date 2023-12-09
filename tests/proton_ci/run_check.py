@@ -34,6 +34,7 @@ TRUSTED_CONTRIBUTORS = {
         "qijun-niu-timeplus",
         "lizhou1111",
         "leo-cai-timeplus",
+        "ilselintp",
     ]
 }
 
