@@ -21,8 +21,12 @@ using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
 struct SourceColumnsDescription
 {
     SourceColumnsDescription() = default;
-    SourceColumnsDescription(const Names & required_column_names, StorageSnapshotPtr storage_snapshot);
-    SourceColumnsDescription(const NamesAndTypesList & columns_to_read, const Block & schema, const NamesAndTypesList & all_extended_columns);
+    SourceColumnsDescription(const Names & required_column_names, StorageSnapshotPtr storage_snapshot, bool enable_partial_read = true);
+    SourceColumnsDescription(
+        const NamesAndTypesList & columns_to_read,
+        const Block & schema,
+        const NamesAndTypesList & all_extended_columns,
+        bool enable_partial_read = true);
 
     enum class ReadColumnType : uint8_t
     {

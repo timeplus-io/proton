@@ -17,7 +17,12 @@ class StreamingStoreSourceBase : public ISource
 {
 public:
     StreamingStoreSourceBase(
-        const Block & header, const StorageSnapshotPtr & storage_snapshot_, ContextPtr context_, Poco::Logger * log_, ProcessorID pid_);
+        const Block & header,
+        const StorageSnapshotPtr & storage_snapshot_,
+        bool enable_partial_read,
+        ContextPtr context_,
+        Poco::Logger * log_,
+        ProcessorID pid_);
 
     Chunk generate() override;
 

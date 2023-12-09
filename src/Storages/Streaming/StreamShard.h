@@ -148,8 +148,6 @@ private:
 
     std::unique_ptr<StreamCallbackData> callback_data;
 
-    std::unique_ptr<StreamingStoreSourceMultiplexers> source_multiplexers;
-
     // For random shard index generation
     mutable std::mutex rng_mutex;
     pcg64 rng;

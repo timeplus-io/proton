@@ -15,14 +15,14 @@
       "steps":[
         {
           "statements": [
-            {"client":"python", "query_type": "table", "wait":2, "query":"drop view if exists mv_2"},
-            {"client":"python", "query_type": "table", "wait":2, "query":"drop view if exists mv_1"},
+            {"client":"python", "query_type": "table", "query":"drop view if exists mv_2"},
+            {"client":"python", "query_type": "table", "query":"drop view if exists mv_1"},
             {"client":"python", "query_type": "table", "wait":2, "query":"drop view if exists mv_truck_track"},
             {"client":"python", "query_type": "table", "wait":2, "query":"drop stream if exists ttp_truck_track"},
             {"client":"python", "query_type": "table", "wait":2, "query_id":"9900", "query": "create stream ttp_truck_track(`lpn` string, `vno` string, `drc` string, `drcCode` int32, `wgs84Lat` float32, `wgs84Lon` float32, `gcj02Lat` float32, `gcj02Lon` float32, `province` nullable(string), `city` nullable(string), `country` nullable(string), `spd` float32, `mil` float32, `time` string, `adr` string)"},
-            {"client":"python", "query_type": "table", "wait":5, "query_id":"9901","depends_on_stream":"ttp_truck_track", "query": "create materialized view mv_truck_track as (select * from ttp_truck_track where date_diff('second', _tp_time, now()) < 30)"},
-            {"client":"python", "query_type": "table", "wait":5, "query_id":"9902", "depends_on_stream":"mv_truck_track", "query": "create materialized view if not exists mv_1 as (select now() as time, count_distinct(lpn) as cnt from mv_truck_track emit last 10m and periodic 10s)"},
-            {"client":"python", "query_type": "table", "wait":5, "query_id":"9903", "depends_on_stream":"mv_truck_track","drop_view":"mv_2,mv_1,mv_truck_track", "drop_view_wait":2, "query": "create materialized view if not exists mv_2 as (select now() as time, count_distinct(lpn) as cnt from mv_truck_track emit last 10m and periodic 10s)"}
+            {"client":"python", "query_type": "table", "wait":2, "query_id":"9901","depends_on_stream":"ttp_truck_track", "query": "create materialized view mv_truck_track as (select * from ttp_truck_track where date_diff('second', _tp_time, now()) < 30)"},
+            {"client":"python", "query_type": "table", "wait":2, "query_id":"9902", "depends_on_stream":"mv_truck_track", "query": "create materialized view if not exists mv_1 as (select now() as time, count_distinct(lpn) as cnt from mv_truck_track emit last 10m and periodic 10s)"},
+            {"client":"python", "query_type": "table", "wait":2, "query_id":"9903", "depends_on_stream":"mv_truck_track","drop_view":"mv_2,mv_1,mv_truck_track", "drop_view_wait":2, "query": "create materialized view if not exists mv_2 as (select now() as time, count_distinct(lpn) as cnt from mv_truck_track emit last 10m and periodic 10s)"}
           ]
         }
       ],
@@ -142,9 +142,9 @@
       "steps":[
         {
           "statements": [
-            {"client":"python", "query_type": "table", "wait":2, "query": "drop view if exists test_mv_1934"},
+            {"client":"python", "query_type": "table", "query": "drop view if exists test_mv_1934"},
             {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test_stream_1934"},
-            {"client":"python", "query_type": "table", "wait":2, "query": "create stream test_stream_1934(value int)"},
+            {"client":"python", "query_type": "table", "exist":"test_stream_1934", "exist_wait":2, "wait":1, "query": "create stream test_stream_1934(value int)"},
             {"client":"python", "query_type": "table", "depends_on_stream":"test_stream_1934", "query": "create materialized view test_mv_1934 as select count() from test_stream_1934"},
             {"client":"python", "query_type": "table", "depends_on_stream":"test_mv_1934", "wait":2, "query": "insert into test_stream_1934(value) values(1)"},
             {"client":"python", "query_type": "table", "wait":3, "query": "insert into test_stream_1934(value) values(2)"},

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "StreamingStoreSourceBase.h"
+#include <Storages/Streaming/StreamingStoreSourceBase.h>
 
 namespace DB
 {

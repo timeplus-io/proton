@@ -106,7 +106,6 @@ tests:
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
           - client: python
@@ -230,17 +229,14 @@ tests:
 
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view2_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view1_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
           - client: python
@@ -305,12 +301,10 @@ tests:
 
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view1_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
     expected_results:
@@ -336,12 +330,10 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
           - client: python
@@ -404,7 +396,6 @@ tests:
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
     expected_results:
@@ -428,12 +419,10 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
           - client: python
@@ -496,7 +485,6 @@ tests:
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
     expected_results:
@@ -527,17 +515,14 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view2_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view1_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
           - client: python
@@ -607,12 +592,10 @@ tests:
 
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view1_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
     expected_results:
@@ -643,7 +626,6 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
           - client: python
@@ -737,17 +719,14 @@ tests:
 
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view2_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view1_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
           - client: python
@@ -807,12 +786,10 @@ tests:
 
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view1_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
     expected_results:
@@ -835,12 +812,10 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
           - client: python
@@ -898,7 +873,6 @@ tests:
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
     expected_results:
@@ -923,12 +897,10 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
           - client: python
@@ -986,7 +958,6 @@ tests:
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
     expected_results:
@@ -1011,17 +982,14 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view2_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view1_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
           - client: python
@@ -1083,12 +1051,10 @@ tests:
 
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view1_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
     expected_results:
@@ -1113,7 +1079,6 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
           - client: python
@@ -1186,17 +1151,14 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view2_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view1_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
           - client: python
@@ -1261,12 +1223,10 @@ tests:
 
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view1_5;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_5;
 
     expected_results:

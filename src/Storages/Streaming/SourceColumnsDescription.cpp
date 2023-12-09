@@ -1,10 +1,12 @@
-#include "SourceColumnsDescription.h"
+#include <Storages/Streaming/SourceColumnsDescription.h>
 
 #include <Core/Block.h>
 #include <NativeLog/Record/Record.h>
 #include <Storages/StorageSnapshot.h>
 #include <base/ClockUtils.h>
 #include <Common/ProtonCommon.h>
+
+#include <numeric>
 
 namespace DB
 {
@@ -30,21 +32,39 @@ void SourceColumnsDescription::PhysicalColumnPositions::clear()
     subcolumns.clear();
 }
 
-SourceColumnsDescription::SourceColumnsDescription(const Names & required_column_names, StorageSnapshotPtr storage_snapshot)
+SourceColumnsDescription::SourceColumnsDescription(
+    const Names & required_column_names, StorageSnapshotPtr storage_snapshot, bool enable_partial_read)
     : SourceColumnsDescription(
-        storage_snapshot->getColumnsByNames(GetColumnsOptions(GetColumnsOptions::All).withSubcolumns().withVirtuals().withExtendedObjects(), required_column_names),
+        storage_snapshot->getColumnsByNames(
+            GetColumnsOptions(GetColumnsOptions::All).withSubcolumns().withVirtuals().withExtendedObjects(), required_column_names),
         storage_snapshot->getMetadataForQuery()->getSampleBlock(),
-        storage_snapshot->getColumns(GetColumnsOptions(GetColumnsOptions::All).withExtendedObjects()))
+        storage_snapshot->getColumns(GetColumnsOptions(GetColumnsOptions::All).withExtendedObjects()),
+        enable_partial_read)
 {
 }
 
-SourceColumnsDescription::SourceColumnsDescription(const NamesAndTypesList & columns_to_read, const Block & schema, const NamesAndTypesList & all_extended_columns)
+SourceColumnsDescription::SourceColumnsDescription(
+    const NamesAndTypesList & columns_to_read,
+    const Block & schema,
+    const NamesAndTypesList & all_extended_columns,
+    bool enable_partial_read)
 {
     /// FIXME, when we have multi-version of schema, the header and the schema may be mismatched
     auto column_size = columns_to_read.size();
 
+    if (enable_partial_read)
+    {
+        /// Just read required partial physical columns
+        physical_column_positions_to_read.positions.reserve(column_size);
+    }
+    else
+    {
+        /// Read full physical columns
+        physical_column_positions_to_read.positions.resize(schema.columns());
+        std::iota(physical_column_positions_to_read.positions.begin(), physical_column_positions_to_read.positions.end(), 0);
+    }
+
     positions.reserve(column_size);
-    physical_column_positions_to_read.positions.reserve(column_size);
     subcolumns_to_read.reserve(column_size);
 
     std::vector<uint16_t> read_all_subcolumns_positions;
@@ -112,45 +132,48 @@ SourceColumnsDescription::SourceColumnsDescription(const NamesAndTypesList & col
             auto pos_in_schema = schema.getPositionByName(name_in_storage);
             const auto & column_in_storage = schema.getByName(name_in_storage);
 
-            /// Calculate main column pos
-            size_t physical_pos_in_schema_to_read = 0;
-            /// We don't need to read duplicate physical columns from schema
-            auto physical_pos_iter = std::find(
-                physical_column_positions_to_read.positions.begin(), physical_column_positions_to_read.positions.end(), pos_in_schema);
-            if (physical_pos_iter == physical_column_positions_to_read.positions.end())
+            size_t physical_pos_in_schema_to_read = pos_in_schema;
+            /// Specially, re-calculate pos in partially read schema
+            if (enable_partial_read)
             {
-                physical_pos_in_schema_to_read = physical_column_positions_to_read.positions.size();
-                physical_column_positions_to_read.positions.emplace_back(pos_in_schema);
-
-                /// json, array(json), tuple(..., json, ...)
-                if (column_in_storage.type->hasDynamicSubcolumns())
+                /// We don't need to read duplicate physical columns from schema
+                auto physical_pos_iter = std::find(
+                    physical_column_positions_to_read.positions.begin(), physical_column_positions_to_read.positions.end(), pos_in_schema);
+                if (physical_pos_iter == physical_column_positions_to_read.positions.end())
                 {
-                    /// We like to read parent json column once if multiple subcolumns of the same json are required
-                    /// like `select json.a, json.b from stream`
-                    auto find_iter = std::find_if(
-                        physical_object_columns_to_read.begin(),
-                        physical_object_columns_to_read.end(),
-                        [&column](const auto & col_name_type) { return col_name_type.name == column.name; });
+                    physical_pos_in_schema_to_read = physical_column_positions_to_read.positions.size();
+                    physical_column_positions_to_read.positions.emplace_back(pos_in_schema);
+                }
+                else
+                    physical_pos_in_schema_to_read = physical_pos_iter - physical_column_positions_to_read.positions.begin();
+            }
 
-                    if (find_iter == physical_object_columns_to_read.end())
+            /// json, array(json), tuple(..., json, ...)
+            if (column_in_storage.type->hasDynamicSubcolumns())
+            {
+                /// We like to read parent json column once if multiple subcolumns of the same json are required
+                /// like `select json.a, json.b from stream`
+                auto find_iter = std::find_if(
+                    physical_object_columns_to_read.begin(),
+                    physical_object_columns_to_read.end(),
+                    [&name_in_storage](const auto & col_name_type) { return col_name_type.name == name_in_storage; });
+
+                if (find_iter == physical_object_columns_to_read.end())
+                {
+                    if (column.isSubcolumn())
                     {
-                        if (column.isSubcolumn())
-                        {
-                            /// When reading a subcolumn of a json like `select json.a from stream`, we will need read the parent `json` column
-                            auto name_and_type = all_extended_columns.tryGetByName(name_in_storage);
-                            assert(name_and_type);
-                            physical_object_columns_to_read.emplace_back(std::move(*name_and_type));
-                        }
-                        else
-                        {
-                            /// This column is parent json column, like `select json from stream`, use the name and type directly
-                            physical_object_columns_to_read.emplace_back(column);
-                        }
+                        /// When reading a subcolumn of a json like `select json.a from stream`, we will need read the parent `json` column
+                        auto name_and_type = all_extended_columns.tryGetByName(name_in_storage);
+                        assert(name_and_type);
+                        physical_object_columns_to_read.emplace_back(std::move(*name_and_type));
+                    }
+                    else
+                    {
+                        /// This column is parent json column, like `select json from stream`, use the name and type directly
+                        physical_object_columns_to_read.emplace_back(column);
                     }
                 }
             }
-            else
-                physical_pos_in_schema_to_read = physical_pos_iter - physical_column_positions_to_read.positions.begin();
 
             /// For subcolumn, which dependents on the main column
             if (column.isSubcolumn())
@@ -181,7 +204,7 @@ SourceColumnsDescription::SourceColumnsDescription(const NamesAndTypesList & col
         physical_column_positions_to_read.subcolumns.erase(pos);
 
     /// Clients like to read virtual columns only, add `_tp_time`, then we know how many rows
-    if (physical_column_positions_to_read.positions.empty())
+    if (enable_partial_read && physical_column_positions_to_read.positions.empty())
         physical_column_positions_to_read.positions.emplace_back(schema.getPositionByName(ProtonConsts::RESERVED_EVENT_TIME));
 }
 }

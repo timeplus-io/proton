@@ -666,3 +666,149 @@ TEST(SourceColumnsDescription, PhysicalAndVirtualAndSubcolumn)
         EXPECT_EQ(columns_desc.physical_object_columns_to_read.rbegin()->name, "col4");
     }
 }
+
+TEST(SourceColumnsDescription, PhysicalAndVirtualAndSubcolumnWithoutPartialRead)
+{
+    auto schema = generateCommonSchema();
+
+    { /// physical + virtual + subcolumn
+        DB::NamesAndTypesList columns_to_read{
+            {"col1", getType("string")},
+            {DB::ProtonConsts::RESERVED_APPEND_TIME, getType("int64")},
+            {"col3", "y", getType("tuple(x int, y string)"), getType("string")},
+            {"col5", "abc", getType("tuple(abc int, xyz string)"), getType("int")}};
+        DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns, /*enable_partial_read*/false);
+        /// Pos to read
+        ASSERT_EQ(columns_desc.positions.size(), 4);
+        ASSERT_EQ(columns_desc.positions[0].type(), Physical);
+        EXPECT_EQ(columns_desc.positions[0].physicalPosition(), 1);
+        ASSERT_EQ(columns_desc.positions[1].type(), Virtual);
+        EXPECT_EQ(columns_desc.positions[1].virtualPosition(), 0);
+        ASSERT_EQ(columns_desc.positions[2].type(), Sub);
+        EXPECT_EQ(columns_desc.positions[2].parentPosition(), 3);
+        EXPECT_EQ(columns_desc.positions[2].subPosition(), 0);
+        ASSERT_EQ(columns_desc.positions[3].type(), Sub);
+        EXPECT_EQ(columns_desc.positions[3].parentPosition(), 5);
+        EXPECT_EQ(columns_desc.positions[3].subPosition(), 1);
+
+        /// Physical columns description
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 8);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 0);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[1], 1);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[2], 2);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[3], 3);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[4], 4);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[5], 5);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[6], 6);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[7], 7);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 2);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[3], std::vector<std::string>({"y"}));
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[5], std::vector<std::string>({"abc"}));
+
+        /// Virtual columns description
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 1);
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), columns_desc.virtual_col_types.size());
+        ASSERT_TRUE(columns_desc.virtual_col_types[0]->equals(*getType("int64")));
+
+        /// Sub-columns description
+        ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 2);
+        EXPECT_TRUE(columns_desc.subcolumns_to_read[0].isSubcolumn());
+        EXPECT_EQ(columns_desc.subcolumns_to_read[0].getNameInStorage(), "col3");
+        EXPECT_EQ(columns_desc.subcolumns_to_read[0].getSubcolumnName(), "y");
+        EXPECT_TRUE(columns_desc.subcolumns_to_read[0].getTypeInStorage()->equals(*getType("tuple(x int, y string)")));
+        EXPECT_TRUE(columns_desc.subcolumns_to_read[0].type->equals(*getType("string")));
+        EXPECT_EQ(columns_desc.subcolumns_to_read[0].name, "col3.y");
+        EXPECT_TRUE(columns_desc.subcolumns_to_read[1].isSubcolumn());
+        EXPECT_EQ(columns_desc.subcolumns_to_read[1].getNameInStorage(), "col5");
+        EXPECT_EQ(columns_desc.subcolumns_to_read[1].getSubcolumnName(), "abc");
+        EXPECT_TRUE(columns_desc.subcolumns_to_read[1].getTypeInStorage()->equals(*getType("json")));
+        EXPECT_TRUE(columns_desc.subcolumns_to_read[1].type->equals(*getType("int")));
+        EXPECT_EQ(columns_desc.subcolumns_to_read[1].name, "col5.abc");
+
+        /// Json description
+        ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 1);
+        EXPECT_EQ(columns_desc.physical_object_columns_to_read.begin()->name, "col5");
+    }
+
+    { /// (complex) physical + virtual + subcolumn
+        DB::NamesAndTypesList columns_to_read{
+            {"col3", "y", getType("tuple(x int, y string)"), getType("string")},
+            {"col1", getType("string")},
+            {"col5", getType("json")},
+            {"col5", "xyz", getType("tuple(abc int, xyz string)"), getType("string")},
+            {"col4", getType("json")},
+            {"col2", getType("tuple(a int, b int)")},
+            {DB::ProtonConsts::RESERVED_APPEND_TIME, getType("int64")},
+            {"col5", "abc", getType("tuple(abc int, xyz string)"), getType("int")},
+            {DB::ProtonConsts::RESERVED_PROCESS_TIME, getType("int64")}};
+        DB::SourceColumnsDescription columns_desc(columns_to_read, schema, all_extended_columns, /*enable_partial_read*/ false);
+        /// Pos to read
+        ASSERT_EQ(columns_desc.positions.size(), 9);
+        ASSERT_EQ(columns_desc.positions[0].type(), Sub);
+        EXPECT_EQ(columns_desc.positions[0].parentPosition(), 3);
+        EXPECT_EQ(columns_desc.positions[0].subPosition(), 0);
+        ASSERT_EQ(columns_desc.positions[1].type(), Physical);
+        EXPECT_EQ(columns_desc.positions[1].physicalPosition(), 1);
+        ASSERT_EQ(columns_desc.positions[2].type(), Physical);
+        EXPECT_EQ(columns_desc.positions[2].physicalPosition(), 5);
+        ASSERT_EQ(columns_desc.positions[3].type(), Sub);
+        EXPECT_EQ(columns_desc.positions[3].parentPosition(), 5);
+        EXPECT_EQ(columns_desc.positions[3].subPosition(), 1);
+        ASSERT_EQ(columns_desc.positions[4].type(), Physical);
+        EXPECT_EQ(columns_desc.positions[4].physicalPosition(), 4);
+        ASSERT_EQ(columns_desc.positions[5].type(), Physical);
+        EXPECT_EQ(columns_desc.positions[5].physicalPosition(), 2);
+        ASSERT_EQ(columns_desc.positions[6].type(), Virtual);
+        EXPECT_EQ(columns_desc.positions[6].virtualPosition(), 0);
+        ASSERT_EQ(columns_desc.positions[7].type(), Sub);
+        EXPECT_EQ(columns_desc.positions[7].parentPosition(), 5);
+        EXPECT_EQ(columns_desc.positions[7].subPosition(), 2);
+        ASSERT_EQ(columns_desc.positions[8].type(), Virtual);
+        EXPECT_EQ(columns_desc.positions[8].virtualPosition(), 1);
+
+        /// Physical columns description
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.positions.size(), 8);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[0], 0);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[1], 1);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[2], 2);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[3], 3);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[4], 4);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[5], 5);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[6], 6);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.positions[7], 7);
+        ASSERT_EQ(columns_desc.physical_column_positions_to_read.subcolumns.size(), 1);
+        EXPECT_EQ(columns_desc.physical_column_positions_to_read.subcolumns[3], std::vector<std::string>({"y"}));
+
+        /// Virtual columns description
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), 2);
+        ASSERT_EQ(columns_desc.virtual_col_calcs.size(), columns_desc.virtual_col_types.size());
+        ASSERT_TRUE(columns_desc.virtual_col_types[0]->equals(*getType("int64")));
+        ASSERT_TRUE(columns_desc.virtual_col_types[1]->equals(*getType("int64")));
+
+        /// Sub-columns description
+        ASSERT_EQ(columns_desc.subcolumns_to_read.size(), 3);
+        EXPECT_TRUE(columns_desc.subcolumns_to_read[0].isSubcolumn());
+        EXPECT_EQ(columns_desc.subcolumns_to_read[0].getNameInStorage(), "col3");
+        EXPECT_EQ(columns_desc.subcolumns_to_read[0].getSubcolumnName(), "y");
+        EXPECT_TRUE(columns_desc.subcolumns_to_read[0].getTypeInStorage()->equals(*getType("tuple(x int, y string)")));
+        EXPECT_TRUE(columns_desc.subcolumns_to_read[0].type->equals(*getType("string")));
+        EXPECT_EQ(columns_desc.subcolumns_to_read[0].name, "col3.y");
+        EXPECT_TRUE(columns_desc.subcolumns_to_read[1].isSubcolumn());
+        EXPECT_EQ(columns_desc.subcolumns_to_read[1].getNameInStorage(), "col5");
+        EXPECT_EQ(columns_desc.subcolumns_to_read[1].getSubcolumnName(), "xyz");
+        EXPECT_TRUE(columns_desc.subcolumns_to_read[1].getTypeInStorage()->equals(*getType("json")));
+        EXPECT_TRUE(columns_desc.subcolumns_to_read[1].type->equals(*getType("string")));
+        EXPECT_EQ(columns_desc.subcolumns_to_read[1].name, "col5.xyz");
+        EXPECT_TRUE(columns_desc.subcolumns_to_read[2].isSubcolumn());
+        EXPECT_EQ(columns_desc.subcolumns_to_read[2].getNameInStorage(), "col5");
+        EXPECT_EQ(columns_desc.subcolumns_to_read[2].getSubcolumnName(), "abc");
+        EXPECT_TRUE(columns_desc.subcolumns_to_read[2].getTypeInStorage()->equals(*getType("json")));
+        EXPECT_TRUE(columns_desc.subcolumns_to_read[2].type->equals(*getType("int")));
+        EXPECT_EQ(columns_desc.subcolumns_to_read[2].name, "col5.abc");
+
+        /// Json description
+        ASSERT_EQ(columns_desc.physical_object_columns_to_read.size(), 2);
+        EXPECT_EQ(columns_desc.physical_object_columns_to_read.begin()->name, "col5");
+        EXPECT_EQ(columns_desc.physical_object_columns_to_read.rbegin()->name, "col4");
+    }
+}

@@ -1,4 +1,4 @@
-#include "StreamingStoreSourceBase.h"
+#include <Storages/Streaming/StreamingStoreSourceBase.h>
 
 #include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
@@ -16,14 +16,19 @@ extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
 StreamingStoreSourceBase::StreamingStoreSourceBase(
-    const Block & header, const StorageSnapshotPtr & storage_snapshot_, ContextPtr query_context_, Poco::Logger * log_, ProcessorID pid_)
+    const Block & header,
+    const StorageSnapshotPtr & storage_snapshot_,
+    bool enable_partial_read,
+    ContextPtr query_context_,
+    Poco::Logger * log_,
+    ProcessorID pid_)
     : ISource(header, true, pid_)
     , storage_snapshot(
           std::make_shared<StorageSnapshot>(*storage_snapshot_)) /// We like to make a copy of it since we will mutate the snapshot
     , query_context(std::move(query_context_))
     , log(log_)
     , header_chunk(header.getColumns(), 0)
-    , columns_desc(header.getNames(), storage_snapshot)
+    , columns_desc(header.getNames(), storage_snapshot, enable_partial_read)
 {
     is_streaming = true;
 
@@ -52,7 +57,8 @@ StreamingStoreSourceBase::getSubcolumnFromBlock(const Block & block, size_t pare
 
             /// Convert subcolumn if the subcolumn type of dynamic object may be dismatched with header.
             /// FIXME: Cache the ExpressionAction
-            Block subcolumn_block({ColumnWithTypeAndName{std::move(subcolumn), std::move(subcolumn_type), subcolumn_pair.name}}); /// NOLINT(performance-move-const-arg)
+            Block subcolumn_block({ColumnWithTypeAndName{
+                std::move(subcolumn), std::move(subcolumn_type), subcolumn_pair.name}}); /// NOLINT(performance-move-const-arg)
             ExpressionActions convert_act(ActionsDAG::makeConvertingActions(
                 subcolumn_block.getColumnsWithTypeAndName(),
                 {ColumnWithTypeAndName{subcolumn_pair.type->createColumn(), subcolumn_pair.type, subcolumn_pair.name}},

@@ -10,6 +10,7 @@
 
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeMutationStatus.h>
+#include <Storages/Streaming/StreamingStoreSourceMultiplexer.h>
 
 namespace nlog
 {
@@ -298,8 +299,7 @@ private:
         UInt64 base_block_id,
         UInt64 sub_block_id);
 
-    void
-    appendToNativeLog(nlog::RecordPtr & record, IngestMode /*ingest_mode*/, klog::AppendCallback callback, klog::CallbackData data);
+    void appendToNativeLog(nlog::RecordPtr & record, IngestMode /*ingest_mode*/, klog::AppendCallback callback, klog::CallbackData data);
 
     void appendToKafka(
         nlog::RecordPtr & record,
@@ -354,5 +354,8 @@ private:
 
     std::atomic_flag inited;
     std::atomic_flag stopped;
+
+    /// Multiplex latest records of each shard.
+    std::unique_ptr<StreamingStoreSourceMultiplexers> source_multiplexers;
 };
 }

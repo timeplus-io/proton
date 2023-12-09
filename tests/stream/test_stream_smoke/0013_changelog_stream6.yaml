@@ -47,12 +47,10 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop view if exists test14_view_6;
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_6;
 
           - client: python
@@ -110,7 +108,6 @@ tests:
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_subquery_6;
 
   - id: 25
@@ -125,7 +122,6 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_substream_6;
 
           - client: python
@@ -237,7 +233,6 @@ tests:
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_substream_6;
 
           - client: python
@@ -328,7 +323,6 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_substream_6;
 
           - client: python
@@ -420,7 +414,6 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_substream_6;
 
           - client: python
@@ -567,7 +560,6 @@ tests:
 
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_substream_6;
 
           - client: python
@@ -641,7 +633,6 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_substream_6;
 
           - client: python
@@ -731,7 +722,6 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_substream_6;
 
           - client: python
@@ -823,7 +813,6 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_substream_6;
 
           - client: python
@@ -898,7 +887,6 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_substream_6;
 
           - client: python
@@ -974,7 +962,6 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_substream_6;
 
           - client: python
@@ -1061,7 +1048,6 @@ tests:
       - statements:
           - client: python
             query_type: table
-            wait: 0
             query: drop stream if exists test14_substream_6;
 
           - client: python
