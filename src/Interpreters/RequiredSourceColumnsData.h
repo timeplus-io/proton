@@ -60,7 +60,7 @@ struct RequiredSourceColumnsData
 
         for (const auto & alias : complex_aliases)
         {
-            if (required_names.contains(alias))
+            if (!masked_columns.contains(alias) && required_names.contains(alias))
                 return true;
         }
         return false;
