@@ -2,10 +2,18 @@
   "name": "awesome-sensor-logger",
   "module": "index.ts",
   "type": "module",
+  "scripts": {
+    "start": "bun run index.ts"
+  },
   "devDependencies": {
     "bun-types": "latest"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@stricjs/app": "^1.0.0-alpha",
+    "@stricjs/router": "^5.0.6",
+    "@stricjs/utils": "^1.6.1"
   }
 }
