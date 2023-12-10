@@ -59,7 +59,6 @@ std::unordered_map<String, String> StreamingFunctionData::changelog_func_map = {
     {"top_k", ""},
     {"min_k", "__min_k_retract"},
     {"max_k", "__max_k_retract"},
-    {"count_distinct", ""},
     {"unique", ""},
     {"unique_exact", ""},
     {"median", ""},
@@ -87,7 +86,7 @@ std::optional<String> StreamingFunctionData::supportChangelog(const String & fun
         {
             const std::string combinator_name = combinator->getName();
             /// TODO: support more combinators
-            if (combinator_name != "_if")
+            if (combinator_name != "_if" && combinator_name != "_distinct")
                 throw Exception(
                     ErrorCodes::NOT_IMPLEMENTED, "{} aggregation function is not supported in changelog query processing", function_name);
 
@@ -159,11 +158,16 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
                     /// Make _tp_delta as the last argument to avoid unused column elimination for query like below
                     /// SELECT count(), avg(i) FROM (SELECT i, _tp_delta FROM versioned_kv) GROUP BY i; =>
                     /// SELECT __count_retract(_tp_delta), __avg_retract(i, _tp_delta) FROM (SELECT i, _tp_delta FROM versioned_kv) GROUP BY i; =>
-                    if (func.name.starts_with("__count_retract") && delta_pos - func.arguments->children.begin() > 0)
-                        /// Fix for nullable since this substitution is not equal
-                        func.arguments->children[0] = std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG);
-                    else
-                        func.arguments->children.insert(delta_pos, std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG));
+
+                    /// TODO: Below check handles optimizes for count_retract(delta col) only,  
+                    /// leads to incorrect results for count_distinct.(the data col and delta col are all processed by a same position)
+                    /// Implement robust delta support expected later.
+
+                    /// if (func.name.starts_with("__count_retract") && delta_pos - func.arguments->children.begin() > 0)
+                    ///     /// Fix for nullable since this substitution is not equal
+                    ///     func.arguments->children[0] = std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG);
+                    /// else
+                    func.arguments->children.insert(delta_pos, std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG));
                 }
 
                 return;

@@ -51,7 +51,7 @@ StoragePtr TableFunctionHist::calculateColumnDescriptions(ContextPtr context)
         if (interpreter.hasAggregation())
             throw Exception(
                 ErrorCodes::BAD_ARGUMENTS,
-                "table function only can be applied to subquery on non-aggreagtion query '{}' ",
+                "table function only can be applied to subquery on non-aggregation query '{}' ",
                 storage_id.getNameForLogs());
 
         columns = ColumnsDescription{interpreter.getSampleBlock().getNamesAndTypesList()};
@@ -68,7 +68,7 @@ StoragePtr TableFunctionHist::calculateColumnDescriptions(ContextPtr context)
             if (interpreter.hasAggregation())
                 throw Exception(
                     ErrorCodes::BAD_ARGUMENTS,
-                    "table function only can be applied to view on non-aggreagtion query '{}'",
+                    "table function only can be applied to view on non-aggregation query '{}'",
                     storage_id.getNameForLogs());
         }
         else if (!storage->supportsStreamingQuery())

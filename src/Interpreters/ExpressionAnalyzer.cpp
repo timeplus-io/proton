@@ -197,13 +197,24 @@ AggregateFunctionPtr getAggregateFunction(
     bool throw_if_empty = true)
 /// proton: ends
 {
-    /// We shall replace '<aggr>_distinct' to '<aggr>_distinct_streaming' in streaming query.
-    if (is_streaming && endsWith(node->name, "_distinct"))
+    /// We shall replace '<aggr>_distinct' to '<aggr>_distinct_retract' in changelog query.
+    if (endsWith(node->name, "_distinct") && (is_changelog_input || is_streaming))
     {
-        if (throw_if_empty)
-            return AggregateFunctionFactory::instance().get(node->name + "_streaming", types, parameters, properties, is_changelog_input);
+        if (is_changelog_input)
+        {
+            if (throw_if_empty)
+                return AggregateFunctionFactory::instance().get(node->name + "_retract", types, parameters, properties, is_changelog_input);
+            else
+                return AggregateFunctionFactory::instance().tryGet(node->name + "_retract", types, parameters, properties, is_changelog_input);
+        
+        }
         else
-            return AggregateFunctionFactory::instance().tryGet(node->name + "_streaming", types, parameters, properties, is_changelog_input);
+        {
+            if (throw_if_empty)
+                return AggregateFunctionFactory::instance().get(node->name + "_streaming", types, parameters, properties, is_changelog_input);
+            else
+                return AggregateFunctionFactory::instance().tryGet(node->name + "_streaming", types, parameters, properties, is_changelog_input);
+        }
     }
     else
     {

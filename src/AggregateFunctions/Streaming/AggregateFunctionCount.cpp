@@ -17,7 +17,11 @@ AggregateFunctionPtr
 createAggregateFunctionCount(const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
 {
     assertNoParameters(name, parameters);
-    assertArityAtMost<1>(name, argument_types);
+    /// the last position reserved for `delta` col, and one col for the data input.
+    if (name.ends_with("retract"))
+        assertArityAtMost<2>(name, argument_types);
+    else
+        assertArityAtMost<1>(name, argument_types);
 
     return std::make_shared<AggregateFunctionCount>(argument_types);
 }
