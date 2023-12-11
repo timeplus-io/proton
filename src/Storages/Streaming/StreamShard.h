@@ -24,7 +24,7 @@ struct KafkaLogContext;
 /// 2. one shard for historical store (optional).
 /// A background process consumes data from log store shard and then commits the data
 /// to the shard of historical store. Please note that the historical store shard is optional.
-class StreamShard final : public std::enable_shared_from_this<StreamShard>
+class StreamShard: public std::enable_shared_from_this<StreamShard>
 {
 public:
     StreamShard(
@@ -43,7 +43,7 @@ public:
         MergeTreeData * storage_stream_,
         Poco::Logger * log_);
 
-    ~StreamShard();
+    virtual ~StreamShard();
 
     void startup();
     void shutdown();
@@ -93,7 +93,7 @@ private:
     using SequencePair = std::pair<nlog::RecordSN, nlog::RecordSN>;
 
     void commit(nlog::RecordPtrs records, SequenceRanges missing_sequence_ranges);
-    void doCommit(Block block, SequencePair seq_pair, std::shared_ptr<IdempotentKeys> keys, SequenceRanges missing_sequence_ranges);
+    virtual void doCommit(Block block, SequencePair seq_pair, std::shared_ptr<IdempotentKeys> keys, SequenceRanges missing_sequence_ranges);
     void commitSN();
     void commitSNLocal(nlog::RecordSN commit_sn);
     void commitSNRemote(nlog::RecordSN commit_sn);
@@ -113,6 +113,8 @@ private:
 
     friend struct StreamCallbackData;
     friend class StorageStream;
+    friend class StorageKV;
+    friend class StreamKVShard;
 
 private:
     Int32 replication_factor;

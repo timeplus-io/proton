@@ -23,9 +23,11 @@ class Context;
 /// Operates with rocksdb data structures via rocksdb API (holds pointer to rocksdb::DB inside for that).
 /// Storage have one primary key.
 /// Values are serialized into raw strings to store in rocksdb.
-class StorageEmbeddedRocksDB final : public IStorage, public IKeyValueEntity, WithContext
+class StorageEmbeddedRocksDB: public IStorage, public IKeyValueEntity, WithContext
 {
     friend class EmbeddedRocksDBSink;
+    friend class StreamKVShard;
+
 public:
     StorageEmbeddedRocksDB(const StorageID & table_id_,
         const String & relative_data_path_,

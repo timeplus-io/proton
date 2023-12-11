@@ -264,7 +264,9 @@ private:
 
     /// proton: starts
     friend class StorageStream;
+    friend class StorageKV;
     friend class StreamShard;
+    friend class StreamKVShard;
 
     void commitSN(Int64 sn);
     Int64 loadSN() const;
