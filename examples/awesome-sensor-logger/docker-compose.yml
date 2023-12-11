@@ -9,9 +9,9 @@ services:
        - 8463:8463 #tcp port for go driver or grafana plugin
 
   proxy:
-    image: sensor-logger-proxy
+    image: timeplus/sensor-logger-proxy
     ports:
-       - 3000:3000 #forward HTTP POST to proton:3218
+       - 8000:3000 #expose internal port 3000 as 8000, avoiding conflicts with Grafana. This will forward HTTP POST to proton:3218
     environment:
       HOST: proton
       STREAM: phone
