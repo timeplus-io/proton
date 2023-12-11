@@ -1,4 +1,4 @@
-name: compatibility test
+name: compatibility_test
 
 on:
   workflow_dispatch:
@@ -28,11 +28,10 @@ jobs:
         cd $GITHUB_WORKSPACE/tests/stream
         env
 
-        ${{ needs.prepare_env.outputs.command }}
-
         bash test_compatibility/prepare_data.sh
         bash test_compatibility/basic_tests.sh
 
+        cd $GITHUB_WORKSPACE
         tar -zcvf $PROTON_VERSION.tar.gz data
         aws s3 cp --no-progress $PROTON_VERSION.tar.gz s3://tp-internal/proton/compatibility/oss/
     secrets:
@@ -63,13 +62,14 @@ jobs:
         # pull docker image
         docker pull ghcr.io/timeplus-io/proton:$PROTON_VERSION
 
-        cd $GITHUB_WORKSPACE/tests/stream
-        env
-
         # prepare data
+        cd $GITHUB_WORKSPACE
         aws s3 cp --no-progress s3://tp-internal/proton/compatibility/oss/$SOURCE_VERSION.tar.gz .
         tar -zxvf $SOURCE_VERSION.tar.gz
         ls .
+
+        cd $GITHUB_WORKSPACE/tests/stream
+        env
 
         bash test_compatibility/basic_tests.sh
         bash test_compatibility/extra_tests.sh

@@ -5,8 +5,8 @@ services:
     pull_policy: always
     container_name: proton-server
     volumes:
-      - ../data/proton-redp/datas:/var/lib/proton
-      - ../data/proton-redp/log:/var/log/proton-server
+      - $GITHUB_WORKSPACE/data/proton-redp/datas:/var/lib/proton
+      - $GITHUB_WORKSPACE/data/proton-redp/log:/var/log/proton-server
     ports:
       - "13218:3218" # HTTP Streaming
       - "18123:8123" # HTTP Snapshot
@@ -63,4 +63,4 @@ services:
       - --check=false
     container_name: redpanda
     volumes:
-      - ../data/redpanda:/var/lib/redpanda/data
+      - $GITHUB_WORKSPACE/data/redpanda:/var/lib/redpanda/data
