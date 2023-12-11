@@ -1,0 +1,69 @@
+version: "3.3"
+services:
+  proton:
+     image: ghcr.io/timeplus-io/proton:latest
+     pull_policy: always
+     ports:
+      #  - 3218:3218 #http port for JDBC driver, default streaming mode
+       - 8123:8123 #http port for JDBC driver, default batch mode
+       - 8463:8463 #native port for proton client
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - "1G"
+      - --reserve-memory
+      - "0M"
+      - --node-id
+      - "0"
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda:29092,OUTSIDE://redpanda:9092
+      - --check=false
+  console:
+    image: docker.redpanda.com/redpandadata/console:v2.3.5
+    entrypoint: /bin/sh
+    command: -c "echo \"$$CONSOLE_CONFIG_FILE\" > /tmp/config.yml; /app/console"
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda:9092"]
+        connect:
+          enabled: true
+          clusters:  
+          - name: cdc
+            url: http://connect:8083
+    ports:
+      - 8080:8080
+    depends_on:
+      - redpanda    
+  connect:
+    image: debezium/connect
+    depends_on:
+      - redpanda
+    ports:
+      - "8083:8083"
+    environment:
+      BOOTSTRAP_SERVERS: "redpanda:9092"
+      GROUP_ID: "1"
+      CONFIG_STORAGE_TOPIC: "inventory.configs"
+      OFFSET_STORAGE_TOPIC: "inventory.offset"
+      STATUS_STORAGE_TOPIC: "inventory.status"
+  mysql:
+    image: debezium/example-mysql:2.4
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: debezium
+      MYSQL_USER: mysqluser
+      MYSQL_PASSWORD: mysqlpw

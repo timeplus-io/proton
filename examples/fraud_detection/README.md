@@ -1,6 +1,6 @@
 # Demo for real-time machine learning - fraud detection
 
-This docker compose file demonstrates how to leverage proton to build a real-time fraud detection where proton is used as a real-time feature store
+This docker compose file demonstrates how to leverage proton to build a real-time fraud detection where proton is used as a real-time feature store.
 
 ## Start the example
 
