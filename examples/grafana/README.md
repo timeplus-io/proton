@@ -21,7 +21,7 @@ Install Grafana if you haven't. Please note, this plugin is not available for Gr
 
 For Mac users, simply run `brew install grafana`.
 
-Before the plugin is approved by Grafana, you need to set your Grafana running in development mode via changing /usr/local/etc/grafana/grafana.ini, setting `app_mode = development`.
+Before the plugin is approved by Grafana, you need to set your Grafana running in development mode via changing /opt/homebrew/etc/grafana/grafana.ini, setting `app_mode = development`.
 
 Also searching for key word "plugin", and change `enable_alpha` and `allow_loading_unsigned_plugins` to
 ```
@@ -37,7 +37,7 @@ We have submited the plugin to Grafana. Once it's approved, you will be able to 
 
 Install the timeplus-proton-datasource in your Grafana plugin folder, such as
 - /var/lib/grafana/plugins (for Linux)
-- /usr/local/var/lib/grafana/plugins (for Homebrew on Mac)
+- /opt/homebrew/var/lib/grafana/plugins (for Homebrew on Mac)
 
 Unzip the file and restart Grafana. 
 

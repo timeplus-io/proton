@@ -65,7 +65,7 @@ def prepare_event(test_results, event_type, **optional_event_msg):
             if "OK" != test_status:
                 test_result_flag = test_result_flag * 0
             detailed_summary.append(current_row)
-        event['test_result'] = "seccess" if test_result_flag else "failed"
+        event['test_result'] = "success" if test_result_flag else "failed"
         if optional_event_msg is not None:
             event.update(optional_event_msg)
         event['payload'] = detailed_summary
