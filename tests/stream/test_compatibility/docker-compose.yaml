@@ -62,5 +62,6 @@ services:
       - "redpanda.enable_idempotence=true"
       - --check=false
     container_name: redpanda
+    user: "0:0"
     volumes:
       - $GITHUB_WORKSPACE/data/redpanda:/var/lib/redpanda/data

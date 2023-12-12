@@ -21,12 +21,28 @@ jobs:
       submodules: false
       timeout: 30
       command: |
-        # pull docker image
         export PROTON_VERSION=${{ github.event.inputs.target }}
-        docker pull ghcr.io/timeplus-io/proton:$PROTON_VERSION
 
         cd $GITHUB_WORKSPACE/tests/stream
-        env
+        
+        # make virtualenv
+        ln -s /usr/bin/python3 /usr/bin/python
+        apt-get update
+        systemctl stop unattended-upgrades
+        apt install python3-venv -y
+        python -m venv env
+        source env/bin/activate
+
+        pip install --upgrade pip
+
+        # FIXME: remove this line after pyyaml community fixed install bug
+        pip install pyyaml==5.3.1
+
+        # FIXME(yokofly): docker 7.0.0 introduce a breaking change
+        # https://github.com/docker/docker-py/issues/3194
+        pip install docker==6.1.3
+
+        pip install -r helpers/requirements.txt
 
         bash test_compatibility/prepare_data.sh
         bash test_compatibility/basic_tests.sh
@@ -59,17 +75,32 @@ jobs:
         export TARGET_VERSION=${{ github.event.inputs.target }}
         export SOURCE_VERSION=${{ github.event.inputs.source }}
         export PROTON_VERSION=$TARGET_VERSION
-        # pull docker image
-        docker pull ghcr.io/timeplus-io/proton:$PROTON_VERSION
 
         # prepare data
         cd $GITHUB_WORKSPACE
         aws s3 cp --no-progress s3://tp-internal/proton/compatibility/oss/$SOURCE_VERSION.tar.gz .
         tar -zxvf $SOURCE_VERSION.tar.gz
-        ls .
 
         cd $GITHUB_WORKSPACE/tests/stream
-        env
+        
+        # make virtualenv
+        ln -s /usr/bin/python3 /usr/bin/python
+        apt-get update
+        systemctl stop unattended-upgrades
+        apt install python3-venv -y
+        python -m venv env
+        source env/bin/activate
+
+        pip install --upgrade pip
+
+        # FIXME: remove this line after pyyaml community fixed install bug
+        pip install pyyaml==5.3.1
+
+        # FIXME(yokofly): docker 7.0.0 introduce a breaking change
+        # https://github.com/docker/docker-py/issues/3194
+        pip install docker==6.1.3
+
+        pip install -r helpers/requirements.txt
 
         bash test_compatibility/basic_tests.sh
         bash test_compatibility/extra_tests.sh
