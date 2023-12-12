@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 from typing import List, Any
 
@@ -26,8 +27,9 @@ if __name__ == "__main__":
         url="https://api.github.com/orgs/timeplus-io/packages/container/proton/versions?per_page=100",
         headers=HEADERS
     ).json()
+
     valid_version_list = []
-    current_version = ""
+    current_version = "latest"
     for version_info in proton_image_version_list:
         created_at = time.mktime(time.strptime(version_info['created_at'], "%Y-%m-%dT%H:%M:%SZ"))
         tags = version_info['metadata']['container']['tags']
@@ -36,22 +38,24 @@ if __name__ == "__main__":
             continue
         if tag_name == PROTON_VERSION or tag_name == PROTON_VERSION + "-rc":
             current_version = tag_name
-            continue
         valid_version_list.append((created_at, tag_name))
+
     valid_version_list.sort(key=lambda version_tuple: -int(version_tuple[0]))
-    valid_version_list = valid_version_list[:min(len(valid_version_list), MAX_TEST_VERSION_NUM)]
-    if current_version == "":
-        print("Cannot find current proton version.")
+    valid_version_list = valid_version_list[:min(len(valid_version_list), MAX_TEST_VERSION_NUM + 1)]
+
     for _, version in valid_version_list:
-        response = requests.post(
-            "https://api.github.com/repos/timeplus-io/proton/actions/workflows/compatibility_test.yml/dispatches",
-            headers=HEADERS,
-            data=json.dumps({
-                "ref": "develop",
-                "inputs": {
-                    "source": version,
-                    "target": current_version
-                }
-            })
-        )
-        print(f'target="{current_version}", source="{version}", status_code="{response.status_code}"')
+        try:
+            response = requests.post(
+                "https://api.github.com/repos/timeplus-io/proton/actions/workflows/compatibility_test.yml/dispatches",
+                headers=HEADERS,
+                data=json.dumps({
+                    "ref": "develop",
+                    "inputs": {
+                        "source": version,
+                        "target": current_version
+                    }
+                })
+            )
+            assert response.status_code == 204
+        except Exception as e:
+            logging.error(e)
