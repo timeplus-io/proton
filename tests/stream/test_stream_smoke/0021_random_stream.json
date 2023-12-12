@@ -573,7 +573,29 @@
                 "query_id":"2234", "expected_results":"error_code:36"
               }
             ]
-          }
+          },
+          {
+            "id": 25,
+            "tags": ["ipv4 data type"],
+            "name": "random stream supports native ipv4 data type",
+            "description": "random stream supports native ipv4 and ipv6 data type",
+            "steps":[
+              {
+                "statements": [
+                  {"client":"python", "query_type": "table", "wait":2, "query": "drop stream if exists test22_create_random"},
+                  {"client":"python", "query_type": "table", "wait":2, "query": "create random stream test22_create_random(id int, ipv4 ipv4, ipv6 ipv6)"},
+                  {"client":"python", "query_type": "table", "query_id":"2235", "wait":2, "query":"select ipv4, ipv6 from test22_create_random settings max_events=1"}
 
+                ]
+              }
+            ],
+            "expected_results": [
+              {
+                "query_id":"2235", "expected_results":[
+                    ["any_value", "any_value"]
+                ]
+              }
+            ]
+          }
     ]
   }
