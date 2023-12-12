@@ -1,0 +1,1 @@
+SELECT number, ip, ip % number FROM (SELECT number, to_ipv4('1.2.3.4') as ip FROM numbers(10, 20));
