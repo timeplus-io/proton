@@ -1,9 +1,10 @@
 #pragma once
 
+#include <Formats/FormatFactory.h>
+#include <Interpreters/Context.h>
 #include <QueryPipeline/Pipe.h>
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/IStorage.h>
-#include <Formats/FormatFactory.h>
 
 namespace DB
 {
@@ -38,11 +39,17 @@ public:
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Ingesting data to this type of external stream is not supported");
     }
 
-    FormatSettings getFormatSettings(const ContextPtr & context) const
+    /// Get the format settings based on the query settings and external stream settings.
+    /// Query settings have higher priority.
+    FormatSettings getFormatSettings(const ContextPtr & query_ctx) const
     {
-        auto format_settings = DB::getFormatSettings(context);
+        const auto & query_settings = query_ctx->getSettingsRef();
+
+        auto format_settings = DB::getFormatSettings(query_ctx);
         if (format_settings.schema.format_schema.empty())
             format_settings.schema.format_schema = formatSchema();
+        if (!query_settings.isChanged("input_format_skip_unknown_fields"))
+            format_settings.skip_unknown_fields = settings->input_format_skip_unknown_fields.value;
         return format_settings;
     }
 
