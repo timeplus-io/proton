@@ -12,6 +12,7 @@ test_suite_config:
         - change
         - bug
         - sample
+        - unstable
       cluster:
         - view
         - cluster_table_bug
@@ -23,6 +24,7 @@ tests:
       - "join processing time alignment"
       - "asof join"
       - "query state"
+      - "unstable"
     name: append-asof-join-versioned_kv-with-processing-time-alignment
     description: streaming append (left) asof join versioned_kv with processing time alignment
     steps:

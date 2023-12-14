@@ -4172,21 +4172,27 @@ void Aggregator::mergeRetractedGroupsImpl(
         Table & src_aggregated_table = getDataVariant<Method>(*aggregated_data[result_num]).data;
         dst_retracted_table.forEachValue([&](const auto & key, auto & mapped) {
             /// Merge new/updated groups
-            {
-                typename Table::LookupResult dst_it;
-                bool inserted;
+            typename Table::LookupResult dst_it;
+            bool inserted;
+
+            /// NOTE: For StringRef `key`, its memory was allocated in `retracted_res->aggregates_pool`,
+            /// we shall save this key in itself pool (i.e. res->aggregates_pool) if inserted
+            using KeyType = std::decay_t<decltype(key)>;
+            if constexpr (std::is_same_v<KeyType, StringRef>)
+                dst_table.emplace(ArenaKeyHolder{key, *res->aggregates_pool}, dst_it, inserted);
+            else
                 dst_table.emplace(key, dst_it, inserted);
-                if (inserted)
-                    dst_it->getMapped() = nullptr;
-              
-                auto find_it = src_aggregated_table.find(key);
-                if (find_it)
-                    mergeAggregateStates(
-                        dst_it->getMapped(),
-                        find_it->getMapped(),
-                        res->aggregates_pool,
-                        /*clear_states*/ false);
-            }
+
+            if (inserted)
+                dst_it->getMapped() = nullptr;
+            
+            auto find_it = src_aggregated_table.find(key);
+            if (find_it)
+                mergeAggregateStates(
+                    dst_it->getMapped(),
+                    find_it->getMapped(),
+                    res->aggregates_pool,
+                    /*clear_states*/ false);
         });
     }
 }
