@@ -7,6 +7,9 @@ namespace DB
     namespace ErrorCodes
     {
         extern const int NO_AVAILABLE_DATA;
+        // proton: starts.
+        extern const int LOGICAL_ERROR;
+        /// proton: ends.
     }
 }
 
@@ -340,6 +343,14 @@ public:
 
 
 public:
+    /// proton: starts. This interface is invalid but exists for compatibility with HashTable interface.
+    template <typename KeyHolder>
+    void ALWAYS_INLINE emplace(KeyHolder &&, LookupResult &, bool &, size_t /* hash */ = 0)
+    {
+        throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "This is a invalid default interface, which cannot be called");
+    }
+    /// proton: ends.
+
     /// The last parameter is unused but exists for compatibility with HashTable interface.
     void ALWAYS_INLINE emplace(const Key & x, LookupResult & it, bool & inserted, size_t /* hash */ = 0)
     {
