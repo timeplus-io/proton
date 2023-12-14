@@ -343,20 +343,17 @@ public:
 
 
 public:
-    /// proton: starts. This interface is used for compatibility with HashTable interface.
+    /// proton: starts. KeyHolder is used for compatibility with HashTable interface.
+    /// The last parameter is unused but exists for compatibility with HashTable interface.
     template <typename KeyHolder>
-    void ALWAYS_INLINE emplace(KeyHolder && key_holder, LookupResult & it, bool & inserted, size_t hash = 0)
+    void ALWAYS_INLINE emplace(KeyHolder && key_holder, LookupResult & it, bool & inserted, size_t /* hash */ = 0)
     {
         if constexpr (std::is_same_v<std::decay_t<decltype(keyHolderGetKey(key_holder))>, StringRef>)
             throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "FixedHashTable doesn't support StringRef key, it's a bug");
-        else
-            emplace(keyHolderGetKey(key_holder), it, inserted, hash);
-    }
-    /// proton: ends.
 
-    /// The last parameter is unused but exists for compatibility with HashTable interface.
-    void ALWAYS_INLINE emplace(const Key & x, LookupResult & it, bool & inserted, size_t /* hash */ = 0)
-    {
+        Key x = keyHolderGetKey(key_holder);
+        /// proton: ends.
+
         it = &buf[x];
 
         if (!buf[x].isZero(*this))
