@@ -343,11 +343,14 @@ public:
 
 
 public:
-    /// proton: starts. This interface is invalid but exists for compatibility with HashTable interface.
+    /// proton: starts. This interface is used for compatibility with HashTable interface.
     template <typename KeyHolder>
-    void ALWAYS_INLINE emplace(KeyHolder &&, LookupResult &, bool &, size_t /* hash */ = 0)
+    void ALWAYS_INLINE emplace(KeyHolder && key_holder, LookupResult & it, bool & inserted, size_t hash = 0)
     {
-        throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "This is a invalid default interface, which cannot be called");
+        if constexpr (std::is_same_v<std::decay_t<decltype(keyHolderGetKey(key_holder))>, StringRef>)
+            throw DB::Exception(DB::ErrorCodes::LOGICAL_ERROR, "FixedHashTable doesn't support StringRef key, it's a bug");
+        else
+            emplace(keyHolderGetKey(key_holder), it, inserted, hash);
     }
     /// proton: ends.
 
