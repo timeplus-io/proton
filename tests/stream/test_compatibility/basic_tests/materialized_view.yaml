@@ -1,0 +1,48 @@
+alter_stream_add_column:
+  description: query from a materialized view on stream, and then alter the stream by adding column
+  steps:
+    - cmd: |
+        select (* except _tp_time) from table(test_1_mv) order by col1;
+      query_time: 3
+      expect:
+        - [ 1, 1.1, 'a1' ]
+        - [ 2, 2.1, 'b2' ]
+        - [ 3, 3.1, 'c3' ]
+        - [ 4, 4.1, 'd4' ]
+        - [ 5, 5.1, 'e5' ]
+        - [ 6, 6.1, 'f6' ]
+    - cmd: |
+        select (* except _tp_time) from test_1_mv where _tp_time > earliest_ts() order by col1;
+      query_time: 3
+      expect:
+        - [ 1, 1.1, 'a1' ]
+        - [ 2, 2.1, 'b2' ]
+        - [ 3, 3.1, 'c3' ]
+        - [ 4, 4.1, 'd4' ]
+        - [ 5, 5.1, 'e5' ]
+        - [ 6, 6.1, 'f6' ]
+
+global_aggregation:
+  description: a materialized view on stream global aggregation
+  steps:
+    - cmd: |
+        select (* except _tp_time) from table(test_2_mv);
+      query_time: 3
+      expect:
+        - [ 1.1, 6.1, 8 ]
+    - cmd: |
+        select (* except _tp_time) from test_2_mv where _tp_time > earliest_ts() limit 1;
+      expect:
+        - [ 1.1, 6.1, 8 ]
+
+func_now:
+  description: test for function now()
+  steps:
+    - cmd: |
+        select (* except _tp_time) from table(test_3_mv) order by i;
+      query_time: 3
+      expect:
+        - [ "any_value", 1 ]
+        - [ "any_value", 2 ]
+        - [ "any_value", 3 ]
+        - [ "any_value", 4 ]
