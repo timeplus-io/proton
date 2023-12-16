@@ -30,7 +30,7 @@ QueryPipeline InterpreterShowFormatSchemasQuery::executeImpl()
     /// Build the result column.
     MutableColumnPtr name_col = ColumnString::create();
     MutableColumnPtr type_col = ColumnString::create();
-    for (const auto & schema_entry : FormatSchemaFactory::instance().getSchemasList(getContext(), query.schema_type))
+    for (const auto & schema_entry : FormatSchemaFactory::instance().getSchemasList(query.schema_type, getContext()))
     {
         name_col->insert(schema_entry.name);
         type_col->insert(schema_entry.type);

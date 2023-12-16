@@ -48,7 +48,7 @@ public:
 
     String toString() const
     {
-        return fmt::join(errors, "\n");
+        return fmt::format("{}", fmt::join(errors, "\n"));
     }
 };
 
@@ -104,7 +104,7 @@ void FormatSchemaFactory::unregisterSchema(const String & schema_name, const Str
     FormatSchemaInfo fsinfo{schema_name, schema_type, false, true, format_settings.schema.format_schema_path};
 
     std::lock_guard lock(mutex);
-    const auto schema_path = findSchemaFile(context, schema_name, schema_type);
+    const auto schema_path = findSchemaFile(schema_name, schema_type, context);
     if (schema_path.empty())
     {
         if (throw_if_not_exists)
@@ -152,7 +152,7 @@ FormatSchemaFactory::SchemaEntryWithBody FormatSchemaFactory::getSchema(const St
     checkSchemaType(schema_type);
 
     std::lock_guard lock(mutex);
-    const auto schema_path = findSchemaFile(context, schema_name, schema_type);
+    const auto schema_path = findSchemaFile(schema_name, schema_type, context);
     if (schema_path.empty())
     {
         if (schema_type.empty())

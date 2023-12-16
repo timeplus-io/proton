@@ -35,7 +35,7 @@ BlockIO InterpreterCreateFormatSchemaQuery::execute()
     else if (create_format_schema_query.or_replace)
         exists_op = FormatSchemaFactory::ExistsOP::Replace;
 
-    FormatSchemaFactory::instance().registerSchema(current_context, create_format_schema_query.getSchemaName(), create_format_schema_query.schema_type, body, exists_op);
+    FormatSchemaFactory::instance().registerSchema(create_format_schema_query.getSchemaName(), create_format_schema_query.schema_type, body, exists_op, current_context);
     return {};
 }
 }

@@ -21,7 +21,7 @@ BlockIO InterpreterDropFormatSchemaQuery::execute()
 
     current_context->checkAccess(access_rights_elements);
 
-    FormatSchemaFactory::instance().unregisterSchema(current_context, drop_format_schema_query.schema_name, drop_format_schema_query.schema_type, !drop_format_schema_query.if_exists);
+    FormatSchemaFactory::instance().unregisterSchema(drop_format_schema_query.schema_name, drop_format_schema_query.schema_type, !drop_format_schema_query.if_exists, current_context);
 
     return {};
 }

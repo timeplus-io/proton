@@ -40,7 +40,7 @@ QueryPipeline InterpreterShowCreateFormatSchemaQuery::executeImpl()
     auto current_context = getContext();
     current_context->checkAccess(access_rights_elements);
 
-    const auto & schema = FormatSchemaFactory::instance().getSchema(current_context, show_query->getSchemaName(), show_query->schema_type);
+    const auto & schema = FormatSchemaFactory::instance().getSchema(show_query->getSchemaName(), show_query->schema_type, current_context);
 
     ASTCreateFormatSchemaQuery create_query;
     create_query.schema_type = schema.type;
