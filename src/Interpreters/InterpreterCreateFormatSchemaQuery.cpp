@@ -29,13 +29,13 @@ BlockIO InterpreterCreateFormatSchemaQuery::execute()
     auto current_context = getContext();
     current_context->checkAccess(access_rights_elements);
 
-    auto if_exists = FormatSchemaFactory::ExistsOP::Throw;
+    auto exists_op = FormatSchemaFactory::ExistsOP::Throw;
     if (create_format_schema_query.if_not_exists)
-        if_exists = FormatSchemaFactory::ExistsOP::noops;
+        exists_op = FormatSchemaFactory::ExistsOP::Ignore;
     else if (create_format_schema_query.or_replace)
-        if_exists = FormatSchemaFactory::ExistsOP::replace;
+        exists_op = FormatSchemaFactory::ExistsOP::Replace;
 
-    FormatSchemaFactory::instance().registerSchema(current_context, create_format_schema_query.getSchemaName(), create_format_schema_query.schema_type, body, if_exists);
+    FormatSchemaFactory::instance().registerSchema(current_context, create_format_schema_query.getSchemaName(), create_format_schema_query.schema_type, body, exists_op);
     return {};
 }
 }

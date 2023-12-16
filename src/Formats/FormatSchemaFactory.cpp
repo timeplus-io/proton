@@ -43,17 +43,12 @@ private:
 public:
     void AddError(int line, google::protobuf::io::ColumnNumber column, const std::string & message) override
     {
-        std::ostringstream error;
-        error << "line: " << line << ", column: " << column << ", error: " << message;
-        errors.push_back(error.str());
+        errors.push_back(fmt::format("line: {}, columns: {}, error: {}", line, column, message));
     }
 
     String toString() const
     {
-        std::ostringstream ret;
-        for (const auto & error : errors)
-            ret << error << std::endl;
-        return ret.str();
+        return fmt::join(errors, "\n");
     }
 };
 
@@ -72,7 +67,7 @@ void validateProtobufSchema(const String & payload)
 }
 }
 
-void FormatSchemaFactory::registerSchema(const ContextPtr & context, const String & schema_name, const String & schema_type, const String & schema_body, ExistsOP if_exists)
+void FormatSchemaFactory::registerSchema(const String & schema_name, const String & schema_type, const String & schema_body, ExistsOP exists_op, const ContextPtr & context)
 {
     assert(!schema_name.empty());
     assert(!schema_type.empty());
@@ -86,9 +81,9 @@ void FormatSchemaFactory::registerSchema(const ContextPtr & context, const Strin
     std::lock_guard lock(mutex);
     if (std::filesystem::exists(fsinfo.absoluteSchemaPath()))
     {
-        if (if_exists == ExistsOP::noops)
+        if (exists_op == ExistsOP::Ignore)
             return;
-        if (if_exists == ExistsOP::Throw)
+        if (exists_op == ExistsOP::Throw)
             throw Exception(ErrorCodes::FORMAT_SCHEMA_ALREADY_EXISTS, "Format schema {} of type {} already exists", schema_name, schema_type);
     }
 
@@ -99,7 +94,7 @@ void FormatSchemaFactory::registerSchema(const ContextPtr & context, const Strin
     schema_file << schema_body;
 }
 
-void FormatSchemaFactory::unregisterSchema(const ContextPtr & context, const String & schema_name, const String & schema_type, bool throw_if_not_exists)
+void FormatSchemaFactory::unregisterSchema(const String & schema_name, const String & schema_type, bool throw_if_not_exists, const ContextPtr & context)
 {
     assert(!schema_name.empty());
 
@@ -126,7 +121,7 @@ void FormatSchemaFactory::unregisterSchema(const ContextPtr & context, const Str
     std::filesystem::remove(schema_path);
 }
 
-std::vector<FormatSchemaFactory::SchemaEntry> FormatSchemaFactory::getSchemasList(const ContextPtr & context, const String & schema_type) const
+std::vector<FormatSchemaFactory::SchemaEntry> FormatSchemaFactory::getSchemasList(const String & schema_type, const ContextPtr & context) const
 {
     checkSchemaType(schema_type);
 
@@ -150,7 +145,7 @@ std::vector<FormatSchemaFactory::SchemaEntry> FormatSchemaFactory::getSchemasLis
     return ret;
 }
 
-FormatSchemaFactory::SchemaEntryWithBody FormatSchemaFactory::getSchema(const ContextPtr & context, const String & schema_name, const String & schema_type) const
+FormatSchemaFactory::SchemaEntryWithBody FormatSchemaFactory::getSchema(const String & schema_name, const String & schema_type, const ContextPtr & context) const
 {
     assert(!schema_name.empty());
 
@@ -173,7 +168,7 @@ FormatSchemaFactory::SchemaEntryWithBody FormatSchemaFactory::getSchema(const Co
     return {{schema_name, getSchemaTypeFromFileExtension(std::filesystem::path(schema_path).extension())}, content.str()};
 }
 
-String FormatSchemaFactory::findSchemaFile(const ContextPtr & context, const String & schema_name, const String & schema_type) const
+String FormatSchemaFactory::findSchemaFile(const String & schema_name, const String & schema_type, const ContextPtr & context) const
 {
     auto format_settings = getFormatSettings(context);
     FormatSchemaInfo fsinfo{schema_name, schema_type, false, true, format_settings.schema.format_schema_path};

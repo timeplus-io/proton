@@ -63,7 +63,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserExplainQuery explain_p(end, allow_settings_after_format_in_insert);
     /// proton: starts
     ParserShowFormatSchemasQuery show_format_schemas_p;
-    ParserShowCreateFormatSchemaQuery format_schema_p;
+    ParserShowCreateFormatSchemaQuery show_create_format_schema_p;
     /// proton: ends
 
     ASTPtr query;
@@ -76,7 +76,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || recover_p.parse(pos, query, expected)
         || show_create_access_entity_p.parse(pos, query, expected) /// should be before `show_tables_p`
         /// proton: starts
-        || format_schema_p.parse(pos, query, expected) /// should be before 'show_tables_p'
+        || show_create_format_schema_p.parse(pos, query, expected) /// should be before 'show_tables_p'
         /// proton: ends
         || show_tables_p.parse(pos, query, expected)
         || table_p.parse(pos, query, expected)
