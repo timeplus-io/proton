@@ -1,4 +1,5 @@
 name: manual_trigger_test
+run-name: manual_trigger_test [${{ github.event.inputs.arch }}] [${{ github.event.inputs.tag }}]
 
 on: # yamllint disable-line rule:truthy
   workflow_dispatch:

@@ -103,7 +103,7 @@ tests:
           depends_on: 3000
           wait: 1
           query: |
-            insert into test30_vk_stream(i, k) values (1, 'k1')(2, 'k1');
+            insert into test30_vk_stream(i, k) values (1, 'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk1')(2, 'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk1');
 
         - client: python
           query_type: table
@@ -111,15 +111,15 @@ tests:
           kill_wait: 3
           wait: 1
           query: |
-            insert into test30_vk_stream(i, k) values (1, 'k2');
+            insert into test30_vk_stream(i, k) values (1, 'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk2');
 
     expected_results:
       - query_id: '3000'
         expected_results:
-          - ["k1", 2, 1]
-          - ["k1", 2, -1]
-          - ["k1", 1, 1]
-          - ["k2", 1, 1]
+          - ["kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk1", 2, 1]
+          - ["kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk1", 2, -1]
+          - ["kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk1", 1, 1]
+          - ["kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk2", 1, 1]
 
   - id: 2
     tags:
