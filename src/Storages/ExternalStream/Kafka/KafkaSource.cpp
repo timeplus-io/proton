@@ -52,6 +52,8 @@ KafkaSource::KafkaSource(
     , ckpt_data(consume_ctx)
     , external_stream_counter(external_stream_counter_)
 {
+    assert(external_stream_counter);
+
     is_streaming = true;
 
     calculateColumnPositions();

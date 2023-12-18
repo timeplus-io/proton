@@ -34,6 +34,7 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     , external_stream_counter(external_stream_counter_)
 {
     assert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);
+    assert(external_stream_counter);
 
     if (settings->brokers.value.empty())
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `brokers` setting for {} external stream", settings->type.value);
