@@ -3,6 +3,7 @@
 #include <Storages/IStorage.h>
 #include <base/shared_ptr_helper.h>
 #include <Common/SettingsChanges.h>
+#include <Storages/ExternalStream/ExternalStreamCounter.h>
 
 namespace DB
 {
@@ -49,6 +50,8 @@ public:
     bool supportsStreamingQuery() const override { return true; }
 
     friend class KafkaSource;
+
+    ExternalStreamCounterPtr getExternalStreamCounter();
 
 protected:
     StorageExternalStream(

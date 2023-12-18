@@ -36,7 +36,8 @@ KafkaSource::KafkaSource(
     Int32 shard,
     Int64 offset,
     size_t max_block_size_,
-    Poco::Logger * log_)
+    Poco::Logger * log_,
+    ExternalStreamCounterPtr external_stream_counter_)
     : ISource(header_, true, ProcessorID::KafkaSourceID)
     , storage_snapshot(storage_snapshot_)
     , query_context(std::move(query_context_))
@@ -49,7 +50,10 @@ KafkaSource::KafkaSource(
     , virtual_time_columns_calc(header.columns(), nullptr)
     , virtual_col_types(header.columns(), nullptr)
     , ckpt_data(consume_ctx)
+    , external_stream_counter(external_stream_counter_)
 {
+    assert(external_stream_counter);
+
     is_streaming = true;
 
     calculateColumnPositions();
@@ -102,8 +106,12 @@ void KafkaSource::readAndProcess()
     current_batch.reserve(header.columns());
 
     auto res = consumer->consume(&KafkaSource::parseMessage, this, record_consume_batch_count, record_consume_timeout_ms, consume_ctx);
+
     if (res != ErrorCodes::OK)
+    {
         LOG_ERROR(log, "Failed to consume streaming, topic={} shard={} err={}", consume_ctx.topic, consume_ctx.partition, res);
+        external_stream_counter->addToReadFailed(1);
+    }
 
     if (!current_batch.empty())
     {
@@ -141,6 +149,8 @@ void KafkaSource::parseRaw(const rd_kafka_message_t * kmessage)
             current_batch.push_back(physical_header.getByPosition(0).type->createColumn());
 
         current_batch.back()->insertData(static_cast<const char *>(kmessage->payload), kmessage->len);
+        external_stream_counter->addToReadBytes(kmessage->len);
+        external_stream_counter->addToReadCounts(1);
     }
     else
     {
@@ -183,6 +193,10 @@ void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
 
     ReadBufferFromMemory buffer(static_cast<const char *>(kmessage->payload), kmessage->len);
     auto new_rows = format_executor->execute(buffer);
+
+    external_stream_counter->addToReadBytes(kmessage->len);
+    external_stream_counter->addToReadCounts(new_rows);
+
     if (!new_rows)
         return;
 

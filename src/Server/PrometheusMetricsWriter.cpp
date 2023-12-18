@@ -4,6 +4,7 @@
 
 #include <IO/WriteHelpers.h>
 #include <Common/StatusInfo.h>
+#include <Storages/ExternalStream/StorageExternalStream.h>
 #include <regex>
 
 namespace
@@ -41,12 +42,14 @@ namespace DB
 
 PrometheusMetricsWriter::PrometheusMetricsWriter(
     const Poco::Util::AbstractConfiguration & config, const std::string & config_name,
-    const AsynchronousMetrics & async_metrics_)
+    const AsynchronousMetrics & async_metrics_, ContextPtr context_)
     : async_metrics(async_metrics_)
+    , context(context_)
     , send_events(config.getBool(config_name + ".events", true))
     , send_metrics(config.getBool(config_name + ".metrics", true))
     , send_asynchronous_metrics(config.getBool(config_name + ".asynchronous_metrics", true))
     , send_status_info(config.getBool(config_name + ".status_info", true))
+    , send_external_stream(config.getBool(config_name + ".external_stream", true))
 {
 }
 
@@ -136,6 +139,43 @@ void PrometheusMetricsWriter::write(WriteBuffer & wb) const
                     DB::writeText("} ", wb);
                     DB::writeText(value.second == enum_value.second, wb);
                     DB::writeChar('\n', wb);
+                }
+            }
+        }
+    }
+
+    if (send_external_stream)
+    {
+        auto databases = DatabaseCatalog::instance().getDatabases();
+
+        for (const auto & [_, database] : databases)
+        {
+            for (auto table_it = database->getTablesIterator(context); table_it->isValid(); table_it->next())
+            {
+                StoragePtr table_ptr = table_it->table();
+
+                if(auto * external_stream = table_ptr->as<StorageExternalStream>())
+                {
+                    const auto & storage_id = external_stream->getStorageID();
+                    std::string table_name = storage_id.getFullTableName();
+
+                    auto external_stream_counter = external_stream->getExternalStreamCounter();
+                    if (!external_stream_counter)
+                        continue;
+
+                    const auto & counters = external_stream_counter->getCounters();
+
+                    for (const auto & [metric_name, value] : counters)
+                    {
+                        std::string key{external_stream_prefix + metric_name};
+                        writeOutLine(wb, "# TYPE", key, "counter");
+                        DB::writeText(key, wb);
+                        DB::writeText("{name=", wb);
+                        DB::writeText(table_name, wb);
+                        DB::writeText("} ", wb);
+                        DB::writeIntText(value, wb);
+                        DB::writeChar('\n', wb);
+                    }
                 }
             }
         }

@@ -2,6 +2,7 @@
 
 #include <QueryPipeline/Pipe.h>
 #include <Storages/IStorage.h>
+#include <Storages/ExternalStream/ExternalStreamCounter.h>
 
 namespace DB
 {
@@ -15,6 +16,7 @@ public:
     virtual void shutdown() = 0;
     virtual bool supportsSubcolumns() const { return false; }
     virtual NamesAndTypesList getVirtuals() const { return {}; }
+    virtual ExternalStreamCounterPtr getExternalStreamCounter() const { return nullptr; }
 
     virtual Pipe read(
         const Names & column_names,
