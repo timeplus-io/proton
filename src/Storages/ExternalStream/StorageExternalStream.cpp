@@ -1,26 +1,24 @@
-#include "StorageExternalStream.h"
-#include <string>
-#include "ExternalStreamSettings.h"
-#include "ExternalStreamTypes.h"
-#include "StorageExternalStreamImpl.h"
-#include "Storages/IStorage_fwd.h"
-
-#include <Interpreters/ExpressionAnalyzer.h>
-/// External stream storages
-#include <Storages/ExternalStream/Kafka/Kafka.h>
-#include <Storages/SelectQueryInfo.h>
+#include <Storages/ExternalStream/StorageExternalStream.h>
 
 #ifdef OS_LINUX
 #    include <Storages/ExternalStream/Log/FileLog.h>
 #endif
 
 #include <Interpreters/Context.h>
+#include <Interpreters/ExpressionAnalyzer.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
 #include <Storages/StorageFactory.h>
+#include <Storages/SelectQueryInfo.h>
+#include <Storages/IStorage_fwd.h>
+#include <Storages/ExternalStream/ExternalStreamSettings.h>
+#include <Storages/ExternalStream/ExternalStreamTypes.h>
+#include <Storages/ExternalStream/StorageExternalStreamImpl.h>
+#include <Storages/ExternalStream/Kafka/Kafka.h>
 
 #include <re2/re2.h>
+#include <string>
 
 namespace DB
 {
@@ -58,7 +56,7 @@ void validateEngineArgs(ContextPtr context, ASTs & engine_args, const ColumnsDes
 }
 
 std::unique_ptr<StorageExternalStreamImpl> createExternalStream(
-    IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings, ContextPtr & context [[maybe_unused]], const ASTs & engine_args, bool attach, std::shared_ptr<ExternalStreamCounter> external_stream_counter)
+    IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings, ContextPtr & context [[maybe_unused]], const ASTs & engine_args, bool attach, ExternalStreamCounterPtr external_stream_counter)
 {
     if (settings->type.value.empty())
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream type is required in settings");
@@ -128,8 +126,9 @@ void StorageExternalStream::read(
     query_plan.addStep(std::move(read_step));
 }
 
-std::shared_ptr<ExternalStreamCounter> StorageExternalStream::getExternalStreamCounter(){
-    return external_stream_counter;
+ExternalStreamCounterPtr StorageExternalStream::getExternalStreamCounter()
+{
+    return external_stream->getExternalStreamCounter();
 }
 
 SinkToStoragePtr StorageExternalStream::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_)
@@ -146,16 +145,13 @@ StorageExternalStream::StorageExternalStream(
     bool attach)
     : IStorage(table_id_), WithContext(context_->getGlobalContext())
 {
-    external_stream_counter = std::make_shared<ExternalStreamCounter>();
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
     setInMemoryMetadata(storage_metadata);
 
-    auto stream = createExternalStream(this, std::move(external_stream_settings_), context_, engine_args, attach, external_stream_counter);
+    auto stream = createExternalStream(this, std::move(external_stream_settings_), context_, engine_args, attach, std::make_shared<ExternalStreamCounter>());
     external_stream.swap(stream);
 }
-
-
 
 void registerStorageExternalStream(StorageFactory & factory)
 {
@@ -184,4 +180,5 @@ void registerStorageExternalStream(StorageFactory & factory)
             .supports_settings = true,
         });
 }
+
 }

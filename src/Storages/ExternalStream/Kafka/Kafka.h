@@ -3,6 +3,7 @@
 #include <KafkaLog/KafkaWALCommon.h>
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
+#include <Storages/ExternalStream/ExternalStreamCounter.h>
 #include <Storages/Streaming/SeekToInfo.h>
 
 namespace DB
@@ -13,13 +14,14 @@ class IStorage;
 class Kafka final : public StorageExternalStreamImpl
 {
 public:
-    Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach, std::shared_ptr<ExternalStreamCounter> thecounter);
+    Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach, ExternalStreamCounterPtr external_stream_counter_);
     ~Kafka() override = default;
 
     void startup() override { }
     void shutdown() override { }
     bool supportsSubcolumns() const override { return true; }
     NamesAndTypesList getVirtuals() const override;
+    ExternalStreamCounterPtr getExternalStreamCounter() const override { return external_stream_counter; }
 
     Pipe read(
         const Names & column_names,
@@ -66,5 +68,7 @@ private:
 
     std::mutex shards_mutex;
     int32_t shards = 0;
+
+    ExternalStreamCounterPtr external_stream_counter;
 };
 }

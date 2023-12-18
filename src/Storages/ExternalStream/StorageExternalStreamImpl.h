@@ -2,6 +2,8 @@
 
 #include <QueryPipeline/Pipe.h>
 #include <Storages/IStorage.h>
+#include <Storages/ExternalStream/ExternalStreamCounter.h>
+
 namespace DB
 {
 /// Base class of StorageExternalStreamImpl
@@ -14,6 +16,8 @@ public:
     virtual void shutdown() = 0;
     virtual bool supportsSubcolumns() const { return false; }
     virtual NamesAndTypesList getVirtuals() const { return {}; }
+    virtual ExternalStreamCounterPtr getExternalStreamCounter() const { return nullptr; }
+
     virtual Pipe read(
         const Names & column_names,
         const StorageSnapshotPtr & storage_snapshot,
@@ -28,8 +32,6 @@ public:
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Ingesting data to this type of external stream is not supported");
     }
-
-    std::shared_ptr<ExternalStreamCounter> external_stream_counter;
 };
 
 }
