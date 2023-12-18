@@ -72,7 +72,7 @@ AggregateFunctionPtr createAggregateFunctionSum(const std::string & name, const 
 
 void registerAggregateFunctionSum(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("sum", createAggregateFunctionSum<AggregateFunctionSumSimple>, AggregateFunctionFactory::CaseSensitive);
+    factory.registerFunction("sum", createAggregateFunctionSum<AggregateFunctionSumSimple>, AggregateFunctionFactory::CaseInsensitive);
     factory.registerFunction("sum_with_overflow", createAggregateFunctionSum<AggregateFunctionSumWithOverflow>);
     factory.registerFunction("sum_kahan", createAggregateFunctionSum<AggregateFunctionSumKahan>);
 }

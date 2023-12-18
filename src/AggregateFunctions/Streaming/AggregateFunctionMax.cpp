@@ -19,7 +19,7 @@ createAggregateFunctionMax(const std::string & name, const DataTypes & argument_
 
 void registerAggregateFunctionsMaxRetract(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("__max_retract", createAggregateFunctionMax, AggregateFunctionFactory::CaseSensitive);
+    factory.registerFunction("__max_retract", createAggregateFunctionMax, AggregateFunctionFactory::CaseInsensitive);
 }
 }
 }

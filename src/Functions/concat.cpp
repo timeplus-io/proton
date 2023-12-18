@@ -230,7 +230,7 @@ private:
 
 REGISTER_FUNCTION(Concat)
 {
-    factory.registerFunction<ConcatOverloadResolver>({}, FunctionFactory::CaseSensitive);
+    factory.registerFunction<ConcatOverloadResolver>({}, FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionConcatAssumeInjective>();
 }
 

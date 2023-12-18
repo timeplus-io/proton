@@ -47,9 +47,10 @@ void ASTFunction::appendColumnNameImpl(WriteBuffer & ostr) const
         writeString(code_name, ostr);
         return;
     }
+
+    writeString(covered_name.empty() ? name : covered_name, ostr);
     /// proton: ends
 
-    writeString(name, ostr);
 
     if (parameters)
     {

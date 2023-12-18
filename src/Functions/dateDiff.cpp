@@ -475,7 +475,7 @@ private:
 
 REGISTER_FUNCTION(DateDiff)
 {
-    factory.registerFunction<FunctionDateDiff<true>>({}, FunctionFactory::CaseSensitive);
+    factory.registerFunction<FunctionDateDiff<true>>({}, FunctionFactory::CaseInsensitive);
 }
 
 REGISTER_FUNCTION(TimeDiff)
@@ -494,7 +494,7 @@ Example:
 
 REGISTER_FUNCTION(Age)
 {
-    factory.registerFunction<FunctionDateDiff<false>>({}, FunctionFactory::CaseSensitive);
+    factory.registerFunction<FunctionDateDiff<false>>({}, FunctionFactory::CaseInsensitive);
 }
 
 }

@@ -72,7 +72,7 @@ std::unordered_map<String, String> StreamingFunctionData::changelog_func_map = {
 
 std::optional<String> StreamingFunctionData::supportChangelog(const String & function_name)
 {
-    auto iter = changelog_func_map.find(function_name);
+    auto iter = changelog_func_map.find(Poco::toLower(function_name));
 
     /// Support combinator suffix, for example:
     /// `count`                 => `__count_retract`

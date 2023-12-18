@@ -33,11 +33,11 @@ public:
         const std::string & name,
         TableFunctionCreator creator,
         Documentation doc = {},
-        CaseSensitiveness case_sensitiveness = CaseSensitive,
+        CaseSensitiveness case_sensitiveness = CaseInsensitive,
         bool support_subquery = false);
 
     template <typename Function>
-    void registerFunction(Documentation doc = {}, CaseSensitiveness case_sensitiveness = CaseSensitive)
+    void registerFunction(Documentation doc = {}, CaseSensitiveness case_sensitiveness = CaseInsensitive)
     {
         auto creator = []() -> TableFunctionPtr { return std::make_shared<Function>(); };
         registerFunction(Function::name, std::move(creator), std::move(doc), case_sensitiveness);

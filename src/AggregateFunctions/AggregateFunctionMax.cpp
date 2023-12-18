@@ -31,7 +31,7 @@ AggregateFunctionPtr createAggregateFunctionArgMax(
 
 void registerAggregateFunctionsMax(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("max", createAggregateFunctionMax, AggregateFunctionFactory::CaseSensitive);
+    factory.registerFunction("max", createAggregateFunctionMax, AggregateFunctionFactory::CaseInsensitive);
 
     #if USE_ARG_MIN_MAX_FUNCS
     /// The functions below depend on the order of data.
