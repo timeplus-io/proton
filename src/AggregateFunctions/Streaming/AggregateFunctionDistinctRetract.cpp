@@ -3,8 +3,6 @@
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
 #include <AggregateFunctions/Helpers.h>
 
-#include <Common/typeid_cast.h>
-
 namespace DB
 {
 struct Settings;
@@ -40,23 +38,6 @@ namespace
             const DataTypes & arguments,
             const Array & params) const override
         {
-            AggregateFunctionPtr res;
-            if (arguments.size() == 1)
-            {
-                res.reset(createWithNumericType<AggregateFunctionDistinctRetract, AggregateFunctionDistinctRetractSingleNumericData>(
-                    *arguments[0], nested_function, arguments, params));
-
-                if (res)
-                    return res;
-
-                if (arguments[0]->isValueUnambiguouslyRepresentedInContiguousMemoryRegion())
-                    return std::make_shared<AggregateFunctionDistinctRetract<AggregateFunctionDistinctRetractSingleGenericData<true>>>(
-                        nested_function, arguments, params);
-                else
-                    return std::make_shared<AggregateFunctionDistinctRetract<AggregateFunctionDistinctRetractSingleGenericData<false>>>(
-                        nested_function, arguments, params);
-            }
-
             return std::make_shared<AggregateFunctionDistinctRetract<AggregateFunctionDistinctRetractMultipleGenericData>>(
                 nested_function, arguments, params);
         }

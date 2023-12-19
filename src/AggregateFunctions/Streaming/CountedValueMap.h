@@ -38,6 +38,7 @@ struct CountedValueArena<StringRef>
             arena.free(const_cast<char *>(key.data), key.size);
     }
 
+    ArenaWithFreeLists * getArenaWithFreeLists() { return &arena; }
 private:
     ArenaWithFreeLists arena;
 };
@@ -98,6 +99,35 @@ public:
         return true;
     }
 
+    /// return true meaning: this is a new added element
+    bool insertIfNewData(T v)
+    {
+        if (atCapacity()) [[unlikely]]
+        {
+            /// At capacity, this is an optimization
+            /// fast ignore elements we don't want to maintain
+            if (less(lastValue(), v))
+                return false;
+        }
+
+        auto iter = m.find(v);
+        if (iter != m.end())
+        {
+            ++iter->second;
+        }
+        else
+        {
+            /// Didn't find v in the map
+            [[maybe_unused]] auto [_, inserted] = m.emplace(arena->emplace(std::move(v)), 1);
+            assert(inserted);
+
+            eraseExtraElements();
+            return true;
+        }
+
+        return false;
+    }
+
     /// To enable heterogeneous erase
     template <typename TT>
     bool erase(const TT & v)
@@ -113,6 +143,24 @@ public:
             }
 
             return true;
+        }
+        return false;
+    }
+
+    template <typename TT>
+    bool eraseIfNewData(const TT & v)
+    {
+        auto iter = m.find(v);
+        if (iter != m.end())
+        {
+            --iter->second;
+            if (iter->second == 0)
+            {
+                arena->free(iter->first);
+                m.erase(iter);
+                return true;
+            }
+
         }
         return false;
     }

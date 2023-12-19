@@ -1,199 +1,58 @@
 #pragma once
 
 #include <AggregateFunctions/IAggregateFunction.h>
-#include <AggregateFunctions/KeyHolderHelpers.h>
-#include <Columns/ColumnArray.h>
-#include <Common/assert_cast.h>
-#include <Common/HashTable/HashMap.h>
+#include <AggregateFunctions/Streaming/CountedValueMap.h>
 
-#include <absl/container/flat_hash_map.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteHelpers.h>
+#include <IO/ReadBuffer.h>
+#include <IO/ReadHelpers.h>
 
 namespace DB
 {
 namespace Streaming
 {
 
-template <typename T>
-struct AggregateFunctionDistinctRetractSingleNumericData
-{
-    /// When creating, the hash table must be small.
-    using Map = HashMapWithStackMemory<T, UInt64, DefaultHash<T>, 4>;
-    using Self = AggregateFunctionDistinctRetractSingleNumericData<T>;
-    Map map;
+/// uint32 max value
+constexpr uint32_t INTERNAL_MAP_SIZE = 0xFFFFFFFF;
 
-    /// proton: starts. Resolve multiple finalizations problem for streaming global aggregation query
-    absl::flat_hash_map<T, uint64_t, absl::Hash<T>> extra_data_since_last_finalize;
+struct AggregateFunctionDistinctRetractGenericData
+{
+    /// proton: starts.
+    /// When creating, the hash table must be small.
+    using Map = CountedValueMap<StringRef, false>; /// map<key(without delta_col), uint32>
+    using Self = AggregateFunctionDistinctRetractGenericData;
+    Map map;
+    std::vector<std::pair<std::string, int8_t>> extra_data_since_last_finalize; /// first element is key, second one is delta_col
     bool use_extra_data = false;  /// Optimized, only streaming global aggregation query need to use extra data after first finalization.
     /// proton: ends.
 
-    void add(const IColumn ** columns, size_t /* columns_num */, size_t row_num, Arena *)
-    {
-        const auto & vec = assert_cast<const ColumnVector<T> &>(*columns[0]).getData();
-        /// proton: starts.
-        map[vec[row_num]]++;
-        if (use_extra_data)
-            extra_data_since_last_finalize[vec[row_num]]++;
-        /// proton: ends.
-    }
-
-    void negate(const IColumn ** columns, size_t /* columns_num */, size_t row_num, Arena *)
-    {
-        const auto & vec = assert_cast<const ColumnVector<T> &>(*columns[0]).getData();
-        /// proton: starts.
-
-        const auto & inserted_data = vec[row_num];
-
-        map[inserted_data]--;
-        if (map[inserted_data] == 0)
-            map.erase(inserted_data);
-
-
-        if (use_extra_data)
-        {
-            extra_data_since_last_finalize[inserted_data]--;
-            if (extra_data_since_last_finalize[inserted_data] == 0)
-                extra_data_since_last_finalize.erase(inserted_data);
-        }
-        /// proton: ends.
-    }
+    AggregateFunctionDistinctRetractGenericData() : map(INTERNAL_MAP_SIZE) { }
 
     void merge(const Self & rhs, Arena *)
     {
         /// proton: starts.
         if (rhs.use_extra_data)
         {
-            for (const auto & pair : rhs.extra_data_since_last_finalize)
+            for (const auto & [key, delta_col] : rhs.extra_data_since_last_finalize)
             {
-                map[pair.first] += pair.second;
-                if (use_extra_data)
-                    extra_data_since_last_finalize[pair.first] += pair.second;
+                bool inserted = map.insert(key);
+                if (use_extra_data && inserted)
+                    extra_data_since_last_finalize.emplace_back(key, delta_col);
             }
         }
         else if (use_extra_data)
         {
-            for (const auto & pair : rhs.map)
+            for (const auto & [key, count] : rhs.map)
             {
-                map[pair.getKey()] += pair.getMapped();
-
-                extra_data_since_last_finalize[pair.getKey()] += pair.getMapped();
+                bool inserted = map.insert(key, count);
+                if (inserted)
+                    extra_data_since_last_finalize.emplace_back(key.toString(), +1);
             }
         }
         else
         {
-            for (const auto & pair : rhs.map)
-                map[pair.getKey()] += pair.getMapped();
-        }
-        /// proton: ends.
-    }
-
-    void serialize(WriteBuffer & buf) const
-    {
-        /// proton: starts.
-        /// serialize historical data:
-
-        writeVarUInt(map.size(), buf);
-        for (const auto & elem : map)
-        {
-            writeBinary(elem.getKey(), buf);
-            writeVarUInt(elem.getMapped(), buf);
-        }
-
-        /// serialize increment data:
-
-        writeVarUInt(extra_data_since_last_finalize.size(), buf);
-        for (const auto & pair : extra_data_since_last_finalize)
-        {
-            writeBinary(pair.first, buf);
-            writeVarUInt(pair.second, buf);
-        }
-        writeBoolText(use_extra_data, buf);
-        /// proton: ends.
-    }
-
-    void deserialize(ReadBuffer & buf, Arena *)
-    {
-        /// proton: starts.
-        size_t his_data_size = 0;
-        readVarUInt(his_data_size, buf);
-        map.reserve(his_data_size);
-
-        T key;
-        uint64_t value;
-        for (size_t i = 0; i < his_data_size; ++i)
-        {
-            readBinary(key, buf);
-            readVarUInt(value, buf);
-            map[key] = value;
-        }
-
-        size_t stream_data_size = 0;
-        readVarUInt(stream_data_size, buf);
-        extra_data_since_last_finalize.reserve(stream_data_size);
-
-        auto hint = extra_data_since_last_finalize.end();  
-        for (size_t i = 0; i < stream_data_size; ++i)
-        {
-            readBinary(key, buf);
-            readVarUInt(value, buf);
-            hint = extra_data_since_last_finalize.emplace_hint(hint, key, value); 
-        }
-        readBoolText(use_extra_data, buf);
-        /// proton: ends.
-    }
-
-    MutableColumns getArguments(const DataTypes & argument_types) const
-    {
-        MutableColumns argument_columns;
-        argument_columns.emplace_back(argument_types[0]->createColumn());
-
-        /// proton: starts.
-        if (use_extra_data)
-        {
-            for (const auto & pair : extra_data_since_last_finalize)
-                argument_columns[0]->insert(pair.first);
-        }
-        else
-        {
-            for (const auto & elem : map)
-                argument_columns[0]->insert(elem.getKey());
-        }
-        /// proton: ends.
-
-        return argument_columns;
-    }
-};
-
-struct AggregateFunctionDistinctRetractGenericData
-{
-    /// When creating, the hash table must be small.
-    using Map = HashMapWithStackMemory<StringRef, UInt64, StringRefHash, 4>;
-    using Self = AggregateFunctionDistinctRetractGenericData;
-    Map map;
-    /// proton: starts. Resolve multiple finalizations problem for streaming global aggregation query
-    absl::flat_hash_map<StringRef, UInt64, StringRefHash> extra_data_since_last_finalize;
-    bool use_extra_data = false;  /// Optimized, only streaming global aggregation query need to use extra data after first finalization.
-    /// proton: ends.
-
-    void merge(const Self & rhs, Arena * arena)
-    {
-        Map::LookupResult it;
-        bool inserted;
-        for (const auto & elem : rhs.map)
-        /// proton: starts.
-        {
-            map.emplace(ArenaKeyHolder{elem.getKey(), *arena}, it, inserted);
-            if (inserted)
-                new (&it->getMapped()) UInt64(elem.getMapped());
-            else
-                new (&it->getMapped()) UInt64(elem.getMapped() + it->getMapped());
-
-            if (use_extra_data)
-            {
-                assert(it);
-                auto [it_new, inserted_new] = extra_data_since_last_finalize.try_emplace(it->getKey(), elem.getMapped());
-                if (!inserted_new)
-                    it_new->second += elem.getMapped();
-            }
+            map.merge(rhs.map);
         }
         /// proton: ends.
     }
@@ -201,184 +60,87 @@ struct AggregateFunctionDistinctRetractGenericData
     void serialize(WriteBuffer & buf) const
     {
         writeVarUInt(map.size(), buf);
-        for (const auto & elem : map)
+        for (const auto & [key, count] : map)
         {
-            writeStringBinary(elem.getKey(), buf);
-            writeVarUInt(elem.getMapped(), buf);
+            writeStringBinary(key, buf);
+            writeVarUInt(count, buf);
         }
 
-        /// proton: starts.
-        writeVarUInt(extra_data_since_last_finalize.size(), buf);
-        for (const auto & pair : extra_data_since_last_finalize)
-        {
-            writeStringBinary(pair.first, buf);
-            writeVarUInt(pair.second, buf);
-        }
-
+        writeVectorBinary(extra_data_since_last_finalize, buf);
         writeBoolText(use_extra_data, buf);
-        /// proton: ends.
     }
 
     void deserialize(ReadBuffer & buf, Arena * arena)
     {
-        size_t size;
-        readVarUInt(size, buf);
-        map.reserve(size);
+        map.clear();
 
-        StringRef key_data;
-        uint64_t value_data;
-        for (size_t i = 0; i < size; ++i) 
+        size_t map_size;
+        readVarUInt(map_size, buf);
+
+        uint32_t count;
+        for (size_t i = 0; i < map_size; ++i)
         {
-            key_data = readStringBinaryInto(*arena, buf);
-            readVarUInt(value_data, buf);
-            map[key_data] = value_data;
+            StringRef ref = readStringBinaryInto(*arena, buf);
+            readVarUInt(count, buf);
+            map.insert(ref, count);
+            arena->rollback(ref.size);
         }
 
-        /// proton: starts.
-        size_t extra_size;
-        readVarUInt(extra_size, buf);
-        extra_data_since_last_finalize.reserve(extra_size);
-
-        auto hint = extra_data_since_last_finalize.end();  
-        for (size_t i = 0; i < extra_size; ++i)
-        {
-            key_data = readStringBinaryInto(*arena, buf);
-            readVarUInt(value_data, buf);
-            hint = extra_data_since_last_finalize.emplace_hint(hint, key_data, value_data); 
-        }   
-
+        readVectorBinary(extra_data_since_last_finalize, buf);
         readBoolText(use_extra_data, buf);
-        /// proton: ends.
-    }
-};
-
-template <bool is_plain_column>
-struct AggregateFunctionDistinctRetractSingleGenericData : public AggregateFunctionDistinctRetractGenericData
-{
-    void add(const IColumn ** columns, size_t /* columns_num */, size_t row_num, Arena * arena)
-    {
-        auto key_holder = getKeyHolder<is_plain_column>(*columns[0], row_num, *arena);
-        auto & key_data = keyHolderGetKey(key_holder);
-        map[key_data]++;
-
-        /// proton: starts.
-        if (use_extra_data )
-            extra_data_since_last_finalize[key_data]++;
-        /// proton: ends.
-    }
-
-    void negate(const IColumn ** columns, size_t /* columns_num */, size_t row_num, Arena * arena)
-    {
-        auto key_holder = getKeyHolder<is_plain_column>(*columns[0], row_num, *arena);
-        auto & key_data = keyHolderGetKey(key_holder);
-        map[key_data]--;
-        if (map[key_data] == 0)
-            map.erase(key_data);
-
-        /// proton: starts.
-        if (use_extra_data)
-        {
-            extra_data_since_last_finalize[key_data]--;
-            if (extra_data_since_last_finalize[key_data] == 0)
-                extra_data_since_last_finalize.erase(key_data);
-        }
-    }
-
-    MutableColumns getArguments(const DataTypes & argument_types) const
-    {
-        MutableColumns argument_columns;
-        argument_columns.emplace_back(argument_types[0]->createColumn());
-
-        /// proton: starts.
-        if (use_extra_data)
-        {
-            for (const auto & data : extra_data_since_last_finalize)
-                deserializeAndInsert<is_plain_column>(data.first, *argument_columns[0]);
-        }
-        else
-        {
-            for (const auto & elem : map)
-                deserializeAndInsert<is_plain_column>(elem.getKey(), *argument_columns[0]);
-        }
-        /// proton: ends.
-
-        return argument_columns;
     }
 };
 
 struct AggregateFunctionDistinctRetractMultipleGenericData : public AggregateFunctionDistinctRetractGenericData
 {
-    void add(const IColumn ** columns, size_t columns_num, size_t row_num, Arena * arena)
+    void add(StringRef key)
     {
-        const char * begin = nullptr;
-        StringRef value(begin, 0);
-        for (size_t i = 0; i < columns_num; ++i)
-        {
-            auto cur_ref = columns[i]->serializeValueIntoArena(row_num, *arena, begin);
-            value.data = cur_ref.data - value.size;
-            value.size += cur_ref.size;
-        }
-
-        auto key_holder = SerializedKeyHolder{value, *arena};
-        auto & key_data = keyHolderGetKey(key_holder);
-        map[key_data]++;
-
         /// proton: starts.
-        if (use_extra_data)
-            extra_data_since_last_finalize[key_data]++;
+        bool is_new_inserted_key = map.insertIfNewData(key);
+        if (use_extra_data && is_new_inserted_key)
+            extra_data_since_last_finalize.emplace_back(key.toString(), +1);
         /// proton: ends.
     }
 
-    void negate(const IColumn ** columns, size_t columns_num, size_t row_num, Arena * arena)
+    void negate(StringRef key)
     {
-        const char * begin = nullptr;
-        StringRef value(begin, 0);
-        for (size_t i = 0; i < columns_num; ++i)
-        {
-            auto cur_ref = columns[i]->serializeValueIntoArena(row_num, *arena, begin);
-            value.data = cur_ref.data - value.size;
-            value.size += cur_ref.size;
-        }
-
-        auto key_holder = SerializedKeyHolder{value, *arena};
-        auto & key_data = keyHolderGetKey(key_holder);
-        map[key_data]--;
-        if (map[key_data] == 0)
-            map.erase(key_data);
-
         /// proton: starts.
-        if (use_extra_data)
-        {
-            extra_data_since_last_finalize[key_data]--;
-            if (extra_data_since_last_finalize[key_data] == 0)
-                extra_data_since_last_finalize.erase(key_data);
-        }
+        bool is_new_erased_key = map.eraseIfNewData(key);
+        if (use_extra_data && is_new_erased_key)
+            extra_data_since_last_finalize.emplace_back(key.toString(), -1);
         /// proton: ends.
     }
 
     MutableColumns getArguments(const DataTypes & argument_types) const
     {
-        MutableColumns argument_columns(argument_types.size());
-        for (size_t i = 0; i < argument_types.size(); ++i)
+        const size_t argument_size = argument_types.size();
+        MutableColumns argument_columns(argument_size);
+        for (size_t i = 0; i < argument_size; ++i)
             argument_columns[i] = argument_types[i]->createColumn();
 
         /// proton: starts.
         if (use_extra_data)
         {
-            for (const auto & pair : extra_data_since_last_finalize)
+            for (const auto & [key, delta_col] : extra_data_since_last_finalize)
             {
-                const char * begin = pair.first.data;
-                for (auto & column : argument_columns)
-                    begin = column->deserializeAndInsertFromArena(begin);
+                /// serialize key
+                const char * begin = key.c_str();
+                for (size_t i = 0; i < argument_size - 1; ++i)
+                    begin = argument_columns[i]->deserializeAndInsertFromArena(begin);
+
+                /// insert delta_col
+                argument_columns[argument_size - 1]->insert(delta_col);
             }
         }
         else
         {
-            for (const auto & elem : map)
+            for (const auto & [key, _] : map)
             {
-                const char * begin = elem.getKey().data;
-                for (auto & column : argument_columns)
-                    begin = column->deserializeAndInsertFromArena(begin);
+                const char * begin = key.data;
+                for (size_t i = 0; i < argument_size - 1; ++i)
+                    begin = argument_columns[i]->deserializeAndInsertFromArena(begin);
+
+                argument_columns[argument_size - 1]->insert(static_cast<int8_t>(+1));
             }
         }
         /// proton: ends.
@@ -420,27 +182,53 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
-        this->data(place).add(columns, arguments_num, row_num, arena);
+        const char * begin = nullptr;
+        StringRef value(begin, 0);
+        /// We do not serialize the `delta_col` because it is meaningless; calling the `add()` function with only +1 is sufficient.
+        for (size_t i = 0; i < arguments_num - 1; ++i)
+        {
+            auto cur_ref = columns[i]->serializeValueIntoArena(row_num, *arena, begin);
+            value.data = cur_ref.data - value.size;
+            value.size += cur_ref.size;
+        }
+
+        this->data(place).add(value);
+        /// Rollback the operation since the arena in this function serves as a data serialization buffer.
+        arena->rollback(value.size);
     }
 
     void negate(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
-        this->data(place).negate(columns, arguments_num, row_num, arena);
+        const char * begin = nullptr;
+        StringRef value(begin, 0);
+        for (size_t i = 0; i < arguments_num - 1; ++i)
+        {
+            auto cur_ref = columns[i]->serializeValueIntoArena(row_num, *arena, begin);
+            value.data = cur_ref.data - value.size;
+            value.size += cur_ref.size;
+        }
+
+        this->data(place).negate(value);
+
+        arena->rollback(value.size);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         this->data(place).merge(this->data(rhs), arena);
+        nested_func->merge(getNestedPlace(place), getNestedPlace(rhs), arena);
     }
 
     void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> /* version */) const override
     {
         this->data(place).serialize(buf);
+        nested_func->serialize(getNestedPlace(place), buf);
     }
 
     void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena * arena) const override
     {
         this->data(place).deserialize(buf, arena);
+        nested_func->deserialize(getNestedPlace(place), buf, std::nullopt /* version */, arena);
     }
 
     template <bool MergeResult>
@@ -454,7 +242,14 @@ public:
         /// the last position reserved for `delta` col, and one col for the data input.
         assert(arguments.size() >= 2);
 
-        nested_func->addBatchSinglePlace(0, arguments[0]->size(), getNestedPlace(place), arguments_raw.data(), arena, -1 /* if_argument_pos */, *(arguments_raw.end()-1) /* delta_col */);
+        nested_func->addBatchSinglePlace(
+            0,
+            arguments[0]->size(),
+            getNestedPlace(place),
+            arguments_raw.data(),
+            arena,
+            -1 /* if_argument_pos */,
+            *(arguments_raw.end() - 1) /* delta_col */);
         if constexpr (MergeResult)
             nested_func->insertMergeResultInto(getNestedPlace(place), to, arena);
         else
