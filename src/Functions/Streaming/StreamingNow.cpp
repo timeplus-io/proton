@@ -29,10 +29,10 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName &, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
-        if (unlikely(input_rows_count == 0))
-            return result_type->createColumn();
-
-        return result_type->createColumnConst(input_rows_count, static_cast<UInt64>(time(nullptr)));
+        /// NOTE: The `FilterTransform` will try optimizing filter ConstColumn to always_false or always_true,
+        /// for exmaple: `now() < '2020-1-1 00:00:01'`, it will be optimized always_true or always_false.
+        /// So we can not create a constant column, since the column data isn't constants value in fact.
+        return result_type->createColumnConst(input_rows_count, static_cast<UInt64>(time(nullptr)))->convertToFullColumnIfConst();
     }
 };
 

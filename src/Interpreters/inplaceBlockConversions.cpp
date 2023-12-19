@@ -199,8 +199,8 @@ ActionsDAGPtr evaluateMissingDefaults(
     /// For streaming `insert select`, we should use `__streaming_now/__streaming_now64` to avoid generate same time for each block
     if (expr_list && is_streaming)
     {
-        Streaming::SubstituteStreamingNowFunctionVisitor::Data data;
-        Streaming::SubstituteStreamingNowFunctionVisitor(data).visit(expr_list);
+        Streaming::SubstituteFunctionsVisitor::Data data{{{"now", "__streaming_now"}, {"now64", "__streaming_now64"}}};
+        Streaming::SubstituteFunctionsVisitor(data).visit(expr_list);
     }
     /// proton: ends.
     return createExpressions(header, expr_list, save_unneeded_columns, required_columns, context);

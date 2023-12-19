@@ -127,12 +127,7 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
     {
         auto iter = func_map.find(func.name);
         if (iter != func_map.end())
-        {
-            /// Always show original func name
-            func.covered_name = func.name;
-            func.name = iter->second;
-            return;
-        }
+            return substitueFunction(func, iter->second);
 
         if (is_changelog)
         {
@@ -184,10 +179,13 @@ bool StreamingFunctionData::ignoreSubquery(const DB::ASTPtr &, const DB::ASTPtr 
     return true;
 }
 
-void StreamingNowFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
+void substitueFunction(ASTFunction & func, const String & new_name)
 {
-    if (func.name == "now" || func.name == "now64")
-        func.name = "__streaming_" + func.name;
+    /// Keep original function name
+    if (func.covered_name.empty())
+        func.covered_name = std::move(func.name);
+
+    func.name = new_name;
 }
 }
 }
