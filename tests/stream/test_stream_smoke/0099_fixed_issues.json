@@ -543,91 +543,91 @@
       ]
     },
     {
-        "id": 19,
-        "tags": ["append_time_test"],
-        "name": "#223",
-        "description": "Covering the append time test.The orginal issue is append_time column is 0 while select _tp_time and _tp_append_time together",
-        "steps":[
-          {
-            "statements": [
-              {"client":"python", "query_type": "table", "query": "drop stream if exists test_append_time"},
-              {"client":"python", "query_type": "table", "exist": "test_append_time", "exist_wait":2, "wait":1, "query": "create stream if not exists test_append_time(id int, value int);"},
-              {"client":"python", "query_type": "table", "query": "insert into test_append_time(id, value) values(1, 2);"},
-              {"client":"python", "query_type": "table", "query": "insert into test_append_time(id, value) values(3, 2);"},
-              {"client":"python", "query_type": "table", "query": "insert into test_append_time(id, value) values(5, 2);"},
-              {"client":"python", "query_type": "stream", "depends_on_stream":"test_append_time", "query_id":"9919", "wait":5, "query":"with cte as (select *, _tp_append_time from test_append_time)select date_diff('millisecond', to_datetime64(_tp_append_time/1000, 3, 'UTC'), _tp_time) < 10 from cte where _tp_time > earliest_timestamp();"},
-              {"client":"python", "query_type": "table", "depends_on":"9919", "wait":1, "query": "insert into test_append_time(id, value) values(5, 2);"},
-              {"client":"python", "query_type": "table", "query": "insert into test_append_time(id, value) values(6, 2);"},
-              {"client":"python", "query_type": "table", "kill":9919, "kill_wait":3, "query": "insert into test_append_time(id, value) values(6, 2);"}
-            ]
-          }
-        ],
-        "expected_results": [
-          {"query_id":"9919", "expected_results":[
-            ["True"],
-            ["True"],
-            ["True"],
-            ["True"],
-            ["True"],
-            ["True"]
-          ]}
-        ]
-      },
-      {
-        "id": 20,
-        "tags": ["backfill", "virtual_column"],
-        "name": "#370",
-        "description": "Covering backfill from historical with virtual columns test.",
-        "steps":[
-          {
-            "statements": [
-              {"client":"python", "query_type": "table", "query": "drop stream if exists fixed_test_stream_99"},
-              {"client":"python", "query_type": "table", "exist": "fixed_test_stream_99", "exist_wait":2, "wait":1, "query": "create stream if not exists fixed_test_stream_99(id int, value int) settings shards=3, sharding_expr='weak_hash32(id)';"},
-              {"client":"python", "query_type": "table", "depends_on_stream": "fixed_test_stream_99", "wait":2, "query": "insert into fixed_test_stream_99(id, value) values(1, 2);"},
-              {"client":"python", "query_type": "stream", "depends_on_stream":"fixed_test_stream_99", "query_id":"9920", "query":"select id, _tp_shard from fixed_test_stream_99 where _tp_time > earliest_ts() settings enable_backfill_from_historical_store=true;"},
-              {"client":"python", "query_type": "table", "kill":9920, "kill_wait":3, "query": "insert into fixed_test_stream_99(id, value) values(2, 2)(3, 3);"},
-              {"client":"python", "query_type": "table", "kill":9920, "kill_wait":3, "query": "insert into fixed_test_stream_99(id, value) values(2, 2)(3, 3);"}
-            ]
-          }
-        ],
-        "expected_results": [
-          {"query_id":"9920", "expected_results":[
-            [1, 0],
-            [2, 0],
-            [3, 2]
-          ]}
-        ]
-      },
-      {
-        "id": 21,
-        "tags": ["window function", "const event time"],
-        "name": "#423",
-        "description": "Covering window function with const event time column test.",
-        "steps":[
-          {
-            "statements": [
-              {"client":"python", "query_type": "table", "query": "drop stream if exists fixed_test_stream_99"},
-              {"client":"python", "query_type": "table", "exist": "fixed_test_stream_99", "exist_wait":2, "wait":1, "query": "create random stream if not exists fixed_test_stream_99(raw string) settings eps=500;"},
-              {"client":"python", "query_type": "stream", "depends_on_stream":"fixed_test_stream_99", "query_id":"9921", "query_end_timer":5, "query":"WITH cte AS (SELECT now64(3) AS _tp_time, to_int64(raw:event_ts) AS event_ts FROM l1 SETTINGS record_consume_batch_count = 1000) SELECT count(1), window_start, window_end FROM tumble(cte, 1s) GROUP BY window_start, window_end limit 2;"},
-              {"client":"python", "query_type": "stream", "depends_on_stream":"fixed_test_stream_99", "query_id":"9922", "query_end_timer":5, "query":"WITH cte AS (SELECT now64(3) AS _tp_time, to_int64(raw:event_ts) AS event_ts FROM l1 SETTINGS record_consume_batch_count = 1000) SELECT count(1), window_start, window_end FROM hop(cte, 1s, 3s) GROUP BY window_start, window_end limit 3;"},
-              {"client":"python", "query_type": "stream", "depends_on_stream":"fixed_test_stream_99", "query_id":"9923", "query_end_timer":5, "query":"WITH cte AS (SELECT now64(3) AS _tp_time, to_int64(raw:event_ts) AS event_ts FROM l1 SETTINGS record_consume_batch_count = 1000) SELECT count(1), window_start, window_end FROM session(cte, 1s, 3s) GROUP BY window_start, window_end limit 1;"}
-            ]
-          }
-        ],
-        "expected_results": [
-          {"query_id":"9921", "expected_results":[
-            ["any_value", "any_value", "any_value"],
-            ["any_value", "any_value", "any_value"]
-          ]},
-          {"query_id":"9922", "expected_results":[
-            ["any_value", "any_value", "any_value"],
-            ["any_value", "any_value", "any_value"],
-            ["any_value", "any_value", "any_value"]
-          ]},
-          {"query_id":"9923", "expected_results":[
-            ["any_value", "any_value", "any_value"]
-          ]}
-        ]
-      }
+      "id": 19,
+      "tags": ["append_time_test"],
+      "name": "#223",
+      "description": "Covering the append time test.The orginal issue is append_time column is 0 while select _tp_time and _tp_append_time together",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "query": "drop stream if exists test_append_time"},
+            {"client":"python", "query_type": "table", "exist": "test_append_time", "exist_wait":2, "wait":1, "query": "create stream if not exists test_append_time(id int, value int);"},
+            {"client":"python", "query_type": "table", "query": "insert into test_append_time(id, value) values(1, 2);"},
+            {"client":"python", "query_type": "table", "query": "insert into test_append_time(id, value) values(3, 2);"},
+            {"client":"python", "query_type": "table", "query": "insert into test_append_time(id, value) values(5, 2);"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"test_append_time", "query_id":"9919", "wait":5, "query":"with cte as (select *, _tp_append_time from test_append_time)select date_diff('millisecond', to_datetime64(_tp_append_time/1000, 3, 'UTC'), _tp_time) < 10 from cte where _tp_time > earliest_timestamp();"},
+            {"client":"python", "query_type": "table", "depends_on":"9919", "wait":1, "query": "insert into test_append_time(id, value) values(5, 2);"},
+            {"client":"python", "query_type": "table", "query": "insert into test_append_time(id, value) values(6, 2);"},
+            {"client":"python", "query_type": "table", "kill":9919, "kill_wait":3, "query": "insert into test_append_time(id, value) values(6, 2);"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9919", "expected_results":[
+          ["True"],
+          ["True"],
+          ["True"],
+          ["True"],
+          ["True"],
+          ["True"]
+        ]}
+      ]
+    },
+    {
+      "id": 20,
+      "tags": ["backfill", "virtual_column"],
+      "name": "#370",
+      "description": "Covering backfill from historical with virtual columns test.",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "query": "drop stream if exists fixed_test_stream_99"},
+            {"client":"python", "query_type": "table", "exist": "fixed_test_stream_99", "exist_wait":2, "wait":1, "query": "create stream if not exists fixed_test_stream_99(id int, value int) settings shards=3, sharding_expr='weak_hash32(id)';"},
+            {"client":"python", "query_type": "table", "depends_on_stream": "fixed_test_stream_99", "wait":2, "query": "insert into fixed_test_stream_99(id, value) values(1, 2);"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"fixed_test_stream_99", "query_id":"9920", "query":"select id, _tp_shard from fixed_test_stream_99 where _tp_time > earliest_ts() settings enable_backfill_from_historical_store=true;"},
+            {"client":"python", "query_type": "table", "kill":9920, "kill_wait":3, "query": "insert into fixed_test_stream_99(id, value) values(2, 2)(3, 3);"},
+            {"client":"python", "query_type": "table", "kill":9920, "kill_wait":3, "query": "insert into fixed_test_stream_99(id, value) values(2, 2)(3, 3);"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9920", "expected_results":[
+          [1, 0],
+          [2, 0],
+          [3, 2]
+        ]}
+      ]
+    },
+    {
+      "id": 21,
+      "tags": ["window function", "const event time"],
+      "name": "#423",
+      "description": "Covering window function with const event time column test.",
+      "steps":[
+        {
+          "statements": [
+            {"client":"python", "query_type": "table", "query": "drop stream if exists fixed_test_stream_99"},
+            {"client":"python", "query_type": "table", "exist": "fixed_test_stream_99", "exist_wait":2, "wait":1, "query": "create random stream if not exists fixed_test_stream_99(raw string) settings eps=2;"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"fixed_test_stream_99", "wait": 1, "query_id":"9921", "query_end_timer":5, "query":"WITH cte AS (SELECT now64(3) AS _tp_time, to_int64(raw:event_ts) AS event_ts FROM fixed_test_stream_99 SETTINGS record_consume_batch_count = 1000) SELECT count(1), window_start, window_end FROM tumble(cte, 1s) GROUP BY window_start, window_end limit 2;"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"fixed_test_stream_99", "wait": 1, "query_id":"9922", "query_end_timer":5, "query":"WITH cte AS (SELECT now64(3) AS _tp_time, to_int64(raw:event_ts) AS event_ts FROM fixed_test_stream_99 SETTINGS record_consume_batch_count = 1000) SELECT count(1), window_start, window_end FROM hop(cte, 1s, 3s) GROUP BY window_start, window_end limit 3;"},
+            {"client":"python", "query_type": "stream", "depends_on_stream":"fixed_test_stream_99", "wait": 1, "query_id":"9923", "query_end_timer":5, "query":"WITH cte AS (SELECT now64(3) AS _tp_time, to_int64(raw:event_ts) AS event_ts FROM fixed_test_stream_99 SETTINGS record_consume_batch_count = 1000) SELECT count(1), window_start, window_end FROM session(cte, 1s, 3s) GROUP BY window_start, window_end limit 1;"}
+          ]
+        }
+      ],
+      "expected_results": [
+        {"query_id":"9921", "expected_results":[
+          ["any_value", "any_value", "any_value"],
+          ["any_value", "any_value", "any_value"]
+        ]},
+        {"query_id":"9922", "expected_results":[
+          ["any_value", "any_value", "any_value"],
+          ["any_value", "any_value", "any_value"],
+          ["any_value", "any_value", "any_value"]
+        ]},
+        {"query_id":"9923", "expected_results":[
+          ["any_value", "any_value", "any_value"]
+        ]}
+      ]
+    }
   ]
 }

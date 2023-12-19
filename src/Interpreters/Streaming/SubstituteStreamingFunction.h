@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Parsers/ASTFunction.h>
 #include <Interpreters/InDepthNodeVisitor.h>
+#include <Parsers/ASTFunction.h>
 
 namespace DB
 {
@@ -35,15 +35,26 @@ private:
     std::optional<String> supportChangelog(const String & function_name);
 };
 
-using SubstituteStreamingFunctionVisitor = InDepthNodeVisitor<OneTypeMatcher<StreamingFunctionData, StreamingFunctionData::ignoreSubquery>, false>;
+using SubstituteStreamingFunctionVisitor
+    = InDepthNodeVisitor<OneTypeMatcher<StreamingFunctionData, StreamingFunctionData::ignoreSubquery>, false>;
 
-struct StreamingNowFunctionData
+
+void substitueFunction(ASTFunction & func, const String & new_name);
+
+struct SubstituteFunctionsData
 {
     using TypeToVisit = ASTFunction;
 
-    void visit(ASTFunction & func, ASTPtr);
+    std::unordered_map<String, String> func_map;
+
+    void visit(ASTFunction & func, ASTPtr &) const
+    {
+        auto iter = func_map.find(Poco::toLower(func.name));
+        if (iter != func_map.end())
+            substitueFunction(func, iter->second);
+    }
 };
 
-using SubstituteStreamingNowFunctionVisitor = InDepthNodeVisitor<OneTypeMatcher<StreamingNowFunctionData>, false>;
+using SubstituteFunctionsVisitor = InDepthNodeVisitor<OneTypeMatcher<SubstituteFunctionsData>, false>;
 }
 }
