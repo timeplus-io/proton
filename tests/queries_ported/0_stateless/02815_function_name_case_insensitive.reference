@@ -1,2 +1,9 @@
-2	7	3	5	10	8	2
-2	4	2	3	6	2	1
+0
+---- normal aggregate functions ----
+3	2	10	2	6	12	32	3
+2	2	7	4	5.5	11	4.5	2
+1	2	4	2	3	6	2	1
+---- combination aggrefation functions ----
+3	1	12
+2	2	11
+1	1	6
