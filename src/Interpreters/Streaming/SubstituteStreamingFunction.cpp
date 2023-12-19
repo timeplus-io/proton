@@ -79,7 +79,6 @@ std::optional<String> StreamingFunctionData::supportChangelog(const String & fun
     /// `count_distinct`        => `__count_retract_distinct_retract`
     /// `count_distinct_if`     => `__count_retract_distinct_retract_if`
     String combinator_suffix;
-    constexpr std::string_view distinct_raw{"_distinct"}, distinct_retract_raw{"_distinct_retract"};
     auto nested_func_name = function_name;
     while (iter == changelog_func_map.end())
     {
@@ -87,15 +86,15 @@ std::optional<String> StreamingFunctionData::supportChangelog(const String & fun
         {
             std::string combinator_name = combinator->getName();
             /// TODO: support more combinators
-            if (combinator_name != "_if" && combinator_name != distinct_raw && combinator_name != distinct_retract_raw)
+            if (combinator_name != "_if" && combinator_name != "_distinct" && combinator_name != "_distinct_retract")
                 throw Exception(
                     ErrorCodes::NOT_IMPLEMENTED, "{} aggregation function is not supported in changelog query processing", function_name);
 
             nested_func_name = nested_func_name.substr(0, nested_func_name.size() - combinator_name.size());
 
             /// replace `<aggr>_distinct[_combinator]` ==> `<aggr>_distinct_retract[_combinator]` for changelog query
-            if (combinator_name == distinct_raw)
-                combinator_name = distinct_retract_raw;
+            if (combinator_name == "_distinct")
+                combinator_name = "_distinct_retract";
             combinator_suffix = combinator_name + combinator_suffix;
             iter = changelog_func_map.find(nested_func_name);
             continue;
@@ -177,8 +176,13 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
         {
             /// replace `<aggr>_distinct[_combinator]` ==> `<aggr>_distinct_streaming[_combinator]` for streaming query
             constexpr std::string_view distinct_raw{"_distinct"}, distinct_streaming_raw{"_distinct_streaming"};
-            if (size_t pos = func.name.find(distinct_raw); pos != std::string::npos)
-                func.name.replace(pos, distinct_raw.length(), distinct_streaming_raw);
+            if (size_t pos = func.name.find(distinct_raw); pos != std::string::npos) {
+                std::string new_name = func.name;
+                new_name.replace(pos, distinct_raw.length(), distinct_streaming_raw);
+
+                /// Substitute the updated name into func
+                func.substitute(new_name);
+            }
         }
     }
     else if (streaming_only_func.contains(func.name))
@@ -198,7 +202,7 @@ bool StreamingFunctionData::ignoreSubquery(const DB::ASTPtr &, const DB::ASTPtr 
 void StreamingNowFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
 {
     if (func.name == "now" || func.name == "now64")
-        func.name = "__streaming_" + func.name;
+        func.substitute("__streaming_" + func.name);
 }
 }
 }

@@ -39,6 +39,7 @@ struct CountedValueArena<StringRef>
     }
 
     ArenaWithFreeLists * getArenaWithFreeLists() { return &arena; }
+
 private:
     ArenaWithFreeLists arena;
 };
@@ -72,48 +73,28 @@ public:
         return inserted;
     }
 
-    bool insert(T v)
+    /**
+    - If returnIfNewData is true, 
+        the function behaves returning true only if the element is new insert instead.
+    - If returnIfNewData is false (which is the default), 
+        the function behaves like the original insert,
+        returning true in all cases except when the capacity is full, and the new element is not desired.
+    */
+    bool insert(T v, bool returnIfNewData = false)
     {
         if (atCapacity())
         {
-            /// At capacity, this is an optimization
-            /// fast ignore elements we don't want to maintain
-            if (less(lastValue(), v))
-                return false;
+        /// At capacity, this is an optimization
+        /// fast ignore elements we don't want to maintain
+        if (less(lastValue(), v))
+            return false;
         }
 
         auto iter = m.find(v);
         if (iter != m.end())
         {
             ++iter->second;
-        }
-        else
-        {
-            /// Didn't find v in the map
-            [[maybe_unused]] auto [_, inserted] = m.emplace(arena->emplace(std::move(v)), 1);
-            assert(inserted);
-
-            eraseExtraElements();
-        }
-
-        return true;
-    }
-
-    /// return true meaning: this is a new added element
-    bool insertIfNewData(T v)
-    {
-        if (atCapacity()) [[unlikely]]
-        {
-            /// At capacity, this is an optimization
-            /// fast ignore elements we don't want to maintain
-            if (less(lastValue(), v))
-                return false;
-        }
-
-        auto iter = m.find(v);
-        if (iter != m.end())
-        {
-            ++iter->second;
+            return !returnIfNewData; // Return true(default behaviour) if not specifically looking for new data
         }
         else
         {
@@ -124,31 +105,17 @@ public:
             eraseExtraElements();
             return true;
         }
-
-        return false;
     }
 
+    /**
+    - If onlyIfErased is true, 
+        the function behaves returning true only if the element is found and erased.
+    - If onlyIfErased is false (which is the default), 
+        the function behaves like the original erase, returning true if the element is found, regardless of whether it is erased. 
+    */
     /// To enable heterogeneous erase
     template <typename TT>
-    bool erase(const TT & v)
-    {
-        auto iter = m.find(v);
-        if (iter != m.end())
-        {
-            --iter->second;
-            if (iter->second == 0)
-            {
-                arena->free(iter->first);
-                m.erase(iter);
-            }
-
-            return true;
-        }
-        return false;
-    }
-
-    template <typename TT>
-    bool eraseIfNewData(const TT & v)
+    bool erase(const TT & v, bool onlyIfErased = false)
     {
         auto iter = m.find(v);
         if (iter != m.end())
@@ -160,7 +127,7 @@ public:
                 m.erase(iter);
                 return true;
             }
-
+            return !onlyIfErased; // Element found but not erased, return based on flag(default return true)
         }
         return false;
     }

@@ -615,9 +615,9 @@
           {
             "statements": [
               {"client":"python", "query_type": "stream","query_id":"12181627213-1", "terminate": "manual","query":"recover from '12181627213'"},
-              {"client":"python", "query_type": "table", "wait": 2, "query": "insert into v_12181627(id, val) values(4, 40),(5, 50);"},
-              {"client":"python", "query_type": "table", "wait": 1, "query": "insert into v_12181627(id, val) values(4, 40),(5, 50);"},
-              {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='12181627213' sync"},
+              {"client":"python", "query_type": "table", "depends_on_stream":"v_12181627", "wait": 2, "query": "insert into v_12181627(id, val) values(4, 40),(5, 50);"},
+              {"client":"python", "query_type": "table", "depends_on_stream":"v_12181627", "wait": 2, "query": "insert into v_12181627(id, val) values(4, 40),(5, 50);"},
+              {"client":"python", "query_type": "table", "depends_on_stream":"v_12181627", "wait":2, "query": "kill query where query_id='12181627213' sync"},
               {"client":"python", "query_type": "table", "query":"unsubscribe to '12181627213'"}
             ]
           }

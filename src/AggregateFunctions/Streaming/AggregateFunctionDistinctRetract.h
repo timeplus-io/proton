@@ -96,16 +96,16 @@ struct AggregateFunctionDistinctRetractMultipleGenericData : public AggregateFun
     void add(StringRef key)
     {
         /// proton: starts.
-        bool is_new_inserted_key = map.insertIfNewData(key);
+        bool is_new_inserted_key = map.insert(key, true);
         if (use_extra_data && is_new_inserted_key)
-            extra_data_since_last_finalize.emplace_back(key.toString(), +1);
+            extra_data_since_last_finalize.emplace_back(key.toString(), +1); /// insert a copy versioned key
         /// proton: ends.
     }
 
     void negate(StringRef key)
     {
         /// proton: starts.
-        bool is_new_erased_key = map.eraseIfNewData(key);
+        bool is_new_erased_key = map.erase(key, true);
         if (use_extra_data && is_new_erased_key)
             extra_data_since_last_finalize.emplace_back(key.toString(), -1);
         /// proton: ends.
@@ -129,7 +129,7 @@ struct AggregateFunctionDistinctRetractMultipleGenericData : public AggregateFun
                     begin = argument_columns[i]->deserializeAndInsertFromArena(begin);
 
                 /// insert delta_col
-                argument_columns[argument_size - 1]->insert(delta_col);
+                argument_columns.back()->insert(delta_col);
             }
         }
         else
@@ -140,7 +140,7 @@ struct AggregateFunctionDistinctRetractMultipleGenericData : public AggregateFun
                 for (size_t i = 0; i < argument_size - 1; ++i)
                     begin = argument_columns[i]->deserializeAndInsertFromArena(begin);
 
-                argument_columns[argument_size - 1]->insert(static_cast<int8_t>(+1));
+                argument_columns.back()->insert(Int8(1));
             }
         }
         /// proton: ends.
