@@ -40,15 +40,15 @@ inline void assertArityAtMost(const std::string & name, const DataTypes & argume
         return;
 
     if constexpr (maximal_arity == 0)
-        throw Exception("Aggregate function " + name + " cannot have arguments",
+        throw Exception("Aggregate function " + name + " cannot have any arguments",
                         ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     if constexpr (maximal_arity == 1)
-        throw Exception("Aggregate function " + name + " requires zero or one arguments",
+        throw Exception("Aggregate function " + name + " requires either zero or one argument",
                         ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     if constexpr (maximal_arity == 2)
-        throw Exception("Aggregate function " + name + " requires zero or one or two arguments",
+        throw Exception("Aggregate function " + name + " requires zero, one, or two arguments",
                         ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
 
