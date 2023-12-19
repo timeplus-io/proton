@@ -1,0 +1,117 @@
+name: compatibility_test
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target proton image Version'
+        required: true
+        default: 'latest'
+      source:
+        description: 'Source proton image Version'
+        required: false
+        default: ''
+jobs:
+  upload_data:
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
+      submodules: false
+      timeout: 30
+      command: |
+        export PROTON_VERSION=${{ github.event.inputs.target }}
+
+        cd $GITHUB_WORKSPACE/tests/stream
+        
+        # make virtualenv
+        ln -s /usr/bin/python3 /usr/bin/python
+        apt-get update
+        systemctl stop unattended-upgrades
+        apt install python3-venv -y
+        python -m venv env
+        source env/bin/activate
+
+        pip install --upgrade pip
+
+        # FIXME: remove this line after pyyaml community fixed install bug
+        pip install pyyaml==5.3.1
+
+        # FIXME(yokofly): docker 7.0.0 introduce a breaking change
+        # https://github.com/docker/docker-py/issues/3194
+        pip install docker==6.1.3
+
+        pip install -r helpers/requirements.txt
+
+        bash test_compatibility/prepare_data.sh
+        bash test_compatibility/basic_tests.sh
+
+        cd $GITHUB_WORKSPACE
+        tar -zcvf $PROTON_VERSION.tar.gz data
+        aws s3 cp --no-progress $PROTON_VERSION.tar.gz s3://tp-internal/proton/compatibility/oss/
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+
+  compatibility_test:
+    if: ${{ github.event.inputs.source!='' }}
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-image-id: ${{ vars.X64_TEST_AMI }}
+      ec2-volume-size: '30'
+      submodules: false
+      timeout: 30
+      command: |
+        export TARGET_VERSION=${{ github.event.inputs.target }}
+        export SOURCE_VERSION=${{ github.event.inputs.source }}
+        export PROTON_VERSION=$TARGET_VERSION
+
+        # prepare data
+        cd $GITHUB_WORKSPACE
+        aws s3 cp --no-progress s3://tp-internal/proton/compatibility/oss/$SOURCE_VERSION.tar.gz .
+        tar -zxvf $SOURCE_VERSION.tar.gz
+
+        cd $GITHUB_WORKSPACE/tests/stream
+        
+        # make virtualenv
+        ln -s /usr/bin/python3 /usr/bin/python
+        apt-get update
+        systemctl stop unattended-upgrades
+        apt install python3-venv -y
+        python -m venv env
+        source env/bin/activate
+
+        pip install --upgrade pip
+
+        # FIXME: remove this line after pyyaml community fixed install bug
+        pip install pyyaml==5.3.1
+
+        # FIXME(yokofly): docker 7.0.0 introduce a breaking change
+        # https://github.com/docker/docker-py/issues/3194
+        pip install docker==6.1.3
+
+        pip install -r helpers/requirements.txt
+
+        bash test_compatibility/basic_tests.sh
+        bash test_compatibility/extra_tests.sh
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}

@@ -645,6 +645,7 @@ prometheus:
     events: true
     asynchronous_metrics: true
     status_info: true
+    external_stream: true
 
 # Query log. Used only for queries with setting log_queries = 1.
 query_log:

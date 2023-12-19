@@ -15,6 +15,7 @@ on: # yamllint disable-line rule:truthy
       - 'docs/**'
       - 'spec/**'
       - 'utils/check-style/aspell-ignore/**'
+      - 'examples/**'
 
 jobs:
   verify:

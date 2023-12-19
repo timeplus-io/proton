@@ -153,7 +153,7 @@ HTTPRequestHandlerFactoryPtr createHandlerFactory(IServer & server, Asynchronous
     {
         auto factory = std::make_shared<HTTPRequestHandlerFactoryMain>(name);
         auto handler = std::make_shared<HandlingRuleHTTPHandlerFactory<PrometheusRequestHandler>>(
-            server, PrometheusMetricsWriter(server.config(), "prometheus", async_metrics));
+            server, PrometheusMetricsWriter(server.config(), "prometheus", async_metrics, server.context()));
         handler->attachStrictPath(server.config().getString("prometheus.endpoint", "/metrics"));
         handler->allowGetAndHeadRequest();
         factory->addHandler(handler);
@@ -218,7 +218,7 @@ void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer 
     if (server.config().has("prometheus") && server.config().getInt("prometheus.port", 0) == 0)
     {
         auto prometheus_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<PrometheusRequestHandler>>(
-            server, PrometheusMetricsWriter(server.config(), "prometheus", async_metrics));
+            server, PrometheusMetricsWriter(server.config(), "prometheus", async_metrics, server.context()));
         prometheus_handler->attachStrictPath(server.config().getString("prometheus.endpoint", "/metrics"));
         prometheus_handler->allowGetAndHeadRequest();
         factory.addHandler(prometheus_handler);

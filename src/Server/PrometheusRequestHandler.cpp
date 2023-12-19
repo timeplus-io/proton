@@ -45,7 +45,7 @@ HTTPRequestHandlerFactoryPtr
 createPrometheusHandlerFactory(IServer & server, AsynchronousMetrics & async_metrics, const std::string & config_prefix)
 {
     auto factory = std::make_shared<HandlingRuleHTTPHandlerFactory<PrometheusRequestHandler>>(
-        server, PrometheusMetricsWriter(server.config(), config_prefix + ".handler", async_metrics));
+        server, PrometheusMetricsWriter(server.config(), config_prefix + ".handler", async_metrics, server.context()));
     factory->addFiltersFromConfig(server.config(), config_prefix);
     return factory;
 }

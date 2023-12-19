@@ -25,14 +25,16 @@ extern const int INVALID_SETTING_VALUE;
 extern const int RESOURCE_NOT_FOUND;
 }
 
-Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach)
+Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach, ExternalStreamCounterPtr external_stream_counter_)
     : storage_id(storage->getStorageID())
     , settings(std::move(settings_))
     , data_format(settings->data_format.value)
     , log(&Poco::Logger::get("External-" + settings->topic.value))
     , engine_args(engine_args_)
+    , external_stream_counter(external_stream_counter_)
 {
     assert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);
+    assert(external_stream_counter);
 
     if (settings->brokers.value.empty())
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `brokers` setting for {} external stream", settings->type.value);
@@ -111,7 +113,7 @@ Pipe Kafka::read(
         assert(offsets.size() == shards_to_query.size());
         for (auto [shard, offset] : std::ranges::views::zip(shards_to_query, offsets))
             pipes.emplace_back(
-                std::make_shared<KafkaSource>(this, header, storage_snapshot, context, shard, offset, max_block_size, log));
+                std::make_shared<KafkaSource>(this, header, storage_snapshot, context, shard, offset, max_block_size, log, external_stream_counter));
     }
 
     LOG_INFO(
