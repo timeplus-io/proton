@@ -84,10 +84,10 @@ public:
     {
         if (atCapacity())
         {
-        /// At capacity, this is an optimization
-        /// fast ignore elements we don't want to maintain
-        if (less(lastValue(), v))
-            return false;
+            /// At capacity, this is an optimization
+            /// fast ignore elements we don't want to maintain
+            if (less(lastValue(), v))
+                return false;
         }
 
         auto iter = m.find(v);
