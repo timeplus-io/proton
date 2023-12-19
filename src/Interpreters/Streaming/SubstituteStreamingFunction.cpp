@@ -72,7 +72,7 @@ std::unordered_map<String, String> StreamingFunctionData::changelog_func_map = {
 
 std::optional<String> StreamingFunctionData::supportChangelog(const String & function_name)
 {
-    auto iter = changelog_func_map.find(Poco::toLower(function_name));
+    auto iter = changelog_func_map.find(function_name);
 
     /// Support combinator suffix, for example:
     /// `count`                 => `__count_retract`
@@ -125,7 +125,7 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
 
     if (streaming)
     {
-        auto iter = func_map.find(func.name);
+        auto iter = func_map.find(Poco::toLower(func.name));
         if (iter != func_map.end())
             return substitueFunction(func, iter->second);
 
@@ -133,13 +133,14 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
         {
             /// Whether the function support 'retract' for changelog, also return the alias name of
             /// function used in rewritten query
-            auto func_alias_name = supportChangelog(func.name);
+            auto func_alias_name = supportChangelog(Poco::toLower(func.name));
             if (func_alias_name.has_value())
             {
                 if (!func_alias_name->empty())
                 {
                     /// Always show original function
-                    func.code_name = DB::serializeAST(func);
+                    if (func.code_name.empty())
+                        func.code_name = DB::serializeAST(func);
 
                     func.name = *func_alias_name;
                     if (!func.arguments)
