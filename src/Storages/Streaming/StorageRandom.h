@@ -14,7 +14,7 @@ class ASTStorage;
 
 #define STORAGE_RANDOM_RELATED_SETTINGS(M) \
     M(UInt64, eps, 1000, "Limit how many rows to be generated per second for each thread. Used by RANDOM STREAM. 0 means no limit", 0) \
-    M(UInt64, interval_time, 100, "the data generating interval, unit ms", 0) \
+    M(UInt64, interval_time, 5, "the data generating interval, unit ms", 0) \
     M(UInt64, shards, 1, "Shards number for random stream", 0)
 
 #define LIST_OF_STORAGE_RANDOM_SETTINGS(M) \

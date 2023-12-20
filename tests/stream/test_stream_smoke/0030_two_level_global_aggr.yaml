@@ -13,7 +13,7 @@ test_suite_config:
         exist_wait: 2
         wait: 1
         query: |
-          create random stream if not exists test_31_rstream(i int default rand() % 100000 + 1, v string) settings eps=5000;
+          create random stream if not exists test_31_rstream(i int default rand() % 100000 + 1, v string) settings eps=5000, interval_time=100;
 
   tests_2_run:
     ids_2_run:
