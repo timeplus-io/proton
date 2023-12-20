@@ -169,7 +169,6 @@ ASTPtr ASTFunction::toLiteral() const
     return {};
 }
 
-
 /** A special hack. If it's [I]LIKE or NOT [I]LIKE expression and the right hand side is a string literal,
   *  we will highlight unescaped metacharacters % and _ in string literal for convenience.
   * Motivation: most people are unaware that _ is a metacharacter and forgot to properly escape it with two backslashes.

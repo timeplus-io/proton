@@ -151,7 +151,7 @@
         },
         {
             "id": 5,
-            "tags": ["changelog_kv_aggr", "native_not_support", "bug"],
+            "tags": ["changelog_kv_aggr"],
             "name": "aggr_func_count_distinct_and_count_if_changelog_kv",
             "description": "aggregation function count_distinct and count_if changelog_kv",
             "steps":[
@@ -162,9 +162,9 @@
                     {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_changelog_kv_stream(id, val) values (1, 1.1), (2, 2.2), (3, 3.3)"},
                     {"client":"python", "query_type": "stream", "query_id":"1405", "depends_on_stream":"test14_changelog_kv_stream", "wait":1, "terminate":"manual", "query":"select count(1), count_distinct(val), count_if(val > 2) from test14_changelog_kv_stream emit periodic 1s"},
                     {"client":"python", "query_type": "table", "depends_on":"1405", "wait":1, "query": "insert into test14_changelog_kv_stream(id, val) values (4, 4.4), (5, 5.5)"},
-                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_changelog_kv_stream(id, _tp_delta) values (3, -1)"},
-                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_changelog_kv_stream(id, _tp_delta) values (1, -1)"},
-                    {"client":"python", "query_type": "table", "kill":"1405", "kill_wait":3, "wait":1, "query": "insert into test14_changelog_kv_stream(id, _tp_delta) values (5, -1)"}
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_changelog_kv_stream(id, val, _tp_delta) values (3, 3.3, -1)"},
+                    {"client":"python", "query_type": "table", "wait":1, "query": "insert into test14_changelog_kv_stream(id, val, _tp_delta) values (1, 1.1, -1)"},
+                    {"client":"python", "query_type": "table", "kill":"1405", "kill_wait":3, "wait":1, "query": "insert into test14_changelog_kv_stream(id, val, _tp_delta) values (5, 5.5, -1)"}
                     ]
                 }
             ],

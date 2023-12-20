@@ -303,16 +303,19 @@ public:
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         this->data(place).merge(this->data(rhs), arena);
+        nested_func->merge(getNestedPlace(place), getNestedPlace(rhs), arena);
     }
 
     void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> /* version */) const override
     {
         this->data(place).serialize(buf);
+        nested_func->serialize(getNestedPlace(place), buf);
     }
 
     void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena * arena) const override
     {
         this->data(place).deserialize(buf, arena);
+        nested_func->deserialize(getNestedPlace(place), buf, std::nullopt /* version */, arena);
     }
 
     template <bool MergeResult>

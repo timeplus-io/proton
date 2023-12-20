@@ -199,23 +199,12 @@ AggregateFunctionPtr getAggregateFunction(
     bool throw_if_empty = true)
 /// proton: ends
 {
-    /// We shall replace '<aggr>_distinct' to '<aggr>_distinct_streaming' in streaming query.
-    if (is_streaming && endsWith(node->name, "_distinct"))
-    {
-        if (throw_if_empty)
-            return AggregateFunctionFactory::instance().get(node->name + "_streaming", types, parameters, properties, is_changelog_input);
-        else
-            return AggregateFunctionFactory::instance().tryGet(node->name + "_streaming", types, parameters, properties, is_changelog_input);
-    }
+    /// Examples: Translate `quantile(x, 0.5)` to `quantile(0.5)(x)`
+    tryTranslateToParametricAggregateFunction(node, types, parameters, argument_names, context);
+    if (throw_if_empty)
+        return AggregateFunctionFactory::instance().get(node->name, types, parameters, properties, is_changelog_input);
     else
-    {
-        /// Examples: Translate `quantile(x, 0.5)` to `quantile(0.5)(x)`
-        tryTranslateToParametricAggregateFunction(node, types, parameters, argument_names, context);
-        if (throw_if_empty)
-            return AggregateFunctionFactory::instance().get(node->name, types, parameters, properties, is_changelog_input);
-        else
-            return AggregateFunctionFactory::instance().tryGet(node->name, types, parameters, properties, is_changelog_input);
-    }
+        return AggregateFunctionFactory::instance().tryGet(node->name, types, parameters, properties, is_changelog_input);
 }
 /// proton: ends.
 }

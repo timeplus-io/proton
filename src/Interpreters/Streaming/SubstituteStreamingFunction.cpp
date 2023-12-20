@@ -8,6 +8,8 @@
 #include <Common/ProtonCommon.h>
 #include <Functions/UserDefined/UserDefinedFunctionFactory.h>
 
+#include <boost/algorithm/string.hpp>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -59,7 +61,6 @@ std::unordered_map<String, String> StreamingFunctionData::changelog_func_map = {
     {"top_k", ""},
     {"min_k", "__min_k_retract"},
     {"max_k", "__max_k_retract"},
-    {"count_distinct", ""},
     {"unique", ""},
     {"unique_exact", ""},
     {"median", ""},
@@ -77,21 +78,25 @@ std::optional<String> StreamingFunctionData::supportChangelog(const String & fun
     /// Support combinator suffix, for example:
     /// `count`                 => `__count_retract`
     /// `count_if`              => `__count_retract_if`
-    /// `count_distinct`        => `__count_retract_distinct`
-    /// `count_distinct_if`     => `__count_retract_distinct_if`
+    /// `count_distinct`        => `__count_retract_distinct_retract`
+    /// `count_distinct_if`     => `__count_retract_distinct_retract_if`
     String combinator_suffix;
     auto nested_func_name = function_name;
     while (iter == changelog_func_map.end())
     {
         if (auto combinator = AggregateFunctionCombinatorFactory::instance().tryFindSuffix(nested_func_name))
         {
-            const std::string combinator_name = combinator->getName();
+            std::string combinator_name = combinator->getName();
             /// TODO: support more combinators
-            if (combinator_name != "_if")
+            if (combinator_name != "_if" && combinator_name != "_distinct" && combinator_name != "_distinct_retract")
                 throw Exception(
                     ErrorCodes::NOT_IMPLEMENTED, "{} aggregation function is not supported in changelog query processing", function_name);
 
             nested_func_name = nested_func_name.substr(0, nested_func_name.size() - combinator_name.size());
+
+            /// replace `<aggr>_distinct[_combinator]` ==> `<aggr>_distinct_retract[_combinator]` for changelog query
+            if (combinator_name == "_distinct")
+                combinator_name = "_distinct_retract";
             combinator_suffix = combinator_name + combinator_suffix;
             iter = changelog_func_map.find(nested_func_name);
             continue;
@@ -156,7 +161,7 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
                     /// Make _tp_delta as the last argument to avoid unused column elimination for query like below
                     /// SELECT count(), avg(i) FROM (SELECT i, _tp_delta FROM versioned_kv) GROUP BY i; =>
                     /// SELECT __count_retract(_tp_delta), __avg_retract(i, _tp_delta) FROM (SELECT i, _tp_delta FROM versioned_kv) GROUP BY i; =>
-                    if (func.name.starts_with("__count_retract") && delta_pos - func.arguments->children.begin() > 0)
+                    if ((func.name == "__count_retract" || func.name == "__count_retract_if") && delta_pos - func.arguments->children.begin() > 0)
                         /// Fix for nullable since this substitution is not equal
                         func.arguments->children[0] = std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG);
                     else
@@ -164,6 +169,28 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
                 }
 
                 return;
+            }
+        }
+        else
+        {
+            /// replace `<aggr>_distinct[_combinator]` ==> `<aggr>_distinct_streaming[_combinator]` for streaming query
+            if (boost::algorithm::contains(func_name_lower, "_distinct"))
+            {
+                if (boost::algorithm::contains(func_name_lower, "_distinct_retract")) [[unlikely]]
+                    throw Exception(
+                        ErrorCodes::FUNCTION_NOT_ALLOWED,
+                        "The function '{}' is not supported in the current stream mode. Consider using the '_distinct' suffix instead "
+                        "of '_distinct_retract'.",
+                        func_name_lower);
+
+                if (!boost::algorithm::contains(func_name_lower, "_distinct_streaming")) [[likely]]
+                {
+                    std::string new_name = func_name_lower;
+                    boost::algorithm::replace_first(new_name, "_distinct", "_distinct_streaming");
+
+                    // Substitute the updated name into func
+                    substitueFunction(func, new_name);
+                }
             }
         }
     }

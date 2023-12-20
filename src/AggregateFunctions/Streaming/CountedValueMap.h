@@ -38,6 +38,8 @@ struct CountedValueArena<StringRef>
             arena.free(const_cast<char *>(key.data), key.size);
     }
 
+    ArenaWithFreeLists * getArenaWithFreeLists() { return &arena; }
+
 private:
     ArenaWithFreeLists arena;
 };
@@ -71,31 +73,38 @@ public:
         return inserted;
     }
 
-    bool insert(T v)
+    /// Return the emplaced element iterator, if failed to emplace, return invalid iterator, `m.end()`
+    Map::iterator emplace(T v)
     {
         if (atCapacity())
         {
             /// At capacity, this is an optimization
             /// fast ignore elements we don't want to maintain
             if (less(lastValue(), v))
-                return false;
+                return m.end();
         }
 
-        auto iter = m.find(v);
-        if (iter != m.end())
+        if (auto iter = m.find(v); iter != m.end())
         {
             ++iter->second;
+            return iter;
         }
         else
         {
             /// Didn't find v in the map
-            [[maybe_unused]] auto [_, inserted] = m.emplace(arena->emplace(std::move(v)), 1);
+            auto [new_iter, inserted] = m.emplace(arena->emplace(std::move(v)), 1);
             assert(inserted);
 
             eraseExtraElements();
+            return new_iter;
         }
+    }
 
-        return true;
+    /// Return true if a new element was added.
+    bool insert(T v)
+    {
+        auto iter = emplace(std::move(v));
+        return iter != m.end();
     }
 
     /// To enable heterogeneous erase
@@ -115,6 +124,13 @@ public:
             return true;
         }
         return false;
+    }
+
+    /// Return true if the element exists in the map.
+    template<typename TT>
+    bool contains(const TT & v) const
+    {
+        return m.find(v) != m.end();
     }
 
     bool firstValue(T & v) const

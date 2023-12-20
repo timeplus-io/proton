@@ -452,9 +452,7 @@
         {
             "id": 108,
             "tags": [
-                "changelog_kv_aggr",
-                "native_not_support",
-                "bug"
+                "changelog_kv_aggr"
             ],
             "name": "aggr_func_count_distinct_and_count_if_changelog_kv",
             "description": "aggregation function count_distinct and count_if changelog_kv",
@@ -500,13 +498,13 @@
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_changelog_kv_stream(id, _tp_delta) values (3, -1)"
+                            "query": "insert into test14_changelog_kv_stream(id, val, _tp_delta) values (3, 3.3, -1)"
                         },
                         {
                             "client": "python",
                             "query_type": "table",
                             "wait": 1,
-                            "query": "insert into test14_changelog_kv_stream(id, _tp_delta) values (1, -1)"
+                            "query": "insert into test14_changelog_kv_stream(id, val, _tp_delta) values (1, 1.1, -1)"
                         },
                         {
                             "client": "python",
@@ -514,7 +512,7 @@
                             "kill": "14108",
                             "kill_wait": 3,
                             "wait": 1,
-                            "query": "insert into test14_changelog_kv_stream(id, _tp_delta) values (5, -1)"
+                            "query": "insert into test14_changelog_kv_stream(id, val, _tp_delta) values (5, 5.5, -1)"
                         }
                     ]
                 }

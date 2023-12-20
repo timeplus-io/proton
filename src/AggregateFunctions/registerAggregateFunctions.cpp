@@ -99,6 +99,7 @@ void registerAggregateFunctionXirr(AggregateFunctionFactory & factory);
 namespace Streaming
 {
 void registerAggregateFunctionCombinatorDistinct(AggregateFunctionCombinatorFactory &);
+void registerAggregateFunctionCombinatorDistinctRetract(AggregateFunctionCombinatorFactory &);
 void registerAggregateFunctionCountRetract(AggregateFunctionFactory & factory);
 void registerAggregateFunctionSumRetract(AggregateFunctionFactory & factory);
 void registerAggregateFunctionAvgRetract(AggregateFunctionFactory & factory);
@@ -222,6 +223,7 @@ void registerAggregateFunctions()
     
         /// proton: starts.
         Streaming::registerAggregateFunctionCombinatorDistinct(factory);
+        Streaming::registerAggregateFunctionCombinatorDistinctRetract(factory);
         /// proton: ends.
     }
 }
