@@ -361,7 +361,7 @@ tests:
               name: test_14_8_add_five
               arguments:
                 - name: value
-                - type: float32
+                  type: float32
               return_type: float32
               source: |
                 function test_14_8_add_five(value) {
@@ -619,7 +619,7 @@ tests:
               name: test_14_8_add_five
               arguments:
                 - name: value
-                - type: float32
+                  type: float32
               return_type: float32
               source: |
                 function test_14_8_add_five(value) {

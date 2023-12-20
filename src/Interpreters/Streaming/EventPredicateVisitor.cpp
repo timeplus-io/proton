@@ -2,6 +2,7 @@
 
 #include <Functions/FunctionsConversion.h>
 #include <Interpreters/IdentifierSemantic.h>
+#include <Interpreters/Streaming/SubstituteStreamingFunction.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <NativeLog/Record/Record.h>
 #include <Parsers/ASTFunction.h>
@@ -87,7 +88,14 @@ Int64 evaluateConstantSeekTo(SeekBy seek_by, ASTPtr & ast, ContextPtr context)
 {
     try
     {
-        auto [value, type] = evaluateConstantExpression(ast, context);
+        /// NOTE: If exists substituted `__streaming_now()`, which will process dynamic timestamp and return non-const column,
+        /// So temporarily substitute back `__streaming_now()` as `now()` to evaluate constant timestamp.
+        /// For example: `select * from table where _tp_time > __streaming_now() - 1d`
+        auto expr_ast = ast->clone();
+        SubstituteFunctionsVisitor::Data data{{{"__streaming_now", "now"}, {"__streaming_now64", "now64"}}};
+        SubstituteFunctionsVisitor(data).visit(expr_ast);
+
+        auto [value, type] = evaluateConstantExpression(expr_ast, context);
         if (seek_by == SeekBy::EventTime)
             return parseSeekToTimestamp(value, type);
         else
