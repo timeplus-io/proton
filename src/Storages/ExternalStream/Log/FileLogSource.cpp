@@ -207,7 +207,7 @@ void FileLogSource::checkNewFiles()
                 continue;
             }
 
-            auto hash_val = calculateFileHash(new_fd, read_buf, read_buf.size(), filename, log);
+            auto hash_val = calculateFileHash(new_fd, read_buf, read_buf.size(), filename);
             if (file_hashes.contains(hash_val))
             {
                 new_iter = new_files.erase(new_iter);
@@ -249,7 +249,7 @@ bool FileLogSource::handleCurrentFile()
 
     const auto & filename = iter->second.string();
 
-    auto hash_val = calculateFileHash(current_fd, buffer, file_log->hashBytes(), filename, log);
+    auto hash_val = calculateFileHash(current_fd, buffer, file_log->hashBytes(), filename);
     auto [hash_iter, inserted] = file_hashes.try_emplace(hash_val, filename);
     if (!inserted)
     {
@@ -266,14 +266,13 @@ bool FileLogSource::handleCurrentFile()
     return true;
 }
 
-size_t
-FileLogSource::calculateFileHash(int fd, std::vector<char> & read_buf, size_t bytes_to_read, const String & filename, Poco::Logger * log_)
+size_t FileLogSource::calculateFileHash(int fd, std::vector<char> & read_buf, size_t bytes_to_read, const String & filename)
 {
     size_t read_bytes = 0;
 
     assert(read_buf.size() >= bytes_to_read);
 
-    while (bytes_to_read)
+    while (bytes_to_read && !isCancelled())
     {
         auto n = ::pread(fd, read_buf.data(), bytes_to_read, read_bytes);
         if (n > 0)
@@ -284,7 +283,7 @@ FileLogSource::calculateFileHash(int fd, std::vector<char> & read_buf, size_t by
         else if (n == 0)
         {
             /// EOF
-            LOG_INFO(log_, "Wait for more data in file={} to calculate its hash", filename);
+            LOG_INFO(log, "Wait for more data in file={} to calculate its hash", filename);
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
         else
