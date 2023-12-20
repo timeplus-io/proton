@@ -18,7 +18,7 @@ createAggregateFunctionMin(const std::string & name, const DataTypes & argument_
 
 void registerAggregateFunctionsMinRetract(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("__min_retract", createAggregateFunctionMin, AggregateFunctionFactory::CaseSensitive);
+    factory.registerFunction("__min_retract", createAggregateFunctionMin, AggregateFunctionFactory::CaseInsensitive);
 }
 }
 }

@@ -27,9 +27,13 @@ void AggregateFunctionCombinatorFactory::registerCombinator(const AggregateFunct
 
 AggregateFunctionCombinatorPtr AggregateFunctionCombinatorFactory::tryFindSuffix(const std::string & name) const
 {
+    /// proton: starts
+    const auto name_lowercase = Poco::toLower(name);
+    /// proton: ends
+
     /// O(N) is ok for just a few combinators.
     for (const auto & suffix_value : dict)
-        if (endsWith(name, suffix_value.name))
+        if (endsWith(name_lowercase, suffix_value.name))
             return suffix_value.combinator_ptr;
     return {};
 }

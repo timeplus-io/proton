@@ -125,7 +125,8 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
 
     if (streaming)
     {
-        auto iter = func_map.find(func.name);
+        auto func_name_lower = Poco::toLower(func.name);
+        auto iter = func_map.find(func_name_lower);
         if (iter != func_map.end())
             return substitueFunction(func, iter->second);
 
@@ -133,13 +134,14 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
         {
             /// Whether the function support 'retract' for changelog, also return the alias name of
             /// function used in rewritten query
-            auto func_alias_name = supportChangelog(func.name);
+            auto func_alias_name = supportChangelog(func_name_lower);
             if (func_alias_name.has_value())
             {
                 if (!func_alias_name->empty())
                 {
                     /// Always show original function
-                    func.code_name = DB::serializeAST(func);
+                    if (func.code_name.empty())
+                        func.code_name = DB::serializeAST(func);
 
                     func.name = *func_alias_name;
                     if (!func.arguments)
