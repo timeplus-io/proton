@@ -66,7 +66,7 @@ void registerAggregateFunctionsStatisticsSimple(AggregateFunctionFactory & facto
 
     factory.registerFunction("covar_samp", createAggregateFunctionStatisticsBinary<AggregateFunctionCovarSampSimple>);
     factory.registerFunction("covar_pop", createAggregateFunctionStatisticsBinary<AggregateFunctionCovarPopSimple>);
-    factory.registerFunction("corr", createAggregateFunctionStatisticsBinary<AggregateFunctionCorrSimple>, AggregateFunctionFactory::CaseSensitive);
+    factory.registerFunction("corr", createAggregateFunctionStatisticsBinary<AggregateFunctionCorrSimple>, AggregateFunctionFactory::CaseInsensitive);
 }
 
 }

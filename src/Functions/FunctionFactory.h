@@ -29,13 +29,13 @@ public:
     static FunctionFactory & instance();
 
     template <typename Function>
-    void registerFunction(Documentation doc = {}, CaseSensitiveness case_sensitiveness = CaseSensitive)
+    void registerFunction(Documentation doc = {}, CaseSensitiveness case_sensitiveness = CaseInsensitive)
     {
         registerFunction<Function>(Function::name, std::move(doc), case_sensitiveness);
     }
 
     template <typename Function>
-    void registerFunction(const std::string & name, Documentation doc = {}, CaseSensitiveness case_sensitiveness = CaseSensitive)
+    void registerFunction(const std::string & name, Documentation doc = {}, CaseSensitiveness case_sensitiveness = CaseInsensitive)
     {
 
         if constexpr (std::is_base_of_v<IFunction, Function>)
@@ -65,7 +65,7 @@ public:
         const std::string & name,
         FunctionCreator creator,
         Documentation doc = {},
-        CaseSensitiveness case_sensitiveness = CaseSensitive);
+        CaseSensitiveness case_sensitiveness = CaseInsensitive);
 
     Documentation getDocumentation(const std::string & name) const;
 

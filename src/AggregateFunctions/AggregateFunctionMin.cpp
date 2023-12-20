@@ -29,7 +29,7 @@ AggregateFunctionPtr createAggregateFunctionArgMin(
 
 void registerAggregateFunctionsMin(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("min", createAggregateFunctionMin, AggregateFunctionFactory::CaseSensitive);
+    factory.registerFunction("min", createAggregateFunctionMin, AggregateFunctionFactory::CaseInsensitive);
 
     #if USE_ARG_MIN_MAX_FUNCS
     /// The functions below depend on the order of data.

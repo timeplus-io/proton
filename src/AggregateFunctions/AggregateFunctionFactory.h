@@ -60,7 +60,7 @@ public:
     void registerFunction(
         const String & name,
         Value creator,
-        CaseSensitiveness case_sensitiveness = CaseSensitive);
+        CaseSensitiveness case_sensitiveness = CaseInsensitive);
 
     /// Throws an exception if not found.
     /// proton: starts. Add 'is_changelog_input' param to allow aggregate function being aware whether the input stream is a changelog

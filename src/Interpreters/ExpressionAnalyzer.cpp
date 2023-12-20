@@ -170,14 +170,16 @@ void tryTranslateToParametricAggregateFunction(
         types = {types[0], types[1]};
     }
     else if (lower_name == "quantile")
-    {
-        /// Translate `quantile(key, level)` to `quantile(level)(key)`
-        if (arguments.size() != 2)
-            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires two arguments.", node->name);
-
-        ASTPtr expression_list = std::make_shared<ASTExpressionList>();
-        expression_list->children.push_back(arguments[1]);
-        parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+    { 
+        ///Translate `quantile(key, level)` to `quantile(level)(key)`,and the default level is 0.5, median fucntion is the alias of quantile(key, 0.5)
+        if (arguments.size() != 2 && arguments.size() != 1)
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires one or two arguments", node->name);
+        if (arguments.size() == 2)
+        {
+            ASTPtr expression_list = std::make_shared<ASTExpressionList>();
+            expression_list->children.push_back(arguments[1]);
+            parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+        }
 
         argument_names = {argument_names[0]};
         types = {types[0]};

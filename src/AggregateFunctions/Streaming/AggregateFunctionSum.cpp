@@ -98,7 +98,7 @@ createAggregateFunctionSumKahan(const std::string & name, const DataTypes & argu
 void registerAggregateFunctionSumRetract(AggregateFunctionFactory & factory)
 {
     factory.registerFunction(
-        "__sum_retract", createAggregateFunctionSum<AggregateFunctionSumSimple>, AggregateFunctionFactory::CaseSensitive);
+        "__sum_retract", createAggregateFunctionSum<AggregateFunctionSumSimple>, AggregateFunctionFactory::CaseInsensitive);
     factory.registerFunction("__sum_with_overflow_retract", createAggregateFunctionSum<AggregateFunctionSumWithOverflow>);
     factory.registerFunction("__sum_kahan_retract", createAggregateFunctionSumKahan);
 }

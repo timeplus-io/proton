@@ -48,7 +48,7 @@ public:
     /** Register additional name for value
       * real_name have to be already registered.
       */
-    void registerAlias(const String & alias_name, const String & real_name, CaseSensitiveness case_sensitiveness = CaseSensitive)
+    void registerAlias(const String & alias_name, const String & real_name, CaseSensitiveness case_sensitiveness = CaseInsensitive)
     {
         const auto & creator_map = getMap();
         const auto & case_insensitive_creator_map = getCaseInsensitiveMap();

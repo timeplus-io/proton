@@ -36,7 +36,7 @@ AggregateFunctionPtr AggregateFunctionCount::getOwnNullAdapter(
 void registerAggregateFunctionCountRetract(AggregateFunctionFactory & factory)
 {
     AggregateFunctionProperties properties = {.returns_default_when_only_null = true, .is_order_dependent = false};
-    factory.registerFunction("__count_retract", {createAggregateFunctionCount, properties}, AggregateFunctionFactory::CaseSensitive);
+    factory.registerFunction("__count_retract", {createAggregateFunctionCount, properties}, AggregateFunctionFactory::CaseInsensitive);
 }
 
 }

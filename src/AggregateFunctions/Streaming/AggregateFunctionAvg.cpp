@@ -47,7 +47,7 @@ createAggregateFunctionAvg(const std::string & name, const DataTypes & argument_
 
 void registerAggregateFunctionAvgRetract(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("__avg_retract", createAggregateFunctionAvg, AggregateFunctionFactory::CaseSensitive);
+    factory.registerFunction("__avg_retract", createAggregateFunctionAvg, AggregateFunctionFactory::CaseInsensitive);
 }
 }
 }

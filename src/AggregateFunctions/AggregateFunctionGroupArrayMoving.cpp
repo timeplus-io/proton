@@ -113,8 +113,8 @@ void registerAggregateFunctionMoving(AggregateFunctionFactory & factory)
 
     factory.registerFunction("group_array_moving_sum", { createAggregateFunctionMoving<MovingSumTemplate>, properties });
     factory.registerFunction("group_array_moving_avg", { createAggregateFunctionMoving<MovingAvgTemplate>, properties });
-    factory.registerAlias("moving_sum", "group_array_moving_sum", AggregateFunctionFactory::CaseSensitive);
-    factory.registerAlias("moving_avg", "group_array_moving_avg", AggregateFunctionFactory::CaseSensitive);
+    factory.registerAlias("moving_sum", "group_array_moving_sum", AggregateFunctionFactory::CaseInsensitive);
+    factory.registerAlias("moving_avg", "group_array_moving_avg", AggregateFunctionFactory::CaseInsensitive);
 }
 
 }
