@@ -167,8 +167,10 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
         else
         {
             /// replace `<aggr>_distinct[_combinator]` ==> `<aggr>_distinct_streaming[_combinator]` for streaming query
-            if (!boost::algorithm::contains(func.name, "_distinct_streaming")) {
-                if (boost::algorithm::contains(func.name, "_distinct")) {
+            if (boost::algorithm::contains(func.name, "_distinct"))
+            {
+                if (!boost::algorithm::contains(func.name, "_distinct_streaming")) [[likely]]
+                {
                     std::string new_name = func.name;
                     boost::algorithm::replace_first(new_name, "_distinct", "_distinct_streaming");
 
