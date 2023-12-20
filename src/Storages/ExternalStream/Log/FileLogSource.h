@@ -39,8 +39,7 @@ public:
 private:
     bool handleCurrentFile();
 
-    static size_t
-    calculateFileHash(int fd, std::vector<char> & read_buf, size_t bytes_to_read, const String & filename, Poco::Logger * log_);
+    size_t calculateFileHash(int fd, std::vector<char> & read_buf, size_t bytes_to_read, const String & filename);
 
     Chunk readAndProcess();
     Chunk process();
