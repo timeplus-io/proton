@@ -167,11 +167,18 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
         else
         {
             /// replace `<aggr>_distinct[_combinator]` ==> `<aggr>_distinct_streaming[_combinator]` for streaming query
-            if (boost::algorithm::contains(func.name, "_distinct"))
+            if (boost::algorithm::contains(func_name_lower, "_distinct"))
             {
-                if (!boost::algorithm::contains(func.name, "_distinct_streaming")) [[likely]]
+                if (boost::algorithm::contains(func_name_lower, "_distinct_retract")) [[unlikely]]
+                    throw Exception(
+                        ErrorCodes::FUNCTION_NOT_ALLOWED,
+                        "The function '{}' is not supported in the current stream mode. Consider using the '_distinct' suffix instead "
+                        "of '_distinct_retract'.",
+                        func_name_lower);
+
+                if (!boost::algorithm::contains(func_name_lower, "_distinct_streaming")) [[likely]]
                 {
-                    std::string new_name = func.name;
+                    std::string new_name = func_name_lower;
                     boost::algorithm::replace_first(new_name, "_distinct", "_distinct_streaming");
 
                     // Substitute the updated name into func
