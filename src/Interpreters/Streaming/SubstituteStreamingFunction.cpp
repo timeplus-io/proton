@@ -158,7 +158,14 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
                     if (func.name.ends_with("_if"))
                         --delta_pos;
 
-                    func.arguments->children.insert(delta_pos, std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG));
+                    /// Make _tp_delta as the last argument to avoid unused column elimination for query like below
+                    /// SELECT count(), avg(i) FROM (SELECT i, _tp_delta FROM versioned_kv) GROUP BY i; =>
+                    /// SELECT __count_retract(_tp_delta), __avg_retract(i, _tp_delta) FROM (SELECT i, _tp_delta FROM versioned_kv) GROUP BY i; =>
+                    if ((func.name == "__count_retract" || func.name == "__count_retract_if") && delta_pos - func.arguments->children.begin() > 0)
+                        /// Fix for nullable since this substitution is not equal
+                        func.arguments->children[0] = std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG);
+                    else
+                        func.arguments->children.insert(delta_pos, std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG));
                 }
 
                 return;
