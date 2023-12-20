@@ -33,10 +33,11 @@ tests:
         query: drop stream if exists v_12181627
       - client: python
         query_type: table
-        wait: 1
+        wait: 2
         query: create stream v_12181627(id int, val int) primary key id settings mode='changelog_kv';
       - client: python
         query_type: stream
+        wait: 2
         depends_on_stream: v_12181627
         query_id: '12181627214'
         query: subscribe to select sum_distinct(val), sum(val), count_distinct(val), count(val)
@@ -45,13 +46,14 @@ tests:
         query_type: table
         depends_on_stream: v_12181627
         kill: '12181627214'
-        kill_wait: 1
-        wait: 2
+        kill_wait: 2
+        wait: 3
         query: insert into v_12181627(id, val) values(3, 30);
     - statements:
       - client: python
         query_type: stream
         query_id: 12181627214-1
+        wait: 2
         terminate: manual
         query: recover from '12181627214'
       - client: python
@@ -281,10 +283,11 @@ tests:
         query: drop stream if exists v_12180413
       - client: python
         query_type: table
-        wait: 1
+        wait: 2
         query: create stream v_12180413(id int, val int) primary key id settings mode='changelog_kv';
       - client: python
         query_type: stream
+        wait: 2
         depends_on_stream: v_12180413
         query_id: '12180413213'
         query: subscribe to select sum_distinct_retract(val), sum(val), count_distinct(val), count(val)
@@ -293,13 +296,14 @@ tests:
         query_type: table
         depends_on_stream: v_12180413
         kill: '12180413213'
-        kill_wait: 1
-        wait: 2
+        kill_wait: 2
+        wait: 3
         query: insert into v_12180413(id, val) values(3, 30);
     - statements:
       - client: python
         query_type: stream
         query_id: 12180413213-1
+        wait: 2
         terminate: manual
         query: recover from '12180413213'
       - client: python
