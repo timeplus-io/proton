@@ -56,13 +56,13 @@ void validateEngineArgs(ContextPtr context, ASTs & engine_args, const ColumnsDes
 }
 
 std::unique_ptr<StorageExternalStreamImpl> createExternalStream(
-    IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings, ContextPtr & context [[maybe_unused]], const ASTs & engine_args, bool attach, ExternalStreamCounterPtr external_stream_counter)
+    IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings, ContextPtr & context [[maybe_unused]], const ASTs & engine_args, bool attach, ExternalStreamCounterPtr external_stream_counter, ContextPtr context_)
 {
     if (settings->type.value.empty())
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream type is required in settings");
 
     if (settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA)
-        return std::make_unique<Kafka>(storage, std::move(settings), engine_args, attach, external_stream_counter);
+        return std::make_unique<Kafka>(storage, std::move(settings), engine_args, attach, external_stream_counter, context_);
 
 #ifdef OS_LINUX
     else if (settings->type.value == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)
@@ -149,7 +149,7 @@ StorageExternalStream::StorageExternalStream(
     storage_metadata.setColumns(columns_);
     setInMemoryMetadata(storage_metadata);
 
-    auto stream = createExternalStream(this, std::move(external_stream_settings_), context_, engine_args, attach, std::make_shared<ExternalStreamCounter>());
+    auto stream = createExternalStream(this, std::move(external_stream_settings_), context_, engine_args, attach, std::make_shared<ExternalStreamCounter>(), context_);
     external_stream.swap(stream);
 }
 

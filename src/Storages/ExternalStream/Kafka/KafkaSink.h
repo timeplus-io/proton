@@ -4,10 +4,8 @@
 #include <Formats/FormatFactory.h>
 #include <Processors/Sinks/SinkToStorage.h>
 #include <Storages/ExternalStream/Kafka/Kafka.h>
-#include <Storages/ExternalStream/Kafka/WriteBufferFromKafka.h>
+#include <Storages/ExternalStream/Kafka/WriteBufferFromKafkaSink.h>
 #include <Common/ThreadPool.h>
-
-#include <random>
 
 namespace Poco
 {
@@ -29,8 +27,7 @@ public:
     BlocksWithShard shard(Block block, Int32 shard_cnt) const;
 
 private:
-    void useRandomSharding();
-    Int32 getNextShardIndex(Int32 shard_cnt) const noexcept { return static_cast<Int32>(rand()) % shard_cnt; }
+    Int32 getNextShardIndex(Int32 /*shard_cnt*/) const noexcept { /* do not specify the partition ID */ return RD_KAFKA_PARTITION_UA; }
 
     BlocksWithShard doSharding(Block block, Int32 shard_cnt) const;
 
@@ -39,14 +36,13 @@ private:
     ExpressionActionsPtr sharding_expr;
     String sharding_key_column_name;
     bool random_sharding = false;
-    mutable std::minstd_rand rand;
 };
 }
 
 class KafkaSink final : public SinkToStorage
 {
 public:
-    KafkaSink(const Kafka * kafka, const Block & header, ContextPtr context, Int32 initial_partition_cnt, Poco::Logger * log_);
+    KafkaSink(const Kafka * kafka, const Block & header, Int32 initial_partition_cnt, const ASTPtr & message_key, ContextPtr context, Poco::Logger * log_);
     ~KafkaSink() override;
 
     String getName() const override { return "KafkaSink"; }
@@ -56,42 +52,62 @@ public:
     void checkpoint(CheckpointContextPtr) override;
 
 private:
-    static void onMessageDelivery(rd_kafka_t * /* producer */, const rd_kafka_message_t * msg, void * opaque)
-    {
-        static_cast<KafkaSink *>(opaque)->wb->onMessageDelivery(msg);
-    }
+    /// Callback for Kafka message delivery report
+    static void onMessageDelivery(rd_kafka_t * /* producer */, const rd_kafka_message_t * msg, void *  /*opaque*/);
+    void onMessageDelivery(const rd_kafka_message_t * msg);
 
-    static int32_t onPartitioning(
-        const rd_kafka_topic_t * /*rkt*/,
-        const void * /*keydata*/,
-        size_t /*keylen*/,
-        int32_t partition_count,
-        void * rkt_opaque,
-        void * msg_opaque)
-    {
-        /// update partition count
-        auto * sink = static_cast<KafkaSink *>(rkt_opaque);
-        sink->partition_cnt = partition_count;
+    void addMessageToBatch(char * pos, size_t len);
 
-        auto parition_id = static_cast<Int32>(reinterpret_cast<std::uintptr_t>(msg_opaque));
-        /// This should not really happen because Kafka does not support reducing partitions.
-        /// However, KIP-694 is currently under discussion, so this might heppen in the future.
-        if (parition_id >= partition_count)
-            parition_id = partition_count - 1;
-        return parition_id;
-    }
+    /// the number of acknowledgement has been received so far for the current checkpoint period
+    size_t acked() const { return state.acked; }
+    /// the number of errors has been received so far for the current checkpoint period
+    size_t error_count() const { return state.error_count; }
+    /// the number of outstanding messages for the current checkpoint period
+    size_t outstandings() const { return state.outstandings; }
+    /// the last error code received from delivery report callback
+    rd_kafka_resp_err_t lastSeenError() const { return static_cast<rd_kafka_resp_err_t>(state.last_error_code.load()); }
+    /// check if there are no more outstandings (i.e. delivery reports have been recieved
+    /// for all out-go messages, regardless if a message is successfully delivered or not)
+    bool hasNoOutstandings() const { return state.outstandings == state.acked + state.error_count; }
+    /// allows to reset the state after each checkpoint
+    void resetState() { state.reset(); }
 
     static const int POLL_TIMEOUT_MS = 500;
 
-    klog::KafkaPtr producer;
-    klog::KTopicPtr topic;
-    std::unique_ptr<WriteBufferFromKafka> wb;
-    OutputFormatPtr writer;
-    ThreadPool polling_threads;
-    std::atomic_flag is_finished;
     Int32 partition_cnt;
+    bool one_message_per_row;
+    Poco::Logger * log;
+
+    klog::KafkaPtr producer {nullptr, rd_kafka_destroy};
+    klog::KTopicPtr topic {nullptr, rd_kafka_topic_destroy};
+    ThreadPool polling_threads {1};
+    ThreadPool metadata_threads {1};
+    std::atomic_flag is_finished {false};
+
+    std::unique_ptr<WriteBufferFromKafkaSink> wb;
+    OutputFormatPtr writer;
     std::unique_ptr<KafkaStream::ChunkSharder> partitioner;
 
-    Poco::Logger * log;
+    ExpressionActionsPtr message_key_expr;
+    bool delete_message_key_column;
+    size_t message_key_column_pos;
+
+    /// For constructing the message batch
+    std::vector<rd_kafka_message_t> current_batch;
+    std::deque<StringRef> keys_queue;
+    Int32 next_partition;
+    mutable std::atomic_uint_fast32_t next_partition_counter = 0;
+
+    struct State final
+    {
+        std::atomic_size_t outstandings = 0;
+        std::atomic_size_t acked = 0;
+        std::atomic_size_t error_count = 0;
+        std::atomic_int last_error_code = 0;
+
+        void reset();
+    };
+
+    State state;
 };
 }
