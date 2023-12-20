@@ -59,10 +59,6 @@ public:
 
     std::string getWindowDescription() const;
 
-    /// proton: starts.
-    void substitute(String new_name);
-    /// proton: ends.
-
 protected:
     void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
     void appendColumnNameImpl(WriteBuffer & ostr) const override;

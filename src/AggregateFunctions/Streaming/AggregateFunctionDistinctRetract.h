@@ -96,7 +96,8 @@ struct AggregateFunctionDistinctRetractMultipleGenericData : public AggregateFun
     void add(StringRef key)
     {
         /// proton: starts.
-        bool is_new_inserted_key = map.insert(key, true);
+        auto iter = map.emplace(key);
+        bool is_new_inserted_key = (iter != map.end() && iter->second == 1);
         if (use_extra_data && is_new_inserted_key)
             extra_data_since_last_finalize.emplace_back(key.toString(), +1); /// insert a copy versioned key
         /// proton: ends.
@@ -105,8 +106,9 @@ struct AggregateFunctionDistinctRetractMultipleGenericData : public AggregateFun
     void negate(StringRef key)
     {
         /// proton: starts.
-        bool is_new_erased_key = map.erase(key, true);
-        if (use_extra_data && is_new_erased_key)
+        [[maybe_unused]] bool erase_success = map.erase(key);
+        assert(erase_success);
+        if (use_extra_data && !map.contains(key))
             extra_data_since_last_finalize.emplace_back(key.toString(), -1);
         /// proton: ends.
     }

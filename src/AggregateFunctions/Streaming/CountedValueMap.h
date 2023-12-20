@@ -73,49 +73,43 @@ public:
         return inserted;
     }
 
-    /**
-    - If returnIfNewData is true, 
-        the function behaves returning true only if the element is new insert instead.
-    - If returnIfNewData is false (which is the default), 
-        the function behaves like the original insert,
-        returning true in all cases except when the capacity is full, and the new element is not desired.
-    */
-    bool insert(T v, bool returnIfNewData = false)
+    /// Return the emplaced element iterator, if failed to emplace, return invalid iterator, `m.end()`
+    Map::iterator emplace(T v)
     {
         if (atCapacity())
         {
             /// At capacity, this is an optimization
             /// fast ignore elements we don't want to maintain
             if (less(lastValue(), v))
-                return false;
+                return m.end();
         }
 
-        auto iter = m.find(v);
-        if (iter != m.end())
+        if (auto iter = m.find(v); iter != m.end())
         {
             ++iter->second;
-            return !returnIfNewData; // Return true(default behaviour) if not specifically looking for new data
+            return iter;
         }
         else
         {
             /// Didn't find v in the map
-            [[maybe_unused]] auto [_, inserted] = m.emplace(arena->emplace(std::move(v)), 1);
+            auto [new_iter, inserted] = m.emplace(arena->emplace(std::move(v)), 1);
             assert(inserted);
 
             eraseExtraElements();
-            return true;
+            return new_iter;
         }
     }
 
-    /**
-    - If onlyIfErased is true, 
-        the function behaves returning true only if the element is found and erased.
-    - If onlyIfErased is false (which is the default), 
-        the function behaves like the original erase, returning true if the element is found, regardless of whether it is erased. 
-    */
+    /// Return true if a new element was added.
+    bool insert(T v)
+    {
+        auto iter = emplace(std::move(v));
+        return iter != m.end();
+    }
+
     /// To enable heterogeneous erase
     template <typename TT>
-    bool erase(const TT & v, bool onlyIfErased = false)
+    bool erase(const TT & v)
     {
         auto iter = m.find(v);
         if (iter != m.end())
@@ -125,11 +119,18 @@ public:
             {
                 arena->free(iter->first);
                 m.erase(iter);
-                return true;
             }
-            return !onlyIfErased; // Element found but not erased, return based on flag(default return true)
+
+            return true;
         }
         return false;
+    }
+
+    /// Return true if the element exists in the map.
+    template<typename TT>
+    bool contains(const TT & v) const
+    {
+        return m.find(v) != m.end();
     }
 
     bool firstValue(T & v) const

@@ -8,6 +8,8 @@
 #include <Common/ProtonCommon.h>
 #include <Functions/UserDefined/UserDefinedFunctionFactory.h>
 
+#include <boost/algorithm/string.hpp>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -156,14 +158,7 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
                     if (func.name.ends_with("_if"))
                         --delta_pos;
 
-                    /// Make _tp_delta as the last argument to avoid unused column elimination for query like below
-                    /// SELECT count(), avg(i) FROM (SELECT i, _tp_delta FROM versioned_kv) GROUP BY i; =>
-                    /// SELECT __count_retract(_tp_delta), __avg_retract(i, _tp_delta) FROM (SELECT i, _tp_delta FROM versioned_kv) GROUP BY i; =>
-                    if ((func.name == "__count_retract" || func.name == "__count_retract_if") && delta_pos - func.arguments->children.begin() > 0)
-                        /// Fix for nullable since this substitution is not equal
-                        func.arguments->children[0] = std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG);
-                    else
-                        func.arguments->children.insert(delta_pos, std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG));
+                    func.arguments->children.insert(delta_pos, std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG));
                 }
 
                 return;
@@ -172,13 +167,14 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
         else
         {
             /// replace `<aggr>_distinct[_combinator]` ==> `<aggr>_distinct_streaming[_combinator]` for streaming query
-            constexpr std::string_view distinct_raw{"_distinct"}, distinct_streaming_raw{"_distinct_streaming"};
-            if (size_t pos = func.name.find(distinct_raw); pos != std::string::npos) {
-                std::string new_name = func.name;
-                new_name.replace(pos, distinct_raw.length(), distinct_streaming_raw);
+            if (!boost::algorithm::contains(func.name, "_distinct_streaming")) {
+                if (boost::algorithm::contains(func.name, "_distinct")) {
+                    std::string new_name = func.name;
+                    boost::algorithm::replace_first(new_name, "_distinct", "_distinct_streaming");
 
-                /// Substitute the updated name into func
-                func.substitute(new_name);
+                    // Substitute the updated name into func
+                    substitueFunction(func, new_name);
+                }
             }
         }
     }
