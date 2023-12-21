@@ -183,24 +183,19 @@ void Kafka::calculateDataFormat(const IStorage * storage)
     if (!data_format.empty())
         return;
 
+    /// If there is only one column and its type is a string type, use RawBLOB. Use JSONEachRow otherwise.
     auto column_names_and_types{storage->getInMemoryMetadata().getColumns().getOrdinary()};
-    if (column_names_and_types.size() != 1)
-        throw Exception(
-            ErrorCodes::INVALID_SETTING_VALUE,
-            "`data_format` settings is empty but the Kafka external stream definition has multiple columns. Proton doesn't know how to "
-            "parse Kafka messages without a data format.");
-
-    auto type = column_names_and_types.begin()->type;
-    if (type->getTypeId() == TypeIndex::String || type->getTypeId() == TypeIndex::FixedString)
+    if (column_names_and_types.size() == 1)
     {
-        /// no-op
+        auto type = column_names_and_types.begin()->type;
+        if (type->getTypeId() == TypeIndex::String || type->getTypeId() == TypeIndex::FixedString)
+        {
+            data_format = "RawBLOB";
+            return;
+        }
     }
-    /// FIXME: JSON logic
-    else if (type->getTypeId() == TypeIndex::Object)
-        data_format = "JSONEachRow";
-    else
-        throw Exception(
-            ErrorCodes::NOT_IMPLEMENTED, "Automatically converting Kafka message to {} type is not supported yet", type->getName());
+
+    data_format = "JSONEachRow";
 }
 
 /// FIXME, refactor out as util and unit test it
