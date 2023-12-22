@@ -59,7 +59,7 @@ tests:
             depends_on_done: fmt-1-0
             wait: 1
             query: |
-              SHOW CREATE FORMAT SCHEMAS test_simple_protobuf_schema;
+              SHOW CREATE FORMAT SCHEMA test_simple_protobuf_schema;
 
           - client: python
             query_id: fmt-1-3
