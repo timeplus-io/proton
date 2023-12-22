@@ -81,10 +81,10 @@ tests:
         expected_results:
           - [ 'test_simple_protobuf_schema', 'Protobuf' ]
       - query_id: fmt-1-2
-        expected_results: |-
+        expected_results:
+        - |-
           CREATE FORMAT SCHEMA test_simple_protobuf_schema AS
           $$
-
           syntax = "proto3";
 
           message SearchRequest {
@@ -92,22 +92,6 @@ tests:
             int32 page_number = 2;
             int32 results_per_page = 3;
           }
-
-          $$
-          TYPE Protobuf
-      - query_id: fmt-1-2
-        expected_results: |-
-          CREATE FORMAT SCHEMA test_simple_protobuf_schema AS
-          $$
-
-          syntax = "proto3";
-
-          message SearchRequest {
-            string query = 1;
-            int32 page_number = 2;
-            int32 results_per_page = 3;
-          }
-
           $$
           TYPE Protobuf
       - query_id: fmt-1-4

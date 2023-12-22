@@ -37,7 +37,7 @@ void ASTCreateFormatSchemaQuery::formatImpl(const IAST::FormatSettings & setting
 
     formatOnCluster(settings);
 
-    settings.ostr << (settings.hilite ? hilite_keyword : "") << " AS " << (settings.hilite ? hilite_none : "");
+    settings.ostr << (settings.hilite ? hilite_keyword : "") << " AS" << (settings.hilite ? hilite_none : "");
 
     /// Do not format the source of the schema.
     settings.ostr << fmt::format("\n$$\n{}\n$$\n", this->getSchemaBody());

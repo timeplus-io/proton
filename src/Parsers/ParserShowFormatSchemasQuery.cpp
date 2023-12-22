@@ -8,7 +8,10 @@ namespace DB
 {
 bool ParserShowFormatSchemasQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
-    if (!ParserKeyword{"SHOW FORMAT SCHEMAS"}.ignore(pos, expected))
+    if (!ParserKeyword{"SHOW"}.ignore(pos, expected))
+        return false;
+
+    if (!ParserKeyword{"FORMAT SCHEMAS"}.ignore(pos, expected))
         return false;
 
     auto query = std::make_shared<ASTShowFormatSchemasQuery>();

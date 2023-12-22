@@ -20,7 +20,7 @@ public:
 
     static FormatSchemaFactory & instance();
 
-    void registerSchema(const String & schema_name, const String & schema_type, const String & schema_body, ExistsOP exists_op, const ContextPtr & context);
+    void registerSchema(const String & schema_name, const String & schema_type, std::string_view schema_body, ExistsOP exists_op, const ContextPtr & context);
 
     void unregisterSchema(const String & schema_name, const String & schema_type, bool throw_if_not_exists, const ContextPtr & context);
 

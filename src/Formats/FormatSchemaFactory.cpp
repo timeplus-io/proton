@@ -52,10 +52,9 @@ public:
     }
 };
 
-void validateProtobufSchema(const String & payload)
+void validateProtobufSchema(const std::string_view payload)
 {
-    std::istringstream s_payload(payload);
-    google::protobuf::io::IstreamInputStream input(&s_payload);
+    google::protobuf::io::ArrayInputStream input{payload.data(), static_cast<int>(payload.size())};
     ErrorCollector error_collector;
     google::protobuf::io::Tokenizer tokenizer(&input, &error_collector);
     google::protobuf::FileDescriptorProto descriptor;
@@ -67,7 +66,7 @@ void validateProtobufSchema(const String & payload)
 }
 }
 
-void FormatSchemaFactory::registerSchema(const String & schema_name, const String & schema_type, const String & schema_body, ExistsOP exists_op, const ContextPtr & context)
+void FormatSchemaFactory::registerSchema(const String & schema_name, const String & schema_type, std::string_view schema_body, ExistsOP exists_op, const ContextPtr & context)
 {
     assert(!schema_name.empty());
     assert(!schema_type.empty());

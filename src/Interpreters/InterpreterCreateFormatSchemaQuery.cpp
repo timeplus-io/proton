@@ -8,6 +8,21 @@
 namespace DB
 {
 
+namespace
+{
+std::string_view trim_whitespaces_at_both_ends(const String & str)
+{
+    std::string_view ret;
+    auto begin = std::find_if_not(str.begin(), str.end(), [](auto ch) { return std::isspace(ch); });
+    if (begin == str.end())
+        return ret;
+    auto end = std::find_if_not(str.rbegin(), str.rend(), [](auto ch) { return std::isspace(ch); });
+    size_t size = end.base() - begin;
+    return std::string_view{begin.base(), size};
+}
+
+}
+
 BlockIO InterpreterCreateFormatSchemaQuery::execute()
 {
     auto & create_format_schema_query = query_ptr->as<ASTCreateFormatSchemaQuery &>();
@@ -16,7 +31,8 @@ BlockIO InterpreterCreateFormatSchemaQuery::execute()
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "ON CLUSTER is not implemented for CREATE FORMAT SCHEMA");
 
     auto body = create_format_schema_query.getSchemaBody();
-    if (body.empty())
+    auto trimmed_body = trim_whitespaces_at_both_ends(body);
+    if (trimmed_body.empty())
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Format schema body cannot be empty");
 
     AccessRightsElements access_rights_elements;
@@ -35,7 +51,7 @@ BlockIO InterpreterCreateFormatSchemaQuery::execute()
     else if (create_format_schema_query.or_replace)
         exists_op = FormatSchemaFactory::ExistsOP::Replace;
 
-    FormatSchemaFactory::instance().registerSchema(create_format_schema_query.getSchemaName(), create_format_schema_query.schema_type, body, exists_op, current_context);
+    FormatSchemaFactory::instance().registerSchema(create_format_schema_query.getSchemaName(), create_format_schema_query.schema_type, trimmed_body, exists_op, current_context);
     return {};
 }
 }
