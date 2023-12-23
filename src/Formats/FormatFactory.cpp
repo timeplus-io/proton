@@ -446,6 +446,35 @@ void FormatFactory::registerFileExtension(const String & extension, const String
     file_extension_formats[boost::to_lower_copy(extension)] = format_name;
 }
 
+/// proton: starts
+void FormatFactory::registerSchemaFileExtension(const String & extension, const String & format_name)
+{
+    schema_file_extension_formats[boost::to_lower_copy(extension)] = format_name;
+}
+
+String FormatFactory::getFormatFromSchemaFileName(const String & file_name, bool throw_if_not_found)
+{
+    auto pos = file_name.find_last_of('.');
+    if (pos == String::npos)
+    {
+        if (throw_if_not_found)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot determine the schema file format by it's extension");
+        return "";
+    }
+
+    String file_extension = file_name.substr(pos + 1, String::npos);
+    boost::algorithm::to_lower(file_extension);
+    auto it = schema_file_extension_formats.find(file_extension);
+    if (it == schema_file_extension_formats.end())
+    {
+        if (throw_if_not_found)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot determine the schema file format by it's extension");
+        return "";
+    }
+    return it->second;
+}
+/// proton: ends
+
 String FormatFactory::getFormatFromFileName(String file_name, bool throw_if_not_found)
 {
     if (file_name == "stdin")
@@ -522,6 +551,36 @@ void FormatFactory::registerExternalSchemaReader(const String & name, ExternalSc
         throw Exception("FormatFactory: Schema reader " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
     target = std::move(external_schema_reader_creator);
 }
+
+/// proton: starts
+void FormatFactory::registerExternalSchemaWriter(const String & name, ExternalSchemaWriterCreator external_schema_writer_creator)
+{
+    auto & target = dict[name].external_schema_writer_creator;
+    if (target)
+        throw Exception("FormatFactory: Schema writer " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
+    target = std::move(external_schema_writer_creator);
+}
+
+bool FormatFactory::checkIfFormatHasExternalSchemaWriter(const String & name)
+{
+    const auto & target = getCreators(name);
+    return bool(target.external_schema_writer_creator);
+}
+
+ExternalSchemaWriterPtr FormatFactory::getExternalSchemaWriter(
+    const String & name,
+    std::string_view body,
+    ContextPtr & context,
+    const std::optional<FormatSettings> & _format_settings) const
+{
+    const auto & external_schema_writer_creator = dict.at(name).external_schema_writer_creator;
+    if (!external_schema_writer_creator)
+        throw Exception("FormatFactory: Format " + name + " doesn't support schema creation.", ErrorCodes::LOGICAL_ERROR);
+
+    auto format_settings = _format_settings ? *_format_settings : getFormatSettings(context);
+    return external_schema_writer_creator(body, format_settings);
+}
+/// proton: ends
 
 void FormatFactory::markOutputFormatSupportsParallelFormatting(const String & name)
 {

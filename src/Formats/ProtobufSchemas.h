@@ -21,6 +21,10 @@ namespace protobuf
 namespace DB
 {
 class FormatSchemaInfo;
+/// proton: starts
+struct SchemaValidationError;
+using SchemaValidationErrors = std::vector<SchemaValidationError>;
+/// proton: ends
 
 /** Keeps parsed google protobuf schemas parsed from files.
   * This class is used to handle the "Protobuf" input/output formats.
@@ -37,6 +41,9 @@ public:
     /// The function never returns nullptr, it throws an exception if it cannot load or parse the file.
     const google::protobuf::Descriptor * getMessageTypeForFormatSchema(const FormatSchemaInfo & info);
 
+    /// proton: starts
+    SchemaValidationErrors validateSchema(std::string_view & schema);
+    /// proton: ends
 private:
     class ImporterWithSourceTree;
     std::unordered_map<String, std::unique_ptr<ImporterWithSourceTree>> importers;

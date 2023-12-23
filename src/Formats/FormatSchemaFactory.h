@@ -20,9 +20,9 @@ public:
 
     static FormatSchemaFactory & instance();
 
-    void registerSchema(const String & schema_name, const String & schema_type, std::string_view schema_body, ExistsOP exists_op, const ContextPtr & context);
+    void registerSchema(const String & schema_name, const String & format, std::string_view schema_body, ExistsOP exists_op, ContextPtr & context);
 
-    void unregisterSchema(const String & schema_name, const String & schema_type, bool throw_if_not_exists, const ContextPtr & context);
+    void unregisterSchema(const String & schema_name, const String & format, bool throw_if_not_exists, const ContextPtr & context);
 
     struct SchemaEntry
     {
@@ -30,19 +30,19 @@ public:
         String type;
     };
 
-    std::vector<SchemaEntry> getSchemasList(const String & schema_type, const ContextPtr & context) const;
+    std::vector<SchemaEntry> getSchemasList(const String & format, const ContextPtr & context) const;
 
     struct SchemaEntryWithBody final: SchemaEntry
     {
         String body;
     };
 
-    SchemaEntryWithBody getSchema(const String & schema_name, const String & schema_type, const ContextPtr & context) const;
+    SchemaEntryWithBody getSchema(const String & schema_name, const String & format, const ContextPtr & context) const;
 
 private:
-    void checkSchemaType(const String & schema_type) const;
+    void checkSchemaType(const String & format) const;
 
-    String findSchemaFile(const String & schema_name, const String & schema_type, const ContextPtr & context) const;
+    String findSchemaFile(const String & schema_name, const String & format, const ContextPtr & context) const;
 
     mutable std::recursive_mutex mutex;
 };

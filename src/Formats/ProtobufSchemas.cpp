@@ -2,6 +2,7 @@
 
 #if USE_PROTOBUF
 #    include <Formats/FormatSchemaInfo.h>
+#    include <Processors/Formats/ISchemaWriter.h>
 #    include <Formats/ProtobufSchemas.h>
 #    include <google/protobuf/compiler/importer.h>
 #    include <Common/Exception.h>
@@ -13,7 +14,32 @@ namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
     extern const int CANNOT_PARSE_PROTOBUF_SCHEMA;
+    /// proton: starts
+    extern const int INVALID_DATA;
+    /// proton: ends
 }
+
+/// proton: starts
+namespace
+{
+class ErrorCollector final: public google::protobuf::io::ErrorCollector
+{
+private:
+    SchemaValidationErrors errors;
+
+public:
+    void AddError(int line, google::protobuf::io::ColumnNumber column, const std::string & message) override
+    {
+        errors.emplace_back(line, column, message);
+    }
+
+    SchemaValidationErrors getErrors() const
+    {
+        return errors;
+    }
+};
+}
+/// proton: starts
 
 ProtobufSchemas & ProtobufSchemas::instance()
 {
@@ -78,6 +104,21 @@ const google::protobuf::Descriptor * ProtobufSchemas::getMessageTypeForFormatSch
     auto * importer = it->second.get();
     return importer->import(info.schemaPath(), info.messageName());
 }
+
+/// proton: starts
+SchemaValidationErrors ProtobufSchemas::validateSchema(std::string_view & schema)
+{
+    google::protobuf::io::ArrayInputStream input{schema.data(), static_cast<int>(schema.size())};
+    ErrorCollector error_collector;
+    google::protobuf::io::Tokenizer tokenizer(&input, &error_collector);
+    google::protobuf::FileDescriptorProto descriptor;
+    google::protobuf::compiler::Parser parser;
+
+    parser.RecordErrorsTo(&error_collector);
+    parser.Parse(&tokenizer, &descriptor);
+    return error_collector.getErrors();
+}
+/// proton: ends
 
 }
 

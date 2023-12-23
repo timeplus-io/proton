@@ -39,6 +39,11 @@ class IExternalSchemaReader;
 using SchemaReaderPtr = std::shared_ptr<ISchemaReader>;
 using ExternalSchemaReaderPtr = std::shared_ptr<IExternalSchemaReader>;
 
+/// proton: starts
+class IExternalSchemaWriter;
+using ExternalSchemaWriterPtr = std::shared_ptr<IExternalSchemaWriter>;
+/// proton: ends
+
 using InputFormatPtr = std::shared_ptr<IInputFormat>;
 using OutputFormatPtr = std::shared_ptr<IOutputFormat>;
 
@@ -100,6 +105,10 @@ private:
     using SchemaReaderCreator = std::function<SchemaReaderPtr(ReadBuffer & in, const FormatSettings & settings)>;
     using ExternalSchemaReaderCreator = std::function<ExternalSchemaReaderPtr(const FormatSettings & settings)>;
 
+    /// proton: starts
+    using ExternalSchemaWriterCreator = std::function<ExternalSchemaWriterPtr(std::string_view schema_body, const FormatSettings & settings)>;
+    /// proton: ends
+
     /// Some formats can extract different schemas from the same source depending on
     /// some settings. To process this case in schema cache we should add some additional
     /// information to a cache key. This getter should return some string with information
@@ -114,6 +123,9 @@ private:
         FileSegmentationEngine file_segmentation_engine;
         SchemaReaderCreator schema_reader_creator;
         ExternalSchemaReaderCreator external_schema_reader_creator;
+        /// proton: starts
+        ExternalSchemaWriterCreator external_schema_writer_creator;
+        /// proton: ends
         bool supports_parallel_formatting{false};
         bool is_column_oriented{false};
         NonTrivialPrefixAndSuffixChecker non_trivial_prefix_and_suffix_checker;
@@ -197,6 +209,22 @@ public:
     String getFormatFromFileName(String file_name, bool throw_if_not_found = false);
     String getFormatFromFileDescriptor(int fd);
 
+    /// proton: starts
+    /// Register schema file extension for format
+    void registerSchemaFileExtension(const String & extension, const String & format_name);
+    String getFormatFromSchemaFileName(const String & file_name, bool throw_if_not_found = false);
+
+    /// Register schema writers for format its name.
+    void registerExternalSchemaWriter(const String & name, ExternalSchemaWriterCreator external_schema_writer_creator);
+    bool checkIfFormatHasExternalSchemaWriter(const String & name);
+
+    ExternalSchemaWriterPtr getExternalSchemaWriter(
+        const String & name,
+        std::string_view body,
+        ContextPtr & context,
+        const std::optional<FormatSettings> & format_settings = std::nullopt) const;
+    /// proton: ends
+
     /// Register schema readers for format its name.
     void registerSchemaReader(const String & name, SchemaReaderCreator schema_reader_creator);
     void registerExternalSchemaReader(const String & name, ExternalSchemaReaderCreator external_schema_reader_creator);
@@ -224,6 +252,9 @@ public:
 private:
     FormatsDictionary dict;
     FileExtensionFormats file_extension_formats;
+    /// proton: starts
+    FileExtensionFormats schema_file_extension_formats;
+    /// proton: ends
 
     const Creators & getCreators(const String & name) const;
 
