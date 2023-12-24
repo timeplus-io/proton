@@ -21,7 +21,7 @@ tests:
   - id: 1
     tags:
       - format_schema
-    name: CURD
+    name: CURD - Normal cases
     description: Format schema lifecycle.
     steps:
       - statements:
@@ -97,3 +97,26 @@ tests:
             TYPE Protobuf
       - query_id: fmt-1-4
         expected_results: []
+
+  - id: 2
+    tags:
+      - format_schema
+    name: CURD - Error cases
+    description: Tests for error handling.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: DROP FORMAT SCHEMA IF EXISTS test_format_schema_error_handling;
+
+          - client: python
+            query_type: table
+            query_id: fmt-2-0
+            wait: 1
+            query: |-
+              CREATE OR REPLACE FORMAT SCHEMA test_format_schema_error_handling AS 'anything' TYPE Avro;
+
+    expected_results:
+      - query_id: fmt-2-0
+        expected_results: error_code:73
