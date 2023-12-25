@@ -23,7 +23,7 @@ using SchemaValidationErrors = std::vector<SchemaValidationError>;
 class IExternalSchemaWriter
 {
 public:
-    IExternalSchemaWriter(std::string_view & schema_body_, const FormatSettings & settings_)
+    IExternalSchemaWriter(std::string_view schema_body_, const FormatSettings & settings_)
         : schema_body(schema_body_)
         , settings(settings_)
         {}

@@ -42,7 +42,7 @@ public:
     const google::protobuf::Descriptor * getMessageTypeForFormatSchema(const FormatSchemaInfo & info);
 
     /// proton: starts
-    SchemaValidationErrors validateSchema(std::string_view & schema);
+    SchemaValidationErrors validateSchema(std::string_view schema);
     /// proton: ends
 private:
     class ImporterWithSourceTree;

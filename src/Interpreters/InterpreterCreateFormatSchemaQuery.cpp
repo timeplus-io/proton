@@ -10,7 +10,8 @@ namespace DB
 
 namespace
 {
-std::string_view trim_whitespaces_at_both_ends(const String & str)
+/// Retruns a view of the input string with both leading and trailing whitespaces are removed.
+std::string_view trim(const String & str)
 {
     std::string_view ret;
     auto begin = std::find_if_not(str.begin(), str.end(), [](auto ch) { return std::isspace(ch); });
@@ -31,7 +32,7 @@ BlockIO InterpreterCreateFormatSchemaQuery::execute()
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "ON CLUSTER is not implemented for CREATE FORMAT SCHEMA");
 
     auto body = create_format_schema_query.getSchemaBody();
-    auto trimmed_body = trim_whitespaces_at_both_ends(body);
+    auto trimmed_body = trim(body);
     if (trimmed_body.empty())
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Format schema body cannot be empty");
 

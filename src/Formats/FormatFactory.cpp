@@ -557,14 +557,14 @@ void FormatFactory::registerExternalSchemaWriter(const String & name, ExternalSc
 {
     auto & target = dict[name].external_schema_writer_creator;
     if (target)
-        throw Exception("FormatFactory: Schema writer " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "FormatFactory: Schema writer {} is already registered", name);
     target = std::move(external_schema_writer_creator);
 }
 
 bool FormatFactory::checkIfFormatHasExternalSchemaWriter(const String & name)
 {
     const auto & target = getCreators(name);
-    return bool(target.external_schema_writer_creator);
+    return static_cast<bool>(target.external_schema_writer_creator);
 }
 
 ExternalSchemaWriterPtr FormatFactory::getExternalSchemaWriter(
@@ -575,7 +575,7 @@ ExternalSchemaWriterPtr FormatFactory::getExternalSchemaWriter(
 {
     const auto & external_schema_writer_creator = dict.at(name).external_schema_writer_creator;
     if (!external_schema_writer_creator)
-        throw Exception("FormatFactory: Format " + name + " doesn't support schema creation.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "FormatFactory: Format {} doesn't support schema creation.", name);
 
     auto format_settings = _format_settings ? *_format_settings : getFormatSettings(context);
     return external_schema_writer_creator(body, format_settings);

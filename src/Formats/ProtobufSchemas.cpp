@@ -33,7 +33,7 @@ public:
         errors.emplace_back(line, column, message);
     }
 
-    SchemaValidationErrors getErrors() const
+    const SchemaValidationErrors & getErrors() const
     {
         return errors;
     }
@@ -106,7 +106,7 @@ const google::protobuf::Descriptor * ProtobufSchemas::getMessageTypeForFormatSch
 }
 
 /// proton: starts
-SchemaValidationErrors ProtobufSchemas::validateSchema(std::string_view & schema)
+SchemaValidationErrors ProtobufSchemas::validateSchema(std::string_view schema)
 {
     google::protobuf::io::ArrayInputStream input{schema.data(), static_cast<int>(schema.size())};
     ErrorCollector error_collector;

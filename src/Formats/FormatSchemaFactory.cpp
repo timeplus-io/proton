@@ -58,7 +58,7 @@ void FormatSchemaFactory::registerSchema(const String & schema_name, const Strin
 
     auto result = writer->write(exists_op == ExistsOP::Replace);
     if (!result && exists_op == ExistsOP::Throw)
-            throw Exception(ErrorCodes::FORMAT_SCHEMA_ALREADY_EXISTS, "Format schema {} of type {} already exists", schema_name, format);
+        throw Exception(ErrorCodes::FORMAT_SCHEMA_ALREADY_EXISTS, "Format schema {} of type {} already exists", schema_name, format);
 }
 
 void FormatSchemaFactory::unregisterSchema(const String & schema_name, const String & format, bool throw_if_not_exists, const ContextPtr & context)
