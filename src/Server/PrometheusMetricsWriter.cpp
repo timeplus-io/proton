@@ -157,7 +157,8 @@ void PrometheusMetricsWriter::write(WriteBuffer & wb) const
                 if(auto * external_stream = table_ptr->as<StorageExternalStream>())
                 {
                     const auto & storage_id = external_stream->getStorageID();
-                    std::string table_name = storage_id.getFullTableName();
+                    String database_name = storage_id.getDatabaseName();
+                    String table_name = storage_id.getTableName();
 
                     auto external_stream_counter = external_stream->getExternalStreamCounter();
                     if (!external_stream_counter)
@@ -170,9 +171,11 @@ void PrometheusMetricsWriter::write(WriteBuffer & wb) const
                         std::string key{external_stream_prefix + metric_name};
                         writeOutLine(wb, "# TYPE", key, "counter");
                         DB::writeText(key, wb);
-                        DB::writeText("{name=", wb);
+                        DB::writeText("{database=\"", wb);
+                        DB::writeText(database_name, wb);
+                        DB::writeText("\", name=\"", wb);
                         DB::writeText(table_name, wb);
-                        DB::writeText("} ", wb);
+                        DB::writeText("\"} ", wb);
                         DB::writeIntText(value, wb);
                         DB::writeChar('\n', wb);
                     }
