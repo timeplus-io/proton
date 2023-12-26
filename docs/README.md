@@ -1,6 +1,17 @@
-# Contributing to ClickHouse Documentation
 
-## Why Do You Need to Document ClickHouse
+Welcome to the Proton database documentation.
+
+# Please note that the docs directory currently contains [ClickHouse](https://github.com/clickhouse/clickhouse.git)-related content. For Proton-specific documentation, kindly visit:
+
+Proton Documentation Site: [https://docs.timeplus.io/proton](https://docs.timeplus.com/proton)
+
+GitHub Documentation: [Proton Guide](https://github.com/timeplus-io/docs/blob/main/docs/proton.md)
+
+Thank you for supporting Proton!
+
+## Contributing to ClickHouse Documentation
+
+### Why Do You Need to Document ClickHouse
 
 The main reason is that ClickHouse is an open source project, and if you don't write the docs, nobody does. "Incomplete or Confusing Documentation" is the top complaint about open source software by the results of a [Github Open Source Survey](http://opensourcesurvey.org/2017/) of 2017. Documentation is highly valued but often overlooked. One of the most important contributions someone can make to an open source repository is a documentation update.
 
