@@ -6,6 +6,7 @@
 #    include <Formats/FormatSchemaInfo.h>
 #    include <Processors/Formats/IRowInputFormat.h>
 #    include <Processors/Formats/ISchemaReader.h>
+#    include <Processors/Formats/ISchemaWriter.h>
 
 namespace DB
 {
@@ -34,6 +35,10 @@ public:
 
     String getName() const override { return "ProtobufRowInputFormat"; }
 
+    /// proton: starts
+    void setReadBuffer(ReadBuffer & buf) override;
+    /// proton: ends
+
 private:
     bool readRow(MutableColumns & columns, RowReadExtension &) override;
     bool allowSyncAfterError() const override;
@@ -54,6 +59,20 @@ public:
 private:
     FormatSchemaInfo schema_info;
 };
+
+/// proton: starts
+class ProtobufSchemaWriter : public IExternalSchemaWriter
+{
+public:
+    explicit ProtobufSchemaWriter(std::string_view schema_body_, const FormatSettings & settings_);
+
+    SchemaValidationErrors validate() override;
+    bool write(bool replace_if_exist) override;
+
+private:
+    FormatSchemaInfo schema_info;
+};
+/// proton: ends
 
 }
 #endif

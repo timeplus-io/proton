@@ -26,9 +26,9 @@ extern const int RESOURCE_NOT_FOUND;
 }
 
 Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach, ExternalStreamCounterPtr external_stream_counter_)
-    : storage_id(storage->getStorageID())
-    , settings(std::move(settings_))
-    , data_format(settings->data_format.value)
+    : StorageExternalStreamImpl(std::move(settings_))
+    , storage_id(storage->getStorageID())
+    , data_format(StorageExternalStreamImpl::dataFormat())
     , log(&Poco::Logger::get("External-" + settings->topic.value))
     , engine_args(engine_args_)
     , external_stream_counter(external_stream_counter_)

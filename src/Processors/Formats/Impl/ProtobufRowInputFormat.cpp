@@ -8,11 +8,13 @@
 #   include <Formats/ProtobufSchemas.h>
 #   include <Formats/ProtobufSerializer.h>
 #   include <Interpreters/Context.h>
+#   include <IO/WriteBufferFromFile.h>
 #   include <base/range.h>
 
 
 namespace DB
 {
+
 ProtobufRowInputFormat::ProtobufRowInputFormat(ReadBuffer & in_, const Block & header_, const Params & params_, const FormatSchemaInfo & schema_info_, bool with_length_delimiter_)
     : IRowInputFormat(header_, in_, params_, ProcessorID::ProtobufRowInputFormatID)
     , reader(std::make_unique<ProtobufReader>(in_))
@@ -27,6 +29,14 @@ ProtobufRowInputFormat::ProtobufRowInputFormat(ReadBuffer & in_, const Block & h
 }
 
 ProtobufRowInputFormat::~ProtobufRowInputFormat() = default;
+
+/// proton: starts
+void ProtobufRowInputFormat::setReadBuffer(ReadBuffer & buf)
+{
+    IInputFormat::setReadBuffer(buf);
+    reader->setReadBuffer(buf);
+}
+/// proton: ends
 
 bool ProtobufRowInputFormat::readRow(MutableColumns & columns, RowReadExtension & row_read_extension)
 {
@@ -89,6 +99,35 @@ NamesAndTypesList ProtobufSchemaReader::readSchema()
     return protobufSchemaToCHSchema(message_descriptor);
 }
 
+/// proton: starts
+ProtobufSchemaWriter::ProtobufSchemaWriter(std::string_view schema_body_, const FormatSettings & settings_)
+    : IExternalSchemaWriter(schema_body_, settings_)
+    , schema_info(
+          settings.schema.format_schema,
+          "Protobuf",
+          false,
+          settings.schema.is_server,
+          settings.schema.format_schema_path)
+{
+}
+
+SchemaValidationErrors ProtobufSchemaWriter::validate()
+{
+    return ProtobufSchemas::instance().validateSchema(schema_body);
+}
+
+bool ProtobufSchemaWriter::write(bool replace_if_exist)
+{
+    if (std::filesystem::exists(schema_info.absoluteSchemaPath()))
+        if (!replace_if_exist)
+            return false;
+
+    WriteBufferFromFile write_buffer {schema_info.absoluteSchemaPath()};
+    write_buffer.write(schema_body.data(), schema_body.size());
+    return true;
+}
+/// proton: ends
+
 void registerProtobufSchemaReader(FormatFactory & factory)
 {
     factory.registerExternalSchemaReader("Protobuf", [](const FormatSettings & settings)
@@ -96,6 +135,14 @@ void registerProtobufSchemaReader(FormatFactory & factory)
         return std::make_shared<ProtobufSchemaReader>(settings);
     });
     factory.registerFileExtension("pb", "Protobuf");
+    /// proton: starts
+    factory.registerSchemaFileExtension("proto", "Protobuf");
+
+    factory.registerExternalSchemaWriter("Protobuf", [](std::string_view schema_body, const FormatSettings & settings)
+    {
+        return std::make_shared<ProtobufSchemaWriter>(schema_body, settings);
+    });
+    /// proton: ends
 
     factory.registerExternalSchemaReader("ProtobufSingle", [](const FormatSettings & settings)
     {

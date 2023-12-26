@@ -238,9 +238,9 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
     /// The callback allows `IRowOutputFormat` based formats produce one Kafka message per row.
     if (kafka->produceOneMessagePerRow())
         writer = FormatFactory::instance().getOutputFormat(
-            data_format, *wb, header, context, [this](auto & /*column*/, auto /*row*/) { wb->next(); });
+            data_format, *wb, header, context, [this](auto & /*column*/, auto /*row*/) { wb->next(); }, kafka->getFormatSettings(context));
     else
-        writer = FormatFactory::instance().getOutputFormat(data_format, *wb, header, context);
+        writer = FormatFactory::instance().getOutputFormat(data_format, *wb, header, context, {}, kafka->getFormatSettings(context));
     writer->setAutoFlush();
 
     if (kafka->hasCustomShardingExpr())

@@ -33,6 +33,7 @@ public:
     void readStringAndAppend(PaddedPODArray<UInt8> & str);
 
     bool eof() const { return in.eof(); }
+    void setReadBuffer(ReadBuffer & buf);
 
 private:
     void readBinary(void * data, size_t size);

@@ -172,7 +172,7 @@ tests:
       - client: python
         depends_on_stream: v_12181827
         query_type: table
-        wait: 1
+        wait: 2
         query: insert into v_12181827(id, val) values(5, 50),(4, 40);
       - client: python
         depends_on_stream: v_12181827

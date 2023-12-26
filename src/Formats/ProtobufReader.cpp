@@ -436,6 +436,13 @@ void ProtobufReader::ignoreGroup()
                    : ""),
         ErrorCodes::UNKNOWN_PROTOBUF_FORMAT);
 }
+
+
+void ProtobufReader::setReadBuffer(ReadBuffer & buf)
+{
+    in.swap(buf);
+    cursor = 0;
+}
 }
 
 #endif
