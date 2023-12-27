@@ -145,18 +145,14 @@ void ChangelogTransform::work()
         return;
     }
 
-    IColumn::Selector selector(rows, 0);
-    for (size_t i = 0; auto delta : delta_flags)
-        selector[i++] = delta > 0;
-
     /// cut every column in chunk_columns and put them into a new chunk
-    auto cut_cols_into_chunk = [&chunk_columns, this, &selector](UInt64 & start_pos, UInt64 end_pos) {
+    auto cut_cols_into_chunk = [&chunk_columns, this, &delta_flags](UInt64 & start_pos, UInt64 end_pos) {
         Chunk chunk_output;
 
         for (const auto & col : chunk_columns)
             chunk_output.addColumn(col->cut(start_pos, end_pos - start_pos));
 
-        if (!selector[start_pos])
+        if (delta_flags[start_pos] < 0)
         {
             /// retract chunk
             chunk_output.setRetractedDataFlag();
@@ -164,6 +160,7 @@ void ChangelogTransform::work()
         }
         else
         {
+            /// update chunk
             chunk_output.setChunkContext(input_data.chunk.getChunkContext());
             this->transformChunk(chunk_output);
         }
@@ -178,17 +175,16 @@ void ChangelogTransform::work()
      * but also ensures that the _tp_delta values in the same chunk are the same. 
      */
     UInt64 start_pos = 0;
-    for (size_t end_pos = 0; end_pos < selector.size(); ++end_pos)
+    for (size_t end_pos = 0; end_pos < delta_flags.size(); ++end_pos)
     {
-        if (selector[end_pos] != selector[start_pos])
+        if (delta_flags[end_pos] != delta_flags[start_pos])
         {
             cut_cols_into_chunk(start_pos, end_pos);
             start_pos = end_pos;
         }
     }
-
     /// handle the last part
-    cut_cols_into_chunk(start_pos, selector.size());
+    cut_cols_into_chunk(start_pos, delta_flags.size());
 
     input_data.chunk.clear();
 }
