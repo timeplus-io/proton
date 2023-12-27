@@ -1,11 +1,11 @@
 
 Welcome to the Proton database documentation.
 
-# Please note that the docs directory currently contains [ClickHouse](https://github.com/clickhouse/clickhouse.git)-related content. For Proton-specific documentation, kindly visit:
+# Please note that the docs directory currently contains [ClickHouse-related](https://github.com/clickhouse/clickhouse.git) content. For Proton-specific documentation, kindly visit:
 
-Proton Documentation Site: [https://docs.timeplus.io/proton](https://docs.timeplus.com/proton)
+Proton documentation: https://docs.timeplus.com/proton
 
-GitHub Documentation: [Proton Guide](https://github.com/timeplus-io/docs/blob/main/docs/proton.md)
+Issues and PR are welcome: https://github.com/timeplus-io/docs
 
 Thank you for supporting Proton!
 
