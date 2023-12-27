@@ -184,6 +184,35 @@ void tryTranslateToParametricAggregateFunction(
         argument_names = {argument_names[0]};
         types = {types[0]};
     }
+    else if (lower_name == "stochastic_linear_regression_state" || lower_name == "stochastic_logistic_regression_state")
+    {
+        /// stochastic_linear_regression_state function need 4 arguments(learning rate, l2 regularization coefficient, mini-batch size, method for updating weights) and any number of feature columns
+        /// for example: stochastic_linear_regression_state(0.1, 0.1, 100, 'sgd', feature_col1, feature_col2....)
+        /// At least one feature column is required
+        if (arguments.size() < 5)
+            throw Exception(
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                "Aggregate function {} requires four arguments and at least 1 feature column",
+                node->name);
+
+        /// put 4 arguments into parameters
+        ASTPtr expression_list = std::make_shared<ASTExpressionList>();
+        for (size_t i = 0; i < 4; ++i)
+            expression_list->children.push_back(arguments[i]);
+
+        parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+
+        /// put feature columns into argument_names and types
+        Names feature_names;
+        DataTypes feature_types;
+        for (size_t i = 4; i < arguments.size(); ++i)
+        {
+            feature_names.push_back(argument_names[i]);
+            feature_types.push_back(types[i]);
+        }
+        argument_names = feature_names;
+        types = feature_types;
+    }
 }
 
 /// proton: starts. Add 'is_changelog_input' param to allow aggregate function being aware whether the input stream is a changelog
