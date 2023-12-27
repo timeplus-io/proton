@@ -149,26 +149,46 @@ void ChangelogTransform::work()
     for (size_t i = 0; auto delta : delta_flags)
         selector[i++] = delta > 0;
 
-    /// FIXME: Consider multiple changelogs processing orders
-    /// Group 0: retract. Group 1: update
-    std::array<Chunk, 2> chunks;
-    for (const auto & col : chunk_columns)
-    {
-        auto split_cols = col->scatter(2, selector);
-        assert(split_cols.size() == 2);
+    /// cut every column in chunk_columns and put them into a new chunk
+    auto cut_cols_into_chunk = [&chunk_columns, this, &selector](UInt64 & start_pos, UInt64 end_pos) {
+        Chunk chunk_output;
 
-        for (size_t chunk_index = 0; chunk_index < 2; ++chunk_index)
-            chunks[chunk_index].addColumn(std::move(split_cols[chunk_index]));
+        for (const auto & col : chunk_columns)
+            chunk_output.addColumn(col->cut(start_pos, end_pos - start_pos));
+
+        if (!selector[start_pos])
+        {
+            /// retract chunk
+            chunk_output.setRetractedDataFlag();
+            this->transformChunk(chunk_output);
+        }
+        else
+        {
+            chunk_output.setChunkContext(input_data.chunk.getChunkContext());
+            this->transformChunk(chunk_output);
+        }
+    };
+
+    /**
+     * @brief Put consecutive data with the same _tp_delta value in a chunk.
+     * For example: if the input chunk delta flags are [1, 1, 1, -1, -1, 1, 1, 1]
+     * We will split into 3 chunks:[[1, 1, 1], [-1, -1], [1, 1, 1]].
+     * 
+     * This not only ensures that the order of data processing is consistent with the input,
+     * but also ensures that the _tp_delta values in the same chunk are the same. 
+     */
+    UInt64 start_pos = 0;
+    for (size_t end_pos = 0; end_pos < selector.size(); ++end_pos)
+    {
+        if (selector[end_pos] != selector[start_pos])
+        {
+            cut_cols_into_chunk(start_pos, end_pos);
+            start_pos = end_pos;
+        }
     }
 
-    if (chunks[0].getNumRows())
-    {
-        chunks[0].setRetractedDataFlag();
-        transformChunk(chunks[0]);
-    }
-
-    chunks[1].setChunkContext(input_data.chunk.getChunkContext());
-    transformChunk(chunks[1]);
+    /// handle the last part
+    cut_cols_into_chunk(start_pos, selector.size());
 
     input_data.chunk.clear();
 }
@@ -187,5 +207,7 @@ void ChangelogTransform::transformChunk(Chunk & chunk)
 
     output_chunks.push_back(std::move(chunk));
 }
+
+
 }
 }
