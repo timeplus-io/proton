@@ -1,0 +1,34 @@
+version: '3.7'
+name: coinbase
+services:
+  proton:
+    image: ghcr.io/timeplus-io/proton:latest
+    pull_policy: always
+    ports:
+    - "3218:3218" # HTTP Streaming
+    healthcheck:
+      test: ["CMD", "curl", "http://localhost:3218/proton/ping"]
+      interval: 2s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  benthos:
+    image: jeffail/benthos:latest
+    pull_policy: always
+    command: streams
+    ports:
+    - "4195:4195"
+
+  init-stream:
+    image: ghcr.io/timeplus-io/proton:latest
+    command:
+      - sh
+      - -c
+      - |
+        proton-client -h proton --query "CREATE STREAM IF NOT EXISTS tickers (best_ask float64, best_ask_size float64, best_bid float64, best_bid_size float64, high_24h float64, last_size float64, low_24h float64, open_24h float64, price float64, product_id string, sequence int, side string, time datetime, trade_id int, type string, volume_24h float64, volume_30d float64)"
+    depends_on:
+      proton:
+        condition: service_healthy
+
+
