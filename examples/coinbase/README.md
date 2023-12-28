@@ -73,7 +73,7 @@ this pipeline will read data from coinbase websocket and then send the result to
 
 ## Query you crypto price data with SQL
 
-now you can run following query to get the OHLC of the crypto data
+now you can run following query to get the OHLC of the crypto data:
 
 ```sql
 SELECT
