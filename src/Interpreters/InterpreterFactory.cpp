@@ -89,7 +89,15 @@
 #include <Common/typeid_cast.h>
 
 /// proton : starts
+#include <Parsers/ASTCreateFormatSchemaQuery.h>
+#include <Parsers/ASTDropFormatSchemaQuery.h>
+#include <Parsers/ASTShowCreateFormatSchemaQuery.h>
+#include <Parsers/ASTShowFormatSchemasQuery.h>
 #include <Parsers/Streaming/ASTUnsubscribeQuery.h>
+#include <Interpreters/InterpreterCreateFormatSchemaQuery.h>
+#include <Interpreters/InterpreterDropFormatSchemaQuery.h>
+#include <Interpreters/InterpreterShowCreateFormatSchemaQuery.h>
+#include <Interpreters/InterpreterShowFormatSchemasQuery.h>
 #include <Interpreters/Streaming/InterpreterUnsubscribeQuery.h>
 /// proton : ends
 
@@ -305,6 +313,24 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     {
         return std::make_unique<InterpreterCreateFunctionQuery>(query, context);
     }
+    // proton: starts
+    else if (query->as<ASTCreateFormatSchemaQuery>())
+    {
+        return std::make_unique<InterpreterCreateFormatSchemaQuery>(query, context);
+    }
+    else if (query->as<ASTDropFormatSchemaQuery>())
+    {
+        return std::make_unique<InterpreterDropFormatSchemaQuery>(query, context);
+    }
+    else if (query->as<ASTShowFormatSchemasQuery>())
+    {
+        return std::make_unique<InterpreterShowFormatSchemasQuery>(query, context);
+    }
+    else if (query->as<ASTShowCreateFormatSchemaQuery>())
+    {
+        return std::make_unique<InterpreterShowCreateFormatSchemaQuery>(query, context);
+    }
+    // proton: ends
     else if (query->as<ASTDropFunctionQuery>())
     {
         return std::make_unique<InterpreterDropFunctionQuery>(query, context);
