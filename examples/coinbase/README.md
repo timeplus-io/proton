@@ -81,11 +81,9 @@ SELECT
 FROM
   tumble(tickers, 60s)
 WHERE
-  product_id != ''
+  product_id != '' and _tp_time > earliest_ts()
 GROUP BY
   window_start, product_id
-SETTINGS
-  seek_to = 'earliest'
 ```
 
 
