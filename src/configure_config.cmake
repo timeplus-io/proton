@@ -241,3 +241,9 @@ endif()
 if (ENABLE_ARG_MIN_MAX_FUNCS)
     set(USE_ARG_MIN_MAX_FUNCS 1)
 endif()
+
+option(ENABLE_BASE64_FUNCS "Enable base64 functions" ${ENABLE_ALL_FUNCS})
+if (ENABLE_BASE64_FUNCS)
+    set(USE_BASE64 1)
+endif()
+
