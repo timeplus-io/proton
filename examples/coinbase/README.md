@@ -2,7 +2,7 @@
 
 
 
-This docker compose file demonstrates how to ingest websocket data into proton by using benthos pipeline. 
+This docker compose file demonstrates how to ingest WebSocket data into Proton by using Benthos pipeline. 
 
 
 
@@ -11,8 +11,8 @@ This docker compose file demonstrates how to ingest websocket data into proton b
 Simply run `docker compose up` in this folder. Three docker containers in the stack:
 
 1. ghcr.io/timeplus-io/proton:latest, as the streaming database
-2. jeffail/benthos:latest, a [benthos](https://www.benthos.dev/) service as the data pipeline
-3. init container, create the tickers stream when proton database server is ready
+2. jeffail/benthos:latest, a [Benthos](https://www.benthos.dev/) service as the data pipeline
+3. init container, create the tickers stream when Proton database server is ready
 
 the ddl to create the stream is:
 
@@ -40,7 +40,7 @@ CREATE STREAM IF NOT EXISTS tickers (
 
 ## Create a ingest data pipeline
 
-run command `make create` to create following benthos data pipeline, note you need install `jq` and `curl` to run this command
+run command `make create` to create following Benthos data pipeline, note you need install `jq` and `curl` to run this command
 
 ```
 input:
@@ -77,7 +77,7 @@ now you can run following query to get the OHLC of the crypto data
 
 ```sql
 SELECT
-  window_start, product_id, earliest(price) AS open, max(price) AS high, min(price) AS low, latest(price) AS close, latest(volume_24h) as acc_vol
+  window_start, product_id, earliest(price) AS open, max(price) AS high, min(price) AS low, latest(price) AS close
 FROM
   tumble(tickers, 60s)
 WHERE
