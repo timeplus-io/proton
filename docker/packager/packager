@@ -206,6 +206,7 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DENABLE_ROCKSDB=ON')
         cmake_flags.append('-DENABLE_SSL=ON')
         cmake_flags.append('-DENABLE_BZIP2=ON')
+        cmake_flags.append('-DENABLE_BASE64=ON')
         cmake_flags.append('-DENABLE_PROTOBUF=ON')
         cmake_flags.append('-DENABLE_URING=ON')
         cmake_flags.append('-DENABLE_UTILS=ON')
