@@ -78,7 +78,7 @@ private:
     std::unique_ptr<StreamingFormatExecutor> format_executor;
     ReadBufferFromMemory read_buffer;
 
-    std::vector<std::function<Int64(const rd_kafka_message_s *)>> virtual_time_columns_calc;
+    std::vector<std::function<Field(const rd_kafka_message_s *)>> virtual_col_value_functions;
     std::vector<DataTypePtr> virtual_col_types;
 
     bool request_virtual_columns = false;
@@ -104,7 +104,7 @@ private:
         Int32 partition;
         Int64 last_sn = -1;
 
-        State(const klog::KafkaWALContext & consume_ctx_) : topic(consume_ctx_.topic), partition(consume_ctx_.partition) { }
+        explicit State(const klog::KafkaWALContext & consume_ctx_) : topic(consume_ctx_.topic), partition(consume_ctx_.partition) { }
     } ckpt_data;
 
     ExternalStreamCounterPtr external_stream_counter;
