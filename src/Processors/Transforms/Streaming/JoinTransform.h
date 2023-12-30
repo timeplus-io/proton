@@ -18,7 +18,7 @@ namespace Streaming
 ///                      JoinTransform
 ///                      /
 /// right stream -> ... ->
-class JoinTransform final : public IProcessor
+class JoinTransform : public IProcessor
 {
 public:
     JoinTransform(

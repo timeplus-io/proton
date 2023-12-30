@@ -20,9 +20,18 @@
 
 /// proton : starts
 #include <Interpreters/Streaming/ConcurrentHashJoin.h>
-#include <Interpreters/Streaming/IHashJoin.h>
-#include <Processors/Transforms/Streaming/JoinTransform.h>
-#include <Processors/Transforms/Streaming/JoinTransformWithAlignment.h>
+#include <Processors/Transforms/Streaming/AsofJoinTransform.h>
+#include <Processors/Transforms/Streaming/AsofJoinTransformWithAlignment.h>
+#include <Processors/Transforms/Streaming/LatestJoinTransform.h>
+#include <Processors/Transforms/Streaming/LatestJoinTransformWithAlignment.h>
+#include <Processors/Transforms/Streaming/ChangelogJoinTransform.h>
+#include <Processors/Transforms/Streaming/ChangelogJoinTransformWithAlignment.h>
+#include <Processors/Transforms/Streaming/BidirectionalAllJoinTransform.h>
+#include <Processors/Transforms/Streaming/BidirectionalAllJoinTransformWithAlignment.h>
+#include <Processors/Transforms/Streaming/BidirectionalRangeJoinTransform.h>
+#include <Processors/Transforms/Streaming/BidirectionalRangeJoinTransformWithAlignment.h>
+#include <Processors/Transforms/Streaming/BidirectionalChangelogJoinTransform.h>
+#include <Processors/Transforms/Streaming/BidirectionalChangelogJoinTransformWithAlignment.h>
 /// proton : ends
 
 namespace DB
@@ -709,14 +718,65 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
         auto hash_join = std::dynamic_pointer_cast<Streaming::IHashJoin>(join);
         if (hash_join->getTableJoin().requiredJoinAlignment())
         {
-            joining = std::make_shared<Streaming::JoinTransformWithAlignment>(
-                left->getHeader(), right->getHeader(), out_header, std::move(hash_join), join_max_cached_bytes);
+            switch (hash_join->type())
+            {
+                case Streaming::HashJoinType::Asof:
+                    joining = std::make_shared<Streaming::AsofJoinTransformWithAlignment>(
+                        left->getHeader(), right->getHeader(), out_header, std::move(hash_join), join_max_cached_bytes);
+                    break;
+                case Streaming::HashJoinType::Latest:
+                    joining = std::make_shared<Streaming::LatestJoinTransformWithAlignment>(
+                        left->getHeader(), right->getHeader(), out_header, std::move(hash_join), join_max_cached_bytes);
+                    break;
+                case Streaming::HashJoinType::Changelog:
+                    joining = std::make_shared<Streaming::ChangelogJoinTransformWithAlignment>(
+                        left->getHeader(), right->getHeader(), out_header, std::move(hash_join), join_max_cached_bytes);
+                    break;
+                case Streaming::HashJoinType::BidirectionalAll:
+                    joining = std::make_shared<Streaming::BidirectionalAllJoinTransformWithAlignment>(
+                        left->getHeader(), right->getHeader(), out_header, std::move(hash_join), join_max_cached_bytes);
+                    break;
+                case Streaming::HashJoinType::BidirectionalRange:
+                    joining = std::make_shared<Streaming::BidirectionalRangeJoinTransformWithAlignment>(
+                        left->getHeader(), right->getHeader(), out_header, std::move(hash_join), join_max_cached_bytes);
+                    break;
+                case Streaming::HashJoinType::BidirectionalChangelog:
+                    joining = std::make_shared<Streaming::BidirectionalChangelogJoinTransformWithAlignment>(
+                        left->getHeader(), right->getHeader(), out_header, std::move(hash_join), join_max_cached_bytes);
+                    break;
+            }
         }
         else
         {
-            joining = std::make_shared<Streaming::JoinTransform>(
-                left->getHeader(), right->getHeader(), out_header, std::move(hash_join), max_block_size, join_max_cached_bytes);
+            switch (hash_join->type())
+            {
+                case Streaming::HashJoinType::Asof:
+                    joining = std::make_shared<Streaming::AsofJoinTransform>(
+                        left->getHeader(), right->getHeader(), out_header, std::move(hash_join), max_block_size, join_max_cached_bytes);
+                    break;
+                case Streaming::HashJoinType::Latest:
+                    joining = std::make_shared<Streaming::LatestJoinTransform>(
+                        left->getHeader(), right->getHeader(), out_header, std::move(hash_join), max_block_size, join_max_cached_bytes);
+                    break;
+                case Streaming::HashJoinType::Changelog:
+                    joining = std::make_shared<Streaming::ChangelogJoinTransform>(
+                        left->getHeader(), right->getHeader(), out_header, std::move(hash_join), max_block_size, join_max_cached_bytes);
+                    break;
+                case Streaming::HashJoinType::BidirectionalAll:
+                    joining = std::make_shared<Streaming::BidirectionalAllJoinTransform>(
+                        left->getHeader(), right->getHeader(), out_header, std::move(hash_join), max_block_size, join_max_cached_bytes);
+                    break;
+                case Streaming::HashJoinType::BidirectionalRange:
+                    joining = std::make_shared<Streaming::BidirectionalRangeJoinTransform>(
+                        left->getHeader(), right->getHeader(), out_header, std::move(hash_join), max_block_size, join_max_cached_bytes);
+                    break;
+                case Streaming::HashJoinType::BidirectionalChangelog:
+                    joining = std::make_shared<Streaming::BidirectionalChangelogJoinTransform>(
+                        left->getHeader(), right->getHeader(), out_header, std::move(hash_join), max_block_size, join_max_cached_bytes);
+                    break;
+            }
         }
+        assert(joining);
 
         connect(**lit, joining->getInputs().front());
         connect(**rit, joining->getInputs().back());

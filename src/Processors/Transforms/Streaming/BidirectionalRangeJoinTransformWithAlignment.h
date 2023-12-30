@@ -17,16 +17,16 @@ namespace DB::Streaming
 /// alignment for temporal join scenarios.
 /// left stream -> ... ->
 ///                      \
-///                      JoinTransformWithAlignment
+///                      BidirectionalRangeJoinTransformWithAlignment
 ///                      /
 /// right stream -> ... ->
-class JoinTransformWithAlignment : public IProcessor
+class BidirectionalRangeJoinTransformWithAlignment final : public IProcessor
 {
 public:
-    JoinTransformWithAlignment(
+    BidirectionalRangeJoinTransformWithAlignment(
         Block left_input_header, Block right_input_header, Block output_header, HashJoinPtr join_, UInt64 join_max_cached_bytes_);
 
-    String getName() const override { return "StreamingJoinTransformWithAlignment"; }
+    String getName() const override { return "StreamingBidirectionalRangeJoinTransformWithAlignment"; }
     Status prepare() override;
     void work() override;
 

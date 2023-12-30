@@ -6,7 +6,7 @@
 #include <NativeLog/Requests/AppendRequest.h>
 #include <Processors/Sinks/SinkToStorage.h>
 #include <Storages/StorageInMemoryMetadata.h>
-#include <Core/BlockWithShard.h>
+#include <Core/DataBlockWithShard.h>
 
 namespace DB
 {

@@ -27,6 +27,9 @@ struct LightChunk
     void concat(const LightChunk & other)
     {
         auto added_rows = other.rows();
+        if (added_rows <= 0)
+            return;
+
         assert(columns() == other.columns());
         for (size_t c = 0; auto & col : data)
         {
@@ -35,9 +38,21 @@ struct LightChunk
         }
     }
 
+    LightChunk cloneEmpty() const
+    {
+        LightChunk res;
+        res.data.reserve(data.size());
+
+        for (const auto & elem : data)
+            res.data.emplace_back(elem->cloneEmpty());
+
+        return res;
+    }
+
     size_t rows() const noexcept { return data.empty() ? 0 : data[0]->size(); }
     size_t columns() const noexcept { return data.size(); }
 
+    Columns & getColumns() noexcept { return data; }
     const Columns & getColumns() const noexcept { return data; }
     Columns detachColumns() noexcept { return std::move(data); }
 
@@ -88,7 +103,9 @@ struct LightChunkWithTimestamp
     LightChunkWithTimestamp() = default;
     LightChunkWithTimestamp(Columns && data_) : chunk(std::move(data_)) { }
     LightChunkWithTimestamp(Chunk && chunk_, Int64 min_ts, Int64 max_ts)
-        : chunk(std::move(chunk_)), min_timestamp(min_ts), max_timestamp(max_ts) { }
+        : chunk(std::move(chunk_)), min_timestamp(min_ts), max_timestamp(max_ts)
+    {
+    }
     LightChunkWithTimestamp(const Block & block)
         : chunk(block), min_timestamp(block.minTimestamp()), max_timestamp(block.maxTimestamp()) { }
 

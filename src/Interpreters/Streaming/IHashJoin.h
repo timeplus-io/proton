@@ -5,8 +5,23 @@
 
 namespace DB
 {
+struct LightChunk;
+
 namespace Streaming
 {
+enum class HashJoinType : uint8_t
+{
+    /// Dynamic enrichment hash join
+    Asof = 1, /// append-only (left/inner) asof join append-only
+    Latest = 2, /// append-only (left/inner) latest join append-only
+    Changelog = 3, /// append-only (left/inner) all join changelog, for exmaple sources: `versioned_kv, changelog_kv and changelog(...)`
+
+    /// Bidirectional hash join
+    BidirectionalAll = 4, /// append-only inner all join append-only
+    BidirectionalRange = 5, /// append-only inner all join append-only with on clause `date_diff_within(...)
+    BidirectionalChangelog = 6, /// changelog inner all join changelog, for exmaple sources: `versioned_kv, changelog_kv and changelog(...)`
+};
+
 class IHashJoin : public IJoin
 {
 public:
@@ -14,19 +29,11 @@ public:
 
     virtual void transformHeader(Block & header) = 0;
 
-    /// For non-bidirectional hash join
-    virtual void insertRightBlock(Block right_block) = 0;
-    virtual void joinLeftBlock(Block & left_block) = 0;
+    /// \returns <retracted_block, joined_block>
+    virtual std::pair<LightChunk, LightChunk> insertLeftDataBlockAndJoin(LightChunk && chunk) = 0;
+    virtual std::pair<LightChunk, LightChunk> insertRightDataBlockAndJoin(LightChunk && chunk) = 0;
 
-    /// For bidirectional hash join
-    /// There are 2 blocks returned : joined block via parameter and retracted block via returned-value if there is
-    virtual Block insertLeftBlockAndJoin(Block & left_block) = 0;
-    virtual Block insertRightBlockAndJoin(Block & right_block) = 0;
-
-    /// For bidirectional range hash join, there may be multiple joined blocks
-    virtual std::vector<Block> insertLeftBlockToRangeBucketsAndJoin(Block left_block) = 0;
-    virtual std::vector<Block> insertRightBlockToRangeBucketsAndJoin(Block right_block) = 0;
-
+    virtual HashJoinType type() const = 0;
     virtual bool emitChangeLog() const = 0;
     virtual bool bidirectionalHashJoin() const = 0;
     virtual bool rangeBidirectionalHashJoin() const = 0;
@@ -43,6 +50,8 @@ public:
 
     virtual JoinStreamDescriptionPtr leftJoinStreamDescription() const noexcept = 0;
     virtual JoinStreamDescriptionPtr rightJoinStreamDescription() const noexcept = 0;
+
+    virtual const Block & getOutputHeader() const = 0;
 
     virtual void serialize(WriteBuffer & wb) const = 0;
     virtual void deserialize(ReadBuffer & rb) = 0;
