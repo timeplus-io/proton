@@ -22,7 +22,8 @@ public:
         size_t merge_threads_,
         size_t temporary_data_merge_threads_,
         bool emit_version_,
-        bool emit_changelog_);
+        bool emit_changelog_,
+        bool fill_missing_window_);
 
     String getName() const override { return "StreamingAggregating"; }
 
@@ -43,6 +44,7 @@ private:
 
     bool emit_version;
     bool emit_changelog;
+    bool fill_missing_window;
 
     Processors aggregating;
 };

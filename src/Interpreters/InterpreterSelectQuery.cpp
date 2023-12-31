@@ -3268,10 +3268,22 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     /// 2) `shuffle by`: calculating light substream without substream ID (The data have been shuffled by `LightShufflingTransform`)
     if (query_info.hasPartitionByKeys() || light_shuffled)
         query_plan.addStep(std::make_unique<Streaming::AggregatingStepWithSubstream>(
-            query_plan.getCurrentDataStream(), std::move(params), final, emit_version, data_stream_semantic_pair.isChangelogOutput()));
+            query_plan.getCurrentDataStream(),
+            std::move(params),
+            final,
+            emit_version,
+            data_stream_semantic_pair.isChangelogOutput(),
+            settings.fill_missing_window_for_aggr));
     else
         query_plan.addStep(std::make_unique<Streaming::AggregatingStep>(
-            query_plan.getCurrentDataStream(), std::move(params), final, merge_threads, temporary_data_merge_threads, emit_version, data_stream_semantic_pair.isChangelogOutput()));
+            query_plan.getCurrentDataStream(),
+            std::move(params),
+            final,
+            merge_threads,
+            temporary_data_merge_threads,
+            emit_version,
+            data_stream_semantic_pair.isChangelogOutput(),
+            settings.fill_missing_window_for_aggr));
 }
 
 /// Resolve input / output data stream semantic.

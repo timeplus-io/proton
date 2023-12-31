@@ -37,14 +37,17 @@ AggregatingStep::AggregatingStep(
     size_t merge_threads_,
     size_t temporary_data_merge_threads_,
     bool emit_version_,
-    bool emit_changelog_)
-    : ITransformingStep(input_stream_, AggregatingTransformParams::getHeader(params_, final_, emit_version_, emit_changelog_), getTraits(), false)
+    bool emit_changelog_,
+    bool fill_missing_window_)
+    : ITransformingStep(
+        input_stream_, AggregatingTransformParams::getHeader(params_, final_, emit_version_, emit_changelog_), getTraits(), false)
     , params(std::move(params_))
     , final(std::move(final_))
     , merge_threads(merge_threads_)
     , temporary_data_merge_threads(temporary_data_merge_threads_)
     , emit_version(emit_version_)
     , emit_changelog(emit_changelog_)
+    , fill_missing_window(fill_missing_window_)
 {
 }
 
@@ -69,7 +72,8 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
       * 1. Parallel aggregation is done, and the results should be merged in parallel.
       * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
       */
-    auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), final, emit_version, emit_changelog);
+    auto transform_params
+        = std::make_shared<AggregatingTransformParams>(std::move(params), final, emit_version, emit_changelog, fill_missing_window);
 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.getNumStreams() > 1)

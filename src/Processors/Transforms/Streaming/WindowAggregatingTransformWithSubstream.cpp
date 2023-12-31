@@ -73,10 +73,20 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
             && window_with_buckets.window.end <= last_finalized_windows_with_buckets.back().window.end)
             continue;
 
-        chunk = AggregatingHelper::spliceAndConvertBucketsToChunk(data_variant, *params, window_with_buckets.buckets);
+        /// No buckets means it's empty window. We should fill it with default values, it's only possible for enable fill missing window
+        if (window_with_buckets.buckets.empty())
+        {
+            assert(params->fill_missing_window);
+            chunk.setColumns(params->aggregator.getHeader(params->final).cloneEmptyColumns(), 0);
+            addMissingWindow(chunk, window_with_buckets.window, params->params.window_params->time_col_is_datetime64, window_start_col_pos, window_end_col_pos);
+        }
+        else
+        {
+            chunk = AggregatingHelper::spliceAndConvertBucketsToChunk(data_variant, *params, window_with_buckets.buckets);
 
-        if (needReassignWindow())
-            reassignWindow(chunk, window_with_buckets.window, params->params.window_params->time_col_is_datetime64, window_start_col_pos, window_end_col_pos);
+            if (needReassignWindow())
+                reassignWindow(chunk, window_with_buckets.window, params->params.window_params->time_col_is_datetime64, window_start_col_pos, window_end_col_pos);
+        }
 
         if (params->emit_version && params->final)
             emitVersion(chunk, substream_ctx);
