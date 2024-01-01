@@ -28,6 +28,7 @@ struct KafkaWALAuth
         return boost::istarts_with(security_protocol, "SASL_");
     }
 
+    /// "SASL_SSL" or "SSL"
     bool usesSecureConnection() const
     {
         return boost::iends_with(security_protocol, "SSL");
@@ -35,17 +36,16 @@ struct KafkaWALAuth
 
     void populateConfigs(std::vector<std::pair<std::string, std::string>> & params) const
     {
-        params.emplace_back("security.protocol", security_protocol.c_str());
+        params.emplace_back("security.protocol", security_protocol);
         if (usesSASL())
         {
-            params.emplace_back("sasl.mechanism", sasl_mechanism.c_str());
-            params.emplace_back("sasl.username", username.c_str());
-            params.emplace_back("sasl.password", password.c_str());
+            params.emplace_back("sasl.mechanism", sasl_mechanism);
+            params.emplace_back("sasl.username", username);
+            params.emplace_back("sasl.password", password);
         }
 
-        /// "SASL_SSL" or "SSL"
         if (usesSecureConnection() && !ssl_ca_cert_file.empty())
-            params.emplace_back("ssl.ca.location", ssl_ca_cert_file.c_str());
+            params.emplace_back("ssl.ca.location", ssl_ca_cert_file);
         }
 };
 
@@ -58,14 +58,7 @@ struct KafkaWALSettings
     /// Global settings for both producer and consumer /// global metrics
     /// comma separated host/port: host1:port,host2:port,...
     std::string brokers;
-    KafkaWALAuth auth = {
-        .security_protocol = "plaintext",
-        .username = "",
-        .password = "",
-        .sasl_mechanism = "",
-        .ssl_ca_cert_file = ""
-    };
-    /// FIXME, SASL, SSL etc support
+    KafkaWALAuth auth = { .security_protocol = "plaintext" };
 
     int32_t message_max_bytes = 1000000;
     int32_t topic_metadata_refresh_interval_ms = 300000;

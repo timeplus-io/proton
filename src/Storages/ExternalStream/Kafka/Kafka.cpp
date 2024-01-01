@@ -31,6 +31,12 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     , data_format(StorageExternalStreamImpl::dataFormat())
     , log(&Poco::Logger::get("External-" + settings->topic.value))
     , engine_args(engine_args_)
+    , auth_info(std::make_unique<klog::KafkaWALAuth>(
+        settings->security_protocol.value,
+        settings->username.value,
+        settings->password.value,
+        settings->sasl_mechanism.value,
+        settings->ssl_ca_cert_file.value))
     , external_stream_counter(external_stream_counter_)
 {
     assert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);
@@ -144,21 +150,9 @@ void Kafka::cacheVirtualColumnNamesAndTypes()
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, std::make_shared<DataTypeInt64>()));
 }
 
-klog::KafkaWALAuth Kafka::auth() const
-{
-        return klog::KafkaWALAuth {
-            .security_protocol = settings->security_protocol.value,
-            .username = settings->username.value,
-            .password = settings->password.value,
-            .sasl_mechanism = settings->sasl_mechanism.value,
-            .ssl_ca_cert_file = settings->ssl_ca_cert_file.value,
-        };
-}
-
 klog::KafkaWALSimpleConsumerPtr Kafka::getConsumer(int32_t fetch_wait_max_ms) const
 {
-
-        return klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, auth(), fetch_wait_max_ms);
+    return klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, *auth_info, fetch_wait_max_ms);
 }
 
 std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const

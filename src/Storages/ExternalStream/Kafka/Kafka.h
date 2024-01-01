@@ -40,9 +40,9 @@ public:
     const String & dataFormat() const override { return data_format; }
     const String & topic() const { return settings->topic.value; }
     const klog::KConfParams & properties() const { return kafka_properties; }
+    const klog::KafkaWALAuth & auth() const noexcept { return *auth_info; }
     bool hasCustomShardingExpr() const { return !engine_args.empty(); }
     const ASTPtr & shardingExprAst() const { assert(!engine_args.empty()); return engine_args[0]; }
-    klog::KafkaWALAuth auth() const;
     klog::KafkaWALSimpleConsumerPtr getConsumer(int32_t fetch_wait_max_ms = 200) const;
 
 private:
@@ -62,6 +62,7 @@ private:
     NamesAndTypesList virtual_column_names_and_types;
     klog::KConfParams kafka_properties;
     const ASTs engine_args;
+    const std::unique_ptr<klog::KafkaWALAuth> auth_info;
 
     std::mutex shards_mutex;
     int32_t shards = 0;
