@@ -415,9 +415,6 @@ public:
         if (total_events == 0 && !is_streaming)
             total_events = events_per_second ? events_per_second : block_size;
 
-        block_idx_in_window = 0;
-        max_full_block_count = events_per_second_ / block_size;
-        partial_size = events_per_second_ % block_size;
         /**
          * In order to generate events evenly within one second, we have the the interval_time parameter.
          * The following code is used to calculate the number of data generated per interval
@@ -480,33 +477,25 @@ protected:
 
         if (events_per_second != 0)
         {
+            /// hign performance mod operation from clickhouse
             int is_special = index - index / interval_count * interval_count;
             auto now_time = MonotonicMilliseconds::now();
 
+            UInt64 batch_size = 0;
             if (now_time >= boundary_time)
             {
+                /// it's time for next output
                 boundary_time += (is_special ? generate_interval : last_interval_time);
-                block_idx_in_window = 0;
-            }
-
-            UInt64 batch_size = 0;
-
-            if (block_idx_in_window == 0) // The size of the first generated chunk is partial_size (events_per_second % block_size).
-            {
                 batch_size = is_special ? normal_interval : last_interval_count;
+                if (total_events)
+                {
+                    batch_size = std::min(batch_size, total_events - generated_events);
+                    generated_events += batch_size;
+                }
                 index++;
             }
-            else if (block_idx_in_window <= max_full_block_count) // The remaining chunk size is block size.
-                batch_size = block_size;
 
-            block_idx_in_window++;
-
-            if (total_events)
-            {
-                batch_size = std::min(batch_size, total_events - generated_events);
-                generated_events += batch_size;
-            }
-
+            /// FIXME: if the batch size > max block size, we have to split it.
             return doGenerate(batch_size);
         }
         else
@@ -517,7 +506,6 @@ protected:
                 batch_size = std::min(block_size, total_events - generated_events);
                 generated_events += batch_size;
             }
-
             return doGenerate(batch_size);
         }
     }
@@ -565,10 +553,7 @@ private:
     const ColumnsDescription our_columns;
     ContextPtr context;
     Int64 boundary_time;
-    UInt64 block_idx_in_window;
     UInt64 events_per_second;
-    UInt64 max_full_block_count;
-    UInt64 partial_size;
     UInt64 normal_interval = 0;
     UInt64 last_interval_count = 0;
     Chunk header_chunk;

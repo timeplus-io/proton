@@ -365,7 +365,6 @@ void KafkaWAL::initProducerHandle()
         {"message.max.bytes", std::to_string(settings->message_max_bytes)},
         {"message.timeout.ms", std::to_string(settings->message_timeout_ms)},
         /// Protocol used to communicate with brokers.
-        {"security.protocol", settings->auth.security_protocol.c_str()},
         {"topic.metadata.refresh.interval.ms", std::to_string(settings->topic_metadata_refresh_interval_ms)},
         {"compression.codec", settings->compression_codec.c_str()},
     };
@@ -373,16 +372,7 @@ void KafkaWAL::initProducerHandle()
     if (!settings->debug.empty())
         producer_params.emplace_back("debug", settings->debug);
 
-    if (boost::iequals(settings->auth.security_protocol, "SASL_PLAINTEXT")
-        || boost::iequals(settings->auth.security_protocol, "SASL_SSL"))
-    {
-        producer_params.emplace_back("sasl.mechanisms", "PLAIN");
-        producer_params.emplace_back("sasl.username", settings->auth.username.c_str());
-        producer_params.emplace_back("sasl.password", settings->auth.password.c_str());
-    }
-
-    if (boost::iequals(settings->auth.security_protocol, "SASL_SSL") && !settings->auth.ssl_ca_cert_file.empty())
-        producer_params.emplace_back("ssl.ca.location", settings->auth.ssl_ca_cert_file.c_str());
+    settings->auth.populateConfigs(producer_params);
 
     auto cb_setup = [](rd_kafka_conf_t * kconf) {
         rd_kafka_conf_set_stats_cb(kconf, &KafkaWALStats::logStats);

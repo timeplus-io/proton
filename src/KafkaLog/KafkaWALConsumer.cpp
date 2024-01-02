@@ -98,19 +98,9 @@ void KafkaWALConsumer::initHandle()
         /// ensuring no on-the-wire or on-disk corruption to the messages occurred
         std::make_pair("check.crcs", std::to_string(settings->check_crcs)),
         std::make_pair("statistics.interval.ms", std::to_string(settings->statistic_internal_ms)),
-        std::make_pair("security.protocol", settings->auth.security_protocol.c_str()),
     };
 
-    if (boost::iequals(settings->auth.security_protocol, "SASL_PLAINTEXT")
-        || boost::iequals(settings->auth.security_protocol, "SASL_SSL"))
-    {
-        consumer_params.emplace_back("sasl.mechanisms", "PLAIN");
-        consumer_params.emplace_back("sasl.username", settings->auth.username.c_str());
-        consumer_params.emplace_back("sasl.password", settings->auth.password.c_str());
-    }
-
-    if (boost::iequals(settings->auth.security_protocol, "SASL_SSL") && !settings->auth.ssl_ca_cert_file.empty())
-        consumer_params.emplace_back("ssl.ca.location", settings->auth.ssl_ca_cert_file.c_str());
+    settings->auth.populateConfigs(consumer_params);
 
     if (!settings->debug.empty())
         consumer_params.emplace_back("debug", settings->debug);
@@ -141,11 +131,11 @@ int32_t KafkaWALConsumer::addSubscriptions(const TopicPartitionOffsets & partiti
 
     for (const auto & partition : partitions_)
     {
-        auto new_partition = rd_kafka_topic_partition_list_add(topic_partitions.get(), partition.topic.c_str(), partition.partition);
+        auto * new_partition = rd_kafka_topic_partition_list_add(topic_partitions.get(), partition.topic.c_str(), partition.partition);
         new_partition->offset = partition.offset;
     }
 
-    auto err = rd_kafka_incremental_assign(consumer_handle.get(), topic_partitions.get());
+    auto * err = rd_kafka_incremental_assign(consumer_handle.get(), topic_partitions.get());
     if (err)
     {
         LOG_ERROR(log, "Failed to assign partitions incrementally, error={}", rd_kafka_error_string(err));
@@ -168,7 +158,7 @@ int32_t KafkaWALConsumer::removeSubscriptions(const TopicPartitionOffsets & part
         rd_kafka_topic_partition_list_add(topic_partitions.get(), partition.topic.c_str(), partition.partition);
     }
 
-    auto err = rd_kafka_incremental_unassign(consumer_handle.get(), topic_partitions.get());
+    auto * err = rd_kafka_incremental_unassign(consumer_handle.get(), topic_partitions.get());
     if (err)
     {
         LOG_ERROR(log, "Failed to unassign partitions incrementally, error={}", rd_kafka_error_string(err));
@@ -193,7 +183,7 @@ ConsumeResult KafkaWALConsumer::consume(uint32_t count, int32_t timeout_ms, std:
 
     for (uint32_t i = 0; i < count; ++i)
     {
-        auto rkmessage = rd_kafka_consumer_poll(consumer_handle.get(), timeout_ms);
+        auto * rkmessage = rd_kafka_consumer_poll(consumer_handle.get(), timeout_ms);
         if (likely(rkmessage))
         {
             if (likely(rkmessage->err == RD_KAFKA_RESP_ERR_NO_ERROR))
@@ -254,7 +244,7 @@ int32_t KafkaWALConsumer::commit(const TopicPartitionOffsets & tpos)
 
     for (const auto & tpo : tpos)
     {
-        auto partition_offset = rd_kafka_topic_partition_list_add(topic_partition_list.get(), tpo.topic.c_str(), tpo.partition);
+        auto * partition_offset = rd_kafka_topic_partition_list_add(topic_partition_list.get(), tpo.topic.c_str(), tpo.partition);
 
         /// rd_kafka_offsets_store commits `offset` as it is. We add 1 to the offset
         /// to keep the same semantic as rd_kafka_offset_store

@@ -47,7 +47,7 @@ KafkaSource::KafkaSource(
     , non_virtual_header(storage_snapshot->metadata->getSampleBlockNonMaterialized())
     , consume_ctx(kafka->topic(), shard, offset)
     , read_buffer("", 0)
-    , virtual_time_columns_calc(header.columns(), nullptr)
+    , virtual_col_value_functions(header.columns(), nullptr)
     , virtual_col_types(header.columns(), nullptr)
     , ckpt_data(consume_ctx)
     , external_stream_counter(external_stream_counter_)
@@ -157,20 +157,20 @@ void KafkaSource::parseRaw(const rd_kafka_message_t * kmessage)
         /// slower path, request virtual columns
         if (!current_batch.empty())
         {
-            assert(current_batch.size() == virtual_time_columns_calc.size());
-            for (size_t i = 0, n = virtual_time_columns_calc.size(); i < n; ++i)
+            assert(current_batch.size() == virtual_col_value_functions.size());
+            for (size_t i = 0, n = virtual_col_value_functions.size(); i < n; ++i)
             {
-                if (!virtual_time_columns_calc[i])
+                if (!virtual_col_value_functions[i])
                     current_batch[i]->insertData(static_cast<const char *>(kmessage->payload), kmessage->len);
                 else
-                    current_batch[i]->insertMany(virtual_time_columns_calc[i](kmessage), 1);
+                    current_batch[i]->insertMany(virtual_col_value_functions[i](kmessage), 1);
             }
         }
         else
         {
-            for (size_t i = 0, n = virtual_time_columns_calc.size(); i < n; ++i)
+            for (size_t i = 0, n = virtual_col_value_functions.size(); i < n; ++i)
             {
-                if (!virtual_time_columns_calc[i])
+                if (!virtual_col_value_functions[i])
                 {
                     current_batch.push_back(physical_header.getByPosition(0).type->createColumn());
                     current_batch.back()->insertData(static_cast<const char *>(kmessage->payload), kmessage->len);
@@ -178,7 +178,7 @@ void KafkaSource::parseRaw(const rd_kafka_message_t * kmessage)
                 else
                 {
                     auto column = virtual_col_types[i]->createColumn();
-                    column->insertMany(virtual_time_columns_calc[i](kmessage), 1);
+                    column->insertMany(virtual_col_value_functions[i](kmessage), 1);
                     current_batch.push_back(std::move(column));
                 }
             }
@@ -223,12 +223,12 @@ void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
         /// slower path
         if (!current_batch.empty())
         {
-            assert(current_batch.size() == virtual_time_columns_calc.size());
+            assert(current_batch.size() == virtual_col_value_functions.size());
 
             /// slower path
-            for (size_t i = 0, j = 0, n = virtual_time_columns_calc.size(); i < n; ++i)
+            for (size_t i = 0, j = 0, n = virtual_col_value_functions.size(); i < n; ++i)
             {
-                if (!virtual_time_columns_calc[i])
+                if (!virtual_col_value_functions[i])
                 {
                     /// non-virtual column: physical or calculated
                     current_batch[i]->insertRangeFrom(*new_data[j], 0, new_rows);
@@ -236,16 +236,16 @@ void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
                 }
                 else
                 {
-                    current_batch[i]->insertMany(virtual_time_columns_calc[i](kmessage), new_rows);
+                    current_batch[i]->insertMany(virtual_col_value_functions[i](kmessage), new_rows);
                 }
             }
         }
         else
         {
             /// slower path
-            for (size_t i = 0, j = 0, n = virtual_time_columns_calc.size(); i < n; ++i)
+            for (size_t i = 0, j = 0, n = virtual_col_value_functions.size(); i < n; ++i)
             {
-                if (!virtual_time_columns_calc[i])
+                if (!virtual_col_value_functions[i])
                 {
                     /// non-virtual column: physical or calculated
                     current_batch.push_back(std::move(new_data[j]));
@@ -254,7 +254,7 @@ void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
                 else
                 {
                     auto column = virtual_col_types[i]->createColumn();
-                    column->insertMany(virtual_time_columns_calc[i](kmessage), new_rows);
+                    column->insertMany(virtual_col_value_functions[i](kmessage), new_rows);
                     current_batch.push_back(std::move(column));
                 }
             }
@@ -278,13 +278,7 @@ void KafkaSource::initConsumer(const Kafka * kafka)
         consume_ctx.auto_offset_reset = "earliest";
 
     consume_ctx.enforce_offset = true;
-    klog::KafkaWALAuth auth = {
-        .security_protocol = kafka->securityProtocol(),
-        .username = kafka->username(),
-        .password = kafka->password(),
-        .ssl_ca_cert_file = kafka->sslCaCertFile()
-    };
-    consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(kafka->brokers(), auth, record_consume_timeout_ms);
+    consumer = kafka->getConsumer(record_consume_timeout_ms);
     consumer->initTopicHandle(consume_ctx);
 }
 
@@ -312,54 +306,51 @@ void KafkaSource::calculateColumnPositions()
 {
     for (size_t pos = 0; const auto & column : header)
     {
-        if (column.name == ProtonConsts::RESERVED_APPEND_TIME)
+        /// If a virtual column is explicitely defined as a physical column in the stream definition, we should honor it,
+        /// just as the virutal columns document says, and users are not recommended to do this (and they still can).
+        if (std::any_of(non_virtual_header.begin(), non_virtual_header.end(), [&column](auto & non_virtual_column) { return non_virtual_column.name == column.name; }))
         {
-            virtual_time_columns_calc[pos]
-                = [](const rd_kafka_message_t * kmessage) { return rd_kafka_message_timestamp(kmessage, nullptr); };
+            physical_header.insert(column);
+        }
+        else if (column.name == ProtonConsts::RESERVED_APPEND_TIME)
+        {
+            virtual_col_value_functions[pos]
+                = [](const rd_kafka_message_t * kmessage) {
+                    rd_kafka_timestamp_type_t ts_type;
+                    auto ts = rd_kafka_message_timestamp(kmessage, &ts_type);
+                    /// Only set the append time when the timestamp is actually an append time.
+                    if (ts_type == RD_KAFKA_TIMESTAMP_LOG_APPEND_TIME)
+                        return Decimal64(ts);
+                    return Decimal64();
+                };
             /// We are assuming all virtual timestamp columns have the same data type
             virtual_col_types[pos] = column.type;
         }
         else if (column.name == ProtonConsts::RESERVED_PROCESS_TIME)
         {
-            virtual_time_columns_calc[pos] = [](const rd_kafka_message_t *) { return UTCMilliseconds::now(); };
+            virtual_col_value_functions[pos] = [](const rd_kafka_message_t *) { return Decimal64(UTCMilliseconds::now()); };
             virtual_col_types[pos] = column.type;
         }
         else if (column.name == ProtonConsts::RESERVED_EVENT_TIME)
         {
-            /// If Kafka message header contains `_tp_time`, honor it
-            virtual_time_columns_calc[pos] = [](const rd_kafka_message_t * kmessage) -> Int64 {
-                rd_kafka_headers_t * hdrs = nullptr;
-                if (rd_kafka_message_headers(kmessage, &hdrs) == RD_KAFKA_RESP_ERR_NO_ERROR)
-                {
-                    /// Has headers
-                    const void * value = nullptr;
-                    size_t size = 0;
-
-                    if (rd_kafka_header_get_last(hdrs, ProtonConsts::RESERVED_EVENT_TIME.c_str(), &value, &size)
-                        == RD_KAFKA_RESP_ERR_NO_ERROR)
-                    {
-                        try
-                        {
-                            return parseIntStrict<Int64>(std::string_view(static_cast<const char *>(value), size + 1), 0, size);
-                        }
-                        catch (...)
-                        {
-                            return 0;
-                        }
-                    }
-                }
-                return 0;
+            virtual_col_value_functions[pos] = [](const rd_kafka_message_t * kmessage) {
+                rd_kafka_timestamp_type_t ts_type;
+                auto ts = rd_kafka_message_timestamp(kmessage, &ts_type);
+                if (ts_type == RD_KAFKA_TIMESTAMP_NOT_AVAILABLE)
+                    return Decimal64();
+                /// Each Kafka message has only one timestamp, thus we always use it as the `_tp_time`.
+                return Decimal64(ts);
             };
             virtual_col_types[pos] = column.type;
         }
         else if (column.name == ProtonConsts::RESERVED_SHARD)
         {
-            virtual_time_columns_calc[pos] = [](const rd_kafka_message_t * kmessage) -> Int64 { return kmessage->partition; };
+            virtual_col_value_functions[pos] = [](const rd_kafka_message_t * kmessage) -> Int64 { return kmessage->partition; };
             virtual_col_types[pos] = column.type;
         }
         else if (column.name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID)
         {
-            virtual_time_columns_calc[pos] = [](const rd_kafka_message_t * kmessage) -> Int64 { return kmessage->offset; };
+            virtual_col_value_functions[pos] = [](const rd_kafka_message_t * kmessage) -> Int64 { return kmessage->offset; };
             virtual_col_types[pos] = column.type;
         }
         else
