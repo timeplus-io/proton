@@ -1,6 +1,7 @@
 #pragma once
 
 #include <KafkaLog/KafkaWALCommon.h>
+#include <KafkaLog/KafkaWALSimpleConsumer.h>
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
@@ -38,13 +39,11 @@ public:
     const String & brokers() const { return settings->brokers.value; }
     const String & dataFormat() const override { return data_format; }
     const String & topic() const { return settings->topic.value; }
-    const String & securityProtocol() const { return settings->security_protocol.value; }
-    const String & username() const { return settings->username.value; }
-    const String & password() const { return settings->password.value; }
-    const String & sslCaCertFile() const { return settings->ssl_ca_cert_file.value; }
     const klog::KConfParams & properties() const { return kafka_properties; }
+    const klog::KafkaWALAuth & auth() const noexcept { return *auth_info; }
     bool hasCustomShardingExpr() const { return !engine_args.empty(); }
     const ASTPtr & shardingExprAst() const { assert(!engine_args.empty()); return engine_args[0]; }
+    klog::KafkaWALSimpleConsumerPtr getConsumer(int32_t fetch_wait_max_ms = 200) const;
 
 private:
     void calculateDataFormat(const IStorage * storage);
@@ -63,6 +62,7 @@ private:
     NamesAndTypesList virtual_column_names_and_types;
     klog::KConfParams kafka_properties;
     const ASTs engine_args;
+    const std::unique_ptr<klog::KafkaWALAuth> auth_info;
 
     std::mutex shards_mutex;
     int32_t shards = 0;

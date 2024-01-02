@@ -87,7 +87,6 @@ void KafkaWALSimpleConsumer::initHandle()
         {"enable.partition.eof", "false"},
         {"queued.min.messages", std::to_string(settings->queued_min_messages)},
         {"queued.max.messages.kbytes", std::to_string(settings->queued_max_messages_kbytes)},
-        {"security.protocol", settings->auth.security_protocol.c_str()},
     };
 
     if (!settings->debug.empty())
@@ -95,16 +94,7 @@ void KafkaWALSimpleConsumer::initHandle()
         consumer_params.emplace_back("debug", settings->debug);
     }
 
-    if (boost::iequals(settings->auth.security_protocol, "SASL_PLAINTEXT")
-        || boost::iequals(settings->auth.security_protocol, "SASL_SSL"))
-    {
-        consumer_params.emplace_back("sasl.mechanisms", "PLAIN");
-        consumer_params.emplace_back("sasl.username", settings->auth.username.c_str());
-        consumer_params.emplace_back("sasl.password", settings->auth.password.c_str());
-    }
-
-    if (boost::iequals(settings->auth.security_protocol, "SASL_SSL") && !settings->auth.ssl_ca_cert_file.empty())
-        consumer_params.emplace_back("ssl.ca.location", settings->auth.ssl_ca_cert_file.c_str());
+    settings->auth.populateConfigs(consumer_params);
 
     auto cb_setup = [](rd_kafka_conf_t * kconf) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         rd_kafka_conf_set_stats_cb(kconf, &KafkaWALStats::logStats);
