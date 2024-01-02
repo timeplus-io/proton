@@ -187,8 +187,8 @@ void Kafka::calculateDataFormat(const IStorage * storage)
     auto column_names_and_types{storage->getInMemoryMetadata().getColumns().getOrdinary()};
     if (column_names_and_types.size() == 1)
     {
-        auto type = column_names_and_types.begin()->type;
-        if (type->getTypeId() == TypeIndex::String || type->getTypeId() == TypeIndex::FixedString)
+        auto type = column_names_and_types.begin()->type->getTypeId();
+        if (type == TypeIndex::String || type == TypeIndex::FixedString)
         {
             data_format = "RawBLOB";
             return;
