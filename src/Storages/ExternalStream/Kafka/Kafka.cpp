@@ -32,6 +32,12 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     , data_format(StorageExternalStreamImpl::dataFormat())
     , log(&Poco::Logger::get("External-" + settings->topic.value))
     , engine_args(engine_args_)
+    , auth_info(std::make_unique<klog::KafkaWALAuth>(
+        settings->security_protocol.value,
+        settings->username.value,
+        settings->password.value,
+        settings->sasl_mechanism.value,
+        settings->ssl_ca_cert_file.value))
     , external_stream_counter(external_stream_counter_)
 {
     assert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);
@@ -145,6 +151,11 @@ void Kafka::cacheVirtualColumnNamesAndTypes()
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, std::make_shared<DataTypeInt64>()));
 }
 
+klog::KafkaWALSimpleConsumerPtr Kafka::getConsumer(int32_t fetch_wait_max_ms) const
+{
+    return klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, *auth_info, fetch_wait_max_ms);
+}
+
 std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const
 {
     assert(seek_to_info);
@@ -155,15 +166,6 @@ std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info, const s
     }
     else
     {
-        klog::KafkaWALAuth auth{
-            .security_protocol = securityProtocol(),
-            .username = username(),
-            .password = password(),
-            .ssl_ca_cert_file = sslCaCertFile(),
-        };
-
-        auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, auth);
-
         std::vector<klog::PartitionTimestamp> partition_timestamps;
         partition_timestamps.reserve(shards_to_query.size());
         auto seek_timestamps{seek_to_info->getSeekPoints()};
@@ -172,7 +174,7 @@ std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info, const s
         for (auto [shard, timestamp] : std::ranges::views::zip(shards_to_query, seek_timestamps))
             partition_timestamps.emplace_back(shard, timestamp);
 
-        return consumer->offsetsForTimestamps(settings->topic.value, partition_timestamps);
+        return getConsumer()->offsetsForTimestamps(settings->topic.value, partition_timestamps);
     }
 }
 
@@ -241,16 +243,7 @@ void Kafka::validate(const std::vector<int32_t> & shards_to_query)
         if (shards == 0)
         {
             /// We haven't describe the topic yet
-            klog::KafkaWALAuth auth = {
-                .security_protocol = settings->security_protocol.value,
-                .username = settings->username.value,
-                .password = settings->password.value,
-                .ssl_ca_cert_file = settings->ssl_ca_cert_file.value,
-            };
-
-            auto consumer = klog::KafkaWALPool::instance(nullptr).getOrCreateStreamingExternal(settings->brokers.value, auth);
-
-            auto result = consumer->describe(settings->topic.value);
+            auto result = getConsumer()->describe(settings->topic.value);
             if (result.err != ErrorCodes::OK)
                 throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "{} topic doesn't exist", settings->topic.value);
 
