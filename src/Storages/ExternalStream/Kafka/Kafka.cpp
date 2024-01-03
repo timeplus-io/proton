@@ -13,8 +13,10 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
+#include <Parsers/ASTFunction.h>
 
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/split.hpp>
 
 #include <ranges>
@@ -69,6 +71,16 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     if (!attach)
         /// Only validate cluster / topic for external stream creation
         validate();
+}
+
+bool Kafka::hasCustomShardingExpr() const {
+    if (engine_args.empty())
+        return false;
+
+    if (auto * shard_func = shardingExprAst()->as<ASTFunction>())
+        return !boost::iequals(shard_func->name, "rand");
+
+    return true;
 }
 
 Pipe Kafka::read(
@@ -244,7 +256,7 @@ std::vector<int32_t> Kafka::parseShards(const std::string & shards_setting)
     return specified_shards;
 }
 
-void Kafka::validateMessageKey(const String & message_key_, IStorage * storage, ContextPtr context)
+void Kafka::validateMessageKey(const String & message_key_, IStorage * storage, const ContextPtr & context)
 {
     const auto & key = message_key_.c_str();
     Tokens tokens(key, key + message_key_.size(), 0);
@@ -266,7 +278,6 @@ void Kafka::validateMessageKey(const String & message_key_, IStorage * storage, 
     auto type_id = block.getByPosition(0).type->getTypeId();
     if (type_id != TypeIndex::String && type_id != TypeIndex::FixedString)
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "message_key must have type of string");
-
 }
 
 /// Validate the topic still exists, specified partitions are still valid etc

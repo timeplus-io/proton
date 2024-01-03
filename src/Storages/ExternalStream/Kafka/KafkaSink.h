@@ -21,13 +21,16 @@ namespace KafkaStream
 class ChunkSharder
 {
 public:
-    ChunkSharder(ContextPtr context, const Block & header, const ASTPtr & sharding_expr_ast);
+    ChunkSharder(ExpressionActionsPtr sharding_expr_, const String & column_name);
     ChunkSharder();
 
     BlocksWithShard shard(Block block, Int32 shard_cnt) const;
 
 private:
-    Int32 getNextShardIndex(Int32 /*shard_cnt*/) const noexcept { /* do not specify the partition ID */ return RD_KAFKA_PARTITION_UA; }
+    Int32 getNextShardIndex(Int32 /*shard_cnt*/) const noexcept {
+        /// let librdkafka decides
+        return RD_KAFKA_PARTITION_UA;
+    }
 
     BlocksWithShard doSharding(Block block, Int32 shard_cnt) const;
 
@@ -42,7 +45,7 @@ private:
 class KafkaSink final : public SinkToStorage
 {
 public:
-    KafkaSink(const Kafka * kafka, const Block & header, Int32 initial_partition_cnt, const ASTPtr & message_key, ContextPtr context, Poco::Logger * log_);
+    KafkaSink(const Kafka * kafka, const Block & header, Int32 initial_partition_cnt, const ASTPtr & message_key, ContextPtr context, Poco::Logger * logger_);
     ~KafkaSink() override;
 
     String getName() const override { return "KafkaSink"; }
@@ -59,29 +62,27 @@ private:
     void addMessageToBatch(char * pos, size_t len);
 
     /// the number of acknowledgement has been received so far for the current checkpoint period
-    size_t acked() const { return state.acked; }
+    size_t acked() const noexcept { return state.acked; }
     /// the number of errors has been received so far for the current checkpoint period
-    size_t error_count() const { return state.error_count; }
+    size_t errorCount() const noexcept { return state.error_count; }
     /// the number of outstanding messages for the current checkpoint period
-    size_t outstandings() const { return state.outstandings; }
+    size_t outstandings() const noexcept { return state.outstandings; }
     /// the last error code received from delivery report callback
     rd_kafka_resp_err_t lastSeenError() const { return static_cast<rd_kafka_resp_err_t>(state.last_error_code.load()); }
     /// check if there are no more outstandings (i.e. delivery reports have been recieved
     /// for all out-go messages, regardless if a message is successfully delivered or not)
-    bool hasNoOutstandings() const { return state.outstandings == state.acked + state.error_count; }
+    bool hasOutstandingMessages() const noexcept { return state.outstandings != state.acked + state.error_count; }
     /// allows to reset the state after each checkpoint
     void resetState() { state.reset(); }
 
     static const int POLL_TIMEOUT_MS = 500;
 
-    Int32 partition_cnt;
-    bool one_message_per_row;
-    Poco::Logger * log;
+    Int32 partition_cnt {0};
+    bool one_message_per_row {false};
 
     klog::KafkaPtr producer {nullptr, rd_kafka_destroy};
     klog::KTopicPtr topic {nullptr, rd_kafka_topic_destroy};
-    ThreadPool polling_threads {1};
-    ThreadPool metadata_threads {1};
+    ThreadPool background_jobs {1};
     std::atomic_flag is_finished {false};
 
     std::unique_ptr<WriteBufferFromKafkaSink> wb;
@@ -89,16 +90,16 @@ private:
     std::unique_ptr<KafkaStream::ChunkSharder> partitioner;
 
     ExpressionActionsPtr message_key_expr;
-    bool delete_message_key_column;
-    size_t message_key_column_pos;
+    bool delete_message_key_column {false};
+    size_t message_key_column_pos {0};
 
     /// For constructing the message batch
     std::vector<rd_kafka_message_t> current_batch;
-    std::deque<StringRef> keys_queue;
-    Int32 next_partition;
-    mutable std::atomic_uint_fast32_t next_partition_counter = 0;
+    std::vector<StringRef> keys_for_current_batch;
+    size_t current_batch_row {0};
+    Int32 next_partition {0};
 
-    struct State final
+    struct State
     {
         std::atomic_size_t outstandings = 0;
         std::atomic_size_t acked = 0;
@@ -109,5 +110,7 @@ private:
     };
 
     State state;
+
+    Poco::Logger * logger;
 };
 }

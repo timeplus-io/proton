@@ -26,7 +26,7 @@ extern const int INVALID_SETTING_VALUE;
 
 namespace
 {
-ExpressionActionsPtr buildExpression(ContextPtr context, const Block & header, const ASTPtr & expr_ast)
+ExpressionActionsPtr buildExpression(const Block & header, const ASTPtr & expr_ast, const ContextPtr & context)
 {
     assert(expr_ast);
 
@@ -38,17 +38,10 @@ ExpressionActionsPtr buildExpression(ContextPtr context, const Block & header, c
 
 namespace KafkaStream
 {
-ChunkSharder::ChunkSharder(ContextPtr context, const Block & header, const ASTPtr & sharding_expr_ast)
+ChunkSharder::ChunkSharder(ExpressionActionsPtr sharding_expr_, const String & column_name)
 {
-    sharding_expr = buildExpression(context, header, sharding_expr_ast);
-
-    sharding_key_column_name = sharding_expr_ast->getColumnName();
-
-    if (auto * shard_func = sharding_expr_ast->as<ASTFunction>())
-    {
-        if (shard_func->name == "rand" || shard_func->name == "RAND")
-            random_sharding = true;
-    }
+    sharding_expr = sharding_expr_;
+    sharding_key_column_name = column_name;
 }
 
 ChunkSharder::ChunkSharder()
@@ -131,11 +124,11 @@ IColumn::Selector ChunkSharder::createSelector(Block block, Int32 shard_cnt) con
 }
 }
 
-KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, Int32 initial_partition_cnt, const ASTPtr & message_key_ast, ContextPtr context, Poco::Logger * log_)
+KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, Int32 initial_partition_cnt, const ASTPtr & message_key_ast, ContextPtr context, Poco::Logger * logger_)
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
     , partition_cnt(initial_partition_cnt)
     , one_message_per_row(kafka->produceOneMessagePerRow())
-    , log(log_)
+    , logger(logger_)
 {
     /// default values
     std::vector<std::pair<String, String>> producer_params{
@@ -198,7 +191,7 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, Int32 initial_pa
     rd_kafka_conf_set_dr_msg_cb(conf, &KafkaSink::onMessageDelivery);
 
     size_t value_size = 8;
-    char topic_refresh_interval_ms_value[8]{'\0'}; /* max: 3600000 */
+    char topic_refresh_interval_ms_value[8]{'\0'}; /// max: 3600000
     rd_kafka_conf_get(conf, "topic.metadata.refresh.interval.ms", topic_refresh_interval_ms_value, &value_size);
     Int32 topic_refresh_interval_ms {std::stoi(topic_refresh_interval_ms_value)};
 
@@ -220,15 +213,15 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, Int32 initial_pa
 
     if (message_key_ast)
     {
-        message_key_expr = buildExpression(context, header, message_key_ast);
+        message_key_expr = buildExpression(header, message_key_ast, context);
         const auto & sample_block = message_key_expr->getSampleBlock();
         /// The last column is the key column, the others are required columns (to be used to calculate the key value).
         message_key_column_pos = message_key_expr->getResultPositions().back();
         auto message_key_column_name = sample_block.getColumnsWithTypeAndName().back().name;
-        /// If the key column already exists in the head, which means the message key is
-        /// one of the column in the stream, in this case, it should not delete the column.
-        /// Otherwise, it's a computed column, it should be deleted from the block.
-        delete_message_key_column = !header.tryGetPositionByName(message_key_column_name).has_value();
+        /// If the key column already exists in the header, which means the message key is
+        /// one of the columns defined in the stream, in this case, it should not delete the column.
+        /// Otherwise, the message key is a computed column, it should be deleted from the block.
+        delete_message_key_column = !header.has(message_key_column_name);
     }
 
     if (one_message_per_row)
@@ -236,7 +229,7 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, Int32 initial_pa
         /// The callback allows `IRowOutputFormat` based formats produce one Kafka message per row.
         writer = FormatFactory::instance().getOutputFormat(
             data_format, *wb, header, context, [this](auto & /*column*/, auto /*row*/) { wb->next(); }, kafka->getFormatSettings(context));
-        if (!static_cast<IRowOutputFormat*>(writer.get()))
+        if (!dynamic_cast<IRowOutputFormat*>(writer.get()))
             throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Data format `{}` is not a row-based foramt, it cannot be used with `one_message_per_row`", data_format);
     }
     else
@@ -246,38 +239,33 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, Int32 initial_pa
     writer->setAutoFlush();
 
     if (kafka->hasCustomShardingExpr())
-        partitioner = std::make_unique<KafkaStream::ChunkSharder>(context, header, kafka->shardingExprAst());
+    {
+        const auto & ast = kafka->shardingExprAst();
+        partitioner = std::make_unique<KafkaStream::ChunkSharder>(buildExpression(header, ast, context), ast->getColumnName());
+    }
     else
         partitioner = std::make_unique<KafkaStream::ChunkSharder>();
 
     /// Polling message deliveries.
-    polling_threads.scheduleOrThrowOnError([this]() {
-        while (!is_finished.test())
-            if (auto n = rd_kafka_poll(producer.get(), POLL_TIMEOUT_MS))
-                LOG_TRACE(log, "polled {} events", n);
-    });
-
-    /// Monitor partition changes.
-    metadata_threads.scheduleOrThrowOnError([this, topic_refresh_interval_ms]() {
-        auto last_refresh_at {std::chrono::steady_clock::now()};
+    background_jobs.scheduleOrThrowOnError([this, refresh_interval_ms = static_cast<UInt64>(topic_refresh_interval_ms)]() {
+        auto metadata_refresh_stopwatch = Stopwatch();
 
         while (!is_finished.test())
         {
-            /// Do not sleep for topic_refresh_interval_ms, it will block cancelling the query.
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            /// Firstly, poll messages
+            if (auto n = rd_kafka_poll(producer.get(), POLL_TIMEOUT_MS))
+                LOG_TRACE(logger, "polled {} events", n);
 
-            auto now {std::chrono::steady_clock::now()};
-            auto passed_ms {std::chrono::duration_cast<std::chrono::milliseconds>(now - last_refresh_at).count()};
-
-            if (passed_ms < topic_refresh_interval_ms)
+            /// Then, fetch topic metadata for partition updates
+            if (metadata_refresh_stopwatch.elapsedMilliseconds() < refresh_interval_ms)
                 continue;
 
-            last_refresh_at = now;
+            metadata_refresh_stopwatch.restart();
 
-            auto result {klog::describeTopic(topic.get(), producer.get(), log)};
+            auto result {klog::describeTopic(topic.get(), producer.get(), logger)};
             if (result.err)
             {
-                LOG_WARNING(log, "Failed to describe topic, error code: {}", result.err);
+                LOG_WARNING(logger, "Failed to describe topic, error code: {}", result.err);
                 continue;
             }
             partition_cnt = result.partitions;
@@ -287,12 +275,7 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, Int32 initial_pa
 
 void KafkaSink::addMessageToBatch(char * pos, size_t len)
 {
-    std::string_view key;
-    if (message_key_expr)
-    {
-        key = keys_queue.front().toView();
-        keys_queue.pop_front();
-    }
+    StringRef key = message_key_expr ? keys_for_current_batch[current_batch_row++] : "";
 
     /// Data at pos (which is in the WriteBuffer) will be overwritten, thus it must be copied to the message.
     /// And these copied data will be freed in the delivery callback
@@ -304,8 +287,8 @@ void KafkaSink::addMessageToBatch(char * pos, size_t len)
         .partition = next_partition,
         .payload = const_cast<void *>(static_cast<const void *>(payload)),
         .len = len,
-        .key = const_cast<void *>(static_cast<const void *>(key.data())),
-        .key_len = key.size(),
+        .key = const_cast<void *>(static_cast<const void *>(key.data)),
+        .key_len = key.size,
     });
 
     ++state.outstandings;
@@ -320,7 +303,20 @@ void KafkaSink::consume(Chunk chunk)
     auto blocks = partitioner->shard(std::move(block), partition_cnt);
 
     current_batch.clear();
-    keys_queue.clear();
+
+    /// If the expression added a new column holds the key values, we need to erase the column from the block,
+    /// and it would lead to heap-use-after-free error when rd_kafka_produce_batch tries to read the keys.
+    /// Thus
+    std::vector<ColumnPtr> key_columns;
+    if (message_key_expr)
+    {
+        key_columns.reserve(blocks.size());
+
+        std::vector<StringRef> keys;
+        keys_for_current_batch.swap(keys);
+        keys_for_current_batch.reserve(chunk.rows());
+        current_batch_row = 0;
+    }
 
     /// When one_message_per_row is set to true, one Kafka message will be generated for each row.
     /// Otherwise, all rows in the same block will be in the same kafka message.
@@ -329,48 +325,30 @@ void KafkaSink::consume(Chunk chunk)
     else
         current_batch.reserve(blocks.size());
 
-    for (auto & blockWithShard : blocks)
+    for (auto & block_with_shard : blocks)
     {
-        next_partition = blockWithShard.shard;
-        /// If message key is not used, and it's using random paritioning,
-        /// simply use round robin to avoid calling the paritioner function.
-        if (next_partition == RD_KAFKA_PARTITION_UA && !message_key_expr)
-            next_partition = next_partition_counter++ % partition_cnt;
+        next_partition = block_with_shard.shard;
 
         if (!message_key_expr)
         {
-            writer->write(blockWithShard.block);
+            writer->write(block_with_shard.block);
             continue;
         }
 
         /// Compute and collect message keys and removed the key column from the block after executing the expression
-        message_key_expr->execute(blockWithShard.block);
-        const auto & message_key_column {blockWithShard.block.getByPosition(message_key_column_pos).column};
+        message_key_expr->execute(block_with_shard.block);
+        auto message_key_column {block_with_shard.block.getByPosition(message_key_column_pos).column};
+        key_columns.push_back(message_key_column);
 
         // Collect all the message keys for creating the messages for the block.
         size_t rows {message_key_column->size()};
         for (size_t i = 0; i < rows; ++i)
-        {
-            /// Since the capacity is big enough, calling push_back won't invalidate iterators.
-            keys_queue.push_back(message_key_column->getDataAt(i));
-        }
+            keys_for_current_batch.push_back(message_key_column->getDataAt(i));
 
-        /// If the expression added a new column holds the key values, it should not be part of the message payload.
-        /// we cannot erase the column from blockWithShard.block here, because it could lead to heap-use-after-free
-        /// error when rd_kafka_produce_batch tries to read the keys.
         if (delete_message_key_column)
-        {
-            Block blk;
-            blk.reserve(blockWithShard.block.columns());
-            for (size_t i = 0; i < blockWithShard.block.columns(); ++i)
-            {
-                if (i != message_key_column_pos)
-                    blk.insert(std::move(blockWithShard.block.getByPosition(i)));
-            }
-            writer->write(blk);
-        }
-        else
-            writer->write(blockWithShard.block);
+            block_with_shard.block.erase(message_key_column_pos);
+
+        writer->write(block_with_shard.block);
     }
 
     /// With `wb->setAutoFlush()`, it makes sure that all messages are generated for the chunk at this point.
@@ -393,24 +371,24 @@ void KafkaSink::onFinish()
     if (is_finished.test_and_set())
         return;
 
-    polling_threads.wait();
+    background_jobs.wait();
 
     /// if there are no outstandings, no need to do flushing
-    if (hasNoOutstandings())
+    if (!hasOutstandingMessages())
         return;
 
     /// Make sure all outstanding requests are transmitted and handled.
     /// It should not block for ever here, otherwise, it will block proton from stopping the job
     /// or block proton from terminating.
     if (auto err = rd_kafka_flush(producer.get(), 15000 /* time_ms */); err)
-        LOG_ERROR(log, "Failed to flush kafka producer, error={}", rd_kafka_err2str(err));
+        LOG_ERROR(logger, "Failed to flush kafka producer, error={}", rd_kafka_err2str(err));
 
     if (auto err = lastSeenError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
-        LOG_ERROR(log, "Failed to send messages, last_seen_error={}", rd_kafka_err2str(err));
+        LOG_ERROR(logger, "Failed to send messages, last_seen_error={}", rd_kafka_err2str(err));
 
     /// if flush does not return an error, the delivery report queue should be empty
-    if (!hasNoOutstandings())
-        LOG_ERROR(log, "Not all messsages are sent successfully, expected={} actual={}", outstandings(), acked());
+    if (hasOutstandingMessages())
+        LOG_ERROR(logger, "Not all messsages are sent successfully, expected={} actual={}", outstandings(), acked());
 }
 
 void KafkaSink::onMessageDelivery(rd_kafka_t * /* producer */, const rd_kafka_message_t * msg, void * opaque)
@@ -445,9 +423,9 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
     {
         if (auto err = lastSeenError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
             throw Exception(
-                klog::mapErrorCode(err), "Failed to send messages, error_cout={} last_error={}", error_count(), rd_kafka_err2str(err));
+                klog::mapErrorCode(err), "Failed to send messages, error_cout={} last_error={}", errorCount(), rd_kafka_err2str(err));
 
-        if (hasNoOutstandings())
+        if (!hasOutstandingMessages())
             break;
 
         if (is_finished.test())
@@ -460,10 +438,10 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
                 throw Exception(
                     klog::mapErrorCode(err),
                     "Failed to send messages, error_cout={} last_error={}",
-                    error_count(),
+                    errorCount(),
                     rd_kafka_err2str(err));
 
-            if (!hasNoOutstandings())
+            if (hasOutstandingMessages())
                 throw Exception(
                     ErrorCodes::CANNOT_WRITE_TO_KAFKA,
                     "Not all messsages are sent successfully, expected={} actual={}",

@@ -10,10 +10,12 @@ namespace DB
 class WriteBufferFromKafkaSink final : public BufferWithOwnMemory<WriteBuffer>
 {
 public:
-    explicit WriteBufferFromKafkaSink(const std::function<void(char * pos, size_t len)> callback, size_t buffer_size = DBMS_DEFAULT_BUFFER_SIZE)
+    explicit WriteBufferFromKafkaSink(std::function<void(char * pos, size_t len)> on_next_, size_t buffer_size = DBMS_DEFAULT_BUFFER_SIZE)
     : BufferWithOwnMemory<WriteBuffer>(buffer_size)
-    , on_next(callback)
-    {}
+    , on_next(on_next_)
+    {
+        assert(on_next);
+    }
 
     ~WriteBufferFromKafkaSink() override = default;
 
@@ -26,6 +28,7 @@ private:
         on_next(working_buffer.begin(), offset());
     }
 
-    const std::function<void(char *, size_t)> on_next;
+    std::function<void(char *, size_t)> on_next;
 };
+
 }
