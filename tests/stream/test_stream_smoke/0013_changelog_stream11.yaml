@@ -454,7 +454,8 @@ tests:
               create materialized view if not exists test14_view1_11 into test14_target_multishard_changelog_kv_11 as
                 (select i,
                         k1,
-                        k2
+                        k2,
+                        _tp_delta
                  from
                    (select i,
                            k1,
@@ -1257,7 +1258,8 @@ tests:
               create materialized view if not exists test14_view1_11 into test14_target_changelog_kv_multishard_11 as
                 (select i,
                         k1,
-                        k2
+                        k2,
+                        _tp_delta
                  from
                    (select i,
                            k1,

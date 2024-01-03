@@ -40,7 +40,7 @@ tests:
         wait: 2
         depends_on_stream: v_12181627
         query_id: '12181627214'
-        query: subscribe to select sum_distinct(val), sum(val), count_distinct(val), count(val)
+        query: subscribe to select sum_distinct(val), sum(val), count_distinct(val), count(val), _tp_delta
           from v_12181627 emit changelog settings checkpoint_interval=1;
       - client: python
         query_type: table

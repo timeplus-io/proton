@@ -45,7 +45,7 @@ tests:
           depends_on_stream: test30_stream
           wait: 1
           query: |
-            select count() from test30_stream emit changelog periodic 1s;
+            select count(), _tp_delta from test30_stream emit changelog periodic 1s;
 
         - client: python
           query_type: table
@@ -96,7 +96,7 @@ tests:
           depends_on_stream: test30_vk_stream
           wait: 1
           query: |
-            select k, count() from test30_vk_stream group by k emit changelog periodic 1s;
+            select k, count(), _tp_delta from test30_vk_stream group by k emit changelog periodic 1s;
 
         - client: python
           query_type: table
@@ -148,7 +148,7 @@ tests:
           depends_on_stream: test30_changelog_kv_stream
           wait: 1
           query: |
-            select k, count() from test30_changelog_kv_stream group by k emit changelog periodic 1s;
+            select k, count(), _tp_delta from test30_changelog_kv_stream group by k emit changelog periodic 1s;
 
         - client: python
           query_type: table
@@ -200,7 +200,7 @@ tests:
           depends_on_stream: test30_stream
           wait: 1
           query: |
-            select k, count() from changelog(test30_stream, i) group by k emit changelog periodic 1s;
+            select k, count(), _tp_delta from changelog(test30_stream, i) group by k emit changelog periodic 1s;
 
         - client: python
           query_type: table
@@ -259,14 +259,14 @@ tests:
           query_id: 3001
           depends_on_stream: test30_stream
           query: |
-            select count() from (select k, count() from changelog(test30_stream, i) group by k emit periodic 1s) emit changelog periodic 1s;
+            select count(), _tp_delta from (select k, count() from changelog(test30_stream, i) group by k emit periodic 1s) emit changelog periodic 1s;
 
         - client: python
           query_type: stream
           query_id: 3002
           depends_on_stream: test30_stream
           query: |
-            select count() from (select k, count() from changelog(test30_stream, i) group by k emit changelog periodic 1s) emit changelog periodic 1s;
+            select count(), _tp_delta from (select k, count() from changelog(test30_stream, i) group by k emit changelog periodic 1s) emit changelog periodic 1s;
 
         - client: python
           query_type: table
@@ -339,13 +339,13 @@ tests:
           depends_on_stream: test30_right_vk_stream
           wait: 1
           query: |
-            select i, count(), max(test30_right_vk_stream.k) from test30_left_stream join test30_right_vk_stream using(i) group by i emit changelog periodic 1s;
+            select i, count(), max(test30_right_vk_stream.k), _tp_delta from test30_left_stream join test30_right_vk_stream using(i) group by i emit changelog periodic 1s;
 
         - client: python
           query_type: stream
           query_id: 3001
           query: |
-            select test30_right_vk_stream.k, count(), max(i) from test30_left_stream join test30_right_vk_stream using(i) group by test30_right_vk_stream.k emit changelog periodic 1s;
+            select test30_right_vk_stream.k, count(), max(i), _tp_delta from test30_left_stream join test30_right_vk_stream using(i) group by test30_right_vk_stream.k emit changelog periodic 1s;
 
         - client: python
           query_type: table
@@ -428,7 +428,7 @@ tests:
           depends_on_stream: test30_right_vk_stream
           wait: 1
           query: |
-            subscribe to select i, count(), max(test30_right_vk_stream.k) from test30_left_stream join test30_right_vk_stream using(i) group by i emit changelog periodic 1s settings checkpoint_interval=1;
+            subscribe to select i, count(), max(test30_right_vk_stream.k), _tp_delta from test30_left_stream join test30_right_vk_stream using(i) group by i emit changelog periodic 1s settings checkpoint_interval=1;
 
         - client: python
           query_type: table

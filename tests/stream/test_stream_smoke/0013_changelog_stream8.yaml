@@ -282,7 +282,7 @@ tests:
           - client: python
             query_type: table
             wait: 2
-            query: create materialized view if not exists test14_view2_8 into test14_target_changelog_kv_8 as (select i, k1, k2 from test14_view1_8 emit changelog);
+            query: create materialized view if not exists test14_view2_8 into test14_target_changelog_kv_8 as (select i, k1, k2, _tp_delta from test14_view1_8 emit changelog);
 
           - client: python
             query_id: '1450'
