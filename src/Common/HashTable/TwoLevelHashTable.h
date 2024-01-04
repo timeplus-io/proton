@@ -90,6 +90,7 @@ public:
     using ConstLookupResult = typename Impl::ConstLookupResult;
 
     Impl impls[NUM_BUCKETS];
+    bool buckets_updated[NUM_BUCKETS] = {false};
 
 
     TwoLevelHashTable() = default;
@@ -119,6 +120,7 @@ public:
             size_t hash_value = cell->getHash(src);
             size_t buck = getBucketFromHash(hash_value);
             impls[buck].insertUniqueNonZero(cell, hash_value);
+            buckets_updated[buck] = true;
         }
     }
 
@@ -271,6 +273,7 @@ public:
     {
         size_t buck = getBucketFromHash(hash_value);
         impls[buck].emplace(key_holder, it, inserted, hash_value);
+        buckets_updated[buck] = true;
     }
 
     LookupResult ALWAYS_INLINE find(Key x, size_t hash_value)
@@ -292,7 +295,10 @@ public:
     void write(DB::WriteBuffer & wb) const
     {
         for (UInt32 i = 0; i < NUM_BUCKETS; ++i)
+        {
             impls[i].write(wb);
+            DB::writeBoolText(buckets_updated[i], wb);
+        }
     }
 
     void writeText(DB::WriteBuffer & wb) const
@@ -301,14 +307,22 @@ public:
         {
             if (i != 0)
                 DB::writeChar(',', wb);
+            /// <impl,updated>
+            DB::writeChar('<', wb);
             impls[i].writeText(wb);
+            DB::writeChar(',', wb);
+            DB::writeBoolText(buckets_updated[i], wb);
+            DB::writeChar('>', wb);
         }
     }
 
     void read(DB::ReadBuffer & rb)
     {
         for (UInt32 i = 0; i < NUM_BUCKETS; ++i)
+        {
             impls[i].read(rb);
+            DB::readBoolText(buckets_updated[i], rb);
+        }
     }
 
     void readText(DB::ReadBuffer & rb)
@@ -317,7 +331,13 @@ public:
         {
             if (i != 0)
                 DB::assertChar(',', rb);
+            
+            /// <impl,updated>
+            DB::assertChar('<', rb);
             impls[i].readText(rb);
+            DB::assertChar(',', rb);
+            DB::readBoolText(buckets_updated[i], rb);
+            DB::assertChar('>', rb);
         }
     }
 
@@ -355,6 +375,16 @@ public:
         std::vector<Int64> bucket_ids(NUM_BUCKETS);
         std::iota(bucket_ids.begin(), bucket_ids.end(), 0);
         return bucket_ids;
+    }
+
+    bool isUpdatedBucket(Int64 bucket_) const
+    {
+        return buckets_updated[bucket_];
+    }
+
+    void resetUpdated(Int64 bucket_)
+    {
+        buckets_updated[bucket_] = false;
     }
     /// proton : ends
 };

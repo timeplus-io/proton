@@ -27,10 +27,28 @@ public:
     }
 
     template <typename Func>
-    void ALWAYS_INLINE forEachValue(Func && func)
+    void ALWAYS_INLINE forEachValue(Func && func, bool reset_updated = true)
     {
         for (auto & p : this->impls)
+        {
             p.second.forEachValue(func);
+            if (reset_updated)
+                this->resetUpdated(p.first);
+        }
+    }
+
+    template <typename Func>
+    void ALWAYS_INLINE forEachValueOfUpdatedBuckets(Func && func, bool reset_updated = true)
+    {
+        for (auto & p : this->impls)
+        {
+            if (this->isUpdatedBucket(p.first))
+            {
+                p.second.forEachValue(func);
+                if (reset_updated)
+                    this->resetUpdated(p.first);
+            }
+        }
     }
 
     typename Cell::Mapped & ALWAYS_INLINE operator[](const Key & x)

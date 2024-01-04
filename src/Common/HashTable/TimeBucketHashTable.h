@@ -108,7 +108,9 @@ public:
     using ConstLookupResult = typename Impl::ConstLookupResult;
 
     /// FIXME, choose a better perf data structure
+    /// Usually we don't have too many time buckets
     std::map<Int64, Impl> impls;
+    std::unordered_map<Int64, bool/*updated*/> buckets_updated;
     Impl sentinel;
 
     TimeBucketHashTable() { }
@@ -263,6 +265,7 @@ public:
     {
         auto window = windowKey(key_holder);
         impls[window].emplace(key_holder, it, inserted, hash_value);
+        buckets_updated[window] = true; /// updated
     }
 
     LookupResult ALWAYS_INLINE find(Key x, size_t hash_value)
@@ -289,6 +292,7 @@ public:
         {
             DB::writeIntBinary(p.first);
             p.second.write(wb);
+            DB::writeBoolText(buckets_updated[p.first], wb);
         }
     }
 
@@ -309,7 +313,12 @@ public:
             /// Write key and key-value separator
             DB::writeIntText(p.first, wb);
             DB::writeChar(KEY_VALUE_SEPARATOR, wb);
+            /// <impl,updated>
+            DB::writeChar('<', wb);
             p.second.writeText(wb);
+            DB::writeChar(',', wb);
+            DB::writeBoolText(buckets_updated[p.first], wb);
+            DB::writeChar('>', wb);
         }
         DB::writeChar(END_BUCKET_MARKER, wb);
     }
@@ -327,6 +336,7 @@ public:
             assert(key != 0);
             assert(!impls.contains(key));
             impls[key].read(rb);
+            DB::readBoolText(buckets_updated[key], rb);
         }
     }
 
@@ -349,7 +359,12 @@ public:
 
             assert(key != 0);
             assert(!impls.contains(key));
+            /// <impl,updated>
+            DB::assertChar('<', rb);
             impls[key].readText(rb);
+            DB::assertChar(',', rb);
+            DB::readBoolText(buckets_updated[key], rb);
+            DB::assertChar('>', rb);
         }
         DB::assertChar(END_BUCKET_MARKER, rb);
     }
@@ -368,7 +383,7 @@ public:
     {
         size_t res = 0;
         for (const auto & p : impls)
-            res += p.getBufferSizeInBytes();
+            res += p.second.getBufferSizeInBytes();
         return res;
     }
 
@@ -392,6 +407,7 @@ public:
                 last_removed_watermark = it->first;
                 ++removed;
 
+                buckets_updated.erase(it->first);
                 it = impls.erase(it);
             }
             else
@@ -427,5 +443,21 @@ public:
             buckets.push_back(time_map.first);
 
         return buckets;
+    }
+
+    bool isUpdatedBucket(Int64 bucket_) const
+    {
+        auto it = buckets_updated.find(bucket_);
+        if (it != buckets_updated.end())
+            return it->second;
+
+        return false;
+    }
+
+    void resetUpdated(Int64 bucket_)
+    {
+        auto it = buckets_updated.find(bucket_);
+        if (it != buckets_updated.end())
+            buckets_updated[bucket_] = false;
     }
 };

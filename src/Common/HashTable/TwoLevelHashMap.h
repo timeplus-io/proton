@@ -32,10 +32,28 @@ public:
     using Self = TwoLevelHashMapTable;
 
     template <typename Func>
-    void ALWAYS_INLINE forEachValue(Func && func)
+    void ALWAYS_INLINE forEachValue(Func && func, bool reset_updated = true)
     {
         for (auto i = 0u; i < this->NUM_BUCKETS; ++i)
+        {
             this->impls[i].forEachValue(func);
+            if (reset_updated)
+                this->resetUpdated(i);
+        }
+    }
+
+    template <typename Func>
+    void ALWAYS_INLINE forEachValueOfUpdatedBuckets(Func && func, bool reset_updated = true)
+    {
+        for (auto i = 0u; i < this->NUM_BUCKETS; ++i)
+        {
+            if (this->isUpdatedBucket(i))
+            {
+                this->impls[i].forEachValue(func);
+                if (reset_updated)
+                    this->resetUpdated(i);
+            }
+        }
     }
 
     template <typename Func>

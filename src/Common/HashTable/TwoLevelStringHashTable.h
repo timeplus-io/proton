@@ -39,6 +39,7 @@ public:
     using ConstLookupResult = typename Impl::ConstLookupResult;
 
     Impl impls[NUM_BUCKETS];
+    bool buckets_updated[NUM_BUCKETS] = {false};
 
     TwoLevelStringHashTable() {}
 
@@ -53,24 +54,28 @@ public:
             size_t hash_value = v.getHash(src.m1);
             size_t buck = getBucketFromHash(hash_value);
             impls[buck].m1.insertUniqueNonZero(&v, hash_value);
+            buckets_updated[buck] = true;
         }
         for (auto & v : src.m2)
         {
             size_t hash_value = v.getHash(src.m2);
             size_t buck = getBucketFromHash(hash_value);
             impls[buck].m2.insertUniqueNonZero(&v, hash_value);
+            buckets_updated[buck] = true;
         }
         for (auto & v : src.m3)
         {
             size_t hash_value = v.getHash(src.m3);
             size_t buck = getBucketFromHash(hash_value);
             impls[buck].m3.insertUniqueNonZero(&v, hash_value);
+            buckets_updated[buck] = true;
         }
         for (auto & v : src.ms)
         {
             size_t hash_value = v.getHash(src.ms);
             size_t buck = getBucketFromHash(hash_value);
             impls[buck].ms.insertUniqueNonZero(&v, hash_value);
+            buckets_updated[buck] = true;
         }
     }
 
@@ -84,6 +89,9 @@ public:
         const size_t sz = x.size;
         if (sz == 0)
         {
+            if constexpr (std::is_same_v<Func, typename Impl::EmplaceCallable>)
+                self.buckets_updated[0] = true;
+
             keyHolderDiscardKey(key_holder);
             return func(self.impls[0].m0, VoidKey{}, 0);
         }
@@ -94,6 +102,9 @@ public:
             // string keys. Put them to the generic table.
             auto res = hash(x);
             auto buck = getBucketFromHash(res);
+            if constexpr (std::is_same_v<Func, typename Impl::EmplaceCallable>)
+                self.buckets_updated[buck] = true;
+
             return func(self.impls[buck].ms, std::forward<KeyHolder>(key_holder),
                 res);
         }
@@ -126,6 +137,9 @@ public:
                 }
                 auto res = hash(k8);
                 auto buck = getBucketFromHash(res);
+                if constexpr (std::is_same_v<Func, typename Impl::EmplaceCallable>)
+                    self.buckets_updated[buck] = true;
+
                 keyHolderDiscardKey(key_holder);
                 return func(self.impls[buck].m1, k8, res);
             }
@@ -137,6 +151,9 @@ public:
                 n[1] >>= s;
                 auto res = hash(k16);
                 auto buck = getBucketFromHash(res);
+                if constexpr (std::is_same_v<Func, typename Impl::EmplaceCallable>)
+                    self.buckets_updated[buck] = true;
+
                 keyHolderDiscardKey(key_holder);
                 return func(self.impls[buck].m2, k16, res);
             }
@@ -148,6 +165,9 @@ public:
                 n[2] >>= s;
                 auto res = hash(k24);
                 auto buck = getBucketFromHash(res);
+                if constexpr (std::is_same_v<Func, typename Impl::EmplaceCallable>)
+                    self.buckets_updated[buck] = true;
+
                 keyHolderDiscardKey(key_holder);
                 return func(self.impls[buck].m3, k24, res);
             }
@@ -155,6 +175,9 @@ public:
             {
                 auto res = hash(x);
                 auto buck = getBucketFromHash(res);
+                if constexpr (std::is_same_v<Func, typename Impl::EmplaceCallable>)
+                    self.buckets_updated[buck] = true;
+
                 return func(self.impls[buck].ms, std::forward<KeyHolder>(key_holder), res);
             }
         }
@@ -179,7 +202,10 @@ public:
     void write(DB::WriteBuffer & wb) const
     {
         for (UInt32 i = 0; i < NUM_BUCKETS; ++i)
+        {
             impls[i].write(wb);
+            DB::writeBoolText(buckets_updated[i], wb);
+        }
     }
 
     void writeText(DB::WriteBuffer & wb) const
@@ -188,14 +214,22 @@ public:
         {
             if (i != 0)
                 DB::writeChar(',', wb);
+            /// <impl,updated>
+            DB::writeChar('<', wb);
             impls[i].writeText(wb);
+            DB::writeChar(',', wb);
+            DB::writeBoolText(buckets_updated[i], wb);
+            DB::writeChar('>', wb);
         }
     }
 
     void read(DB::ReadBuffer & rb)
     {
         for (UInt32 i = 0; i < NUM_BUCKETS; ++i)
+        {
             impls[i].read(rb);
+            DB::readBoolText(buckets_updated[i], rb);
+        }
     }
 
     void readText(DB::ReadBuffer & rb)
@@ -205,6 +239,12 @@ public:
             if (i != 0)
                 DB::assertChar(',', rb);
             impls[i].readText(rb);
+            /// <impl,updated>
+            DB::assertChar('<', rb);
+            impls[i].readText(rb);
+            DB::assertChar(',', rb);
+            DB::readBoolText(buckets_updated[i], rb);
+            DB::assertChar('>', rb);
         }
     }
 
@@ -240,5 +280,15 @@ public:
         std::vector<Int64> bucket_ids(NUM_BUCKETS);
         std::iota(bucket_ids.begin(), bucket_ids.end(), 0);
         return bucket_ids;
+    }
+
+    bool isUpdatedBucket(Int64 bucket_) const
+    {
+        return buckets_updated[bucket_];
+    }
+
+    void resetUpdated(Int64 bucket_)
+    {
+        buckets_updated[bucket_] = false;
     }
 };
