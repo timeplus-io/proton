@@ -59,7 +59,6 @@ private:
     String data_format;
     const std::unique_ptr<klog::KafkaWALAuth> auth_info;
     ExternalStreamCounterPtr external_stream_counter;
-    Poco::Logger * log;
 
     NamesAndTypesList virtual_column_names_and_types;
 
@@ -67,5 +66,7 @@ private:
     int32_t shards = 0;
 
     ASTPtr message_key_ast;
+
+    Poco::Logger * log;
 };
 }

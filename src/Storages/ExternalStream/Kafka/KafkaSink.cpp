@@ -30,9 +30,8 @@ ExpressionActionsPtr buildExpression(const Block & header, const ASTPtr & expr_a
 {
     assert(expr_ast);
 
-    ASTPtr query = expr_ast;
-    auto syntax_result = TreeRewriter(context).analyze(query, header.getNamesAndTypesList());
-    return ExpressionAnalyzer(query, syntax_result, context).getActions(false);
+    auto syntax_result = TreeRewriter(context).analyze(const_cast<ASTPtr &>(expr_ast), header.getNamesAndTypesList());
+    return ExpressionAnalyzer(expr_ast, syntax_result, context).getActions(false);
 }
 }
 
@@ -216,12 +215,7 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, Int32 initial_pa
         message_key_expr = buildExpression(header, message_key_ast, context);
         const auto & sample_block = message_key_expr->getSampleBlock();
         /// The last column is the key column, the others are required columns (to be used to calculate the key value).
-        message_key_column_pos = message_key_expr->getResultPositions().back();
-        auto message_key_column_name = sample_block.getColumnsWithTypeAndName().back().name;
-        /// If the key column already exists in the header, which means the message key is
-        /// one of the columns defined in the stream, in this case, it should not delete the column.
-        /// Otherwise, the message key is a computed column, it should be deleted from the block.
-        delete_message_key_column = !header.has(message_key_column_name);
+        message_key_column_name = sample_block.getColumnsWithTypeAndName().back().name;
     }
 
     if (one_message_per_row)
@@ -277,20 +271,20 @@ void KafkaSink::addMessageToBatch(char * pos, size_t len)
 {
     StringRef key = message_key_expr ? keys_for_current_batch[current_batch_row++] : "";
 
-    /// Data at pos (which is in the WriteBuffer) will be overwritten, thus it must be copied to the message.
-    /// And these copied data will be freed in the delivery callback
-    /// (when it's confirm the message is either sent succesfully, or failed).
-    char * payload = new char[len];
-    memcpy(payload, pos, len);
+    /// Data at pos (which is in the WriteBuffer) will be overwritten, thus it must be kept somewhere else (in `batch_payload`).
+    nlog::ByteVector payload {len};
+    payload.resize(len); /// set the size to the right value
+    memcpy(payload.data(), pos, len);
 
     current_batch.push_back(rd_kafka_message_t{
         .partition = next_partition,
-        .payload = const_cast<void *>(static_cast<const void *>(payload)),
+        .payload = payload.data(),
         .len = len,
         .key = const_cast<void *>(static_cast<const void *>(key.data)),
         .key_len = key.size,
     });
 
+    batch_payload.push_back(std::move(payload));
     ++state.outstandings;
 }
 
@@ -302,28 +296,39 @@ void KafkaSink::consume(Chunk chunk)
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
     auto blocks = partitioner->shard(std::move(block), partition_cnt);
 
-    current_batch.clear();
-
-    /// If the expression added a new column holds the key values, we need to erase the column from the block,
-    /// and it would lead to heap-use-after-free error when rd_kafka_produce_batch tries to read the keys.
-    /// Thus
-    std::vector<ColumnPtr> key_columns;
     if (message_key_expr)
     {
-        key_columns.reserve(blocks.size());
-
-        std::vector<StringRef> keys;
-        keys_for_current_batch.swap(keys);
+        if (!keys_for_current_batch.empty())
+        {
+            std::vector<StringRef> keys;
+            keys_for_current_batch.swap(keys);
+        }
         keys_for_current_batch.reserve(chunk.rows());
         current_batch_row = 0;
+    }
+    if (!current_batch.empty())
+    {
+        std::vector<rd_kafka_message_t> batch;
+        current_batch.swap(batch);
+    }
+    if (!batch_payload.empty())
+    {
+        std::vector<nlog::ByteVector> payload;
+        batch_payload.swap(payload);
     }
 
     /// When one_message_per_row is set to true, one Kafka message will be generated for each row.
     /// Otherwise, all rows in the same block will be in the same kafka message.
     if (one_message_per_row)
+    {
         current_batch.reserve(chunk.rows());
+        batch_payload.reserve(chunk.rows());
+    }
     else
+    {
         current_batch.reserve(blocks.size());
+        batch_payload.reserve(blocks.size());
+    }
 
     for (auto & block_with_shard : blocks)
     {
@@ -335,35 +340,54 @@ void KafkaSink::consume(Chunk chunk)
             continue;
         }
 
-        /// Compute and collect message keys and removed the key column from the block after executing the expression
+        /// Compute and collect message keys.
         message_key_expr->execute(block_with_shard.block);
-        auto message_key_column {block_with_shard.block.getByPosition(message_key_column_pos).column};
-        key_columns.push_back(message_key_column);
-
-        // Collect all the message keys for creating the messages for the block.
+        auto message_key_column {block_with_shard.block.getByName(message_key_column_name).column};
         size_t rows {message_key_column->size()};
         for (size_t i = 0; i < rows; ++i)
             keys_for_current_batch.push_back(message_key_column->getDataAt(i));
 
-        if (delete_message_key_column)
-            block_with_shard.block.erase(message_key_column_pos);
+        /// After `message_key_expr->execute`, the columns in `block_with_shard.block` could be out-of-order.
+        /// We have to make sure the the column order in `block_with_shard.block` exactly matches the order in header,
+        /// otherwise, the output format writer will panic.
+        Block blk;
+        blk.reserve(getHeader().columns());
+        for (const auto & col : getHeader())
+            blk.insert(std::move(block_with_shard.block.getByName(col.name)));
 
-        writer->write(block_with_shard.block);
+        writer->write(blk);
     }
 
     /// With `wb->setAutoFlush()`, it makes sure that all messages are generated for the chunk at this point.
-    auto n = rd_kafka_produce_batch(
+    rd_kafka_produce_batch(
         topic.get(),
         RD_KAFKA_PARTITION_UA,
-        RD_KAFKA_MSG_F_PARTITION | RD_KAFKA_MSG_F_BLOCK,
+        RD_KAFKA_MSG_F_FREE | RD_KAFKA_MSG_F_PARTITION | RD_KAFKA_MSG_F_BLOCK,
         current_batch.data(),
         current_batch.size());
 
-    if (static_cast<size_t>(n) != current_batch.size())
-        /// Find the first error and throw it.
-        for (const auto & msg : current_batch)
-            if (msg.err)
-                throw Exception(klog::mapErrorCode(msg.err), rd_kafka_err2str(msg.err));
+    rd_kafka_resp_err_t err {RD_KAFKA_RESP_ERR_NO_ERROR};
+    for (size_t i = 0; i < current_batch.size(); ++i)
+        if (current_batch[i].err)
+            err = current_batch[i].err;
+        else
+            batch_payload[i].release(); /// payload of messages which are succesfully handled by rd_kafka_produce_batch will be free'ed by librdkafka
+
+    /// Clean up all the bookkeepings for the batch.
+    std::vector<rd_kafka_message_t> batch;
+    current_batch.swap(batch);
+
+    std::vector<nlog::ByteVector> payload;
+    batch_payload.swap(payload);
+
+    if (!keys_for_current_batch.empty())
+    {
+        std::vector<StringRef> keys;
+        keys_for_current_batch.swap(keys);
+    }
+
+    if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
+        throw Exception(klog::mapErrorCode(err), rd_kafka_err2str(err));
 }
 
 void KafkaSink::onFinish()
@@ -398,11 +422,6 @@ void KafkaSink::onMessageDelivery(rd_kafka_t * /* producer */, const rd_kafka_me
 
 void KafkaSink::onMessageDelivery(const rd_kafka_message_t * msg)
 {
-    /// Can't rely on librdkafka freeing up the payloads with RD_KAFKA_MSG_F_FREE, it will throw:
-    ///   AddressSanitizer: alloc-dealloc-mismatch (operator new [] vs free)
-    char * payload = static_cast<char *>(msg->payload);
-    delete[] payload;
-
     if (msg->err)
     {
         state.last_error_code.store(msg->err);

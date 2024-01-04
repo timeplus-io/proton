@@ -75,7 +75,7 @@ private:
     /// allows to reset the state after each checkpoint
     void resetState() { state.reset(); }
 
-    static const int POLL_TIMEOUT_MS = 500;
+    static const int POLL_TIMEOUT_MS {500};
 
     Int32 partition_cnt {0};
     bool one_message_per_row {false};
@@ -90,21 +90,21 @@ private:
     std::unique_ptr<KafkaStream::ChunkSharder> partitioner;
 
     ExpressionActionsPtr message_key_expr;
-    bool delete_message_key_column {false};
-    size_t message_key_column_pos {0};
+    String message_key_column_name;
 
     /// For constructing the message batch
     std::vector<rd_kafka_message_t> current_batch;
+    std::vector<nlog::ByteVector> batch_payload;
     std::vector<StringRef> keys_for_current_batch;
     size_t current_batch_row {0};
     Int32 next_partition {0};
 
     struct State
     {
-        std::atomic_size_t outstandings = 0;
-        std::atomic_size_t acked = 0;
-        std::atomic_size_t error_count = 0;
-        std::atomic_int last_error_code = 0;
+        std::atomic_size_t outstandings {0};
+        std::atomic_size_t acked {0};
+        std::atomic_size_t error_count {0};
+        std::atomic_int last_error_code {0};
 
         void reset();
     };
