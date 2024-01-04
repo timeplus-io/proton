@@ -128,9 +128,14 @@ void ChangelogQueryVisitorMatcher::addDeltaColumn(ASTSelectQuery & select_query,
         }
     }
 
-    /// Need add delta if _tp_delta is not present and the @p select_query is a subquery or an `EMIT CHANGELOG` query
-    if (!found_delta_col && (is_subquery || query_info.force_emit_changelog))
-        select_expression_list->children.emplace_back(std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG));
+    if (!found_delta_col)
+    {
+        if (is_subquery)
+            /// Need add delta if _tp_delta is not present and the @p select_query is a subquery 
+            select_expression_list->children.emplace_back(std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG));
+        else if (query_info.force_emit_changelog)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "The query with emit changelog explicitly requires a `_tp_delta` in select list");
+    }
 
     if (add_new_required_result_columns)
         new_required_result_column_names.push_back(ProtonConsts::RESERVED_DELTA_FLAG);

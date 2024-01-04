@@ -139,7 +139,7 @@ void StorageView::read(
         Streaming::rewriteAsChangelogQuery(current_inner_query->as<ASTSelectWithUnionQuery &>());
     /// proton: ends.
 
-    auto options = SelectQueryOptions(QueryProcessingStage::Complete, 0, false, query_info.settings_limit_offset_done);
+    auto options = SelectQueryOptions(QueryProcessingStage::Complete, 0, true, query_info.settings_limit_offset_done);
     InterpreterSelectWithUnionQuery interpreter(current_inner_query, context, options, column_names);
     interpreter.addStorageLimits(*query_info.storage_limits);
     interpreter.buildQueryPlan(query_plan);
