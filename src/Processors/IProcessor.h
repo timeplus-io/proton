@@ -372,6 +372,7 @@ public:
     virtual void recover(CheckpointContextPtr) { }
 
     VersionType getVersion() const;
+    void setVersion(VersionType version_) { version = version_; }
 
 protected:
     bool is_streaming = false;

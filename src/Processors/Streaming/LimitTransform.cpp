@@ -442,7 +442,7 @@ void LimitTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
         if (has_previous_row_chunk)
         {
             writeBoolText(true, wb);
-            SimpleNativeWriter<Chunk> writer(wb, getOutputPort().getHeader(), ProtonRevision::getVersionRevision());
+            SimpleNativeWriter<Chunk> writer(wb, getOutputPort().getHeader(), getVersion());
             writer.write(previous_row_chunk);
         }
 
@@ -460,12 +460,12 @@ void LimitTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 
 void LimitTransform::recover(CheckpointContextPtr ckpt_ctx)
 {
-    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) {
+    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType version_, ReadBuffer & rb) {
         bool has_previous_row_chunk;
         readBoolText(has_previous_row_chunk, rb);
         if (has_previous_row_chunk)
         {
-            SimpleNativeReader<Chunk> reader(rb, getOutputPort().getHeader(), ProtonRevision::getVersionRevision());
+            SimpleNativeReader<Chunk> reader(rb, getOutputPort().getHeader(), version_);
             previous_row_chunk = reader.read();
         }
 

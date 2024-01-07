@@ -3,7 +3,7 @@
 #include <Processors/ISimpleTransform.h>
 
 /// proton: starts.
-#include <base/SerdeTag.h>
+#include <Common/serde.h>
 /// proton: ends.
 
 namespace DB

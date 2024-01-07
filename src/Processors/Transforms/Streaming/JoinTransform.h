@@ -2,7 +2,7 @@
 
 #include <Interpreters/Streaming/IHashJoin.h>
 #include <Processors/IProcessor.h>
-#include <base/SerdeTag.h>
+#include <Common/serde.h>
 
 namespace DB
 {

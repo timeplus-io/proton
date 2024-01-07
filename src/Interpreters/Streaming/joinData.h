@@ -12,7 +12,7 @@
 #include <Core/Block.h>
 #include <Core/BlockRangeSplitter.h>
 #include <Core/LightChunk.h>
-#include <base/SerdeTag.h>
+#include <Common/serde.h>
 #include <Common/Arena.h>
 #include <Common/HashMapSizes.h>
 
