@@ -40,38 +40,8 @@ GlobalAggregatingTransform::GlobalAggregatingTransform(
     if (unlikely(params->params.overflow_row))
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Overflow row processing is not implemented in global aggregation");
 
-    /// Need extra retracted data
-    if (params->emit_changelog)
-    {
-        if (params->emit_version)
-            throw Exception(ErrorCodes::UNSUPPORTED, "'emit_version()' is not supported in global aggregation emit changelog");
-
-        ManyRetractedDataVariants retracted_data(many_data->variants.size());
-        for (auto & elem : retracted_data)
-            elem = std::make_shared<AggregatedDataVariants>();
-
-        many_data->setField(
-            {std::move(retracted_data),
-             /// Field serializer
-             [this](const std::any & field, WriteBuffer & wb) {
-                 const auto & data = std::any_cast<const ManyRetractedDataVariants &>(field);
-                 DB::writeIntBinary(data.size(), wb);
-                 for (const auto & elem : data)
-                     params->aggregator.checkpoint(*elem, wb);
-             },
-             /// Field deserializer
-             [this](std::any & field, ReadBuffer & rb) {
-                 auto & data = std::any_cast<ManyRetractedDataVariants &>(field);
-                 size_t num;
-                 DB::readIntBinary(num, rb);
-                 data.resize(num);
-                 for (auto & elem : data)
-                 {
-                     elem = std::make_shared<AggregatedDataVariants>();
-                     params->aggregator.recover(*elem, rb);
-                 }
-             }});
-    }
+    if (params->emit_changelog && params->emit_version)
+        throw Exception(ErrorCodes::UNSUPPORTED, "'emit_version()' is not supported in global aggregation emit changelog");
 }
 
 bool GlobalAggregatingTransform::needFinalization(Int64 min_watermark) const
@@ -103,14 +73,18 @@ std::pair<bool, bool> GlobalAggregatingTransform::executeOrMergeColumns(Chunk & 
     if (params->emit_changelog)
     {
         assert(!params->only_merge);
-
-        auto & retracted_variants = many_data->getField<ManyRetractedDataVariants>()[current_variant];
-        auto & aggregated_variants = many_data->variants[current_variant];
-
         /// Blocking finalization during execution on current variant
         std::lock_guard lock(variants_mutex);
-        return params->aggregator.executeAndRetractOnBlock(
-            chunk.detachColumns(), 0, num_rows, *aggregated_variants, *retracted_variants, key_columns, aggregate_columns, no_more_keys);
+
+        if (getVersion() < IMPL_V2_MIN_VERSION)
+        {
+            auto & retracted_variants = many_data->getField<ManyRetractedDataVariants>()[current_variant];
+            auto & aggregated_variants = many_data->variants[current_variant];
+            return params->aggregator.executeAndRetractOnBlockLegacy(
+                chunk.detachColumns(), 0, num_rows, *aggregated_variants, *retracted_variants, key_columns, aggregate_columns, no_more_keys);
+        }
+
+        return params->aggregator.executeAndRetractOnBlock(chunk.detachColumns(), 0, num_rows, variants, key_columns, aggregate_columns, no_more_keys);
     }
     else
         return AggregatingTransform::executeOrMergeColumns(chunk, num_rows);
@@ -127,11 +101,20 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 
     if (params->emit_changelog)
     {
-        auto [retracted_chunk, chunk] = AggregatingHelper::mergeAndConvertToChangelogChunk(
-            many_data->variants, many_data->getField<ManyRetractedDataVariants>(), *params);
+        if (getVersion() < IMPL_V2_MIN_VERSION)
+        {
+            auto [retracted_chunk, chunk] = AggregatingHelper::mergeAndConvertToChangelogChunkLegacy(
+                many_data->variants, many_data->getField<ManyRetractedDataVariants>(), *params);
 
-        chunk.setChunkContext(chunk_ctx);
-        setCurrentChunk(std::move(chunk), std::move(retracted_chunk));
+            chunk.setChunkContext(chunk_ctx);
+            setCurrentChunk(std::move(chunk), std::move(retracted_chunk));
+        }
+        else
+        {
+            auto [retracted_chunk, chunk] = AggregatingHelper::mergeAndConvertToChangelogChunk(many_data->variants, *params);
+            chunk.setChunkContext(chunk_ctx);
+            setCurrentChunk(std::move(chunk), std::move(retracted_chunk));
+        }
     }
     else
     {
@@ -144,5 +127,45 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
     }
 }
 
+void GlobalAggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
+{
+    AggregatingTransform::recover(std::move(ckpt_ctx));
+
+    /// Need extra retracted data for old version impl
+    if (getVersion() < IMPL_V2_MIN_VERSION)
+    {
+        ManyRetractedDataVariants retracted_data(many_data->variants.size());
+        for (auto & elem : retracted_data)
+            elem = std::make_shared<AggregatedDataVariants>();
+
+        many_data->setField(
+            {std::move(retracted_data),
+            /// Field serializer
+            [this](const std::any & field, WriteBuffer & wb, VersionType version) {
+                assert(version < IMPL_V2_MIN_VERSION);
+                const auto & data = std::any_cast<const ManyRetractedDataVariants &>(field);
+                DB::writeIntBinary(data.size(), wb);
+                for (const auto & elem : data)
+                {
+                    elem->aggregator = &params->aggregator;
+                    DB::serialize(*elem, wb, version);
+                }
+            },
+            /// Field deserializer
+            [this](std::any & field, ReadBuffer & rb, VersionType version) {
+                assert(version < IMPL_V2_MIN_VERSION);
+                auto & data = std::any_cast<ManyRetractedDataVariants &>(field);
+                size_t num;
+                DB::readIntBinary(num, rb);
+                data.resize(num);
+                for (auto & elem : data)
+                {
+                    elem = std::make_shared<AggregatedDataVariants>();
+                    elem->aggregator = &params->aggregator;
+                    DB::deserialize(*elem, rb, version);
+                }
+            }});
+    }
+}
 }
 }

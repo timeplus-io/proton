@@ -22,12 +22,16 @@ public:
 
     String getName() const override { return "GlobalAggregatingTransform"; }
 
+    void recover(CheckpointContextPtr ckpt_ctx) override;
+
 private:
     std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, size_t num_rows) override;
     bool needFinalization(Int64 min_watermark) const override;
     bool prepareFinalization(Int64 min_watermark) override;
 
     void finalize(const ChunkContextPtr & chunk_ctx) override;
+
+    static constexpr VersionType IMPL_V2_MIN_VERSION = 2;
 };
 
 }
