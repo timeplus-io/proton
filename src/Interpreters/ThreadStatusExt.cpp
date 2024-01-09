@@ -405,11 +405,15 @@ void ThreadStatus::detachQuery(bool exit_if_already_detached, bool thread_exits)
     query_context.reset();
     thread_trace_context.trace_id = 0;
     thread_trace_context.span_id = 0;
+
+    /// The memory of thread_group->finished_threads_counters_memory is temporarily moved to this vector, which is deallocated out of critical section.
+    std::vector<ThreadGroupStatus::ProfileEventsCountersAndMemory> move_to_temp;
+
     /// Avoid leaking of ThreadGroupStatus::finished_threads_counters_memory
     /// (this is in case someone uses system thread but did not call getProfileEventsCountersAndMemoryForThreads())
     {
         std::lock_guard guard(thread_group->mutex);
-        auto stats = std::move(thread_group->finished_threads_counters_memory);
+        move_to_temp = std::move(thread_group->finished_threads_counters_memory);
     }
 
     thread_group.reset();
