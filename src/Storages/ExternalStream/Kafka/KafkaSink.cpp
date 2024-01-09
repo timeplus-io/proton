@@ -38,9 +38,9 @@ ExpressionActionsPtr buildExpression(const Block & header, const ASTPtr & expr_a
 namespace KafkaStream
 {
 ChunkSharder::ChunkSharder(ExpressionActionsPtr sharding_expr_, const String & column_name)
+    : sharding_expr(sharding_expr_)
+    , sharding_key_column_name(column_name)
 {
-    sharding_expr = sharding_expr_;
-    sharding_key_column_name = column_name;
 }
 
 ChunkSharder::ChunkSharder()
@@ -280,7 +280,7 @@ void KafkaSink::addMessageToBatch(char * pos, size_t len)
         .partition = next_partition,
         .payload = payload.data(),
         .len = len,
-        .key = const_cast<void *>(static_cast<const void *>(key.data)),
+        .key = const_cast<char *>(key.data),
         .key_len = key.size,
     });
 
@@ -296,6 +296,8 @@ void KafkaSink::consume(Chunk chunk)
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
     auto blocks = partitioner->shard(std::move(block), partition_cnt);
 
+    /// We do swap with empty std::vector here to avoid some big underlying memory hang out there forever.
+    /// since std::vector::clear still holds on to its allocated memory
     if (message_key_expr)
     {
         if (!keys_for_current_batch.empty())
@@ -306,11 +308,13 @@ void KafkaSink::consume(Chunk chunk)
         keys_for_current_batch.reserve(chunk.rows());
         current_batch_row = 0;
     }
+
     if (!current_batch.empty())
     {
         std::vector<rd_kafka_message_t> batch;
         current_batch.swap(batch);
     }
+
     if (!batch_payload.empty())
     {
         std::vector<nlog::ByteVector> payload;

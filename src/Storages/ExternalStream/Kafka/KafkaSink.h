@@ -27,7 +27,8 @@ public:
     BlocksWithShard shard(Block block, Int32 shard_cnt) const;
 
 private:
-    Int32 getNextShardIndex(Int32 /*shard_cnt*/) const noexcept {
+    Int32 getNextShardIndex(Int32 /*shard_cnt*/) const noexcept
+    {
         /// let librdkafka decides
         return RD_KAFKA_PARTITION_UA;
     }

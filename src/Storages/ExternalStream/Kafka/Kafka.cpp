@@ -43,7 +43,7 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
         settings->sasl_mechanism.value,
         settings->ssl_ca_cert_file.value))
     , external_stream_counter(external_stream_counter_)
-    , log(&Poco::Logger::get("External-" + settings->topic.value))
+    , logger(&Poco::Logger::get("External-" + settings->topic.value))
 {
     assert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);
     assert(external_stream_counter);
@@ -99,7 +99,7 @@ Pipe Kafka::read(
     {
         shards_to_query = parseShards(context->getSettingsRef().shards.value);
         validate(shards_to_query);
-        LOG_INFO(log, "reading from [{}] partitions for topic={}", fmt::join(shards_to_query, ","), settings->topic.value);
+        LOG_INFO(logger, "reading from [{}] partitions for topic={}", fmt::join(shards_to_query, ","), settings->topic.value);
     }
     else
     {
@@ -143,11 +143,11 @@ Pipe Kafka::read(
         assert(offsets.size() == shards_to_query.size());
         for (auto [shard, offset] : std::ranges::views::zip(shards_to_query, offsets))
             pipes.emplace_back(
-                std::make_shared<KafkaSource>(this, header, storage_snapshot, context, shard, offset, max_block_size, log, external_stream_counter));
+                std::make_shared<KafkaSource>(this, header, storage_snapshot, context, shard, offset, max_block_size, logger, external_stream_counter));
     }
 
     LOG_INFO(
-        log,
+        logger,
         "Starting reading {} streams by seeking to {} in dedicated resource group",
         pipes.size(),
         query_info.seek_to_info->getSeekTo());
@@ -319,6 +319,6 @@ SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr
 {
     /// always validate before actual use
     validate();
-    return std::make_shared<KafkaSink>(this, metadata_snapshot->getSampleBlock(), shards, message_key_ast, context, log);
+    return std::make_shared<KafkaSink>(this, metadata_snapshot->getSampleBlock(), shards, message_key_ast, context, logger);
 }
 }

@@ -67,6 +67,6 @@ private:
 
     ASTPtr message_key_ast;
 
-    Poco::Logger * log;
+    Poco::Logger * logger;
 };
 }
