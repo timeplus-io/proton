@@ -8,7 +8,7 @@
 
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/TableJoin.h>
-#include <base/SerdeTag.h>
+#include <Common/serde.h>
 #include <Common/ColumnUtils.h>
 #include <Common/HashMapSizes.h>
 #include <Common/HashMapsTemplate.h>

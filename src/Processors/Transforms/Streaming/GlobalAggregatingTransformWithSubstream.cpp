@@ -28,19 +28,24 @@ GlobalAggregatingTransformWithSubstream::GlobalAggregatingTransformWithSubstream
 SubstreamContextPtr GlobalAggregatingTransformWithSubstream::getOrCreateSubstreamContext(const SubstreamID & id)
 {
     auto substream_ctx = AggregatingTransformWithSubstream::getOrCreateSubstreamContext(id);
-    if (params->emit_changelog && !substream_ctx->hasField())
+    /// Need extra retracted data for old version impl
+    if (getVersion() < IMPL_V2_MIN_VERSION && params->emit_changelog && !substream_ctx->hasField())
     {
         substream_ctx->setField(
             {std::make_shared<RetractedDataVariants>(),
             /// Field serializer
-            [this](const std::any & field, WriteBuffer & wb) {
+            [this](const std::any & field, WriteBuffer & wb, VersionType version) {
+                assert(version < IMPL_V2_MIN_VERSION);
                 const auto & data = std::any_cast<const RetractedDataVariantsPtr &>(field);
-                params->aggregator.checkpoint(*data, wb);
+                data->aggregator = &params->aggregator;
+                DB::serialize(*data, wb, version);
             },
             /// Field deserializer
-            [this](std::any & field, ReadBuffer & rb) {
+            [this](std::any & field, ReadBuffer & rb, VersionType version) {
+                assert(version < IMPL_V2_MIN_VERSION);
                 auto & data = std::any_cast<RetractedDataVariantsPtr &>(field);
-                params->aggregator.recover(*data, rb);
+                data->aggregator = &params->aggregator;
+                DB::deserialize(*data, rb, version);
             }});
     }
     return substream_ctx;
@@ -52,13 +57,18 @@ GlobalAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, co
     if (params->emit_changelog)
     {
         assert(!params->only_merge);
-
         auto num_rows = chunk.getNumRows();
-        auto & retracted_variants = substream_ctx->getField<RetractedDataVariantsPtr>();
-        auto & aggregated_variants = substream_ctx->variants;
+
+        if (getVersion() < IMPL_V2_MIN_VERSION)
+        {
+            auto & retracted_variants = substream_ctx->getField<RetractedDataVariantsPtr>();
+            auto & aggregated_variants = substream_ctx->variants;
+            return params->aggregator.executeAndRetractOnBlockLegacy(
+                chunk.detachColumns(), 0, num_rows, aggregated_variants, *retracted_variants, key_columns, aggregate_columns, no_more_keys);
+        }
 
         return params->aggregator.executeAndRetractOnBlock(
-            chunk.detachColumns(), 0, num_rows, aggregated_variants, *retracted_variants, key_columns, aggregate_columns, no_more_keys);
+            chunk.detachColumns(), 0, num_rows, substream_ctx->variants, key_columns, aggregate_columns, no_more_keys);
     }
     else
         return AggregatingTransformWithSubstream::executeOrMergeColumns(chunk, substream_ctx);
@@ -87,10 +97,19 @@ void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
     auto start = MonotonicMilliseconds::now();
     if (params->emit_changelog)
     {
-        auto [retracted_chunk, chunk]
-            = AggregatingHelper::convertToChangelogChunk(variants, *substream_ctx->getField<RetractedDataVariantsPtr>(), *params);
-        chunk.setChunkContext(chunk_ctx);
-        setCurrentChunk(std::move(chunk), std::move(retracted_chunk));
+        if (getVersion() < IMPL_V2_MIN_VERSION)
+        {
+            auto [retracted_chunk, chunk]
+                = AggregatingHelper::convertToChangelogChunkLegacy(variants, *substream_ctx->getField<RetractedDataVariantsPtr>(), *params);
+            chunk.setChunkContext(chunk_ctx);
+            setCurrentChunk(std::move(chunk), std::move(retracted_chunk));
+        }
+        else
+        {
+            auto [retracted_chunk, chunk] = AggregatingHelper::convertToChangelogChunk(variants, *params);
+            chunk.setChunkContext(chunk_ctx);
+            setCurrentChunk(std::move(chunk), std::move(retracted_chunk));
+        }
     }
     else
     {

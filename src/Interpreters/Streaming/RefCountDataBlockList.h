@@ -4,7 +4,7 @@
 #include <Interpreters/Streaming/CachedBlockMetrics.h>
 #include <Interpreters/Streaming/RefCountDataBlock.h>
 #include <Interpreters/Streaming/joinSerder_fwd.h>
-#include <base/SerdeTag.h>
+#include <Common/serde.h>
 #include <base/defines.h>
 
 #include <list>

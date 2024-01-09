@@ -5,7 +5,7 @@
 #include <Interpreters/Streaming/IHashJoin.h>
 #include <Processors/IProcessor.h>
 #include <base/ClockUtils.h>
-#include <base/SerdeTag.h>
+#include <Common/serde.h>
 #include <Common/ColumnUtils.h>
 
 namespace DB::Streaming
