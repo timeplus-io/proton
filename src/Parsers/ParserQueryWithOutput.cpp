@@ -24,9 +24,10 @@
 #include <Parsers/Access/ParserShowCreateAccessEntityQuery.h>
 #include <Parsers/Access/ParserShowGrantsQuery.h>
 #include <Parsers/Access/ParserShowPrivilegesQuery.h>
-#include "Common/Exception.h"
+#include <Common/Exception.h>
 
 /// proton : starts
+#include <Parsers/ParserCreateExternalTableQuery.h>
 #include <Parsers/ParserShowCreateFormatSchemaQuery.h>
 #include <Parsers/ParserShowFormatSchemasQuery.h>
 #include <Parsers/Streaming/ParserSubscribeQuery.h>
@@ -64,6 +65,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     /// proton: starts
     ParserShowFormatSchemasQuery show_format_schemas_p;
     ParserShowCreateFormatSchemaQuery show_create_format_schema_p;
+    ParserCreateExternalTableQuery create_external_table_p;
     /// proton: ends
 
     ASTPtr query;
@@ -84,6 +86,9 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || describe_table_p.parse(pos, query, expected)
         || show_processlist_p.parse(pos, query, expected)
         || create_p.parse(pos, query, expected)
+        /// proton: starts
+        || create_external_table_p.parse(pos, query, expected)
+        /// proton: ends
         || alter_p.parse(pos, query, expected)
         || rename_p.parse(pos, query, expected)
         || drop_p.parse(pos, query, expected)
