@@ -1,0 +1,9 @@
+example:
+  description: This is an example of test_suit
+  steps:
+    - cmd: select 1;
+      query_time: 3
+      wait: 1
+      query_id: '0000-0000'
+      expect:
+        - [1]

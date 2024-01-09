@@ -1,0 +1,70 @@
+alter_stream_add_column:
+  description: a materialized view on stream, and then alter the stream by adding column
+  steps:
+    - cmd: |
+        create stream test_1_s (
+               col1 int,
+               col2 float,
+               col3 string
+        );
+    - cmd: |
+        create materialized view test_1_mv as (
+               select 
+                   col1, col2, col3
+               from 
+                   test_1_s
+        );
+    - cmd: |
+        insert into test_1_s (* except _tp_time) 
+        values
+            (1, 1.1, 'a1'), (2, 2.1, 'b2'), (3, 3.1, 'c3');
+    - cmd: |
+        alter stream test_1_s add column col4 uint64;
+    - cmd: |
+        insert into test_1_s (* except _tp_time) 
+        values
+            (4, 4.1, 'd4', 44), (5, 5.1, 'e5', 45), (6, 6.1, 'f6', 46);
+
+global_aggregation:
+  description: a materialized view on stream global aggregation
+  steps:
+    - cmd: |
+        create stream test_2_s (
+               col1 int,
+               col2 float64
+        );
+    - cmd: |
+        create materialized view test_2_mv as(
+               select 
+                    min(col2) as min_col2,
+                    max(col2) as max_col2,
+                    count(col2) as cnt_col2
+               from test_2_s
+        );
+    - cmd: |
+        insert into test_2_s (* except _tp_time) 
+        values
+            (1, 1.1), (2, 2.1), (3, 3.1), (4, 4.1), (5, 5.1), (6, 6.1), (3, 3.1), (4, 4.1);
+    
+func_now:
+  description: test for function now()
+  steps:
+    - cmd: |
+        create stream test_3_s (
+            i int
+        );
+    - cmd: |
+        create materialized view test_3_mv as (
+               select 
+                    now(), i
+               from
+                    test_3_s
+        );
+    - cmd: |
+        insert into test_3_s (* except _tp_time) values (1);
+    - cmd: |
+        insert into test_3_s (* except _tp_time) values (2);
+    - cmd: |
+        insert into test_3_s (* except _tp_time) values (3);
+    - cmd: |
+        insert into test_3_s (* except _tp_time) values (4);

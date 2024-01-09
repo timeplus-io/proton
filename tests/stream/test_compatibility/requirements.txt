@@ -1,0 +1,4 @@
+docker-compose==1.29.2
+proton-driver>=0.2.9
+ddt>=1.7.0
+pyyaml==5.3.1
