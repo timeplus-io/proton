@@ -790,7 +790,8 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(UInt64, keep_windows, 0, "How many streaming windows to keep from recycling", 0) \
     M(String, seek_to, "", "Seeking to an offset of the streaming/historical store to seek", 0) \
     M(Bool, enable_backfill_from_historical_store, true, "Enable backfill data from historical data store", 0) \
-    M(Bool, emit_aggregated_during_backfill, true, "Enable emit intermediate aggr result during backfill historical data", 0) \
+    M(Bool, emit_aggregated_during_backfill, false, "Enable emit intermediate aggr result during backfill historical data", 0) \
+    M(Bool, force_backfill_in_order, false, "Requires backfill data in order", 0) \
     M(Bool, include_internal_streams, false, "Show internal streams on SHOW streams query.", 0) \
     M(UInt64, join_max_buffered_bytes, 524288000, "Max buffered bytes for stream to stream join", 0) \
     M(UInt64, join_buffered_data_block_size, 0, "For streaming join, when buffered data in memory, the data block size directs to merge small data blocks to form bigger ones to improve memory efficiency. 0 means disable merging small data blocks.", 0) \

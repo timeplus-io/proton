@@ -3434,9 +3434,11 @@ void InterpreterSelectQuery::finalCheckAndOptimizeForStreamingQuery()
                 context->setSetting("enable_backfill_from_historical_store", false);
         }
 
-        /// Optimization: no requires backfill data in order for global aggregation with settings `emit_aggregated_during_backfill = false`.
-        if (!settings.emit_aggregated_during_backfill.value && hasStreamingGlobalAggregation())
-            query_info.require_in_order_backfill = false;
+        /// Usually, we don't care whether the backfilled data is in order. Excepts:
+        /// 1) User require backfill data in order
+        /// 2) User need window aggr emit result during backfill (it expects that process data in ascending event time)
+        if (settings.force_backfill_in_order.value || (settings.emit_aggregated_during_backfill.value && hasAggregation() && hasStreamingWindowFunc()))
+            query_info.require_in_order_backfill = true;
     }
     else
     {
