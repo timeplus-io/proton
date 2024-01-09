@@ -1,18 +1,22 @@
-#include "Kafka.h"
-#include "KafkaSink.h"
-#include "KafkaSource.h"
-
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/TreeRewriter.h>
 #include <KafkaLog/KafkaWALPool.h>
+#include <Parsers/ExpressionListParsers.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
+#include <Storages/ExternalStream/Kafka/Kafka.h>
+#include <Storages/ExternalStream/Kafka/KafkaSink.h>
+#include <Storages/ExternalStream/Kafka/KafkaSource.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
+#include <Parsers/ASTFunction.h>
 
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/split.hpp>
 
 #include <ranges>
@@ -26,12 +30,12 @@ extern const int INVALID_SETTING_VALUE;
 extern const int RESOURCE_NOT_FOUND;
 }
 
-Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach, ExternalStreamCounterPtr external_stream_counter_)
+Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach, ExternalStreamCounterPtr external_stream_counter_, ContextPtr context)
     : StorageExternalStreamImpl(std::move(settings_))
     , storage_id(storage->getStorageID())
-    , data_format(StorageExternalStreamImpl::dataFormat())
-    , log(&Poco::Logger::get("External-" + settings->topic.value))
     , engine_args(engine_args_)
+    , kafka_properties(klog::parseProperties(settings->properties.value))
+    , data_format(StorageExternalStreamImpl::dataFormat())
     , auth_info(std::make_unique<klog::KafkaWALAuth>(
         settings->security_protocol.value,
         settings->username.value,
@@ -39,6 +43,7 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
         settings->sasl_mechanism.value,
         settings->ssl_ca_cert_file.value))
     , external_stream_counter(external_stream_counter_)
+    , logger(&Poco::Logger::get("External-" + settings->topic.value))
 {
     assert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);
     assert(external_stream_counter);
@@ -49,7 +54,15 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     if (settings->topic.value.empty())
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `topic` setting for {} external stream", settings->type.value);
 
-    kafka_properties = klog::parseProperties(settings->properties.value);
+    if (!settings->message_key.value.empty())
+    {
+        validateMessageKey(settings->message_key.value, storage, context);
+
+        /// When message_key is set, each row should be sent as one message, it doesn't make any sense otherwise.
+        if (settings->isChanged("one_message_per_row") && !settings->one_message_per_row)
+            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "`one_message_per_row` cannot be set to `false` when `message_key` is set");
+        settings->set("one_message_per_row", true);
+    }
 
     calculateDataFormat(storage);
 
@@ -58,6 +71,16 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     if (!attach)
         /// Only validate cluster / topic for external stream creation
         validate();
+}
+
+bool Kafka::hasCustomShardingExpr() const {
+    if (engine_args.empty())
+        return false;
+
+    if (auto * shard_func = shardingExprAst()->as<ASTFunction>())
+        return !boost::iequals(shard_func->name, "rand");
+
+    return true;
 }
 
 Pipe Kafka::read(
@@ -76,7 +99,7 @@ Pipe Kafka::read(
     {
         shards_to_query = parseShards(context->getSettingsRef().shards.value);
         validate(shards_to_query);
-        LOG_INFO(log, "reading from [{}] partitions for topic={}", fmt::join(shards_to_query, ","), settings->topic.value);
+        LOG_INFO(logger, "reading from [{}] partitions for topic={}", fmt::join(shards_to_query, ","), settings->topic.value);
     }
     else
     {
@@ -120,11 +143,11 @@ Pipe Kafka::read(
         assert(offsets.size() == shards_to_query.size());
         for (auto [shard, offset] : std::ranges::views::zip(shards_to_query, offsets))
             pipes.emplace_back(
-                std::make_shared<KafkaSource>(this, header, storage_snapshot, context, shard, offset, max_block_size, log, external_stream_counter));
+                std::make_shared<KafkaSource>(this, header, storage_snapshot, context, shard, offset, max_block_size, logger, external_stream_counter));
     }
 
     LOG_INFO(
-        log,
+        logger,
         "Starting reading {} streams by seeking to {} in dedicated resource group",
         pipes.size(),
         query_info.seek_to_info->getSeekTo());
@@ -228,6 +251,30 @@ std::vector<int32_t> Kafka::parseShards(const std::string & shards_setting)
     return specified_shards;
 }
 
+void Kafka::validateMessageKey(const String & message_key_, IStorage * storage, const ContextPtr & context)
+{
+    const auto & key = message_key_.c_str();
+    Tokens tokens(key, key + message_key_.size(), 0);
+    IParser::Pos pos(tokens, 0);
+    Expected expected;
+    ParserExpression p_id;
+    if (!p_id.parse(pos, message_key_ast, expected))
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "message_key was not a valid expression, parse failed at {}, expected {}", expected.max_parsed_pos, fmt::join(expected.variants, ", "));
+
+    if (!pos->isEnd())
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "message_key must be a single expression, got extra characters: {}", expected.max_parsed_pos);
+
+    auto syntax_result = TreeRewriter(context).analyze(message_key_ast, storage->getInMemoryMetadata().getColumns().getAllPhysical());
+    auto analyzer = ExpressionAnalyzer(message_key_ast, syntax_result, context).getActions(true);
+    const auto & block = analyzer->getSampleBlock();
+    if (block.columns() != 1)
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "message_key expression must return exactly one column");
+
+    auto type_id = block.getByPosition(0).type->getTypeId();
+    if (type_id != TypeIndex::String && type_id != TypeIndex::FixedString)
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "message_key must have type of string");
+}
+
 /// Validate the topic still exists, specified partitions are still valid etc
 void Kafka::validate(const std::vector<int32_t> & shards_to_query)
 {
@@ -267,6 +314,6 @@ SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr
 {
     /// always validate before actual use
     validate();
-    return std::make_shared<KafkaSink>(this, metadata_snapshot->getSampleBlock(), context, shards, log);
+    return std::make_shared<KafkaSink>(this, metadata_snapshot->getSampleBlock(), shards, message_key_ast, context, logger);
 }
 }
