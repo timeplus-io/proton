@@ -21,14 +21,16 @@ struct AggregatingTransformParams
     bool only_merge = false;
     bool emit_version = false;
     bool emit_changelog = false;
+    bool fill_missing_window = false;
     DataTypePtr version_type;
 
-    AggregatingTransformParams(const Aggregator::Params & params_, bool final_, bool emit_version_, bool emit_changelog_)
+    AggregatingTransformParams(const Aggregator::Params & params_, bool final_, bool emit_version_, bool emit_changelog_, bool fill_missing_window_)
         : aggregator(params_)
         , params(aggregator.getParams())
         , final(final_)
         , emit_version(emit_version_)
         , emit_changelog(emit_changelog_)
+        , fill_missing_window(fill_missing_window_)
     {
         if (emit_version)
             version_type = DataTypeFactory::instance().get("int64");

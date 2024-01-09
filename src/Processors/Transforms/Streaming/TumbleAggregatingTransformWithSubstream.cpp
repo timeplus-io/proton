@@ -65,6 +65,62 @@ TumbleAggregatingTransformWithSubstream::getFinalizedWindowsWithBuckets(Int64 wa
                 {time_bucket}});
     }
 
+    if (params->fill_missing_window)
+    {
+        /// If no finalized window, we should start from the current first window
+        Int64 next_window_end;
+        if (substream_ctx->finalized_watermark == INVALID_WATERMARK)
+        {
+            if (windows_with_buckets.empty())
+                return {};
+
+            next_window_end = windows_with_buckets.front().window.end;
+        }
+        else
+        {
+            auto finalized_window_start = toStartTime(
+                substream_ctx->finalized_watermark,
+                window_params.interval_kind,
+                window_params.window_interval,
+                *window_params.time_zone,
+                window_params.time_scale);
+
+            next_window_end = addTime(
+                finalized_window_start,
+                window_params.interval_kind,
+                2 * window_params.window_interval,
+                *window_params.time_zone,
+                window_params.time_scale);
+        }
+
+        auto it = windows_with_buckets.begin();
+        while (next_window_end <= watermark)
+        {
+            /// Add missing window if not exist
+            if (it == windows_with_buckets.end() || next_window_end != it->window.end) [[unlikely]]
+            {
+                Window missing_window
+                    = {addTime(
+                           next_window_end,
+                           window_params.interval_kind,
+                           -window_params.window_interval,
+                           *window_params.time_zone,
+                           window_params.time_scale),
+                       next_window_end};
+                it = windows_with_buckets.insert(it, WindowWithBuckets{.window = std::move(missing_window), .buckets = {}});
+            }
+
+            next_window_end = addTime(
+                next_window_end,
+                window_params.interval_kind,
+                window_params.window_interval,
+                *window_params.time_zone,
+                window_params.time_scale);
+
+            ++it;
+        }
+    }
+
     return windows_with_buckets;
 }
 

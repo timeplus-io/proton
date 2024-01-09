@@ -873,5 +873,39 @@ void reassignWindow(Chunk & chunk, const Window & window, bool time_col_is_datet
     chunk.setColumns(std::move(columns), rows);
 }
 
+void addMissingWindow(
+    Chunk & chunk, const Window & window, bool time_col_is_datetime64, std::optional<size_t> start_pos, std::optional<size_t> end_pos)
+{
+    auto add_window_time = [&](ColumnPtr & column, Int64 ts) {
+        auto col = IColumn::mutate(std::move(column));
+        if (time_col_is_datetime64)
+            col->insert(static_cast<DateTime64>(ts));
+        else
+            col->insert(static_cast<UInt32>(ts));
+        column = std::move(col);
+    };
+
+    auto add_default = [&](ColumnPtr & column) {
+        auto col = IColumn::mutate(std::move(column));
+        col->insertDefault();
+        column = std::move(col);
+    };
+
+    auto rows = chunk.rows();
+    auto columns = chunk.detachColumns();
+    for (size_t pos = 0; auto & column : columns)
+    {
+        if (start_pos.has_value() && pos == *start_pos)
+            add_window_time(column, window.start);
+        else if (end_pos.has_value() && pos == *end_pos)
+            add_window_time(column, window.end);
+        else
+            add_default(column);
+
+        ++pos;
+    }
+
+    chunk.setColumns(std::move(columns), rows + 1);
+}
 }
 }
