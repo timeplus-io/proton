@@ -221,9 +221,8 @@ KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, ContextPtr conte
     topic = klog::KTopicPtr(rd_kafka_topic_new(producer.get(), kafka->topic().c_str(), nullptr), rd_kafka_topic_destroy);
     wb = std::make_unique<WriteBufferFromKafka>(topic.get());
 
-    String data_format = kafka->dataFormat();
-    if (data_format.empty())
-        data_format = "JSONEachRow";
+    const auto & data_format = kafka->dataFormat();
+    assert(!data_format.empty());
 
     /// The callback allows `IRowOutputFormat` based formats produce one Kafka message per row.
     if (kafka->produceOneMessagePerRow())

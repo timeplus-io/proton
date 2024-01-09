@@ -53,7 +53,6 @@ private:
     static void parseMessage(void * kmessage, size_t total_count, void * data);
     void doParseMessage(const rd_kafka_message_s * kmessage, size_t total_count);
     void parseFormat(const rd_kafka_message_s * kmessage);
-    void parseRaw(const rd_kafka_message_s * kmessage);
 
     inline void readAndProcess();
 
