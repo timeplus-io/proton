@@ -2396,6 +2396,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             }
             assert(storagestream);
 
+            const String & replay_time_col = settings.replay_time_column;
             if (std::ranges::none_of(required_columns, [](const auto & name) { return name == ProtonConsts::RESERVED_APPEND_TIME; }))
                 required_columns.emplace_back(ProtonConsts::RESERVED_APPEND_TIME);
 
@@ -2407,7 +2408,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
                 query_plan, required_columns, storage_snapshot, query_info, context, processing_stage, max_block_size, max_streams);
 
             auto replay_step = std::make_unique<Streaming::ReplayStreamStep>(
-                query_plan.getCurrentDataStream(), settings.replay_speed, (storagestream)->getLastSNs());
+                query_plan.getCurrentDataStream(), settings.replay_speed, (storagestream)->getLastSNs(), replay_time_col);
             replay_step->setStepDescription("Replay Stream");
             query_plan.addStep(std::move(replay_step));
         }
