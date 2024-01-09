@@ -130,60 +130,8 @@ void KafkaSource::parseMessage(void * kmessage, size_t total_count, void * data)
 
 void KafkaSource::doParseMessage(const rd_kafka_message_t * kmessage, size_t /*total_count*/)
 {
-    if (format_executor)
-        parseFormat(kmessage);
-    else
-        parseRaw(kmessage);
-
+    parseFormat(kmessage);
     ckpt_data.last_sn = kmessage->offset;
-}
-
-void KafkaSource::parseRaw(const rd_kafka_message_t * kmessage)
-{
-    if (!request_virtual_columns)
-    {
-        /// fast path
-        assert(physical_header.columns() == 1);
-
-        if (current_batch.empty())
-            current_batch.push_back(physical_header.getByPosition(0).type->createColumn());
-
-        current_batch.back()->insertData(static_cast<const char *>(kmessage->payload), kmessage->len);
-        external_stream_counter->addToReadBytes(kmessage->len);
-        external_stream_counter->addToReadCounts(1);
-    }
-    else
-    {
-        /// slower path, request virtual columns
-        if (!current_batch.empty())
-        {
-            assert(current_batch.size() == virtual_col_value_functions.size());
-            for (size_t i = 0, n = virtual_col_value_functions.size(); i < n; ++i)
-            {
-                if (!virtual_col_value_functions[i])
-                    current_batch[i]->insertData(static_cast<const char *>(kmessage->payload), kmessage->len);
-                else
-                    current_batch[i]->insertMany(virtual_col_value_functions[i](kmessage), 1);
-            }
-        }
-        else
-        {
-            for (size_t i = 0, n = virtual_col_value_functions.size(); i < n; ++i)
-            {
-                if (!virtual_col_value_functions[i])
-                {
-                    current_batch.push_back(physical_header.getByPosition(0).type->createColumn());
-                    current_batch.back()->insertData(static_cast<const char *>(kmessage->payload), kmessage->len);
-                }
-                else
-                {
-                    auto column = virtual_col_types[i]->createColumn();
-                    column->insertMany(virtual_col_value_functions[i](kmessage), 1);
-                    current_batch.push_back(std::move(column));
-                }
-            }
-        }
-    }
 }
 
 void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
@@ -285,21 +233,19 @@ void KafkaSource::initConsumer(const Kafka * kafka)
 void KafkaSource::initFormatExecutor(const Kafka * kafka)
 {
     const auto & data_format = kafka->dataFormat();
-    if (!data_format.empty())
-    {
-        auto input_format
-            = FormatFactory::instance().getInputFormat(data_format, read_buffer, non_virtual_header, query_context, max_block_size, kafka->getFormatSettings(query_context));
 
-        format_executor = std::make_unique<StreamingFormatExecutor>(
-            non_virtual_header, std::move(input_format), [](const MutableColumns &, Exception &) -> size_t { return 0; });
+    auto input_format
+        = FormatFactory::instance().getInputFormat(data_format, read_buffer, non_virtual_header, query_context, max_block_size);
 
-        auto converting_dag = ActionsDAG::makeConvertingActions(
-            non_virtual_header.cloneEmpty().getColumnsWithTypeAndName(),
-            physical_header.cloneEmpty().getColumnsWithTypeAndName(),
-            ActionsDAG::MatchColumnsMode::Name);
+    format_executor = std::make_unique<StreamingFormatExecutor>(
+        non_virtual_header, std::move(input_format), [](const MutableColumns &, Exception &) -> size_t { return 0; });
 
-        convert_non_virtual_to_physical_action = std::make_shared<ExpressionActions>(std::move(converting_dag));
-    }
+    auto converting_dag = ActionsDAG::makeConvertingActions(
+        non_virtual_header.cloneEmpty().getColumnsWithTypeAndName(),
+        physical_header.cloneEmpty().getColumnsWithTypeAndName(),
+        ActionsDAG::MatchColumnsMode::Name);
+
+    convert_non_virtual_to_physical_action = std::make_shared<ExpressionActions>(std::move(converting_dag));
 }
 
 void KafkaSource::calculateColumnPositions()
