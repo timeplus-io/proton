@@ -146,8 +146,36 @@ void WatermarkStamper::preProcess(const Block & header)
         initTimeoutTimer(params.timeout_interval);
 }
 
-void WatermarkStamper::process(Chunk & chunk)
+template <bool apply_watermark_per_row>
+ALWAYS_INLINE Int64 WatermarkStamper::calculateWatermark(Int64 event_ts) const
 {
+    if (params.delay_interval)
+    {
+        auto event_ts_bias = addTime(
+            event_ts,
+            params.delay_interval.unit,
+            -1 * params.delay_interval.interval,
+            *params.window_params->time_zone,
+            params.window_params->time_scale);
+
+        if constexpr (apply_watermark_per_row)
+            return event_ts_bias;
+        else
+            return calculateWatermarkBasedOnWindowImpl(event_ts_bias);
+    }
+    else
+    {
+        if constexpr (apply_watermark_per_row)
+            return event_ts;
+        else
+            return calculateWatermarkBasedOnWindowImpl(event_ts);
+    }
+}
+
+void WatermarkStamper::processAfterUnmuted(Chunk & chunk)
+{
+    assert(!chunk.hasRows() && chunk.isHistoricalDataEnd());
+
     switch (params.mode)
     {
         case WatermarkStamperParams::EmitMode::PERIODIC: {
@@ -155,23 +183,68 @@ void WatermarkStamper::process(Chunk & chunk)
             break;
         }
         case WatermarkStamperParams::EmitMode::WATERMARK: {
-            assert(params.window_params);
-            if (params.window_params->time_col_is_datetime64)
-                processWatermark<ColumnDateTime64, false>(chunk);
-            else
-                processWatermark<ColumnDateTime, false>(chunk);
+            auto muted_watermark_ts = calculateWatermark<false>(max_event_ts);
+            if (muted_watermark_ts != INVALID_WATERMARK)
+                chunk.setWatermark(muted_watermark_ts);
             break;
         }
         case WatermarkStamperParams::EmitMode::WATERMARK_PER_ROW: {
-            assert(params.window_params);
-            if (params.window_params->time_col_is_datetime64)
-                processWatermark<ColumnDateTime64, true>(chunk);
-            else
-                processWatermark<ColumnDateTime, true>(chunk);
+            auto muted_watermark_ts = calculateWatermark<true>(max_event_ts);
+            if (muted_watermark_ts != INVALID_WATERMARK)
+                chunk.setWatermark(muted_watermark_ts);
             break;
         }
         default:
             break;
+    }
+}
+
+template <bool mute_watermark>
+void WatermarkStamper::process(Chunk & chunk)
+{
+    if constexpr (mute_watermark)
+    {
+        /// NOTE: In order to avoid that when there is only backfill data and no new data, the window aggregation don't emit results after the backfill is completed.
+        /// Even mute watermark, we still need collect `max_event_ts` which will be used in "processAfterUnmuted()" to emit a watermark as soon as the backfill is completed
+        if (params.window_params && chunk.hasRows())
+        {
+            if (params.window_params->time_col_is_datetime64)
+                max_event_ts = std::max<Int64>(
+                    max_event_ts,
+                    *std::ranges::max_element(assert_cast<const ColumnDateTime64 &>(*chunk.getColumns()[time_col_pos]).getData()));
+            else
+                max_event_ts = std::max<Int64>(
+                    max_event_ts,
+                    *std::ranges::max_element(assert_cast<const ColumnDateTime &>(*chunk.getColumns()[time_col_pos]).getData()));
+        }
+    }
+    else
+    {
+        switch (params.mode)
+        {
+            case WatermarkStamperParams::EmitMode::PERIODIC: {
+                processPeriodic(chunk);
+                break;
+            }
+            case WatermarkStamperParams::EmitMode::WATERMARK: {
+                assert(params.window_params);
+                if (params.window_params->time_col_is_datetime64)
+                    processWatermark<ColumnDateTime64, false>(chunk);
+                else
+                    processWatermark<ColumnDateTime, false>(chunk);
+                break;
+            }
+            case WatermarkStamperParams::EmitMode::WATERMARK_PER_ROW: {
+                assert(params.window_params);
+                if (params.window_params->time_col_is_datetime64)
+                    processWatermark<ColumnDateTime64, true>(chunk);
+                else
+                    processWatermark<ColumnDateTime, true>(chunk);
+                break;
+            }
+            default:
+                break;
+        }
     }
 
     processTimeout(chunk);
@@ -238,31 +311,6 @@ void WatermarkStamper::processWatermark(Chunk & chunk)
 
     assert(params.window_params);
 
-    std::function<Int64(Int64)> calc_watermark_ts;
-    if (params.delay_interval)
-    {
-        calc_watermark_ts = [this](Int64 event_ts) {
-            auto event_ts_bias = addTime(
-                event_ts,
-                params.delay_interval.unit,
-                -1 * params.delay_interval.interval,
-                *params.window_params->time_zone,
-                params.window_params->time_scale);
-
-            if constexpr (apply_watermark_per_row)
-                return event_ts_bias;
-            else
-                return calculateWatermark(event_ts_bias);
-        };
-    }
-    else
-    {
-        if constexpr (apply_watermark_per_row)
-            calc_watermark_ts = [](Int64 event_ts) { return event_ts; };
-        else
-            calc_watermark_ts = [this](Int64 event_ts) { return calculateWatermark(event_ts); };
-    }
-
     Int64 event_ts_watermark = watermark_ts;
 
     /// [Process chunks]
@@ -284,7 +332,7 @@ void WatermarkStamper::processWatermark(Chunk & chunk)
             max_event_ts = event_ts;
 
             if constexpr (apply_watermark_per_row)
-                event_ts_watermark = calc_watermark_ts(max_event_ts);
+                event_ts_watermark = calculateWatermark<apply_watermark_per_row>(max_event_ts);
         }
 
         if (unlikely(event_ts < event_ts_watermark))
@@ -295,7 +343,7 @@ void WatermarkStamper::processWatermark(Chunk & chunk)
     }
 
     if constexpr (!apply_watermark_per_row)
-        event_ts_watermark = calc_watermark_ts(max_event_ts);
+        event_ts_watermark = calculateWatermark<apply_watermark_per_row>(max_event_ts);
 
     if (late_events_in_chunk > 0)
     {
@@ -315,9 +363,9 @@ void WatermarkStamper::processWatermark(Chunk & chunk)
     }
 }
 
-Int64 WatermarkStamper::calculateWatermark(Int64 event_ts) const
+Int64 WatermarkStamper::calculateWatermarkBasedOnWindowImpl(Int64 event_ts) const
 {
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "calculateWatermark() not implemented in {}", getName());
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "calculateWatermarkBasedOnWindowImpl() not implemented in {}", getName());
 }
 
 void WatermarkStamper::initPeriodicTimer(const WindowInterval & interval)
@@ -385,5 +433,8 @@ void WatermarkStamper::deserialize(ReadBuffer & rb)
     readIntBinary(last_logged_late_events, rb);
     readIntBinary(last_logged_late_events_ts, rb);
 }
+
+template void WatermarkStamper::process<true>(Chunk &);
+template void WatermarkStamper::process<false>(Chunk &);
 }
 }

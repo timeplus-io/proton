@@ -16,7 +16,7 @@ TumbleWatermarkStamper::TumbleWatermarkStamper(const WatermarkStamperParams & pa
         throw Exception(ErrorCodes::INCORRECT_QUERY, "{} doesn't support emit mode '{}'", getName(), magic_enum::enum_name(params.mode));
 }
 
-Int64 TumbleWatermarkStamper::calculateWatermark(Int64 event_ts) const
+Int64 TumbleWatermarkStamper::calculateWatermarkBasedOnWindowImpl(Int64 event_ts) const
 {
     return toStartTime(
         event_ts, window_params.interval_kind, window_params.window_interval, *window_params.time_zone, window_params.time_scale);

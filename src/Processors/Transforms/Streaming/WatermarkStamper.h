@@ -58,7 +58,11 @@ public:
     virtual String getName() const { return "WatermarkStamper"; }
 
     void preProcess(const Block & header);
+
+    template <bool mute_watermark = false>
     void process(Chunk & chunk);
+
+    void processAfterUnmuted(Chunk & chunk);
 
     bool requiresPeriodicOrTimeoutEmit() const { return periodic_interval || timeout_interval; }
 
@@ -80,7 +84,10 @@ private:
 
     void logLateEvents();
 
-    virtual Int64 calculateWatermark(Int64 event_ts) const;
+    template <bool apply_watermark_per_row>
+    ALWAYS_INLINE Int64 calculateWatermark(Int64 event_ts) const;
+
+    virtual Int64 calculateWatermarkBasedOnWindowImpl(Int64 event_ts) const;
 
     void initPeriodicTimer(const WindowInterval & interval);
 

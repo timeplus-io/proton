@@ -54,15 +54,26 @@ void WatermarkTransform::transform(Chunk & chunk)
 {
     chunk.clearWatermark();
 
-    if (chunk.isHistoricalDataStart())
-        is_backfilling_data = true;
-    else if (chunk.isHistoricalDataEnd())
-        is_backfilling_data = false;
+    if (chunk.isHistoricalDataStart() && skip_stamping_for_backfill_data) [[unlikely]]
+    {
+        mute_watermark = true;
+        return;
+    }
 
-    bool avoid_watermark = chunk.avoidWatermark();
-    avoid_watermark |= is_backfilling_data && skip_stamping_for_backfill_data;
-    if (!avoid_watermark)
-        watermark->process(chunk);
+    if (chunk.isHistoricalDataEnd() && skip_stamping_for_backfill_data) [[unlikely]]
+    {
+        mute_watermark = false;
+        watermark->processAfterUnmuted(chunk);
+        return;
+    }
+
+    if (chunk.avoidWatermark())
+        return;
+
+    if (mute_watermark)
+        watermark->process<true>(chunk);
+    else
+        watermark->process<false>(chunk);
 }
 
 void WatermarkTransform::checkpoint(CheckpointContextPtr ckpt_ctx)

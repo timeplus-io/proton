@@ -6,6 +6,7 @@ namespace DB
 {
 struct ASTTableExpression;
 class ASTSelectWithUnionQuery;
+struct SelectQueryInfo;
 
 namespace Streaming
 {
@@ -24,6 +25,7 @@ ASTPtr rewriteAsSubquery(ASTTableExpression & table_expression);
 /// Return true if rewritten subquery, otherwise false (if already is changelog subquery or skip storage/table_function)
 bool rewriteAsChangelogSubquery(ASTTableExpression & table_expression, bool only_rewrite_subquery);
 
-bool rewriteAsChangelogQuery(ASTSelectWithUnionQuery & query);
+
+bool rewriteSubqueryByQueryInfo(ASTSelectWithUnionQuery & query, const SelectQueryInfo & query_info);
 }
 }

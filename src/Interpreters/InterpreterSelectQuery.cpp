@@ -93,6 +93,7 @@
 #include <Interpreters/Streaming/EventPredicateVisitor.h>
 #include <Interpreters/Streaming/IHashJoin.h>
 #include <Interpreters/Streaming/PartitionByVisitor.h>
+#include <Interpreters/Streaming/RewriteAsSubquery.h>
 #include <Interpreters/Streaming/SubstituteStreamingFunction.h>
 #include <Interpreters/Streaming/SyntaxAnalyzeUtils.h>
 #include <Interpreters/Streaming/TableFunctionDescription.h>
@@ -2278,6 +2279,10 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         if (!subquery)
             throw Exception("Subquery expected", ErrorCodes::LOGICAL_ERROR);
 
+        /// proton: starts.
+        Streaming::rewriteSubqueryByQueryInfo(subquery->as<ASTSelectWithUnionQuery &>(), query_info);
+        /// proton: ends.
+
         interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(
             subquery, getSubqueryContext(context),
             options.copy().subquery().noModify(), required_columns);
@@ -3437,7 +3442,10 @@ void InterpreterSelectQuery::finalCheckAndOptimizeForStreamingQuery()
         /// Usually, we don't care whether the backfilled data is in order. Excepts:
         /// 1) User require backfill data in order
         /// 2) User need window aggr emit result during backfill (it expects that process data in ascending event time)
-        if (settings.force_backfill_in_order.value || (settings.emit_aggregated_during_backfill.value && hasAggregation() && hasStreamingWindowFunc()))
+        if (settings.emit_aggregated_during_backfill.value && hasAggregation() && hasStreamingWindowFunc())
+            context->setSetting("force_backfill_in_order", true);
+
+        if (settings.force_backfill_in_order.value)
             query_info.require_in_order_backfill = true;
     }
     else

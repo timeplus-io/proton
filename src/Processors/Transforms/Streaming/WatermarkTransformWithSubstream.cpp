@@ -114,13 +114,31 @@ void WatermarkTransformWithSubstream::work()
 
     process_chunk.clearWatermark();
 
-    if (process_chunk.isHistoricalDataStart())
-        is_backfilling_data = true;
-    else if (process_chunk.isHistoricalDataEnd())
-        is_backfilling_data = false;
+    if (process_chunk.isHistoricalDataStart() && skip_stamping_for_backfill_data) [[unlikely]]
+    {
+        mute_watermark = true;
+        /// Propagate historical data start flag
+        output_chunks.emplace_back(std::move(process_chunk));
+        return;
+    }
 
-    bool avoid_watermark = process_chunk.avoidWatermark();
-    avoid_watermark |= is_backfilling_data && skip_stamping_for_backfill_data;
+    if (process_chunk.isHistoricalDataEnd() && skip_stamping_for_backfill_data) [[unlikely]]
+    {
+        mute_watermark = false;
+        output_chunks.reserve(substream_watermarks.size() + 1);
+        /// Propagate historical data end flag first
+        output_chunks.emplace_back(process_chunk.clone());
+        for (auto & [id, watermark] : substream_watermarks)
+        {
+            auto chunk_ctx =ChunkContext::create();
+            chunk_ctx->setSubstreamID(std::move(id));
+            process_chunk.setChunkContext(std::move(chunk_ctx)); /// reset context
+
+            watermark->processAfterUnmuted(process_chunk);
+            output_chunks.emplace_back(process_chunk.clone());
+        }
+        return;
+    }
 
     if (unlikely(process_chunk.requestCheckpoint()))
     {
@@ -133,8 +151,13 @@ void WatermarkTransformWithSubstream::work()
 
         auto & watermark = getOrCreateSubstreamWatermark(process_chunk.getSubstreamID());
 
-        if (!avoid_watermark)
-            watermark.process(process_chunk);
+        if (!process_chunk.avoidWatermark())
+        {
+            if (mute_watermark)
+                watermark.process<true>(process_chunk);
+            else
+                watermark.process<false>(process_chunk);
+        }
 
         assert(process_chunk);
         output_chunks.emplace_back(std::move(process_chunk));
@@ -146,7 +169,7 @@ void WatermarkTransformWithSubstream::work()
 
         /// It's possible to generate periodic or timeout watermark for each substream via an empty chunk
         /// FIXME: This is a very ugly and inefficient implementation and needs to revisit.
-        if (!avoid_watermark && watermark_template->requiresPeriodicOrTimeoutEmit())
+        if (!mute_watermark && watermark_template->requiresPeriodicOrTimeoutEmit())
         {
             output_chunks.reserve(substream_watermarks.size());
             for (auto & [id, watermark] : substream_watermarks)
