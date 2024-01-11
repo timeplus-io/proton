@@ -206,8 +206,9 @@ void WatermarkStamper::process(Chunk & chunk)
     {
         /// NOTE: In order to avoid that when there is only backfill data and no new data, the window aggregation don't emit results after the backfill is completed.
         /// Even mute watermark, we still need collect `max_event_ts` which will be used in "processAfterUnmuted()" to emit a watermark as soon as the backfill is completed
-        if (params.window_params && chunk.hasRows())
+        if (chunk.hasRows() && (params.mode == WatermarkStamperParams::EmitMode::WATERMARK || params.mode == WatermarkStamperParams::EmitMode::WATERMARK_PER_ROW))
         {
+            assert(params.window_params);
             if (params.window_params->time_col_is_datetime64)
                 max_event_ts = std::max<Int64>(
                     max_event_ts,
