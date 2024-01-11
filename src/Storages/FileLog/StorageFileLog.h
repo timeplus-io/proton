@@ -208,6 +208,8 @@ private:
 
     void deserialize();
     static void checkOffsetIsValid(const String & full_name, UInt64 offset);
+
+    bool supportsStreamingQuery() const override { return true; }
 };
 
 }
