@@ -69,6 +69,7 @@ std::unordered_map<String, String> StreamingFunctionData::changelog_func_map = {
     {"p95", ""},
     {"p99", ""},
     {"moving_sum", ""},
+    {"group_uniq_array", "group_uniq_array_retract"}
 };
 
 std::optional<String> StreamingFunctionData::supportChangelog(const String & function_name)

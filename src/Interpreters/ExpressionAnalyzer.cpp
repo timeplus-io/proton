@@ -213,6 +213,19 @@ void tryTranslateToParametricAggregateFunction(
         argument_names = feature_names;
         types = feature_types;
     }
+    else if (lower_name == "group_uniq_array" || lower_name == "group_uniq_array_retract")
+    {
+        if (arguments.size() == 3)
+        {
+            /// After StreamingFunctionData::visit(), `group_uniq_array(key, num)` -> `group_uniq_array(num, key, _tp_delta)`
+            /// Translate `group_uniq_array(num, key, _tp_delta)` to `group_uniq_array(num)(key)`
+            ASTPtr expression_list = std::make_shared<ASTExpressionList>();
+            expression_list->children.push_back(arguments[1]);
+            parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+        }
+        argument_names = {argument_names[0]};
+        types = {types[0]};
+    }
 }
 
 /// proton: starts. Add 'is_changelog_input' param to allow aggregate function being aware whether the input stream is a changelog
