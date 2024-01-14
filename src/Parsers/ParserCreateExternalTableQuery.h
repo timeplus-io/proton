@@ -6,7 +6,7 @@ namespace DB
 {
 
 /// Query like this:
-/// CREATE [OR REPLACE] EXTERNAL TABLE [IF NOT EXISTS] [db.]name [UUID 'uuid']
+/// CREATE [OR REPLACE] EXTERNAL TABLE [IF NOT EXISTS] [db.]name
 /// [SETTINGS name = value, ...]
 class ParserCreateExternalTableQuery : public DB::IParserBase
 {

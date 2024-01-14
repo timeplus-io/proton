@@ -248,6 +248,7 @@ else()
 endif()
 
 add_subdirectory(Storages/ExternalStream)
+add_subdirectory(Storages/ExternalTable)
 # proton: end
 
 set (DBMS_COMMON_LIBRARIES)
@@ -264,6 +265,7 @@ endif()
 
 target_link_libraries (dbms PRIVATE klog)
 target_link_libraries (dbms PRIVATE external_stream)
+target_link_libraries (dbms PRIVATE external_table)
 target_link_libraries (dbms PRIVATE checkpoint)
 
 set (all_modules dbms)

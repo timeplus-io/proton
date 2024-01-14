@@ -28,6 +28,7 @@
 
 /// proton : starts
 #include <Parsers/ParserCreateExternalTableQuery.h>
+#include <Parsers/ParserDropExternalTableQuery.h>
 #include <Parsers/ParserShowCreateFormatSchemaQuery.h>
 #include <Parsers/ParserShowFormatSchemasQuery.h>
 #include <Parsers/Streaming/ParserSubscribeQuery.h>
@@ -52,6 +53,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserAlterQuery alter_p;
     ParserRenameQuery rename_p;
     ParserDropQuery drop_p;
+    ParserDropExternalTableQuery drop_external_table_p;
     ParserCheckQuery check_p;
     ParserOptimizeQuery optimize_p;
     ParserKillQueryQuery kill_query_p;
@@ -85,13 +87,16 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || describe_cache_p.parse(pos, query, expected)
         || describe_table_p.parse(pos, query, expected)
         || show_processlist_p.parse(pos, query, expected)
-        || create_p.parse(pos, query, expected)
         /// proton: starts
         || create_external_table_p.parse(pos, query, expected)
         /// proton: ends
+        || create_p.parse(pos, query, expected)
         || alter_p.parse(pos, query, expected)
         || rename_p.parse(pos, query, expected)
         || drop_p.parse(pos, query, expected)
+        /// proton: starts
+        || drop_external_table_p.parse(pos, query, expected)
+        /// proton: ends
         || check_p.parse(pos, query, expected)
         || kill_query_p.parse(pos, query, expected)
         || optimize_p.parse(pos, query, expected)

@@ -1,9 +1,9 @@
-#include <Parsers/ASTCreateExternalTableQuery.h>
 #include <Parsers/CommonParsers.h>
-#include <Parsers/ExpressionElementParsers.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
 #include <Parsers/ParserCreateExternalTableQuery.h>
 #include <Parsers/ParserSetQuery.h>
-#include "Parsers/ASTIdentifier.h"
 
 namespace DB
 {
@@ -31,7 +31,7 @@ bool DB::ParserCreateExternalTableQuery::parseImpl(Pos & pos, ASTPtr & node, Exp
     if (s_or_replace.ignore(pos, expected))
         or_replace = true;
 
-    if (s_external_table.ignore(pos, expected))
+    if (!s_external_table.ignore(pos, expected))
         return false;
 
     if (!or_replace && s_if_not_exists.ignore(pos, expected))
@@ -46,23 +46,24 @@ bool DB::ParserCreateExternalTableQuery::parseImpl(Pos & pos, ASTPtr & node, Exp
             return false;
     }
 
-    auto query = std::make_shared<ASTCreateExternalTableQuery>();
-    node = query;
+    auto create_query = std::make_shared<ASTCreateQuery>();
+    node = create_query;
 
-    query->create_or_replace = or_replace;
-    query->if_not_exists = if_not_exists;
+    create_query->create_or_replace = or_replace;
+    create_query->if_not_exists = if_not_exists;
 
     auto * table_id = table->as<ASTTableIdentifier>();
-    query->database = table_id->getDatabase();
-    query->table = table_id->getTable();
-    if (query->database)
-        query->children.push_back(query->database);
-    if (query->table)
-        query->children.push_back(query->table);
+    create_query->database = table_id->getDatabase();
+    create_query->table = table_id->getTable();
+    if (create_query->database)
+        create_query->children.push_back(create_query->database);
+    if (create_query->table)
+        create_query->children.push_back(create_query->table);
 
-    query->settings = settings;
-    if (query->settings)
-        query->children.push_back(query->settings);
+    auto storage = std::make_shared<ASTStorage>();
+    storage->set(storage->engine, makeASTFunction("ExternalTable"));
+    storage->set(storage->settings, settings);
+    create_query->set(create_query->storage, storage);
 
     return true;
 }

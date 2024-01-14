@@ -120,6 +120,11 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
             throw Exception(ErrorCodes::INCORRECT_QUERY, "It {} is not a Dictionary", table_id.getNameForLogs());
             /// proton: ends
 
+        /// proton: starts
+        if (ast_drop_query.is_external_table && !table->isExternalTable())
+            throw Exception(ErrorCodes::INCORRECT_QUERY, "It {} is not a External Table", table_id.getNameForLogs());
+        /// proton: ends
+
         /// Now get UUID, so we can wait for table data to be finally dropped
         table_id.uuid = database->tryGetTableUUID(table_id.table_name);
 
@@ -137,6 +142,11 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
 
         if (query.kind == ASTDropQuery::Kind::Detach)
         {
+            /// proton: starts
+            if (table->isExternalTable())
+                throw Exception("Cannot DETACH external table", ErrorCodes::SYNTAX_ERROR);
+            /// proton: ends
+
             context_->checkAccess(drop_storage, table_id);
 
             if (table->isDictionary())
@@ -174,6 +184,11 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
         }
         else if (query.kind == ASTDropQuery::Kind::Truncate)
         {
+            /// proton: starts
+            if (table->isExternalTable())
+                throw Exception("Cannot TRUNCATE external table", ErrorCodes::SYNTAX_ERROR);
+            /// proton: ends
+
             if (table->isDictionary())
                 throw Exception("Cannot TRUNCATE dictionary", ErrorCodes::SYNTAX_ERROR);
 
