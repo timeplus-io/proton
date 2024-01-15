@@ -23,18 +23,18 @@
   <a href="#contributing"><strong>Contributing</strong></a> ·
   <a href="#need-help"><strong>Need help?</strong></a>
 </p>
-Proton is a streaming SQL engine, a fast and lightweight alternative to Apache Flink, 🚀 powered by ClickHouse. It helps data engineers and platform engineers solve real-time data pipelines and stream processing use cases, also powers the [Timeplus Cloud](https://timeplus.com) streaming analytics platform.
+Proton is a streaming SQL engine, a fast and lightweight alternative to Apache Flink, 🚀 powered by ClickHouse. It helps data engineers and platform engineers solve real-time data pipelines and stream processing use cases. Proton also powers the [Timeplus Cloud](https://timeplus.com) streaming analytics platform.
 
 ## 💪 Why use Proton?
 
-1. **[Apache Flink](https://github.com/apache/flink) or [ksqlDB](https://github.com/confluentinc/ksql) alternative.** Proton provides powerful streaming SQL functionality, such as streaming ETL, tumble/hop/session windows, watermarks, materialized views, CDC and data revision processing, etc.
+1. **[Apache Flink](https://github.com/apache/flink) or [ksqlDB](https://github.com/confluentinc/ksql) alternative.** Proton provides powerful streaming SQL functionalities, such as streaming ETL, tumble/hop/session windows, watermarks, materialized views, CDC and data revision processing, and more.
 2. **Fast.** Proton is written in C++, with optimized performance through SIMD. [For example](https://www.timeplus.com/post/scary-fast), on an Apple MacBookPro with M2 Max, Proton can deliver 90 million EPS, 4 millisecond end-to-end latency, and high cardinality aggregation with 1 million unique keys.
-3. **Lightweight.** Proton is a single binary (\<500MB). No JVM or any other dependencies. You can also run it with Docker, or on AWS t2.nano instance (1 vCPU and 0.5 GiB memory).
-4. **Powered by [ClickHouse](https://github.com/clickhouse/clickhouse).** Proton extends the historical data, storage, and computing functionality of ClickHouse with stream processing. More than 1200 [SQL functions](https://docs.timeplus.com/functions) are available. Query billions of historical data in milliseconds.
+3. **Lightweight.** Proton is a single binary (\<500MB). No JVM or any other dependencies. You can also run it with Docker, or on an AWS t2.nano instance (1 vCPU and 0.5 GiB memory).
+4. **Powered by [ClickHouse](https://github.com/clickhouse/clickhouse).** Proton extends the historical data, storage, and computing functionality of ClickHouse with stream processing. More than 1,200 [SQL functions](https://docs.timeplus.com/functions) are available. Query billions of historical data in milliseconds.
 5. **Best SQL engine for [Kafka](https://kafka.apache.org/)/[Redpanda](https://redpanda.com/)/[Confluent](https://www.confluent.io/).** Query the live data in Kafka or other compatiable streaming data platforms, with [external streams](https://docs.timeplus.com/proton-kafka).
 
 ![Proton Architecture](design/proton-architecture.webp)
-See our [architecture](https://docs.timeplus.com/proton-architecture) doc for technical details and the [FAQ](https://docs.timeplus.com/proton-faq) for more information.
+See our [architecture](https://docs.timeplus.com/proton-architecture) doc for technical details and our [FAQ](https://docs.timeplus.com/proton-faq) for more information.
 
 ## 🎬 Demo Video
 
@@ -45,7 +45,7 @@ https://github.com/timeplus-io/proton/assets/5076438/8ceca355-d992-4798-b861-1e0
 ## ⚡ Quick Start
 
 ### 🐙 Try Proton With Docker Compose:
-The [docker compose stack](https://github.com/timeplus-io/proton/tree/develop/examples/ecommerce) demonstrates how to read/write data in Kafka/Redpanda with external streams.
+The [Docker Compose stack](https://github.com/timeplus-io/proton/tree/develop/examples/ecommerce) demonstrates how to read/write data in Kafka/Redpanda with external streams.
 
 ### 🐳 Try Proton With Docker:
 
@@ -100,7 +100,7 @@ You should see data like the following:
 ### ⏩ What's next?
 To see more examples of using Proton, check out the [examples](https://github.com/timeplus-io/proton/tree/develop/examples) folder.
 
-To access more features, such as sources, sinks, dashboards, alerts, data lineage, create a workspace at [Timeplus Cloud](https://us.timeplus.cloud) or try the [live demo](https://demo.timeplus.cloud) with pre-built live data and dashboards.
+To access more features, such as sources, sinks, dashboards, alerts, and data lineage, create a workspace on [Timeplus Cloud](https://us.timeplus.cloud) or try our [live demo](https://demo.timeplus.cloud) with pre-built live data and dashboards.
 
 ## 🧩 Integrations
 The following drivers are available:
@@ -129,11 +129,11 @@ We welcome your contributions! If you are looking for issues to work on, try loo
 
 Please see the [wiki](https://github.com/timeplus-io/proton/wiki/Contributing) for more details, and [BUILD.md](https://github.com/timeplus-io/proton/blob/develop/BUILD.md) to compile Proton in different platforms.
 
-We also encourage you to join the [Timeplus Community Slack](https://timeplus.com/slack) to ask questions and meet other active contributors from Timeplus and beyond.
+We also encourage you to join our [Timeplus Community Slack](https://timeplus.com/slack) to ask questions and meet other active contributors from Timeplus and beyond.
 
 ## Need help?
 
-Join the [Timeplus Community Slack](https://timeplus.com/slack) to connect with Timeplus engineers and other Proton users.
+Join our [Timeplus Community Slack](https://timeplus.com/slack) to connect with Timeplus engineers and other Proton users.
 
 For filing bugs, suggesting improvements, or requesting new features, see the [open issues](https://github.com/timeplus-io/proton/issues) here on GitHub.
 
