@@ -17,7 +17,7 @@
 <p align="center">
   <a href="#-why-use-proton"><strong>Why Use Proton</strong></a> ·
   <a href="#-demo-video"><strong>Demo Video</strong></a> ·
-  <a href="#-quick-start"><strong>Get Started</strong></a> ·
+  <a href="#-quick-start"><strong>Quick Start</strong></a> ·
   <a href="#-whats-next"><strong>What's Next</strong></a> ·
   <a href="#-integrations"><strong>Integrations</strong></a> ·
   <a href="#contributing"><strong>Contributing</strong></a> ·
@@ -41,10 +41,10 @@ See our [architecture](https://docs.timeplus.com/proton-architecture) doc for te
 
 ## ⚡ Quick Start
 
-### 🐙 Docker Compose:
+### 🐙 Try Proton With Docker Compose:
 The [docker compose stack](https://github.com/timeplus-io/proton/tree/develop/examples/ecommerce) demonstrates how to read/write data in Kafka/Redpanda with external streams.
 
-### 🐳 Docker:
+### 🐳 Try Proton With Docker:
 
 ```bash
 docker run -d --pull always --name proton ghcr.io/timeplus-io/proton:latest
