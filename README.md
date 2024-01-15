@@ -1,8 +1,8 @@
 <p align="center">
   <img alt="Proton – open source, unified streaming and data processing engine for real-time analytics" src="design/proton-logo-white-bg.png"/> <br/>
   <b> A streaming SQL engine, fast and lightweight </b> <br/><br/>
-  📄 <a href="https://docs.timeplus.com/proton" target="_blank">Documentation</a>&nbsp;
-  🚀 <a href="https://demo.timeplus.cloud/" target="_blank">Live Demo</a>
+  📄 <a href="https://docs.timeplus.com/proton" target="_blank">Documentation</a>&nbsp;&nbsp;
+  🚀 <a href="https://demo.timeplus.cloud/" target="_blank">Live Demo</a>&nbsp;&nbsp;
   🌎 <a href="https://timeplus.com/" target="_blank">Timeplus</a> <br/><br/>
   <a href="https://github.com/timeplus-io/proton/"><img src="https://img.shields.io/github/stars/timeplus-io/proton?logo=github" /></a>&nbsp;
   <a href="https://github.com/timeplus-io/proton/pkgs/container/proton"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fuwkp37dgeb6d2oc5fxu6oles2i0eevmm.lambda-url.us-west-2.on.aws%2F" /></a>&nbsp; 
@@ -38,23 +38,33 @@ See our [architecture](https://docs.timeplus.com/proton-architecture) doc for te
 
 ## 🎬 Demo Video
 <iframe width="560" height="315" src="https://www.youtube.com/embed/vi4Yl6L4_Dw?si=1Ina4LHf9CP6PqO3&amp;start=283" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+
 ## ⚡ Quick Start
+
 ### 🐙 Docker Compose:
 The [docker compose stack](https://github.com/timeplus-io/proton/tree/develop/examples/ecommerce) demonstrates how to read/write data in Kafka/Redpanda with external streams.
+
 ### 🐳 Docker:
+
 ```bash
 docker run -d --pull always --name proton ghcr.io/timeplus-io/proton:latest
 ```
+
 ### ⬇️ Install Proton Without Docker
+
 You can install Proton as a single binary via:
+
 ```shell
 curl -sSf https://raw.githubusercontent.com/timeplus-io/proton/develop/install.sh | sh
 ```
+
 For Mac users, you can also use [Homebrew](https://brew.sh/) to manage the install/upgrade/uninstall:
+
 ```shell
 brew tap timeplus-io/timeplus
 brew install proton
 ```
+
 Then you can start the server via `proton server start` and start a new terminal window with `proton client` to start the SQL shell.
 
 ### 🔎 Query a test stream
