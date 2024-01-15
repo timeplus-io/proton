@@ -130,7 +130,7 @@ void WatermarkTransformWithSubstream::work()
         output_chunks.emplace_back(process_chunk.clone());
         for (auto & [id, watermark] : substream_watermarks)
         {
-            auto chunk_ctx =ChunkContext::create();
+            auto chunk_ctx = ChunkContext::create();
             chunk_ctx->setSubstreamID(std::move(id));
             process_chunk.setChunkContext(std::move(chunk_ctx)); /// reset context
 
@@ -154,9 +154,9 @@ void WatermarkTransformWithSubstream::work()
         if (!process_chunk.avoidWatermark())
         {
             if (mute_watermark)
-                watermark.process<true>(process_chunk);
+                watermark.processWithMutedWatermark(process_chunk);
             else
-                watermark.process<false>(process_chunk);
+                watermark.process(process_chunk);
         }
 
         assert(process_chunk);

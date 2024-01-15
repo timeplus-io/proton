@@ -18,7 +18,7 @@ public:
     WatermarkStamperPtr clone() const override { return std::make_unique<TumbleWatermarkStamper>(*this); }
 
 private:
-    Int64 calculateWatermarkBasedOnWindowImpl(Int64 event_ts) const override;
+    Int64 calculateWatermarkImpl(Int64 event_ts) const override;
 
     TumbleWindowParams & window_params;
 };

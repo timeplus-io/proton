@@ -59,8 +59,10 @@ public:
 
     void preProcess(const Block & header);
 
-    template <bool mute_watermark = false>
     void process(Chunk & chunk);
+
+    /// During mute watermark, we still need to process the chunk to update max_event_ts
+    void processWithMutedWatermark(Chunk & chunk);
 
     void processAfterUnmuted(Chunk & chunk);
 
@@ -84,10 +86,10 @@ private:
 
     void logLateEvents();
 
-    template <bool apply_watermark_per_row>
     ALWAYS_INLINE Int64 calculateWatermark(Int64 event_ts) const;
+    ALWAYS_INLINE Int64 calculateWatermarkPerRow(Int64 event_ts) const;
 
-    virtual Int64 calculateWatermarkBasedOnWindowImpl(Int64 event_ts) const;
+    virtual Int64 calculateWatermarkImpl(Int64 event_ts) const;
 
     void initPeriodicTimer(const WindowInterval & interval);
 

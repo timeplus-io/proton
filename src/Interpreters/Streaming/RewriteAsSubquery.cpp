@@ -137,13 +137,12 @@ bool rewriteAsChangelogSubquery(ASTTableExpression & table_expression, bool only
     return rewriteAsChangelogQuery(query);
 }
 
-bool rewriteSubqueryByQueryInfo(ASTSelectWithUnionQuery & query, const SelectQueryInfo & query_info)
+bool rewriteSubquery(ASTSelectWithUnionQuery & query, const SelectQueryInfo & query_info)
 {
-    bool rewriten = false;
     if (query_info.left_input_tracking_changes)
-        rewriten |= rewriteAsChangelogQuery(query);
+        return rewriteAsChangelogQuery(query);
 
-    return rewriten;
+    return false;
 }
 }
 }

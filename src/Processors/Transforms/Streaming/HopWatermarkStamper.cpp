@@ -18,7 +18,7 @@ HopWatermarkStamper::HopWatermarkStamper(const WatermarkStamperParams & params_,
         throw Exception(ErrorCodes::INCORRECT_QUERY, "{} doesn't support emit mode '{}'", getName(), magic_enum::enum_name(params.mode));
 }
 
-Int64 HopWatermarkStamper::calculateWatermarkBasedOnWindowImpl(Int64 event_ts) const
+Int64 HopWatermarkStamper::calculateWatermarkImpl(Int64 event_ts) const
 {
     auto last_finalized_window = HopHelper::getLastFinalizedWindow(event_ts, window_params);
     if (likely(last_finalized_window.isValid()))

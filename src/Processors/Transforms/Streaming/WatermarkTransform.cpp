@@ -71,9 +71,9 @@ void WatermarkTransform::transform(Chunk & chunk)
         return;
 
     if (mute_watermark)
-        watermark->process<true>(chunk);
+        watermark->processWithMutedWatermark(chunk);
     else
-        watermark->process<false>(chunk);
+        watermark->process(chunk);
 }
 
 void WatermarkTransform::checkpoint(CheckpointContextPtr ckpt_ctx)

@@ -135,7 +135,7 @@ void StorageView::read(
     }
 
     /// proton: starts.
-    Streaming::rewriteSubqueryByQueryInfo(current_inner_query->as<ASTSelectWithUnionQuery &>(), query_info);
+    Streaming::rewriteSubquery(current_inner_query->as<ASTSelectWithUnionQuery &>(), query_info);
     /// proton: ends.
 
     auto options = SelectQueryOptions(QueryProcessingStage::Complete, 0, true, query_info.settings_limit_offset_done);

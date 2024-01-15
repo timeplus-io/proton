@@ -2280,7 +2280,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             throw Exception("Subquery expected", ErrorCodes::LOGICAL_ERROR);
 
         /// proton: starts.
-        Streaming::rewriteSubqueryByQueryInfo(subquery->as<ASTSelectWithUnionQuery &>(), query_info);
+        Streaming::rewriteSubquery(subquery->as<ASTSelectWithUnionQuery &>(), query_info);
         /// proton: ends.
 
         interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(
@@ -3442,7 +3442,7 @@ void InterpreterSelectQuery::finalCheckAndOptimizeForStreamingQuery()
         /// Usually, we don't care whether the backfilled data is in order. Excepts:
         /// 1) User require backfill data in order
         /// 2) User need window aggr emit result during backfill (it expects that process data in ascending event time)
-        if (settings.emit_aggregated_during_backfill.value && hasAggregation() && hasStreamingWindowFunc())
+        if (settings.emit_during_backfill.value && hasAggregation() && hasStreamingWindowFunc())
             context->setSetting("force_backfill_in_order", true);
 
         if (settings.force_backfill_in_order.value)
@@ -3508,7 +3508,7 @@ void InterpreterSelectQuery::buildWatermarkQueryPlan(QueryPlan & query_plan) con
     auto params = std::make_shared<Streaming::WatermarkStamperParams>(
         query_info.query, query_info.syntax_analyzer_result, query_info.streaming_window_params);
 
-    bool skip_stamping_for_backfill_data = !context->getSettingsRef().emit_aggregated_during_backfill.value;
+    bool skip_stamping_for_backfill_data = !context->getSettingsRef().emit_during_backfill.value;
 
     if (query_info.hasPartitionByKeys())
         query_plan.addStep(std::make_unique<Streaming::WatermarkStepWithSubstream>(
