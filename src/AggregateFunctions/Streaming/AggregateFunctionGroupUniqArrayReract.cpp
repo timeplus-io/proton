@@ -1,7 +1,7 @@
 #include <AggregateFunctions/Streaming/AggregateFunctionGroupUniqArrayRetract.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <AggregateFunctions/Helpers.h>
 #include <AggregateFunctions/FactoryHelpers.h>
+#include <AggregateFunctions/Helpers.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 
@@ -12,9 +12,9 @@ struct Settings;
 
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
-    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int BAD_ARGUMENTS;
+extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+extern const int BAD_ARGUMENTS;
 }
 
 namespace Streaming
@@ -27,8 +27,11 @@ template <typename HasLimit>
 class AggregateFunctionGroupUniqArrayDateRetract : public AggregateFunctionGroupUniqArrayRetract<DataTypeDate::FieldType, HasLimit>
 {
 public:
-    explicit AggregateFunctionGroupUniqArrayDateRetract(const DataTypePtr & argument_type, const Array & parameters_, UInt64 max_elems_ = std::numeric_limits<UInt64>::max())
-        : AggregateFunctionGroupUniqArrayRetract<DataTypeDate::FieldType, HasLimit>(argument_type, parameters_, max_elems_) {}
+    explicit AggregateFunctionGroupUniqArrayDateRetract(
+        const DataTypePtr & argument_type, const Array & parameters_, UInt64 max_elems_ = std::numeric_limits<UInt64>::max())
+        : AggregateFunctionGroupUniqArrayRetract<DataTypeDate::FieldType, HasLimit>(argument_type, parameters_, max_elems_)
+    {
+    }
     DataTypePtr getReturnType() const override { return std::make_shared<DataTypeArray>(std::make_shared<DataTypeDate>()); }
 };
 
@@ -36,17 +39,22 @@ template <typename HasLimit>
 class AggregateFunctionGroupUniqArrayDateTimeRetract : public AggregateFunctionGroupUniqArrayRetract<DataTypeDateTime::FieldType, HasLimit>
 {
 public:
-    explicit AggregateFunctionGroupUniqArrayDateTimeRetract(const DataTypePtr & argument_type, const Array & parameters_, UInt64 max_elems_ = std::numeric_limits<UInt64>::max())
-        : AggregateFunctionGroupUniqArrayRetract<DataTypeDateTime::FieldType, HasLimit>(argument_type, parameters_, max_elems_) {}
+    explicit AggregateFunctionGroupUniqArrayDateTimeRetract(
+        const DataTypePtr & argument_type, const Array & parameters_, UInt64 max_elems_ = std::numeric_limits<UInt64>::max())
+        : AggregateFunctionGroupUniqArrayRetract<DataTypeDateTime::FieldType, HasLimit>(argument_type, parameters_, max_elems_)
+    {
+    }
     DataTypePtr getReturnType() const override { return std::make_shared<DataTypeArray>(std::make_shared<DataTypeDateTime>()); }
 };
 
-template <typename HasLimit, typename ... TArgs>
-IAggregateFunction * createWithExtraTypes(const DataTypePtr & argument_type, TArgs && ... args)
+template <typename HasLimit, typename... TArgs>
+IAggregateFunction * createWithExtraTypes(const DataTypePtr & argument_type, TArgs &&... args)
 {
     WhichDataType which(argument_type);
-    if (which.idx == TypeIndex::Date) return new AggregateFunctionGroupUniqArrayDateRetract<HasLimit>(argument_type, std::forward<TArgs>(args)...);
-    else if (which.idx == TypeIndex::DateTime) return new AggregateFunctionGroupUniqArrayDateRetract<HasLimit>(argument_type, std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::Date)
+        return new AggregateFunctionGroupUniqArrayDateRetract<HasLimit>(argument_type, std::forward<TArgs>(args)...);
+    else if (which.idx == TypeIndex::DateTime)
+        return new AggregateFunctionGroupUniqArrayDateRetract<HasLimit>(argument_type, std::forward<TArgs>(args)...);
     else
     {
         /// Check that we can use plain version of AggregateFunctionGroupUniqArrayRetractGeneric
@@ -57,21 +65,22 @@ IAggregateFunction * createWithExtraTypes(const DataTypePtr & argument_type, TAr
     }
 }
 
-template <typename HasLimit, typename ... TArgs>
-inline AggregateFunctionPtr createAggregateFunctionGroupUniqArrayRetractImpl(const std::string & name, const DataTypePtr & argument_type, TArgs ... args)
+template <typename HasLimit, typename... TArgs>
+inline AggregateFunctionPtr
+createAggregateFunctionGroupUniqArrayRetractImpl(const std::string & name, const DataTypePtr & argument_type, TArgs... args)
 {
-
-    AggregateFunctionPtr res(createWithNumericType<AggregateFunctionGroupUniqArrayRetract, HasLimit, const DataTypePtr &, TArgs...>(*argument_type, argument_type, std::forward<TArgs>(args)...));
+    AggregateFunctionPtr res(createWithNumericType<AggregateFunctionGroupUniqArrayRetract, HasLimit, const DataTypePtr &, TArgs...>(
+        *argument_type, argument_type, std::forward<TArgs>(args)...));
 
     if (!res)
         res = AggregateFunctionPtr(createWithExtraTypes<HasLimit>(argument_type, std::forward<TArgs>(args)...));
 
     if (!res)
-        throw Exception("Illegal type " + argument_type->getName() +
-                        " of argument for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(
+            "Illegal type " + argument_type->getName() + " of argument for aggregate function " + name,
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     return res;
-
 }
 
 AggregateFunctionPtr createAggregateFunctionGroupUniqArrayRetract(
@@ -92,16 +101,17 @@ AggregateFunctionPtr createAggregateFunctionGroupUniqArrayRetract(
         if (type != Field::Types::Int64 && type != Field::Types::UInt64)
             throw Exception("Parameter for aggregate function " + name + " should be positive number", ErrorCodes::BAD_ARGUMENTS);
 
-        if ((type == Field::Types::Int64 && parameters[0].get<Int64>() < 0) ||
-            (type == Field::Types::UInt64 && parameters[0].get<UInt64>() == 0))
+        if ((type == Field::Types::Int64 && parameters[0].get<Int64>() < 0)
+            || (type == Field::Types::UInt64 && parameters[0].get<UInt64>() == 0))
             throw Exception("Parameter for aggregate function " + name + " should be positive number", ErrorCodes::BAD_ARGUMENTS);
 
         limit_size = true;
         max_elems = parameters[0].get<Int64>();
     }
     else
-        throw Exception("Incorrect number of parameters for aggregate function " + name + ", should be 0 or 1",
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(
+            "Incorrect number of parameters for aggregate function " + name + ", should be 0 or 1",
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     if (!limit_size)
         return createAggregateFunctionGroupUniqArrayRetractImpl<std::false_type>(name, argument_types[0], parameters);
@@ -113,9 +123,9 @@ AggregateFunctionPtr createAggregateFunctionGroupUniqArrayRetract(
 
 void registerAggregateFunctionGroupUniqArrayRetract(AggregateFunctionFactory & factory)
 {
-    AggregateFunctionProperties properties = { .returns_default_when_only_null = false, .is_order_dependent = true };
+    AggregateFunctionProperties properties = {.returns_default_when_only_null = false, .is_order_dependent = true};
 
-    factory.registerFunction("group_uniq_array_retract", { createAggregateFunctionGroupUniqArrayRetract, properties });
+    factory.registerFunction("group_uniq_array_retract", {createAggregateFunctionGroupUniqArrayRetract, properties});
 }
 
 }

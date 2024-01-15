@@ -1,24 +1,16 @@
 #pragma once
 
-#include <cassert>
-
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeString.h>
-
-#include <Columns/ColumnArray.h>
-
-#include <Common/HashTable/HashSet.h>
-#include <Common/HashTable/HashTableKeyHolder.h>
-#include <Common/assert_cast.h>
-
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/KeyHolderHelpers.h>
 #include <AggregateFunctions/Streaming/CountedValueMap.h>
-
+#include <Columns/ColumnArray.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+#include <Common/HashTable/HashTableKeyHolder.h>
+#include <Common/assert_cast.h>
 
 
 namespace DB
@@ -36,8 +28,9 @@ struct AggregateFunctionGroupUniqArrayRetractData
 
 /// Puts all values to the hash set. Returns an array of unique values. Implemented for numeric types.
 template <typename T, typename LimitNumElems>
-class AggregateFunctionGroupUniqArrayRetract
-    : public IAggregateFunctionDataHelper<AggregateFunctionGroupUniqArrayRetractData<T>, AggregateFunctionGroupUniqArrayRetract<T, LimitNumElems>>
+class AggregateFunctionGroupUniqArrayRetract : public IAggregateFunctionDataHelper<
+                                                   AggregateFunctionGroupUniqArrayRetractData<T>,
+                                                   AggregateFunctionGroupUniqArrayRetract<T, LimitNumElems>>
 {
     static constexpr bool limit_num_elems = LimitNumElems::value;
     Int64 max_elems;
@@ -46,17 +39,18 @@ private:
     using State = AggregateFunctionGroupUniqArrayRetractData<T>;
 
 public:
-    AggregateFunctionGroupUniqArrayRetract(const DataTypePtr & argument_type, const Array & parameters_, UInt64 max_elems_ = std::numeric_limits<UInt64>::max())
-        : IAggregateFunctionDataHelper<AggregateFunctionGroupUniqArrayRetractData<T>,
-          AggregateFunctionGroupUniqArrayRetract<T, LimitNumElems>>({argument_type}, parameters_),
-          max_elems(max_elems_) {}
+    AggregateFunctionGroupUniqArrayRetract(
+        const DataTypePtr & argument_type, const Array & parameters_, UInt64 max_elems_ = std::numeric_limits<UInt64>::max())
+        : IAggregateFunctionDataHelper<
+            AggregateFunctionGroupUniqArrayRetractData<T>,
+            AggregateFunctionGroupUniqArrayRetract<T, LimitNumElems>>({argument_type}, parameters_)
+        , max_elems(max_elems_)
+    {
+    }
 
     String getName() const override { return "group_uniq_array_retract"; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeArray>(this->argument_types[0]);
-    }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeArray>(this->argument_types[0]); }
 
     bool allocatesMemoryInArena() const override { return false; }
 
@@ -64,13 +58,13 @@ public:
     {
         if (limit_num_elems && this->data(place).map.size() >= max_elems)
             return;
-        
+
         this->data(place).map.emplace(assert_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
     }
 
     void negate(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        bool erase_success = this->data(place).map.erase(assert_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
+        [[maybe_unused]] bool erase_success = this->data(place).map.erase(assert_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
         assert(erase_success);
     }
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -80,7 +74,7 @@ public:
 
         if (limit_num_elems && cur_map.size() >= max_elems)
             return;
-        
+
         cur_map.merge(rhs_map);
     }
 
@@ -126,8 +120,6 @@ public:
         data_to.resize(old_size + size);
 
         size_t i = 0;
-        // for (auto it = set.begin(); it != set.end(); ++it, ++i)
-        //     data_to[old_size + i] = it->getValue();
         for (const auto & [key, _] : map)
         {
             data_to[old_size + i] = key;
@@ -139,10 +131,7 @@ public:
 /// Generic implementation, it uses serialized representation as object descriptor.
 struct AggregateFunctionGroupUniqArrayRetractGenericData
 {
-    static constexpr size_t INITIAL_SIZE_DEGREE = 3; /// adjustable
-
     using Map = CountedValueMap<StringRef, false>;
-
 
     Map map;
 };
@@ -152,9 +141,9 @@ struct AggregateFunctionGroupUniqArrayRetractGenericData
  *  For such columns group_uniq_array() can be implemented more efficiently (especially for small numeric arrays).
  */
 template <bool is_plain_column = false, typename LimitNumElems = std::false_type>
-class AggregateFunctionGroupUniqArrayRetractGeneric
-    : public IAggregateFunctionDataHelper<AggregateFunctionGroupUniqArrayRetractGenericData,
-        AggregateFunctionGroupUniqArrayRetractGeneric<is_plain_column, LimitNumElems>>
+class AggregateFunctionGroupUniqArrayRetractGeneric : public IAggregateFunctionDataHelper<
+                                                          AggregateFunctionGroupUniqArrayRetractGenericData,
+                                                          AggregateFunctionGroupUniqArrayRetractGeneric<is_plain_column, LimitNumElems>>
 {
     DataTypePtr & input_data_type;
 
@@ -164,22 +153,21 @@ class AggregateFunctionGroupUniqArrayRetractGeneric
     using State = AggregateFunctionGroupUniqArrayRetractGenericData;
 
 public:
-    AggregateFunctionGroupUniqArrayRetractGeneric(const DataTypePtr & input_data_type_, const Array & parameters_, UInt64 max_elems_ = std::numeric_limits<UInt64>::max())
-        : IAggregateFunctionDataHelper<AggregateFunctionGroupUniqArrayRetractGenericData, AggregateFunctionGroupUniqArrayRetractGeneric<is_plain_column, LimitNumElems>>({input_data_type_}, parameters_)
+    AggregateFunctionGroupUniqArrayRetractGeneric(
+        const DataTypePtr & input_data_type_, const Array & parameters_, UInt64 max_elems_ = std::numeric_limits<UInt64>::max())
+        : IAggregateFunctionDataHelper<
+            AggregateFunctionGroupUniqArrayRetractGenericData,
+            AggregateFunctionGroupUniqArrayRetractGeneric<is_plain_column, LimitNumElems>>({input_data_type_}, parameters_)
         , input_data_type(this->argument_types[0])
-        , max_elems(max_elems_) {}
+        , max_elems(max_elems_)
+    {
+    }
 
     String getName() const override { return "group_uniq_array_retract"; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeArray>(input_data_type);
-    }
+    DataTypePtr getReturnType() const override { return std::make_shared<DataTypeArray>(input_data_type); }
 
-    bool allocatesMemoryInArena() const override
-    {
-        return true;
-    }
+    bool allocatesMemoryInArena() const override { return true; }
 
     void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> /* version */) const override
     {
@@ -233,7 +221,7 @@ public:
 
         if (limit_num_elems && cur_map.size() >= max_elems)
             return;
-        
+
         cur_map.merge(rhs_map);
     }
 

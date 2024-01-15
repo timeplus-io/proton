@@ -215,10 +215,11 @@ void tryTranslateToParametricAggregateFunction(
     }
     else if (lower_name == "group_uniq_array" || lower_name == "group_uniq_array_retract")
     {
-        if (arguments.size() == 3)
+        /// there are two cases for group_uniq_array function
+        /// 1. changelog stream: after StreamingFunctionData::visit() group_uniq_array(column, max_size) -> group_uniq_array(column, max_size, _tp_delta), we translate to group_uniq_array(max_size)(column)
+        /// 2. append-only stream: group_uniq_array(column, max_size) -> group_uniq_array(max_size)(column)
+        if (arguments.size() >= 2 && argument_names[1] != ProtonConsts::RESERVED_DELTA_FLAG)
         {
-            /// After StreamingFunctionData::visit(), `group_uniq_array(key, num)` -> `group_uniq_array(num, key, _tp_delta)`
-            /// Translate `group_uniq_array(num, key, _tp_delta)` to `group_uniq_array(num)(key)`
             ASTPtr expression_list = std::make_shared<ASTExpressionList>();
             expression_list->children.push_back(arguments[1]);
             parameters = getAggregateFunctionParametersArray(expression_list, "", context);
@@ -226,7 +227,7 @@ void tryTranslateToParametricAggregateFunction(
         argument_names = {argument_names[0]};
         types = {types[0]};
     }
-}
+};
 
 /// proton: starts. Add 'is_changelog_input' param to allow aggregate function being aware whether the input stream is a changelog
 AggregateFunctionPtr getAggregateFunction(
