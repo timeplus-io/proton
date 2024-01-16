@@ -43,6 +43,20 @@ struct HashBlocks
 
     HashMapSizes hashMapSizes(const HashJoin * hash_join) const;
 
+    void serialize(
+        WriteBuffer & wb,
+        VersionType version,
+        const Block & header,
+        const HashJoin & join,
+        SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices) const;
+
+    void deserialize(
+        ReadBuffer & rb,
+        VersionType version,
+        const Block & header,
+        const HashJoin & join,
+        DeserializedIndicesToRowRefListMultiple<JoinDataBlock> * deserialized_indices_to_multiple_ref);
+
     /// Buffered data
     JoinDataBlockList blocks;
 
@@ -175,9 +189,9 @@ SERDE struct BufferedStreamData
         return {};
     }
 
-    void serialize(WriteBuffer & wb, SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices = nullptr) const;
+    void serialize(WriteBuffer & wb, VersionType version, SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices = nullptr) const;
     void deserialize(
-        ReadBuffer & rb, DeserializedIndicesToRowRefListMultiple<JoinDataBlock> * deserialized_indices_to_row_ref_list_multiple = nullptr);
+        ReadBuffer & rb, VersionType version, DeserializedIndicesToRowRefListMultiple<JoinDataBlock> * deserialized_indices_to_row_ref_list_multiple = nullptr);
 
     NO_SERDE HashJoin * join;
 

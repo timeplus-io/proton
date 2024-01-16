@@ -81,8 +81,8 @@ public:
         return hash_joins[0]->data->rightJoinStreamDescription();
     }
 
-    void serialize(WriteBuffer &) const override;
-    void deserialize(ReadBuffer &) override;
+    void serialize(WriteBuffer &, VersionType) const override;
+    void deserialize(ReadBuffer &, VersionType) override;
 
     void cancel() override;
 

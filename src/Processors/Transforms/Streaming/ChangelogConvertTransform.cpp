@@ -201,7 +201,7 @@ void ChangelogConvertTransform::work()
             hash_buffer_bytes,
             hash_buffer_cells,
             late_rows,
-            source_chunks.empty() ? 0 : source_chunks.front().refCount());
+            source_chunks.empty() ? 0 : source_chunks.begin()->refCount());
 
         last_log_ts = MonotonicMilliseconds::now();
     }
@@ -407,7 +407,7 @@ void ChangelogConvertTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
         SerializedBlocksToIndices serialized_blocks_to_indices;
-        source_chunks.serialize(getInputs().front().getHeader(), wb, &serialized_blocks_to_indices);
+        DB::serialize(source_chunks, wb, getVersion(), getInputs().front().getHeader(), &serialized_blocks_to_indices);
 
         index.serialize(
             /*MappedSerializer*/
@@ -418,15 +418,14 @@ void ChangelogConvertTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
             wb);
 
         DB::writeIntBinary(late_rows, wb);
-        cached_block_metrics.serialize(wb);
     });
 }
 
 void ChangelogConvertTransform::recover(CheckpointContextPtr ckpt_ctx)
 {
-    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) {
+    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType version_, ReadBuffer & rb) {
         DeserializedIndicesToBlocks<LightChunk> deserialized_indices_to_blocks;
-        source_chunks.deserialize(getInputs().front().getHeader(), rb, &deserialized_indices_to_blocks);
+        DB::deserialize(source_chunks, rb, version_, getInputs().front().getHeader(), &deserialized_indices_to_blocks);
 
         index.deserialize(
             /*MappedDeserializer*/
@@ -438,7 +437,9 @@ void ChangelogConvertTransform::recover(CheckpointContextPtr ckpt_ctx)
             rb);
 
         DB::readIntBinary(late_rows, rb);
-        cached_block_metrics.deserialize(rb);
+
+        if (version_ <= CachedBlockMetrics::HAS_STATE_MAX_VERSION)
+            DB::deserialize(cached_block_metrics, rb, version_);
     });
 }
 }

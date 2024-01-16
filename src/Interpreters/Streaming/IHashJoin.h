@@ -44,8 +44,8 @@ public:
     virtual JoinStreamDescriptionPtr leftJoinStreamDescription() const noexcept = 0;
     virtual JoinStreamDescriptionPtr rightJoinStreamDescription() const noexcept = 0;
 
-    virtual void serialize(WriteBuffer & wb) const = 0;
-    virtual void deserialize(ReadBuffer & rb) = 0;
+    virtual void serialize(WriteBuffer & wb, VersionType version) const = 0;
+    virtual void deserialize(ReadBuffer & rb, VersionType version) = 0;
 
     virtual void cancel() = 0;
 };

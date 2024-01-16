@@ -12,7 +12,7 @@ namespace Streaming
 {
 template <typename DataBlock>
 void RefCountDataBlockList<DataBlock>::serialize(
-    const Block & header, WriteBuffer & wb, VersionType version, SerializedBlocksToIndices * serialized_blocks_to_indices) const
+    WriteBuffer & wb, VersionType version, const Block & header, SerializedBlocksToIndices * serialized_blocks_to_indices) const
 {
     assert(version >= STATE_V2_MIN_VERSION);
 
@@ -37,7 +37,7 @@ void RefCountDataBlockList<DataBlock>::serialize(
 
 template <typename DataBlock>
 void RefCountDataBlockList<DataBlock>::deserialize(
-    const Block & header, ReadBuffer & rb, VersionType version, DeserializedIndicesToBlocks<DataBlock> * deserialized_indices_with_block)
+    ReadBuffer & rb, VersionType version, const Block & header, DeserializedIndicesToBlocks<DataBlock> * deserialized_indices_with_block)
 {
     if (version < STATE_V2_MIN_VERSION)
     {

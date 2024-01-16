@@ -2,6 +2,7 @@
 
 #include <base/defines.h>
 #include <fmt/format.h>
+#include <base/types.h>
 
 namespace DB
 {
@@ -32,8 +33,8 @@ struct CachedBlockMetrics
             total_data_bytes);
     }
 
-    /// [Legacy]
-    static constexpr VersionType HAS_STATE_VERSION = 1;
+    /// [Legacy] We don't need to serialize this anymore on new impl, since the metrics is volated. will update it back during recover 
+    static constexpr VersionType HAS_STATE_MAX_VERSION = 1;
     void deserialize(ReadBuffer & rb, VersionType version);
 };
 }

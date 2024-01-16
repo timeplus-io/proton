@@ -164,9 +164,8 @@ struct RefCountDataBlockList
 
     static constexpr VersionType STATE_V2_MIN_VERSION = 2;
 
-    void serialize(const Block & header, WriteBuffer & wb, VersionType version, SerializedBlocksToIndices * serialized_blocks_to_indices = nullptr) const;
-    void
-    deserialize(const Block & header, ReadBuffer & rb, VersionType version, DeserializedIndicesToBlocks<DataBlock> * deserialized_indices_with_block = nullptr);
+    void serialize(WriteBuffer & wb, VersionType version, const Block & header, SerializedBlocksToIndices * serialized_blocks_to_indices = nullptr) const;
+    void deserialize(ReadBuffer & rb, VersionType version, const Block & header, DeserializedIndicesToBlocks<DataBlock> * deserialized_indices_with_block = nullptr);
 
 private:
     size_t data_block_size;
