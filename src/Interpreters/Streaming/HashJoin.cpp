@@ -2369,17 +2369,17 @@ void HashJoin::reviseJoinStrictness()
 
 void HashJoin::checkLimits() const
 {
-    const auto & left_metrics = left_data.buffered_data->getJoinMetrics();
-    const auto & right_metrics = right_data.buffered_data->getJoinMetrics();
-    auto current_total_bytes = left_metrics.current_total_bytes + right_metrics.current_total_bytes;
+    const auto & left_total_bytes = left_data.buffered_data->getJoinMetrics().totalBytes();
+    const auto & right_total_bytes = right_data.buffered_data->getJoinMetrics().totalBytes();
+    auto current_total_bytes = left_total_bytes + right_total_bytes;
     if (current_total_bytes >= join_max_cached_bytes)
         throw Exception(
             ErrorCodes::SET_SIZE_LIMIT_EXCEEDED,
             "Streaming join's memory reaches max size: {}, current total: {}, left total: {}, right total: {}",
             join_max_cached_bytes,
             current_total_bytes,
-            left_metrics.current_total_bytes,
-            right_metrics.current_total_bytes);
+            left_total_bytes,
+            right_total_bytes);
 }
 
 void HashJoin::validateAsofJoinKey()
@@ -2463,7 +2463,7 @@ HashMapSizes HashJoin::sizesOfMapsVariant(const MapsVariant & maps_variant) cons
     HashMapSizes sizes;
     joinDispatch(streaming_kind, streaming_strictness, maps_variant, [&](auto /*kind_*/, auto /*strictness_*/, auto & maps) {
         sizes.keys = maps.getTotalRowCount();
-        sizes.buffer_size_in_bytes = maps.getTotalByteCountImpl();
+        sizes.buffer_size_in_bytes = maps.getBufferSizeInBytes();
         sizes.buffer_bytes_in_cells = maps.getBufferSizeInCells();
     });
     return sizes;

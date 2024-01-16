@@ -205,6 +205,8 @@ public:
 
     UInt64 bytes() const;
     UInt64 allocatedBytes() const;
+    UInt64 allocatedDataBytes() const;
+    UInt64 allocatedMetadataBytes() const;
 
     std::string dumpStructure() const;
 

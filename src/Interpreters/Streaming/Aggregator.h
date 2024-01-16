@@ -102,7 +102,7 @@ using TimeBucketAggregatedDataWithKeys128TwoLevel = TimeBucketHashMap<UInt128, A
 using TimeBucketAggregatedDataWithKeys256TwoLevel = TimeBucketHashMap<UInt256, AggregateDataPtr, UInt256HashCRC32>;
 
 class Aggregator;
-
+struct AggregatedDataMetrics;
 struct AggregatedDataVariants : private boost::noncopyable
 {
     /** Working with states of aggregate functions in the pool is arranged in the following (inconvenient) way:
@@ -558,6 +558,8 @@ struct AggregatedDataVariants : private boost::noncopyable
                 throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
         }
     }
+
+    void updateMetrics(AggregatedDataMetrics & metrics) const;
 };
 
 using AggregatedDataVariantsPtr = std::shared_ptr<AggregatedDataVariants>;

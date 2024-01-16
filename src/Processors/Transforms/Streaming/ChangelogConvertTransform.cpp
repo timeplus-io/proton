@@ -10,6 +10,8 @@
 #include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
 
+#include <ranges>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -60,6 +62,15 @@ ChangelogConvertTransform::ChangelogConvertTransform(
     auto [hash_type, key_sizes_] = chooseHashMethod(key_columns);
     index.create(hash_type);
     key_sizes.swap(key_sizes_);
+
+    auto key_sizes_str_v = key_sizes | std::views::transform([](const auto & size) { return std::to_string(size); });
+    LOG_INFO(
+        logger,
+        "Prepare converting changelog by keys_num={}, keys_size={} (each key size: {}), input_header={}",
+        key_sizes.size(),
+        std::accumulate(key_sizes.begin(), key_sizes.end(), static_cast<size_t>(0)),
+        fmt::join(key_sizes_str_v, ", "),
+        input_header.dumpStructure());
 }
 
 IProcessor::Status ChangelogConvertTransform::prepare()
@@ -140,14 +151,7 @@ void ChangelogConvertTransform::work()
 
     /// Propagate empty chunk since it acts like a heartbeat
     auto rows = chunk.rows();
-    if (!rows)
-    {
-        transformEmptyChunk();
-        return;
-    }
-
-    bool log_metrics = false;
-    size_t total_row_count = 0, total_bytes_count = 0, total_buffer_size_in_cells = 0;
+    if (rows)
     {
         /// Constant columns are not supported directly during hashing keys. To make them work anyway, we materialize them.
         Columns materialized_columns;
@@ -173,27 +177,34 @@ void ChangelogConvertTransform::work()
             APPLY_FOR_HASH_KEY_VARIANTS(M)
 #undef M
         }
-
-        /// Every 30 seconds, log metrics
-        if (MonotonicMilliseconds::now() - last_log_ts > 30'000)
-        {
-            total_row_count = index.getTotalRowCount();
-            total_bytes_count = index.getTotalByteCountImpl();
-            total_buffer_size_in_cells = index.getBufferSizeInCells();
-            log_metrics = true;
-            last_log_ts = MonotonicMilliseconds::now();
-        }
     }
+    else
+        transformEmptyChunk();
 
-    if (log_metrics)
+    /// Every 30 seconds, log metrics
+    if (MonotonicMilliseconds::now() - last_log_ts > 30'000)
+    {
+        size_t hash_total_row_count = index.getTotalRowCount();
+        size_t hash_total_row_refs_bytes = hash_total_row_count * sizeof(RefCountDataBlock<LightChunk>);
+        size_t hash_buffer_bytes = index.getBufferSizeInBytes();
+        size_t hash_buffer_cells = index.getBufferSizeInCells();
+
         LOG_INFO(
             logger,
-            "source blocks metrics: {}; hash table metrics: hash_total_rows={} hash_total_bytes={} hash_total_buffer_size={}; late_rows={}",
+            "Cached source blocks metrics: {}; hash table metrics: hash_total_rows={} hash_total_bytes={} (total_bytes_in_arena:{} "
+            "hash_row_refs_bytes:{} hash_buffer_bytes:{} hash_buffer_cells:{}); late_rows={}; earliest_cached_block_ref_count={};",
             cached_block_metrics.string(),
-            total_row_count,
-            total_bytes_count,
-            total_buffer_size_in_cells,
-            late_rows);
+            hash_total_row_count,
+            hash_buffer_bytes + hash_total_row_refs_bytes + pool.size(),
+            pool.size(),
+            hash_total_row_refs_bytes,
+            hash_buffer_bytes,
+            hash_buffer_cells,
+            late_rows,
+            source_chunks.empty() ? 0 : source_chunks.front().refCount());
+
+        last_log_ts = MonotonicMilliseconds::now();
+    }
 }
 
 template <typename KeyGetter, typename Map>

@@ -12,11 +12,9 @@ namespace Streaming
 {
 template <typename DataBlock>
 void RefCountDataBlockList<DataBlock>::serialize(
-    const Block & header, WriteBuffer & wb, SerializedBlocksToIndices * serialized_blocks_to_indices) const
+    const Block & header, WriteBuffer & wb, VersionType version, SerializedBlocksToIndices * serialized_blocks_to_indices) const
 {
-    DB::writeIntBinary(min_ts, wb);
-    DB::writeIntBinary(max_ts, wb);
-    DB::writeIntBinary(total_bytes, wb);
+    assert(version >= STATE_V2_MIN_VERSION);
 
     UInt32 blocks_size = static_cast<UInt32>(blocks.size());
     DB::writeIntBinary<UInt32>(blocks_size, wb);
@@ -39,11 +37,15 @@ void RefCountDataBlockList<DataBlock>::serialize(
 
 template <typename DataBlock>
 void RefCountDataBlockList<DataBlock>::deserialize(
-    const Block & header, ReadBuffer & rb, DeserializedIndicesToBlocks<DataBlock> * deserialized_indices_with_block)
+    const Block & header, ReadBuffer & rb, VersionType version, DeserializedIndicesToBlocks<DataBlock> * deserialized_indices_with_block)
 {
-    DB::readIntBinary(min_ts, rb);
-    DB::readIntBinary(max_ts, rb);
-    DB::readIntBinary(total_bytes, rb);
+    if (version < STATE_V2_MIN_VERSION)
+    {
+        /// V1 layout [min_ts, max_ts, total_bytes]
+        DB::readIntBinary(min_ts, rb);
+        DB::readIntBinary(max_ts, rb);
+        DB::readIntBinary(total_data_bytes, rb);
+    }
 
     UInt32 block_size;
     DB::readIntBinary<UInt32>(block_size, rb);
@@ -59,6 +61,7 @@ void RefCountDataBlockList<DataBlock>::deserialize(
         DB::readIntBinary(elem.refcnt, rb);
         assert(elem.refcnt > 0);
 
+        updateMetrics(elem.block);
         blocks.push_back(std::move(elem));
 
         if (deserialized_indices_with_block)

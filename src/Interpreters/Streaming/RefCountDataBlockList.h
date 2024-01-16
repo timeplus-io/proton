@@ -23,10 +23,10 @@ struct RefCountDataBlockList
 
     ~RefCountDataBlockList()
     {
-        metrics.current_total_blocks -= blocks.size();
-        metrics.current_total_bytes -= total_bytes;
+        metrics.total_rows -= total_rows;
         metrics.total_blocks -= blocks.size();
-        metrics.total_bytes -= total_bytes;
+        metrics.total_metadata_bytes -= total_metadata_bytes;
+        metrics.total_data_bytes -= total_data_bytes;
         metrics.gced_blocks += blocks.size();
     }
 
@@ -36,23 +36,33 @@ struct RefCountDataBlockList
         max_ts = std::max(block.maxTimestamp(), max_ts);
 
         /// Update metrics
-        auto bytes = block.allocatedBytes();
-        total_bytes += bytes;
-        ++metrics.current_total_blocks;
-        metrics.current_total_bytes += bytes;
+        auto rows = block.rows();
+        auto allocated_metadata_bytes = block.allocatedMetadataBytes();
+        auto allocated_data_bytes = block.allocatedDataBytes();
+        total_rows += rows;
+        total_metadata_bytes += allocated_metadata_bytes;
+        total_data_bytes += allocated_data_bytes;
+
         ++metrics.total_blocks;
-        metrics.total_bytes += bytes;
+        metrics.total_rows += rows;
+        metrics.total_metadata_bytes += allocated_metadata_bytes;
+        metrics.total_data_bytes += allocated_data_bytes;
     }
 
     void ALWAYS_INLINE negateMetrics(const DataBlock & block)
     {
         /// Update metrics
-        auto bytes = block.allocatedBytes();
-        total_bytes -= bytes;
-        --metrics.current_total_blocks;
-        metrics.current_total_bytes -= bytes;
+        auto rows = block.rows();
+        auto allocated_metadata_bytes = block.allocatedMetadataBytes();
+        auto allocated_data_bytes = block.allocatedDataBytes();
+        total_rows -= rows;
+        total_metadata_bytes -= allocated_metadata_bytes;
+        total_data_bytes -= allocated_data_bytes;
+
         --metrics.total_blocks;
-        metrics.total_bytes -= bytes;
+        metrics.total_rows -= rows;
+        metrics.total_metadata_bytes -= allocated_metadata_bytes;
+        metrics.total_data_bytes -= allocated_data_bytes;
         ++metrics.gced_blocks;
     }
 
@@ -152,15 +162,19 @@ struct RefCountDataBlockList
     Int64 minTimestamp() const noexcept { return min_ts; }
     Int64 maxTimestamp() const noexcept { return max_ts; }
 
-    void serialize(const Block & header, WriteBuffer & wb, SerializedBlocksToIndices * serialized_blocks_to_indices = nullptr) const;
+    static constexpr VersionType STATE_V2_MIN_VERSION = 2;
+
+    void serialize(const Block & header, WriteBuffer & wb, VersionType version, SerializedBlocksToIndices * serialized_blocks_to_indices = nullptr) const;
     void
-    deserialize(const Block & header, ReadBuffer & rb, DeserializedIndicesToBlocks<DataBlock> * deserialized_indices_with_block = nullptr);
+    deserialize(const Block & header, ReadBuffer & rb, VersionType version, DeserializedIndicesToBlocks<DataBlock> * deserialized_indices_with_block = nullptr);
 
 private:
     size_t data_block_size;
-    SERDE Int64 min_ts = std::numeric_limits<Int64>::max();
-    SERDE Int64 max_ts = std::numeric_limits<Int64>::min();
-    SERDE size_t total_bytes = 0;
+    Int64 min_ts = std::numeric_limits<Int64>::max();
+    Int64 max_ts = std::numeric_limits<Int64>::min();
+    size_t total_rows = 0;
+    size_t total_metadata_bytes = 0;
+    size_t total_data_bytes = 0;
 
     SERDE std::list<RefCountDataBlock<DataBlock>> blocks;
 
