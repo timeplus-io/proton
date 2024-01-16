@@ -193,8 +193,7 @@ void ProxyStream::doRead(
 
     if (current_subquery)
     {
-        if (query_info.left_input_tracking_changes)
-            Streaming::rewriteAsChangelogQuery(current_subquery->as<ASTSelectWithUnionQuery &>());
+        Streaming::rewriteSubquery(current_subquery->as<ASTSelectWithUnionQuery &>(), query_info);
 
         auto sub_context = createProxySubqueryContext(context_, query_info, isStreamingQuery());
         auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(

@@ -3,6 +3,7 @@
 #include <Core/BlockWithShard.h>
 #include <Formats/FormatFactory.h>
 #include <Processors/Sinks/SinkToStorage.h>
+#include <Storages/ExternalStream/ExternalStreamCounter.h>
 #include <Storages/ExternalStream/Kafka/Kafka.h>
 #include <Storages/ExternalStream/Kafka/WriteBufferFromKafkaSink.h>
 #include <Common/ThreadPool.h>
@@ -46,7 +47,14 @@ private:
 class KafkaSink final : public SinkToStorage
 {
 public:
-    KafkaSink(const Kafka * kafka, const Block & header, Int32 initial_partition_cnt, const ASTPtr & message_key, ContextPtr context, Poco::Logger * logger_);
+    KafkaSink(
+        const Kafka * kafka,
+        const Block & header,
+        Int32 initial_partition_cnt,
+        const ASTPtr & message_key,
+        ContextPtr context,
+        Poco::Logger * logger_,
+        ExternalStreamCounterPtr external_stream_counter_);
     ~KafkaSink() override;
 
     String getName() const override { return "KafkaSink"; }
@@ -113,5 +121,6 @@ private:
     State state;
 
     Poco::Logger * logger;
+    ExternalStreamCounterPtr external_stream_counter;
 };
 }
