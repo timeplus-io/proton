@@ -10,6 +10,8 @@
 #include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
 
+#include <ranges>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -60,6 +62,14 @@ ChangelogConvertTransform::ChangelogConvertTransform(
     auto [hash_type, key_sizes_] = chooseHashMethod(key_columns);
     index.create(hash_type);
     key_sizes.swap(key_sizes_);
+
+    auto key_sizes_str_v = key_sizes | std::views::transform([](const auto & size) { return std::to_string(size); });
+    LOG_INFO(
+        logger,
+        "Prepare converting changelog by keys_num={}, keys_size={} (each key size: {})",
+        key_sizes.size(),
+        std::accumulate(key_sizes.begin(), key_sizes.end(), static_cast<size_t>(0)),
+        fmt::join(key_sizes_str_v, ", "));
 }
 
 IProcessor::Status ChangelogConvertTransform::prepare()
@@ -186,7 +196,8 @@ void ChangelogConvertTransform::work()
     if (log_metrics)
         LOG_INFO(
             logger,
-            "Cached source blocks metrics: {}; hash table metrics: hash_total_rows={} hash_total_bytes={} (hash_total_row_refs_bytes={} hash_total_buffer_bytes={} hash_total_buffer_size={}); late_rows={}",
+            "Cached source blocks metrics: {}; hash table metrics: hash_total_rows={} hash_total_bytes={} (hash_total_row_refs_bytes={} "
+            "hash_total_buffer_bytes={} hash_total_buffer_size={}); late_rows={}",
             cached_block_metrics.string(),
             total_row_count,
             total_buffer_bytes + total_row_refs_bytes,
