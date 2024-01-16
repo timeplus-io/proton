@@ -123,11 +123,19 @@ IColumn::Selector ChunkSharder::createSelector(Block block, Int32 shard_cnt) con
 }
 }
 
-KafkaSink::KafkaSink(const Kafka * kafka, const Block & header, Int32 initial_partition_cnt, const ASTPtr & message_key_ast, ContextPtr context, Poco::Logger * logger_)
+KafkaSink::KafkaSink(
+    const Kafka * kafka,
+    const Block & header,
+    Int32 initial_partition_cnt,
+    const ASTPtr & message_key_ast,
+    ContextPtr context,
+    Poco::Logger * logger_,
+    ExternalStreamCounterPtr external_stream_counter_)
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
     , partition_cnt(initial_partition_cnt)
     , one_message_per_row(kafka->produceOneMessagePerRow())
     , logger(logger_)
+    , external_stream_counter(external_stream_counter_)
 {
     /// default values
     std::vector<std::pair<String, String>> producer_params{
@@ -292,6 +300,7 @@ void KafkaSink::consume(Chunk chunk)
     if (!chunk.hasRows())
         return;
 
+    auto total_rows = chunk.rows();
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
     auto blocks = partitioner->shard(std::move(block), partition_cnt);
 
@@ -371,10 +380,18 @@ void KafkaSink::consume(Chunk chunk)
 
     rd_kafka_resp_err_t err {RD_KAFKA_RESP_ERR_NO_ERROR};
     for (size_t i = 0; i < current_batch.size(); ++i)
+    {
         if (current_batch[i].err)
+        {
             err = current_batch[i].err;
+            external_stream_counter->addToWriteFailed(1);
+        }
         else
+        {
             batch_payload[i].release(); /// payload of messages which are succesfully handled by rd_kafka_produce_batch will be free'ed by librdkafka
+            external_stream_counter->addToWriteBytes(current_batch[i].len);
+        }
+    }
 
     /// Clean up all the bookkeepings for the batch.
     std::vector<rd_kafka_message_t> batch;
@@ -391,6 +408,8 @@ void KafkaSink::consume(Chunk chunk)
 
     if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
         throw Exception(klog::mapErrorCode(err), rd_kafka_err2str(err));
+    else
+        external_stream_counter->addToWriteCounts(total_rows);
 }
 
 void KafkaSink::onFinish()

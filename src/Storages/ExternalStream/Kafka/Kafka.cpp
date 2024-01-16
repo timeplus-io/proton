@@ -314,6 +314,7 @@ SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr
 {
     /// always validate before actual use
     validate();
-    return std::make_shared<KafkaSink>(this, metadata_snapshot->getSampleBlock(), shards, message_key_ast, context, logger);
+    return std::make_shared<KafkaSink>(
+        this, metadata_snapshot->getSampleBlock(), shards, message_key_ast, context, logger, external_stream_counter);
 }
 }
