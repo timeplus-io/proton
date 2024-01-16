@@ -186,9 +186,9 @@ void ChangelogConvertTransform::work()
     if (log_metrics)
         LOG_INFO(
             logger,
-            "Cached source blocks metrics: {} {}; hash table metrics: hash_total_rows={} hash_total_bytes={} (hash_total_row_refs_bytes={} hash_total_buffer_bytes={} hash_total_buffer_size={}); late_rows={}",
+            "Cached source blocks metrics: {}; hash table metrics: hash_total_rows={} hash_total_bytes={} (hash_total_row_refs_bytes={} hash_total_buffer_bytes={} hash_total_buffer_size={}); late_rows={}",
             cached_block_metrics.string(),
-            index.getTotalRowCount(),
+            total_row_count,
             total_buffer_bytes + total_row_refs_bytes,
             total_buffer_bytes,
             total_buffer_cells,
