@@ -23,7 +23,7 @@
   <a href="#contributing"><strong>Contributing</strong></a> ·
   <a href="#need-help"><strong>Need help?</strong></a>
 </p>
-Proton is a streaming SQL engine, a fast and lightweight alternative to Apache Flink, 🚀 powered by ClickHouse. It helps data engineers and platform engineers solve real-time data pipelines and stream processing use cases. Proton also powers the [Timeplus Cloud](https://timeplus.com) streaming analytics platform.
+Proton is a streaming SQL engine, a fast and lightweight alternative to Apache Flink, 🚀 powered by ClickHouse. It helps data engineers and platform engineers solve real-time data pipelines and stream processing use cases. Proton also powers the [Timeplus Cloud](https://www.timeplus.com) streaming analytics platform.
 
 ## 💪 Why use Proton?
 
