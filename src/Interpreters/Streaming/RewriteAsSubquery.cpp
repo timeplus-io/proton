@@ -9,6 +9,7 @@
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/Streaming/ASTEmitQuery.h>
+#include <Storages/SelectQueryInfo.h>
 
 namespace DB
 {
@@ -19,6 +20,29 @@ extern const int ALIAS_REQUIRED;
 
 namespace Streaming
 {
+namespace
+{
+bool rewriteAsChangelogQuery(ASTSelectWithUnionQuery & query)
+{
+    if (query.list_of_selects->children.size() != 1)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Only expect one select query to rewrite as changelog query");
+
+    auto & select_query = query.list_of_selects->children[0]->as<ASTSelectQuery &>();
+
+    /// Emit changelog
+    auto emit_query = select_query.emit();
+    if (!emit_query)
+        emit_query = std::make_shared<ASTEmitQuery>();
+
+    if (emit_query->as<ASTEmitQuery &>().stream_mode == ASTEmitQuery::StreamMode::CHANGELOG)
+        return false;
+
+    emit_query->as<ASTEmitQuery &>().stream_mode = ASTEmitQuery::StreamMode::CHANGELOG;
+    select_query.setExpression(ASTSelectQuery::Expression::EMIT, std::move(emit_query));
+    return true;
+}
+}
+
 ASTPtr rewriteAsSubquery(ASTTableExpression & table_expr)
 {
     if (table_expr.subquery)
@@ -113,24 +137,12 @@ bool rewriteAsChangelogSubquery(ASTTableExpression & table_expression, bool only
     return rewriteAsChangelogQuery(query);
 }
 
-bool rewriteAsChangelogQuery(ASTSelectWithUnionQuery & query)
+bool rewriteSubquery(ASTSelectWithUnionQuery & query, const SelectQueryInfo & query_info)
 {
-    if (query.list_of_selects->children.size() != 1)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Only expect one select query to rewrite as changelog query");
+    if (query_info.left_input_tracking_changes)
+        return rewriteAsChangelogQuery(query);
 
-    auto & select_query = query.list_of_selects->children[0]->as<ASTSelectQuery &>();
-
-    /// Emit changelog
-    auto emit_query = select_query.emit();
-    if (!emit_query)
-        emit_query = std::make_shared<ASTEmitQuery>();
-
-    if (emit_query->as<ASTEmitQuery &>().stream_mode == ASTEmitQuery::StreamMode::CHANGELOG)
-        return false;
-
-    emit_query->as<ASTEmitQuery &>().stream_mode = ASTEmitQuery::StreamMode::CHANGELOG;
-    select_query.setExpression(ASTSelectQuery::Expression::EMIT, std::move(emit_query));
-    return true;
+    return false;
 }
 }
 }
