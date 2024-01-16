@@ -66,10 +66,11 @@ ChangelogConvertTransform::ChangelogConvertTransform(
     auto key_sizes_str_v = key_sizes | std::views::transform([](const auto & size) { return std::to_string(size); });
     LOG_INFO(
         logger,
-        "Prepare converting changelog by keys_num={}, keys_size={} (each key size: {})",
+        "Prepare converting changelog by keys_num={}, keys_size={} (each key size: {}), input_header={}",
         key_sizes.size(),
         std::accumulate(key_sizes.begin(), key_sizes.end(), static_cast<size_t>(0)),
-        fmt::join(key_sizes_str_v, ", "));
+        fmt::join(key_sizes_str_v, ", "),
+        input_header.dumpStructure());
 }
 
 IProcessor::Status ChangelogConvertTransform::prepare()
@@ -182,29 +183,34 @@ void ChangelogConvertTransform::work()
 
     /// Every 30 seconds, log metrics
     bool log_metrics = false;
-    size_t total_row_count = 0, total_row_refs_bytes = 0, total_buffer_bytes = 0, total_buffer_cells = 0;
+    size_t hash_total_row_count = 0, hash_total_row_refs_bytes = 0, hash_buffer_bytes = 0, hash_buffer_cells = 0;
     if (MonotonicMilliseconds::now() - last_log_ts > 30'000)
     {
-        total_row_count = index.getTotalRowCount();
-        total_row_refs_bytes = total_row_count * sizeof(RefCountDataBlock<LightChunk>);
-        total_buffer_bytes = index.getBufferSizeInBytes();
-        total_buffer_cells = index.getBufferSizeInCells();
+        hash_total_row_count = index.getTotalRowCount();
+        hash_total_row_refs_bytes = hash_total_row_count * sizeof(RefCountDataBlock<LightChunk>);
+        hash_buffer_bytes = index.getBufferSizeInBytes();
+        hash_buffer_cells = index.getBufferSizeInCells();
         log_metrics = true;
         last_log_ts = MonotonicMilliseconds::now();
     }
 
     if (log_metrics)
+    {
+        auto ref_count_list_v = source_chunks | std::views::transform([](const auto & block) { return block.refCount(); });
         LOG_INFO(
             logger,
-            "Cached source blocks metrics: {}; hash table metrics: hash_total_rows={} hash_total_bytes={} (hash_total_row_refs_bytes={} "
-            "hash_total_buffer_bytes={} hash_total_buffer_size={}); late_rows={}",
+            "Cached source blocks metrics: {}; hash table metrics: hash_total_rows={} hash_total_bytes={} (total_bytes_in_arena:{} "
+            "hash_row_refs_bytes:{} hash_buffer_bytes:{} hash_buffer_cells:{}); late_rows={}; rsource_blocks_ref_count_list={}",
             cached_block_metrics.string(),
-            total_row_count,
-            total_buffer_bytes + total_row_refs_bytes,
-            total_buffer_bytes,
-            total_buffer_cells,
-            total_row_refs_bytes,
-            late_rows);
+            hash_total_row_count,
+            hash_buffer_bytes + hash_total_row_refs_bytes + pool.size(),
+            pool.size(),
+            hash_total_row_refs_bytes,
+            hash_buffer_bytes,
+            hash_buffer_cells,
+            late_rows,
+            fmt::join(ref_count_list_v, ","));
+    }
 }
 
 template <typename KeyGetter, typename Map>
