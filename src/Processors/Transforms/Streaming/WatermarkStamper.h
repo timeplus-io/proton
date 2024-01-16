@@ -3,7 +3,7 @@
 #include <Core/Types.h>
 #include <Interpreters/Streaming/WindowCommon.h>
 #include <Interpreters/TreeRewriter.h>
-#include <base/SerdeTag.h>
+#include <Common/serde.h>
 
 namespace Poco
 {

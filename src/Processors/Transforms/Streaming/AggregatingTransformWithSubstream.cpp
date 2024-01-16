@@ -165,17 +165,17 @@ void AggregatingTransformWithSubstream::emitVersion(Chunk & chunk, const Substre
     size_t rows = chunk.rows();
     if (params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
     {
-        /// For UDA with own emit strategy, possibly a block can trigger multiple emits for a substream, each emit cause version+1
+        /// For UDA with own emit strategy, possibly a block can trigger multiple emits for a substream, each emit cause emited_version+1
         /// each emit only has one result, therefore we can count emit times by row number
         auto col = params->version_type->createColumn();
         col->reserve(rows);
         for (size_t i = 0; i < rows; i++)
-            col->insert(substream_ctx->version++);
+            col->insert(substream_ctx->emited_version++);
         chunk.addColumn(std::move(col));
     }
     else
     {
-        Int64 version = substream_ctx->version++;
+        Int64 version = substream_ctx->emited_version++;
         chunk.addColumn(params->version_type->createColumnConst(rows, version)->convertToFullColumnIfConst());
     }
 }
@@ -250,27 +250,27 @@ void AggregatingTransformWithSubstream::checkpoint(CheckpointContextPtr ckpt_ctx
         for (const auto & [id, substream_ctx] : substream_contexts)
         {
             assert(id == substream_ctx->id);
-            substream_ctx->serialize(wb);
+            substream_ctx->serialize(wb, getVersion());
         }
     });
 }
 
 void AggregatingTransformWithSubstream::recover(CheckpointContextPtr ckpt_ctx)
 {
-    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) {
+    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType version_, ReadBuffer & rb) {
         size_t num_substreams;
         readIntBinary(num_substreams, rb);
         substream_contexts.reserve(num_substreams);
         for (size_t i = 0; i < num_substreams; ++i)
         {
             auto substream_ctx = std::make_shared<SubstreamContext>(this);
-            substream_ctx->deserialize(rb);
+            substream_ctx->deserialize(rb, version_);
             substream_contexts.emplace(substream_ctx->id, std::move(substream_ctx));
         }
     });
 }
 
-void SubstreamContext::serialize(WriteBuffer & wb) const
+void SubstreamContext::serialize(WriteBuffer & wb, VersionType version) const
 {
     DB::Streaming::serialize(id, wb);
 
@@ -278,17 +278,17 @@ void SubstreamContext::serialize(WriteBuffer & wb) const
 
     DB::writeIntBinary(finalized_watermark, wb);
 
-    DB::writeIntBinary(version, wb);
+    DB::writeIntBinary(emited_version, wb);
 
     DB::writeIntBinary(rows_since_last_finalization, wb);
 
     bool has_field = hasField();
     DB::writeBoolText(has_field, wb);
     if (has_field)
-        any_field.serializer(any_field.field, wb);
+        any_field.serializer(any_field.field, wb, version);
 }
 
-void SubstreamContext::deserialize(ReadBuffer & rb)
+void SubstreamContext::deserialize(ReadBuffer & rb, VersionType version)
 {
     DB::Streaming::deserialize(id, rb);
 
@@ -296,14 +296,14 @@ void SubstreamContext::deserialize(ReadBuffer & rb)
 
     DB::readIntBinary(finalized_watermark, rb);
 
-    DB::readIntBinary(version, rb);
+    DB::readIntBinary(emited_version, rb);
 
     DB::readIntBinary(rows_since_last_finalization, rb);
 
     bool has_field;
     DB::readBoolText(has_field, rb);
     if (has_field)
-        any_field.deserializer(any_field.field, rb);
+        any_field.deserializer(any_field.field, rb, version);
 }
 
 }

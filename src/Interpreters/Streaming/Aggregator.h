@@ -1219,6 +1219,11 @@ private:
     VersionType getVersion() const;
 
 public:
+    /// Existed versions:
+    ///   STATE VERSION 1 - Legacy version
+    ///   STATE VERSION 2 - REVISION 1 (Enable revision)
+    static constexpr UInt64 STATE_V2_MIN_REVISION = 1;
+
     void checkpoint(const AggregatedDataVariants & data_variants, WriteBuffer & wb);
     void recover(AggregatedDataVariants & data_variants, ReadBuffer & rb);
 

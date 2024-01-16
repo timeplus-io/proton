@@ -213,12 +213,12 @@ void AggregatingTransform::emitVersion(Chunk & chunk)
         auto col = params->version_type->createColumn();
         col->reserve(rows);
         for (size_t i = 0; i < rows; i++)
-            col->insert(many_data->version++);
+            col->insert(many_data->emited_version++);
         chunk.addColumn(std::move(col));
     }
     else
     {
-        Int64 version = many_data->version++;
+        Int64 version = many_data->emited_version++;
         chunk.addColumn(params->version_type->createColumnConst(rows, version)->convertToFullColumnIfConst());
     }
 }
@@ -432,7 +432,7 @@ void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 
             DB::writeIntBinary(many_data->finalized_watermark.load(std::memory_order_relaxed), wb);
             DB::writeIntBinary(many_data->finalized_window_end.load(std::memory_order_relaxed), wb);
-            DB::writeIntBinary(many_data->version.load(std::memory_order_relaxed), wb);
+            DB::writeIntBinary(many_data->emited_version.load(std::memory_order_relaxed), wb);
 
             assert(num_variants == many_data->rows_since_last_finalizations.size());
             for (const auto & last_row : many_data->rows_since_last_finalizations)
@@ -441,7 +441,7 @@ void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
             bool has_field = many_data->hasField();
             DB::writeBoolText(has_field, wb);
             if (has_field)
-                many_data->any_field.serializer(many_data->any_field.field, wb);
+                many_data->any_field.serializer(many_data->any_field.field, wb, getVersion());
         }
 
         /// Serializing no shared data
@@ -458,7 +458,7 @@ void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 
 void AggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
 {
-    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) {
+    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType version_, ReadBuffer & rb) {
         bool is_last_checkpointing_transform;
         DB::readBoolText(is_last_checkpointing_transform, rb);
 
@@ -484,7 +484,7 @@ void AggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
 
             Int64 last_version = 0;
             DB::readIntBinary(last_version, rb);
-            many_data->version = last_version;
+            many_data->emited_version = last_version;
 
             assert(num_variants == many_data->rows_since_last_finalizations.size());
             for (auto & rows_since_last_finalization : many_data->rows_since_last_finalizations)
@@ -497,7 +497,7 @@ void AggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
             bool has_field;
             DB::readBoolText(has_field, rb);
             if (has_field)
-                many_data->any_field.deserializer(many_data->any_field.field, rb);
+                many_data->any_field.deserializer(many_data->any_field.field, rb, version_);
         }
 
         /// Serializing local or stable data during checkpointing
