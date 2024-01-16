@@ -70,7 +70,7 @@ public:
         if (hasWatermark())
         {
             flags &= ~WATERMARK_FLAG;
-            ts_1 = 0;
+            ts_1 = Streaming::INVALID_WATERMARK;
         }
     }
 

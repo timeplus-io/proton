@@ -41,7 +41,7 @@ private:
     SERDE SubstreamHashMap<WatermarkStamperPtr> substream_watermarks;
 
     bool skip_stamping_for_backfill_data;
-    bool is_backfilling_data = false;
+    bool mute_watermark = false;
 
     Poco::Logger * log;
 };
