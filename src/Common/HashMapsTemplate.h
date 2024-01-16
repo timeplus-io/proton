@@ -124,7 +124,7 @@ struct HashMapsTemplate
         UNREACHABLE();
     }
 
-    size_t getTotalByteCountImpl() const
+    size_t getBufferSizeInBytes() const
     {
         switch (type)
         {

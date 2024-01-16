@@ -30,6 +30,7 @@
 #include <Formats/SimpleNativeReader.h>
 #include <Formats/SimpleNativeWriter.h>
 #include <Interpreters/CompiledAggregateFunctionsHolder.h>
+#include <Interpreters/Streaming/AggregatedDataMetrics.h>
 #include <Common/HashMapsTemplate.h>
 #include <Common/VersionRevision.h>
 #include <Common/logger_useful.h>
@@ -139,6 +140,39 @@ void AggregatedDataVariants::convertToTwoLevel()
         default:
             throw Exception("Wrong data variant passed.", ErrorCodes::LOGICAL_ERROR);
     }
+}
+
+void AggregatedDataVariants::updateMetrics(AggregatedDataMetrics & metrics) const
+{
+    switch (type)
+    {
+        case Type::EMPTY: break;
+        case Type::without_key:
+        {
+            assert(aggregator);
+            metrics.total_aggregated_rows += 1;
+            metrics.total_bytes_of_aggregate_states += aggregator->total_size_of_aggregate_states;
+            break;
+        }
+
+    #define M(NAME, IS_TWO_LEVEL) \
+        case Type::NAME: \
+        { \
+            assert(aggregator); \
+            auto & table = NAME->data; \
+            metrics.total_aggregated_rows += table.size(); \
+            metrics.hash_buffer_bytes += table.getBufferSizeInBytes(); \
+            metrics.hash_buffer_cells += table.getBufferSizeInCells(); \
+            metrics.total_bytes_of_aggregate_states += table.size() * aggregator->total_size_of_aggregate_states; \
+            break; \
+        }
+
+        APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
+    #undef M
+    }
+
+    for (const auto & arena : aggregates_pools)
+        metrics.total_bytes_in_arena += arena->size();
 }
 
 Block Aggregator::getHeader(bool final) const

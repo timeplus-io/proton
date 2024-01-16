@@ -80,6 +80,8 @@ SERDE struct ManyAggregatedData
     std::atomic<UInt32> ckpt_requested = 0;
     std::atomic<AggregatingTransform *> last_checkpointing_transform = nullptr;
 
+    std::atomic<Int64> last_log_ts = 0;
+
     /// Stuff additional data context to it if needed
     SERDE struct AnyField
     {
@@ -186,6 +188,11 @@ private:
     /// Try propagate an empty rows chunk to downstream, act as a heart beat
     bool propagateHeartbeatChunk();
 
+    /// Try log aggregating metrics
+    void logAggregatingMetrics();
+
+    void logAggregatingMetricsWithoutLock();
+
 protected:
     void emitVersion(Chunk & chunk);
     /// return {should_abort, need_finalization} pair
@@ -199,6 +206,8 @@ protected:
     virtual bool prepareFinalization(Int64 /*min_watermark*/) { return true; }
 
     virtual void clearExpiredState(Int64 /*finalized_watermark*/) { }
+
+    [[nodiscard]] std::vector<std::unique_lock<std::timed_mutex>> lockAllDataVariants();
 
 protected:
     /// To read the data that was flushed into the temporary data file.
@@ -250,11 +259,13 @@ protected:
     Chunk current_chunk_aggregated;
     bool has_input = false;
 
-    static constexpr auto finalizing_check_interval_ms = std::chrono::milliseconds(100);
+    static constexpr auto finalizing_check_interval_ms = std::chrono::milliseconds(10);
 
     /// If the current thread fails to acquire the finalizing lock, then we keep the watermark and
     /// continue to try in the next processing (it's efficient, avoiding lock waiting)
     std::optional<Int64> try_finalizing_watermark;
+
+    static constexpr Int64 log_metrics_interval_ms = 30'000;
 };
 }
 }

@@ -27,7 +27,7 @@ ChangelogConvertTransform::ChangelogConvertTransform(
     const std::string & version_column_name)
     : IProcessor({input_header}, {output_header}, ProcessorID::ChangelogConvertTransformID)
     , output_chunk_header(outputs.front().getHeader().getColumns(), 0)
-    , source_chunks(cached_block_metrics)
+    , source_chunks(0, cached_block_metrics)
     , last_log_ts(MonotonicMilliseconds::now())
     , logger(&Poco::Logger::get("ChangelogConvertTransform"))
 {
@@ -141,13 +141,8 @@ void ChangelogConvertTransform::work()
     /// Propagate empty chunk since it acts like a heartbeat
     auto rows = chunk.rows();
     if (!rows)
-    {
         transformEmptyChunk();
-        return;
-    }
-
-    bool log_metrics = false;
-    size_t total_row_count = 0, total_bytes_count = 0, total_buffer_size_in_cells = 0;
+    else
     {
         /// Constant columns are not supported directly during hashing keys. To make them work anyway, we materialize them.
         Columns materialized_columns;
@@ -173,26 +168,31 @@ void ChangelogConvertTransform::work()
             APPLY_FOR_HASH_KEY_VARIANTS(M)
 #undef M
         }
+    }
 
-        /// Every 30 seconds, log metrics
-        if (MonotonicMilliseconds::now() - last_log_ts > 30'000)
-        {
-            total_row_count = index.getTotalRowCount();
-            total_bytes_count = index.getTotalByteCountImpl();
-            total_buffer_size_in_cells = index.getBufferSizeInCells();
-            log_metrics = true;
-            last_log_ts = MonotonicMilliseconds::now();
-        }
+    /// Every 30 seconds, log metrics
+    bool log_metrics = false;
+    size_t total_row_count = 0, total_row_refs_bytes = 0, total_buffer_bytes = 0, total_buffer_cells = 0;
+    if (MonotonicMilliseconds::now() - last_log_ts > 30'000)
+    {
+        total_row_count = index.getTotalRowCount();
+        total_row_refs_bytes = total_row_count * sizeof(RefCountDataBlock<LightChunk>);
+        total_buffer_bytes = index.getBufferSizeInBytes();
+        total_buffer_cells = index.getBufferSizeInCells();
+        log_metrics = true;
+        last_log_ts = MonotonicMilliseconds::now();
     }
 
     if (log_metrics)
         LOG_INFO(
             logger,
-            "source blocks metrics: {}; hash table metrics: hash_total_rows={} hash_total_bytes={} hash_total_buffer_size={}; late_rows={}",
+            "Cached source blocks metrics: {} {}; hash table metrics: hash_total_rows={} hash_total_bytes={} (hash_total_row_refs_bytes={} hash_total_buffer_bytes={} hash_total_buffer_size={}); late_rows={}",
             cached_block_metrics.string(),
-            total_row_count,
-            total_bytes_count,
-            total_buffer_size_in_cells,
+            index.getTotalRowCount(),
+            total_buffer_bytes + total_row_refs_bytes,
+            total_buffer_bytes,
+            total_buffer_cells,
+            total_row_refs_bytes,
             late_rows);
 }
 

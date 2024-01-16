@@ -58,7 +58,7 @@ size_t BufferedStreamData::removeOldBuckets(std::string_view stream)
                 break;
         }
 
-        remaining_bytes = metrics.total_bytes;
+        remaining_bytes = metrics.totalBytes();
     }
 
     if (!buckets_to_remove.empty())
@@ -67,7 +67,7 @@ size_t BufferedStreamData::removeOldBuckets(std::string_view stream)
             "Removing data in range buckets={} in {} stream. Remaining bytes={} blocks={}",
             fmt::join(buckets_to_remove.begin(), buckets_to_remove.end(), ","),
             stream,
-            metrics.total_bytes,
+            metrics.totalBytes(),
             metrics.total_blocks);
 
     return remaining_bytes;

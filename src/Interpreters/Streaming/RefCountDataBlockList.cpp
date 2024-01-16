@@ -16,7 +16,9 @@ void RefCountDataBlockList<DataBlock>::serialize(
 {
     DB::writeIntBinary(min_ts, wb);
     DB::writeIntBinary(max_ts, wb);
-    DB::writeIntBinary(total_bytes, wb);
+    DB::writeIntBinary(total_rows, wb);
+    DB::writeIntBinary(total_metadata_bytes, wb);
+    DB::writeIntBinary(total_data_bytes, wb);
 
     UInt32 blocks_size = static_cast<UInt32>(blocks.size());
     DB::writeIntBinary<UInt32>(blocks_size, wb);
@@ -43,7 +45,9 @@ void RefCountDataBlockList<DataBlock>::deserialize(
 {
     DB::readIntBinary(min_ts, rb);
     DB::readIntBinary(max_ts, rb);
-    DB::readIntBinary(total_bytes, rb);
+    DB::readIntBinary(total_rows, rb);
+    DB::readIntBinary(total_metadata_bytes, rb);
+    DB::readIntBinary(total_data_bytes, rb);
 
     UInt32 block_size;
     DB::readIntBinary<UInt32>(block_size, rb);
