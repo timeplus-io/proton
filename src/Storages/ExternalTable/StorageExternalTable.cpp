@@ -1,19 +1,35 @@
+#include <Core/QueryProcessingStage.h>
+#include <Client/Connection.h>
+#include <Client/ConnectionParameters.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Storages/ExternalTable/StorageExternalTable.h>
 #include <Storages/StorageFactory.h>
+#include "Storages/ExternalTable/ClickHouse/ClickHouse.h"
 
 namespace DB
 {
 
 StorageExternalTable::StorageExternalTable(
         const StorageID & table_id_,
-        std::unique_ptr<ExternalTableSettings>  /*external_table_settings_*/,
+        std::unique_ptr<ExternalTableSettings>  settings,
         ContextPtr context_)
 : IStorage(table_id_)
 , WithContext(context_->getGlobalContext())
 {
-    std::cout << "External table created" << std::endl;
+    auto type = settings->type.value;
+    if (type == "clickhouse")
+        external_table = std::make_unique<ExternalTable::ClickHouse>(std::move(settings));
+    else
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unknown external table type: {}", type);
+}
+
+SinkToStoragePtr StorageExternalTable::write(
+    const ASTPtr & query,
+    const StorageMetadataPtr & metadata_snapshot,
+    ContextPtr context_)
+{
+    return external_table->write(query, metadata_snapshot, context_);
 }
 
 void registerStorageExternalTable(StorageFactory & factory)
@@ -39,5 +55,6 @@ void registerStorageExternalTable(StorageFactory & factory)
             .supports_schema_inference = true,
         });
 }
+
 
 }

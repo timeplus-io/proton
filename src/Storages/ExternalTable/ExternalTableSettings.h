@@ -23,4 +23,6 @@ struct ExternalTableSettings : public BaseSettings<ExternalTableSettingsTraits>
     void loadFromQuery(ASTStorage & storage_def);
 };
 
+using ExternalTableSettingsPtr = std::unique_ptr<ExternalTableSettings>;
+
 }
