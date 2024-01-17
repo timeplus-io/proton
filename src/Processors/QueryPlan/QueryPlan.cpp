@@ -198,8 +198,6 @@ QueryPipelineBuilderPtr QueryPlan::buildQueryPipeline(
     last_pipeline->addResources(std::move(resources));
 
     /// proton : starts
-    last_pipeline->setExecuteMode(queryExecuteMode(isStreaming(), query_context->getSettingsRef()));
-
     if (isStreaming() != last_pipeline->isStreaming())
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
