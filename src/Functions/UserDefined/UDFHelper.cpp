@@ -54,7 +54,7 @@ void validateUDFName(const String & func_name)
         throw Exception(ErrorCodes::UDF_INVALID_NAME, "UDF name's first char shall be an alphabetic or underscore");
 
     if (AggregateFunctionCombinatorPtr combinator = AggregateFunctionCombinatorFactory::instance().tryFindSuffix(func_name))
-        throw Exception(ErrorCodes::UDF_INVALID_NAME, "UDF name can not end up with " + combinator->getName() + ", because it is key word suffix");
+        throw Exception(fmt::format("UDF name can not end up with {}, because it is key word suffix", combinator->getName()), ErrorCodes::UDF_INVALID_NAME);
 }
 
 namespace
