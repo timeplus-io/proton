@@ -1,6 +1,6 @@
 <p align="center">
-  <img alt="Proton – open source, unified streaming and data processing engine for real-time analytics" src="design/proton-logo-white-bg.png"/> <br/>
-  <b> A streaming SQL engine, fast and lightweight </b> <br/><br/>
+  <img alt="Proton – An open-source, fast and lightweight streaming SQL engine, 🚀 powered by ClickHouse" src="design/proton-logo-white-bg.png"/> <br/>
+  <b> A fast and lightweight streaming SQL engine, 🚀 powered by ClickHouse</b> <br/><br/>
   📄 <a href="https://docs.timeplus.com/proton" target="_blank">Documentation</a>&nbsp;&nbsp;
   🚀 <a href="https://demo.timeplus.cloud/" target="_blank">Live Demo</a>&nbsp;&nbsp;
   🌎 <a href="https://timeplus.com/" target="_blank">Timeplus</a> <br/><br/>
@@ -24,15 +24,20 @@
   <a href="#need-help"><strong>Need help?</strong></a>
 </p>
 
-Proton is a streaming SQL engine, a fast and lightweight alternative to Apache Flink, 🚀 powered by ClickHouse. It helps data engineers and platform engineers solve real-time data pipelines and stream processing use cases. Proton also powers the [Timeplus Cloud](https://timeplus.com) streaming analytics platform.
+Proton is a streaming SQL engine, a fast and lightweight alternative to Apache Flink, 🚀 powered by ClickHouse. It enables developers to solve streaming data processing, routing and analytics challenges from Kafka, Redpanda and more sources, and send aggregated data to the downstream systems. Proton is core engine of [Timeplus](https://timeplus.com), which is a Cloud-native streaming analytics platform.
 
 ## 💪 Why use Proton?
 
-1. **[Apache Flink](https://github.com/apache/flink) or [ksqlDB](https://github.com/confluentinc/ksql) alternative.** Proton provides powerful streaming SQL functionalities, such as streaming ETL, tumble/hop/session windows, watermarks, materialized views, CDC and data revision processing, and more.
-2. **Fast.** Proton is written in C++, with optimized performance through SIMD. [For example](https://www.timeplus.com/post/scary-fast), on an Apple MacBookPro with M2 Max, Proton can deliver 90 million EPS, 4 millisecond end-to-end latency, and high cardinality aggregation with 1 million unique keys.
-3. **Lightweight.** Proton is a single binary (\<500MB). No JVM or any other dependencies. You can also run it with Docker, or on an AWS t2.nano instance (1 vCPU and 0.5 GiB memory).
-4. **Powered by the fast, resource efficient and mature [ClickHouse](https://github.com/clickhouse/clickhouse).**  Proton extends the historical data, storage, and computing functionality of ClickHouse with stream processing. Thousands of SQL functions are available in Proton. Billions of rows in are queried in milliseconds.
-5. **Best SQL engine for [Kafka](https://kafka.apache.org/)/[Redpanda](https://redpanda.com/)/[Confluent](https://www.confluent.io/).** Query the live data in Kafka or other compatiable streaming data platforms, with [external streams](https://docs.timeplus.com/proton-kafka).
+1. **A fast and lightweight [Apache Flink](https://github.com/apache/flink) or [ksqlDB](https://github.com/confluentinc/ksql) alternative**:  Proton provides powerful streaming SQL functionalities, such as streaming ETL, tumble/hop/session windows, watermarks, materialized views, CDC and data revision processing, and more.
+   
+2. **High-performance**:  Proton is written in C++, with optimized performance through SIMD. [For example](https://www.timeplus.com/post/scary-fast), on an Apple MacBookPro with M2 Max, Proton can deliver 90 million EPS, 4 millisecond end-to-end latency, and high cardinality aggregation with 1 million unique keys.
+   
+3. **Lightweight**:  Proton is a single binary (\<500MB). No JVM or any other dependencies. You can also run it with Docker, or on an AWS t2.nano instance (1 vCPU and 0.5 GiB memory).
+   
+4. **Powered by [ClickHouse](https://github.com/clickhouse/clickhouse)**:  Proton can connect stream processing to the historical data storage and processing in ClickHouse to enable a powerful unified processing in one single engine. With Proton, ClickHouse users can quickly connect, process and analyze streaming data with the same powerful compuation capabilties.
+   
+5. **Best streaming SQL engine for [Kafka](https://kafka.apache.org/) or [Redpanda](https://redpanda.com/)**: 
+ Query the live data in Kafka or other compatiable streaming data platforms, with [external streams](https://docs.timeplus.com/proton-kafka).
 
 ![Proton Architecture](design/proton-architecture.webp)
 See our [architecture](https://docs.timeplus.com/proton-architecture) doc for technical details and our [FAQ](https://docs.timeplus.com/proton-faq) for more information.
@@ -43,35 +48,27 @@ See our [architecture](https://docs.timeplus.com/proton-architecture) doc for te
 
 https://github.com/timeplus-io/proton/assets/5076438/8ceca355-d992-4798-b861-1e0334fc4438
 
-## ⚡ Quick Start
+## ⚡ Deployment
 
-### 🐙 Try Proton With Docker Compose:
-The [Docker Compose stack](https://github.com/timeplus-io/proton/tree/develop/examples/ecommerce) demonstrates how to read/write data in Kafka/Redpanda with external streams.
-
-### 🐳 Try Proton With Docker:
-
-```bash
-docker run -d --pull always --name proton ghcr.io/timeplus-io/proton:latest
-```
-
-### ⬇️ Install Proton Without Docker
-
-You can install Proton as a single binary via:
+### A single binary:
 
 ```shell
 curl -sSf https://raw.githubusercontent.com/timeplus-io/proton/develop/install.sh | sh
 ```
 
-For Mac users, you can also use [Homebrew](https://brew.sh/) to manage the install/upgrade/uninstall:
+### Docker:
 
-```shell
-brew tap timeplus-io/timeplus
-brew install proton
+```bash
+docker run -d --pull always --name proton ghcr.io/timeplus-io/proton:latest
 ```
 
-Then you can start the server via `proton server start` and start a new terminal window with `proton client` to start the SQL shell.
+### Docker Compose:
 
-### 🔎 Query a test stream
+The [Docker Compose stack](https://github.com/timeplus-io/proton/tree/develop/examples/ecommerce) demonstrates how to read/write data in Kafka/Redpanda with external streams.
+
+
+## 🔎 Usage
+You can start the server via `proton server start` and start a new terminal window with `proton client` to start the SQL shell.
 
 From `proton-client`, run the following SQL to create a stream of random data:
 
