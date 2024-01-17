@@ -74,7 +74,7 @@ One step to try Proton in [Timeplus Cloud](https://us.timeplus.cloud/)
 ## 🔎 Usage
 You can start the server via `proton server start` and start a new terminal window with `proton client` to start the SQL shell.
 
-From `proton-client`, run the following SQL to create a stream of random data:
+From `proton client`, run the following SQL to create a stream of random data:
 
 ```sql
 -- Create a stream with random data
