@@ -5,5 +5,5 @@
 namespace DB
 {
 struct Settings;
-ExecuteMode queryExecuteMode(bool is_streaming, const Settings & settings);
+ExecuteMode queryExecuteMode(bool is_streaming, bool is_subquery, const Settings & settings);
 }
