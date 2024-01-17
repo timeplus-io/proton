@@ -23,6 +23,7 @@
 #include <Interpreters/Streaming/IHashJoin.h>
 #include <Processors/Transforms/Streaming/JoinTransform.h>
 #include <Processors/Transforms/Streaming/JoinTransformWithAlignment.h>
+#include <Processors/Transforms/Streaming/JoinTransformWithStaticRightStream.h>
 /// proton : ends
 
 namespace DB
@@ -31,6 +32,7 @@ namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
     extern const int NOT_IMPLEMENTED;
+    extern const int UNSUPPORTED;
 }
 
 void QueryPipelineBuilder::checkInitialized()
@@ -613,6 +615,7 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     size_t max_block_size,
     size_t max_streams,
     size_t join_max_cached_bytes,
+    bool join_static_right_stream,
     Processors * collected_processors)
 {
     left->checkInitializedAndNotCompleted();
@@ -707,7 +710,15 @@ std::unique_ptr<QueryPipelineBuilder> QueryPipelineBuilder::joinPipelinesStreami
     {
         ProcessorPtr joining;
         auto hash_join = std::dynamic_pointer_cast<Streaming::IHashJoin>(join);
-        if (hash_join->getTableJoin().requiredJoinAlignment())
+        if (join_static_right_stream)
+        {
+            if (hash_join->getTableJoin().requiredJoinAlignment()) [[unlikely]]
+                throw Exception(ErrorCodes::UNSUPPORTED, "No support for join static right stream with alignment");
+
+            joining = std::make_shared<Streaming::JoinTransformWithStaticRightStream>(
+                left->getHeader(), right->getHeader(), out_header, std::move(hash_join), join_max_cached_bytes);
+        }
+        else if (hash_join->getTableJoin().requiredJoinAlignment())
         {
             joining = std::make_shared<Streaming::JoinTransformWithAlignment>(
                 left->getHeader(), right->getHeader(), out_header, std::move(hash_join), join_max_cached_bytes);

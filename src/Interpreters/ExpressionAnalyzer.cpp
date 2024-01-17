@@ -2363,9 +2363,9 @@ std::shared_ptr<IJoin> SelectQueryExpressionAnalyzer::chooseJoinAlgorithmStreami
 
     if (analyzed_join->allowParallelHashJoin())
         return std::make_shared<Streaming::ConcurrentHashJoin>(
-            analyzed_join, max_threads, std::move(left_join_stream_desc), std::move(right_join_stream_desc));
+            analyzed_join, max_threads, std::move(left_join_stream_desc), std::move(right_join_stream_desc), getContext()->getSettingsRef().join_static_right_stream);
     else
-        return std::make_shared<Streaming::HashJoin>(analyzed_join, std::move(left_join_stream_desc), std::move(right_join_stream_desc));
+        return std::make_shared<Streaming::HashJoin>(analyzed_join, std::move(left_join_stream_desc), std::move(right_join_stream_desc), getContext()->getSettingsRef().join_static_right_stream);
 }
 /// proton : ends
 

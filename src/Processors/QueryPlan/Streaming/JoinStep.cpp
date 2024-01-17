@@ -20,11 +20,13 @@ JoinStep::JoinStep(
     JoinPtr join_,
     size_t max_block_size_,
     size_t max_streams_,
-    size_t join_max_cached_bytes_)
+    size_t join_max_cached_bytes_,
+    bool join_static_right_stream_)
     : join(std::move(join_))
     , max_block_size(max_block_size_)
     , max_streams(max_streams_)
     , join_max_cached_bytes(join_max_cached_bytes_)
+    , join_static_right_stream(join_static_right_stream_)
 {
     input_streams = {left_stream_, right_stream_};
     output_stream = DataStream{
@@ -48,6 +50,7 @@ QueryPipelineBuilderPtr JoinStep::updatePipeline(QueryPipelineBuilders pipelines
         max_block_size,
         max_streams,
         join_max_cached_bytes,
+        join_static_right_stream,
         &processors);
 }
 

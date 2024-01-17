@@ -106,7 +106,8 @@ public:
     HashJoin(
         std::shared_ptr<TableJoin> table_join_,
         JoinStreamDescriptionPtr left_join_stream_desc_,
-        JoinStreamDescriptionPtr right_join_stream_desc_);
+        JoinStreamDescriptionPtr right_join_stream_desc_,
+        bool join_static_right_stream_);
 
     ~HashJoin() noexcept override;
 
@@ -436,6 +437,8 @@ private:
     bool emit_changelog = false;
     bool bidirectional_hash_join = true;
     bool range_bidirectional_hash_join = true;
+
+    bool join_static_right_stream = false;
 
     /// Delta column in right-left-join
     /// `rlj` -> right-left-join

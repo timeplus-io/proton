@@ -115,7 +115,8 @@ enum class ProcessorID : UInt32
     ChangelogTransformID = 94,
     ReplayStreamTransformID = 95,
     LightShufflingTransformID = 96,
-    StreamingJoinTransformWithAlignmentID = 44,
+    StreamingJoinTransformWithAlignmentID = 97,
+    StreamingJoinTransformWithStaticRightStreamID = 98,
 
     /// Aggregating transform
     AggregatingInOrderTransformID = 1'000,

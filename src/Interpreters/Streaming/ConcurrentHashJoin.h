@@ -18,7 +18,8 @@ public:
         std::shared_ptr<TableJoin> table_join_,
         size_t slots_,
         JoinStreamDescriptionPtr left_join_stream_desc_,
-        JoinStreamDescriptionPtr right_join_stream_desc_);
+        JoinStreamDescriptionPtr right_join_stream_desc_,
+        bool join_static_right_stream_);
 
     ~ConcurrentHashJoin() override = default;
 
@@ -112,6 +113,7 @@ private:
     size_t slots;
     std::vector<std::shared_ptr<InternalHashJoin>> hash_joins;
     size_t num_used_hash_joins; /// Actual number of used hash joins
+    bool join_static_right_stream;
 
     std::vector<size_t> left_key_column_positions;
     std::vector<size_t> right_key_column_positions;

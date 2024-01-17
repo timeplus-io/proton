@@ -37,17 +37,19 @@ ConcurrentHashJoin::ConcurrentHashJoin(
     std::shared_ptr<TableJoin> table_join_,
     size_t slots_,
     JoinStreamDescriptionPtr left_join_stream_desc_,
-    JoinStreamDescriptionPtr right_join_stream_desc_)
+    JoinStreamDescriptionPtr right_join_stream_desc_,
+    bool join_static_right_stream_)
     : table_join(table_join_)
     , left_join_stream_desc(std::move(left_join_stream_desc_))
     , right_join_stream_desc(std::move(right_join_stream_desc_))
     , slots(getSlots(slots_))
     , num_used_hash_joins(slots_)
+    , join_static_right_stream(join_static_right_stream_)
 {
     for (size_t i = 0; i < slots; ++i)
     {
         auto inner_hash_join = std::make_shared<InternalHashJoin>();
-        inner_hash_join->data = std::make_unique<HashJoin>(table_join, left_join_stream_desc, right_join_stream_desc);
+        inner_hash_join->data = std::make_unique<HashJoin>(table_join, left_join_stream_desc, right_join_stream_desc, join_static_right_stream);
         hash_joins.emplace_back(std::move(inner_hash_join));
     }
 }
@@ -72,7 +74,7 @@ void ConcurrentHashJoin::rescale(size_t slots_)
         for (; slots < new_slots; ++slots)
         {
             auto inner_hash_join = std::make_shared<InternalHashJoin>();
-            inner_hash_join->data = std::make_unique<HashJoin>(table_join, left_join_stream_desc, right_join_stream_desc);
+            inner_hash_join->data = std::make_unique<HashJoin>(table_join, left_join_stream_desc, right_join_stream_desc, join_static_right_stream);
             hash_joins.emplace_back(std::move(inner_hash_join));
         }
     }

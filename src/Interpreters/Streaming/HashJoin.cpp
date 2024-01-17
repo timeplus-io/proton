@@ -827,7 +827,8 @@ void HashJoin::validate(const JoinCombinationType & join_combination)
 HashJoin::HashJoin(
     std::shared_ptr<TableJoin> table_join_,
     JoinStreamDescriptionPtr left_join_stream_desc_,
-    JoinStreamDescriptionPtr right_join_stream_desc_)
+    JoinStreamDescriptionPtr right_join_stream_desc_,
+    bool join_static_right_stream_)
     : table_join(std::move(table_join_))
     , kind(table_join->kind())
     , strictness(table_join->strictness())
@@ -835,6 +836,7 @@ HashJoin::HashJoin(
     , asof_inequality(table_join->getAsofInequality())
     , right_data(std::move(right_join_stream_desc_))
     , left_data(std::move(left_join_stream_desc_))
+    , join_static_right_stream(join_static_right_stream_)
     , logger(&Poco::Logger::get("StreamingHashJoin"))
 {
     init();
@@ -884,16 +886,21 @@ void HashJoin::init()
     streaming_kind = Streaming::toJoinKind(kind);
     streaming_strictness = Streaming::toJoinStrictness(strictness, table_join->isRangeJoin());
 
-    emit_changelog
-        = isJoinResultChangelog(left_data.join_stream_desc->data_stream_semantic, right_data.join_stream_desc->data_stream_semantic);
+    reviseJoinStrictness();
 
-    retract_push_down
-        = (isVersionedKeyedStorage(left_data.join_stream_desc->data_stream_semantic)
-           && isVersionedKeyedStorage(right_data.join_stream_desc->data_stream_semantic) && right_data.join_stream_desc->hasPrimaryKey());
+    if (!join_static_right_stream)
+    {
+        emit_changelog
+            = isJoinResultChangelog(left_data.join_stream_desc->data_stream_semantic, right_data.join_stream_desc->data_stream_semantic);
 
-    retract_push_down
-        |= (isChangelogKeyedStorage(left_data.join_stream_desc->data_stream_semantic)
-            && isChangelogKeyedStorage(right_data.join_stream_desc->data_stream_semantic) && right_data.join_stream_desc->hasPrimaryKey());
+        retract_push_down
+            = (isVersionedKeyedStorage(left_data.join_stream_desc->data_stream_semantic)
+            && isVersionedKeyedStorage(right_data.join_stream_desc->data_stream_semantic) && right_data.join_stream_desc->hasPrimaryKey());
+
+        retract_push_down
+            |= (isChangelogKeyedStorage(left_data.join_stream_desc->data_stream_semantic)
+                && isChangelogKeyedStorage(right_data.join_stream_desc->data_stream_semantic) && right_data.join_stream_desc->hasPrimaryKey());
+    }
 
     /// So far there are following cases which doesn't require bidirectional join
     /// SELECT * FROM append_only INNER ALL JOIN versioned_kv ON append_only.key = versioned_kv.key;
@@ -904,20 +911,11 @@ void HashJoin::init()
     /// `ASOF` keeps multiple versions and `LATEST` only keeps the latest version for the join key
     auto data_enrichment_join = (left_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Append
                                  && right_data.join_stream_desc->data_stream_semantic == DataStreamSemantic::Changelog)
-        || streaming_strictness == Strictness::Asof || streaming_strictness == Strictness::Latest;
+        || streaming_strictness == Strictness::Asof || streaming_strictness == Strictness::Latest || join_static_right_stream;
 
     bidirectional_hash_join = !data_enrichment_join;
 
-    /// append-only inner join append-only on ... and date_diff_within(10s)
-    /// In case when emitChangeLog()
-    if (streaming_strictness == Strictness::Range
-        && (left_data.join_stream_desc->data_stream_semantic != DataStreamSemantic::Append
-            || right_data.join_stream_desc->data_stream_semantic != DataStreamSemantic::Append))
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Stream range join only support append-only streams");
-
     range_bidirectional_hash_join = bidirectional_hash_join && (streaming_strictness == Strictness::Range);
-
-    reviseJoinStrictness();
 
     /// If right stream is key-value data stream semantic and our query plan pushes down the changelog transform
     /// initRightPrimaryKeyHashTable();
@@ -2355,8 +2353,11 @@ void HashJoin::reviseJoinStrictness()
 
     if (streaming_strictness == Strictness::Range)
     {
-        if (!isAppendDataStream(right_data.join_stream_desc->data_stream_semantic))
+        if (!isAppendDataStream(left_data.join_stream_desc->data_stream_semantic) || !isAppendDataStream(right_data.join_stream_desc->data_stream_semantic))
             throw Exception(ErrorCodes::UNSUPPORTED, "Range join keyed stream or changelog stream is not supported");
+
+        if (join_static_right_stream)
+            throw Exception(ErrorCodes::UNSUPPORTED, "Range join static stream is not supported");
 
         return;
     }
@@ -2451,11 +2452,14 @@ void HashJoin::checkJoinSemantic() const
                 ErrorCodes::NOT_IMPLEMENTED, "Streaming join doesn't support predicates in JOIN ON clause. Use WHERE predicate instead");
     }
 
-    validate(
-        {left_data.join_stream_desc->data_stream_semantic.toStorageSemantic(),
-         kind,
-         strictness,
-         right_data.join_stream_desc->data_stream_semantic.toStorageSemantic()});
+    /// If join_static_right_stream is true, enforce its behavior same as `append join table`, regardless of the storage semantic on left/right side,
+    /// always is a data enrichment join.
+    if (!join_static_right_stream)
+        validate(
+            {left_data.join_stream_desc->data_stream_semantic.toStorageSemantic(),
+            kind,
+            strictness,
+            right_data.join_stream_desc->data_stream_semantic.toStorageSemantic()});
 }
 
 HashMapSizes HashJoin::sizesOfMapsVariant(const MapsVariant & maps_variant) const

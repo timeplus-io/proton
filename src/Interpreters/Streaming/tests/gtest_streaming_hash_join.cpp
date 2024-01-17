@@ -246,7 +246,7 @@ std::shared_ptr<Streaming::HashJoin> initHashJoin(
         tables[1], right_header, tables[1].output_data_stream_semantic, keep_versions, 0, 0);
     right_join_stream_desc->calculateColumnPositions(table_join->strictness());
 
-    auto join = std::make_shared<Streaming::HashJoin>(table_join, std::move(left_join_stream_desc), std::move(right_join_stream_desc));
+    auto join = std::make_shared<Streaming::HashJoin>(table_join, std::move(left_join_stream_desc), std::move(right_join_stream_desc), false);
 
     auto output_header
         = Streaming::JoinTransform::transformHeader(left_header.cloneEmpty(), std::dynamic_pointer_cast<Streaming::IHashJoin>(join));
