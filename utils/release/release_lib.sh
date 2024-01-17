@@ -56,9 +56,10 @@ function gen_revision_author {
                 VERSION_PATCH=1
             elif [ "$TYPE" == "patch" ] || [ "$TYPE" == "bugfix" ]; then
                 # VERSION_REVISION not incremented in new scheme.
-                if [ "$VERSION_MAJOR" -eq "1" ] && [ "$VERSION_MINOR" -eq "1" ]; then
+                # if [ "$VERSION_MAJOR" -eq "1" ] && [ "$VERSION_MINOR" -eq "1" ]; then
+                # Enable VERSION_REVISION incrementation for checkpointing
                     VERSION_REVISION=$(($VERSION_REVISION + 1))
-                fi
+                # fi
 
                 VERSION_PATCH=$(($VERSION_PATCH + 1))
             elif [ "$TYPE" == "env" ]; then

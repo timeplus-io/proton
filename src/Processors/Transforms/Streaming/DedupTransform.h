@@ -4,7 +4,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/Streaming/TableFunctionDescription_fwd.h>
 #include <Processors/ISimpleTransform.h>
-#include <base/SerdeTag.h>
+#include <Common/serde.h>
 #include <Common/HashTable/HashSet.h>
 #include <Common/SipHash.h>
 

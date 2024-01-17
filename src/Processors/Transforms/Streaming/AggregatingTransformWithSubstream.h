@@ -29,7 +29,7 @@ SERDE struct SubstreamContext
     /// are below this watermark can be safely GCed.
     SERDE Int64 finalized_watermark = INVALID_WATERMARK;
 
-    SERDE Int64 version = 0;
+    SERDE Int64 emited_version = 0;
 
     SERDE UInt64 rows_since_last_finalization = 0;
 
@@ -37,8 +37,8 @@ SERDE struct SubstreamContext
     SERDE struct AnyField
     {
         std::any field;
-        std::function<void(const std::any &, WriteBuffer &)> serializer;
-        std::function<void(std::any &, ReadBuffer &)> deserializer;
+        std::function<void(const std::any &, WriteBuffer &, VersionType)> serializer;
+        std::function<void(std::any &, ReadBuffer &, VersionType)> deserializer;
     } any_field;
 
     explicit SubstreamContext(AggregatingTransformWithSubstream * aggr, const SubstreamID & id_ = {}) : aggregating_transform(aggr), id(id_)
@@ -46,9 +46,9 @@ SERDE struct SubstreamContext
         assert(aggregating_transform);
     }
 
-    void serialize(WriteBuffer & wb) const;
+    void serialize(WriteBuffer & wb, VersionType version) const;
 
-    void deserialize(ReadBuffer & rb);
+    void deserialize(ReadBuffer & rb, VersionType version);
 
     bool hasField() const { return any_field.field.has_value(); }
 

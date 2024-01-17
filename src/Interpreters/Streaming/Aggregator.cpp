@@ -57,6 +57,7 @@ namespace ErrorCodes
     extern const int RECOVER_CHECKPOINT_FAILED;
     extern const int AGGREGATE_FUNCTION_NOT_APPLICABLE;
     extern const int NOT_IMPLEMENTED;
+    extern const int SERVER_REVISION_IS_TOO_OLD;
 }
 
 namespace Streaming
@@ -3336,13 +3337,15 @@ void Aggregator::recover(AggregatedDataVariants & data_variants, ReadBuffer & rb
 {
     /// Serialization layout
     /// [version] + [states layout]
-    VersionType version = 0;
-    readIntBinary(version, rb);
+    VersionType recovered_version = 0;
+    readIntBinary(recovered_version, rb);
+    assert(recovered_version <= getVersion());
 
     /// FIXME: Legacy layout needs to be cleaned after no use
-    if (version <= 1)
+    if (recovered_version <= 1)
         return doRecoverLegacy(data_variants, rb);
 
+    /// Recover STATE V2
     return doRecover(data_variants, rb);
 }
 
@@ -3735,10 +3738,13 @@ bool Aggregator::shouldClearStates(ConvertAction action, bool final_) const
     }
 }
 
-VersionType Aggregator::getVersionFromRevision(UInt64 revision [[maybe_unused]]) const
+VersionType Aggregator::getVersionFromRevision(UInt64 revision) const
 {
-    /// FIXME: Enable @p revision ? always 1 for now
-    return static_cast<VersionType>(2);
+    if (revision >= STATE_V2_MIN_REVISION)
+        return static_cast<VersionType>(2);
+    else
+        throw Exception(
+            ErrorCodes::SERVER_REVISION_IS_TOO_OLD, "State of AggregatedDataVariants is not yet implemented in revision {}", revision);
 }
 
 VersionType Aggregator::getVersion() const

@@ -5,7 +5,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Processors/IProcessor.h>
 #include <Common/Stopwatch.h>
-#include <base/SerdeTag.h>
+#include <Common/serde.h>
 
 #include <any>
 
@@ -73,7 +73,7 @@ SERDE struct ManyAggregatedData
     SERDE std::atomic<Int64> finalized_watermark = INVALID_WATERMARK;
     SERDE std::atomic<Int64> finalized_window_end = INVALID_WATERMARK;
 
-    SERDE std::atomic<Int64> version = 0;
+    SERDE std::atomic<Int64> emited_version = 0;
 
     SERDE std::vector<std::unique_ptr<std::atomic<UInt64>>> rows_since_last_finalizations;
 
@@ -84,8 +84,8 @@ SERDE struct ManyAggregatedData
     SERDE struct AnyField
     {
         SERDE std::any field;
-        std::function<void(const std::any &, WriteBuffer &)> serializer;
-        std::function<void(std::any &, ReadBuffer &)> deserializer;
+        std::function<void(const std::any &, WriteBuffer &, VersionType)> serializer;
+        std::function<void(std::any &, ReadBuffer &, VersionType)> deserializer;
     } any_field;
 
     explicit ManyAggregatedData(size_t num_threads) : variants(num_threads), watermarks(num_threads, INVALID_WATERMARK)
