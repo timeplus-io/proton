@@ -626,14 +626,14 @@ struct ExecutorImpl
 
     /// Return {removed, last_removed_watermark, remaining_size}
     template <DestroyDataFunc<Data>... F>
-    void removeBucketsBefore(Int64 watermark, F &&... destory)
+    void removeBucketsBefore(Int64 watermark, F &&... destroy)
     {
         auto destroy_wrapper = [&](DataPtr & data) {
             if (nullptr == data)
                 return;
 
             Data & data_ref = *reinterpret_cast<Data *>(data);
-            (destory(data_ref), ...);
+            (destroy(data_ref), ...);
 
             data = nullptr;
         };

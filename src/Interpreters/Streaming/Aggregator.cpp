@@ -2355,7 +2355,7 @@ void NO_INLINE Aggregator::mergeDataImpl(
         {
             /// If there are multiple sources, there are more than one AggregatedDataVariant. Aggregator always creates a new AggregatedDataVariant and merge all other
             /// AggregatedDataVariants to the new created one. After finalize(), it does not clean up aggregate state except the new create AggregatedDataVariant.
-            /// If it does not alloc new memory for the 'dst' (i.e. aggregate state of the new AggregatedDataVariant which get destoryed after finalize()) but reuse
+            /// If it does not alloc new memory for the 'dst' (i.e. aggregate state of the new AggregatedDataVariant which get destroyed after finalize()) but reuse
             /// that from the 'src' to store the final aggregated result, it will cause the data from other AggregatedDataVariant will be merged multiple times and
             /// generate incorrect aggregated result.
             dst = arena->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
