@@ -148,11 +148,14 @@ private:
     bool snapshot_mode = false;
     Poco::Logger * log;
 
+    String forwarded_for;
+
     String client_name;
     UInt64 client_version_major = 0;
     UInt64 client_version_minor = 0;
     UInt64 client_version_patch = 0;
     UInt32 client_tcp_protocol_version = 0;
+    String quota_key;
 
     /// Connection settings, which are extracted from a context.
     bool send_exception_with_stack_trace = true;
@@ -183,7 +186,6 @@ private:
     bool is_interserver_mode = false;
     String salt;
     String cluster;
-    String cluster_secret;
 
     std::mutex task_callback_mutex;
     std::mutex fatal_error_mutex;
@@ -205,8 +207,11 @@ private:
 
     void extractConnectionSettingsFromContext(const ContextPtr & context);
 
+    std::unique_ptr<Session> makeSession();
+
     bool receiveProxyHeader();
     void receiveHello();
+    void receiveAddendum();
     bool receivePacket();
     void receiveQuery();
     void receiveIgnoredPartUUIDs();
@@ -249,6 +254,8 @@ private:
     void sendTotals(const Block & totals);
     void sendExtremes(const Block & extremes);
     void sendProfileEvents();
+    void sendSelectProfileEvents();
+    void sendInsertProfileEvents();
 
     /// Creates state.block_in/block_out for blocks read/write, depending on whether compression is enabled.
     void initBlockInput();
