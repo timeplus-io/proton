@@ -2721,6 +2721,9 @@ void HashJoin::JoinResults::serialize(WriteBuffer & wb, VersionType version, con
     std::scoped_lock lock(mutex);
     assert(maps);
     serializeHashJoinMapsVariants(blocks, *maps, wb, version, sample_block, join);
+
+    if (version <= CachedBlockMetrics::HAS_STATE_MAX_VERSION)
+        DB::serialize(metrics, wb, version);
 }
 
 void HashJoin::JoinResults::deserialize(ReadBuffer & rb, VersionType version, const HashJoin & join)

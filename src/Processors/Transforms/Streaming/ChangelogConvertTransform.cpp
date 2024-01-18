@@ -418,6 +418,9 @@ void ChangelogConvertTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
             wb);
 
         DB::writeIntBinary(late_rows, wb);
+
+        if (version <= CachedBlockMetrics::HAS_STATE_MAX_VERSION)
+            DB::serialize(cached_block_metrics, wb, getVersion());
     });
 }
 

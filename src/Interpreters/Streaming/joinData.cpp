@@ -335,6 +335,9 @@ void BufferedStreamData::serialize(
         assert(hash_blocks);
         DB::serialize(*hash_blocks, wb, version, sample_block, *join, serialized_row_ref_list_multiple_to_indices);
     }
+
+    if (version <= CachedBlockMetrics::HAS_STATE_MAX_VERSION)
+        DB::serialize(metrics, wb, version);
 }
 
 void BufferedStreamData::deserialize(
