@@ -2722,7 +2722,7 @@ void HashJoin::JoinResults::serialize(WriteBuffer & wb, VersionType version, con
     assert(maps);
     serializeHashJoinMapsVariants(blocks, *maps, wb, version, sample_block, join);
 
-    if (version <= CachedBlockMetrics::HAS_STATE_MAX_VERSION)
+    if (version <= CachedBlockMetrics::SERDE_REQUIRED_MAX_VERSION)
         DB::serialize(metrics, wb, version);
 }
 
@@ -2732,7 +2732,7 @@ void HashJoin::JoinResults::deserialize(ReadBuffer & rb, VersionType version, co
     assert(maps);
     deserializeHashJoinMapsVariants(blocks, *maps, rb, version, pool, sample_block, join);
 
-    if (version <= CachedBlockMetrics::HAS_STATE_MAX_VERSION)
+    if (version <= CachedBlockMetrics::SERDE_REQUIRED_MAX_VERSION)
         DB::deserialize(metrics, rb, version);
 }
 

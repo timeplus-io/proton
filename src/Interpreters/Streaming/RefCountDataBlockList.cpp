@@ -14,7 +14,13 @@ template <typename DataBlock>
 void RefCountDataBlockList<DataBlock>::serialize(
     WriteBuffer & wb, VersionType version, const Block & header, SerializedBlocksToIndices * serialized_blocks_to_indices) const
 {
-    assert(version >= STATE_V2_MIN_VERSION);
+    if (version < STATE_V2_MIN_VERSION)
+    {
+        /// V1 layout [min_ts, max_ts, total_bytes]
+        DB::writeIntBinary(min_ts, wb);
+        DB::writeIntBinary(max_ts, wb);
+        DB::writeIntBinary(total_data_bytes, wb);
+    }
 
     UInt32 blocks_size = static_cast<UInt32>(blocks.size());
     DB::writeIntBinary<UInt32>(blocks_size, wb);
@@ -22,7 +28,7 @@ void RefCountDataBlockList<DataBlock>::serialize(
     if (blocks_size == 0)
         return;
 
-    SimpleNativeWriter<DataBlock> writer(wb, header, ProtonRevision::getVersionRevision());
+    SimpleNativeWriter<DataBlock> writer(wb, header, version);
     for (UInt32 i = 0; const auto & block_with_ref : blocks)
     {
         writer.write(block_with_ref.block);
@@ -53,7 +59,7 @@ void RefCountDataBlockList<DataBlock>::deserialize(
     if (block_size == 0)
         return;
 
-    SimpleNativeReader<DataBlock> reader(rb, header, ProtonRevision::getVersionRevision());
+    SimpleNativeReader<DataBlock> reader(rb, header, version);
     for (UInt32 i = 0; i < block_size; ++i)
     {
         auto data_block = reader.read();
@@ -61,7 +67,10 @@ void RefCountDataBlockList<DataBlock>::deserialize(
         DB::readIntBinary(elem.refcnt, rb);
         assert(elem.refcnt > 0);
 
-        updateMetrics(elem.block);
+        /// Update metrics back via `updateMetrics`
+        if (version >= STATE_V2_MIN_VERSION)
+            updateMetrics(elem.block);
+
         blocks.push_back(std::move(elem));
 
         if (deserialized_indices_with_block)

@@ -419,7 +419,7 @@ void ChangelogConvertTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 
         DB::writeIntBinary(late_rows, wb);
 
-        if (version <= CachedBlockMetrics::HAS_STATE_MAX_VERSION)
+        if (version <= CachedBlockMetrics::SERDE_REQUIRED_MAX_VERSION)
             DB::serialize(cached_block_metrics, wb, getVersion());
     });
 }
@@ -441,7 +441,7 @@ void ChangelogConvertTransform::recover(CheckpointContextPtr ckpt_ctx)
 
         DB::readIntBinary(late_rows, rb);
 
-        if (version_ <= CachedBlockMetrics::HAS_STATE_MAX_VERSION)
+        if (version_ <= CachedBlockMetrics::SERDE_REQUIRED_MAX_VERSION)
             DB::deserialize(cached_block_metrics, rb, version_);
     });
 }

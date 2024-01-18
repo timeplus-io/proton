@@ -336,7 +336,7 @@ void BufferedStreamData::serialize(
         DB::serialize(*hash_blocks, wb, version, sample_block, *join, serialized_row_ref_list_multiple_to_indices);
     }
 
-    if (version <= CachedBlockMetrics::HAS_STATE_MAX_VERSION)
+    if (version <= CachedBlockMetrics::SERDE_REQUIRED_MAX_VERSION)
         DB::serialize(metrics, wb, version);
 }
 
@@ -373,7 +373,7 @@ void BufferedStreamData::deserialize(
         DB::deserialize(*iter->second, rb, version, sample_block, *join, deserialized_indices_to_row_ref_list_multiple);
     }
 
-    if (version <= CachedBlockMetrics::HAS_STATE_MAX_VERSION)
+    if (version <= CachedBlockMetrics::SERDE_REQUIRED_MAX_VERSION)
         DB::deserialize(metrics, rb, version);
 }
 

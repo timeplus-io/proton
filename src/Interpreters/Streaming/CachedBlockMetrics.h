@@ -34,7 +34,7 @@ struct CachedBlockMetrics
     }
 
     /// [Legacy] We don't need to serialize this anymore on new impl, since the metrics is volated. will update it back during recover 
-    static constexpr VersionType HAS_STATE_MAX_VERSION = 1;
+    static constexpr VersionType SERDE_REQUIRED_MAX_VERSION = 1;
     void serialize(WriteBuffer & wb, VersionType version) const;
     void deserialize(ReadBuffer & rb, VersionType version);
 };
