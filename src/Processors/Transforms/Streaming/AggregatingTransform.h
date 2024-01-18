@@ -80,7 +80,7 @@ SERDE struct ManyAggregatedData
     std::atomic<UInt32> ckpt_requested = 0;
     std::atomic<AggregatingTransform *> last_checkpointing_transform = nullptr;
 
-    std::atomic<Int64> last_log_ts = 0;
+    std::atomic<Int64> last_log_ts = MonotonicMilliseconds::now();
 
     /// Stuff additional data context to it if needed
     SERDE struct AnyField
@@ -191,7 +191,7 @@ private:
     /// Try log aggregating metrics
     void logAggregatingMetrics();
 
-    void logAggregatingMetricsWithoutLock();
+    void logAggregatingMetricsWithoutLock(Int64 start_ts = MonotonicMilliseconds::now());
 
 protected:
     void emitVersion(Chunk & chunk);
@@ -265,7 +265,7 @@ protected:
     /// continue to try in the next processing (it's efficient, avoiding lock waiting)
     std::optional<Int64> try_finalizing_watermark;
 
-    static constexpr Int64 log_metrics_interval_ms = 30'000;
+    static constexpr Int64 log_metrics_interval_ms = 60'000;
 };
 }
 }

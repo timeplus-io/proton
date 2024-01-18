@@ -342,7 +342,7 @@ void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
         many_data->variants.size(),
         many_data->finalized_watermark.load(std::memory_order_relaxed));
 
-    if (MonotonicMilliseconds::now() - many_data->last_log_ts.load() > log_metrics_interval_ms)
+    if (MonotonicMilliseconds::now() - many_data->last_log_ts.load(std::memory_order_relaxed) > log_metrics_interval_ms)
         logAggregatingMetricsWithoutLock();
 }
 
@@ -410,35 +410,39 @@ bool AggregatingTransform::propagateCheckpointAndReset()
 
 void AggregatingTransform::logAggregatingMetrics()
 {
-    if (MonotonicMilliseconds::now() - many_data->last_log_ts.load() <= log_metrics_interval_ms)
+    auto start_ts = MonotonicMilliseconds::now();
+    if (start_ts - many_data->last_log_ts.load(std::memory_order_relaxed) <= log_metrics_interval_ms)
         return;
 
     std::unique_lock<std::mutex> lock(many_data->finalizing_mutex, std::try_to_lock);
     if (!lock.owns_lock())
         return; /// Anothor thread is finalizing, so we try in next `work()`
 
+    /// Check logged by other threads
+    if (MonotonicMilliseconds::now() - many_data->last_log_ts.load(std::memory_order_relaxed) <= log_metrics_interval_ms)
+        return;
+
     auto lock_holders = lockAllDataVariants();
     if (isCancelled())
         return;
 
-    logAggregatingMetricsWithoutLock();
+    logAggregatingMetricsWithoutLock(start_ts);
 }
 
-void AggregatingTransform::logAggregatingMetricsWithoutLock()
+void AggregatingTransform::logAggregatingMetricsWithoutLock(Int64 start_ts)
 {
-    auto start = MonotonicMilliseconds::now();
     AggregatedDataMetrics aggregated_data_metrics;
     for (const auto & data_variants : many_data->variants)
-        data_variants->updateMetrics(aggregated_data_metrics);
+        params->aggregator.updateMetrics(*data_variants, aggregated_data_metrics);
 
-    auto end = MonotonicMilliseconds::now();
+    auto end_ts = MonotonicMilliseconds::now();
     LOG_INFO(
         log,
         "Took {} milliseconds to log metrics. Aggregated data metrics: {}",
-        end - start,
+        end_ts - start_ts,
         aggregated_data_metrics.string());
 
-    many_data->last_log_ts.store(end);
+    many_data->last_log_ts.store(end_ts, std::memory_order_relaxed);
 }
 
 std::vector<std::unique_lock<std::timed_mutex>> AggregatingTransform::lockAllDataVariants()

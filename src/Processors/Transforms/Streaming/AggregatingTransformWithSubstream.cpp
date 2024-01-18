@@ -147,7 +147,7 @@ void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamCont
         auto start = MonotonicMilliseconds::now();
         AggregatedDataMetrics aggregated_data_metrics;
         for (const auto & [_, ctx] : substream_contexts)
-            ctx->variants.updateMetrics(aggregated_data_metrics);
+            params->aggregator.updateMetrics(ctx->variants, aggregated_data_metrics);
         auto end = MonotonicMilliseconds::now();
 
         LOG_INFO(

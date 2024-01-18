@@ -558,8 +558,6 @@ struct AggregatedDataVariants : private boost::noncopyable
                 throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
         }
     }
-
-    void updateMetrics(AggregatedDataMetrics & metrics) const;
 };
 
 using AggregatedDataVariantsPtr = std::shared_ptr<AggregatedDataVariants>;
@@ -859,6 +857,8 @@ public:
 
     /// proton: starts
     Params & getParams() { return params; }
+
+    void updateMetrics(const AggregatedDataVariants & variants, AggregatedDataMetrics & metrics) const;
     /// proton: ends
 
 private:

@@ -143,39 +143,6 @@ void AggregatedDataVariants::convertToTwoLevel()
     }
 }
 
-void AggregatedDataVariants::updateMetrics(AggregatedDataMetrics & metrics) const
-{
-    switch (type)
-    {
-        case Type::EMPTY: break;
-        case Type::without_key:
-        {
-            assert(aggregator);
-            metrics.total_aggregated_rows += 1;
-            metrics.total_bytes_of_aggregate_states += aggregator->total_size_of_aggregate_states;
-            break;
-        }
-
-    #define M(NAME, IS_TWO_LEVEL) \
-        case Type::NAME: \
-        { \
-            assert(aggregator); \
-            auto & table = NAME->data; \
-            metrics.total_aggregated_rows += table.size(); \
-            metrics.hash_buffer_bytes += table.getBufferSizeInBytes(); \
-            metrics.hash_buffer_cells += table.getBufferSizeInCells(); \
-            metrics.total_bytes_of_aggregate_states += table.size() * aggregator->total_size_of_aggregate_states; \
-            break; \
-        }
-
-        APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
-    #undef M
-    }
-
-    for (const auto & arena : aggregates_pools)
-        metrics.total_bytes_in_arena += arena->size();
-}
-
 Block Aggregator::getHeader(bool final) const
 {
     return params.getHeader(final);
@@ -4371,6 +4338,37 @@ bool Aggregator::checkAndProcessResult(AggregatedDataVariants & result, bool & n
     }
 
     return false;
+}
+
+void Aggregator::updateMetrics(const AggregatedDataVariants & variants, AggregatedDataMetrics & metrics) const
+{
+    switch (variants.type)
+    {
+        case AggregatedDataVariants::Type::EMPTY: break;
+        case AggregatedDataVariants::Type::without_key:
+        {
+            metrics.total_aggregated_rows += 1;
+            metrics.total_bytes_of_aggregate_states += total_size_of_aggregate_states;
+            break;
+        }
+
+    #define M(NAME, IS_TWO_LEVEL) \
+        case AggregatedDataVariants::Type::NAME: \
+        { \
+            auto & table = variants.NAME->data; \
+            metrics.total_aggregated_rows += table.size(); \
+            metrics.hash_buffer_bytes += table.getBufferSizeInBytes(); \
+            metrics.hash_buffer_cells += table.getBufferSizeInCells(); \
+            metrics.total_bytes_of_aggregate_states += table.size() * total_size_of_aggregate_states; \
+            break; \
+        }
+
+        APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
+    #undef M
+    }
+
+    for (const auto & arena : variants.aggregates_pools)
+        metrics.total_bytes_in_arena += arena->size();
 }
 /// proton: ends
 }
