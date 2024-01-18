@@ -34,7 +34,7 @@ Proton is a streaming SQL engine, a fast and lightweight alternative to Apache F
    
 3. **Lightweight**:  Proton is a single binary (\<500MB). No JVM or any other dependencies. You can also run it with Docker, or on an AWS t2.nano instance (1 vCPU and 0.5 GiB memory).
    
-4. **Powered by [ClickHouse](https://github.com/clickhouse/clickhouse)**:  Proton can connect stream processing to the historical data storage and processing in ClickHouse to enable a powerful unified processing in one single engine. With Proton, ClickHouse users can quickly connect, process and analyze streaming data with the same powerful compuation capabilties.
+4. **Powered by the fast, resource efficient and mature [ClickHouse](https://github.com/clickhouse/clickhouse).**  Proton extends the historical data, storage, and computing functionality of ClickHouse with stream processing. Thousands of SQL functions are available in Proton. Billions of rows in are queried in milliseconds.
    
 5. **Best streaming SQL engine for [Kafka](https://kafka.apache.org/) or [Redpanda](https://redpanda.com/)**: 
  Query the live data in Kafka or other compatiable streaming data platforms, with [external streams](https://docs.timeplus.com/proton-kafka).
