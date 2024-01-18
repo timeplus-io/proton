@@ -295,7 +295,7 @@ tests:
           from v_12180413 settings checkpoint_interval=1;
       - client: python
         query_type: table
-        depends_on_stream: 12180413213
+        depends_on: 12180413213
         kill: '12180413213'
         kill_wait: 3
         wait: 3
