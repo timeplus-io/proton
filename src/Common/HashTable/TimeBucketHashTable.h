@@ -368,7 +368,17 @@ public:
     {
         size_t res = 0;
         for (const auto & p : impls)
-            res += p.getBufferSizeInBytes();
+            res += p.second.getBufferSizeInBytes();
+
+        return res;
+    }
+
+    size_t getBufferSizeInCells() const
+    {
+        size_t res = 0;
+        for (const auto & p : impls)
+            res += p.second.getBufferSizeInCells();
+
         return res;
     }
 

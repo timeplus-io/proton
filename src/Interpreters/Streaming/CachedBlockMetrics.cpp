@@ -7,21 +7,24 @@ namespace DB
 {
 namespace Streaming
 {
-void CachedBlockMetrics::serialize(WriteBuffer & wb) const
+void CachedBlockMetrics::serialize(WriteBuffer & wb, VersionType version) const
 {
-    DB::writeBinary(current_total_blocks, wb);
-    DB::writeBinary(current_total_bytes, wb);
+    assert(version <= SERDE_REQUIRED_MAX_VERSION);
     DB::writeBinary(total_blocks, wb);
-    DB::writeBinary(total_bytes, wb);
+    DB::writeBinary(total_data_bytes, wb);
+    DB::writeBinary(total_blocks, wb);
+    DB::writeBinary(total_data_bytes, wb);
     DB::writeBinary(gced_blocks, wb);
 }
 
-void CachedBlockMetrics::deserialize(ReadBuffer & rb)
+void CachedBlockMetrics::deserialize(ReadBuffer & rb, VersionType version)
 {
-    DB::readBinary(current_total_blocks, rb);
-    DB::readBinary(current_total_bytes, rb);
+    assert(version <= SERDE_REQUIRED_MAX_VERSION);
+    /// V1 layout [current_total_blocks, current_total_bytes, total_blocks, total_bytes, gced_blocks]
     DB::readBinary(total_blocks, rb);
-    DB::readBinary(total_bytes, rb);
+    DB::readBinary(total_data_bytes, rb);
+    DB::readBinary(total_blocks, rb);
+    DB::readBinary(total_data_bytes, rb);
     DB::readBinary(gced_blocks, rb);
 }
 }

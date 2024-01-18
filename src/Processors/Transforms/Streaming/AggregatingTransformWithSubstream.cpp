@@ -1,6 +1,7 @@
 #include <Processors/Transforms/Streaming/AggregatingTransformWithSubstream.h>
 
 #include <Checkpoint/CheckpointCoordinator.h>
+#include <Interpreters/Streaming/AggregatedDataMetrics.h>
 #include <Processors/Transforms/convertToChunk.h>
 
 namespace DB
@@ -127,7 +128,7 @@ void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamCont
         /// We always propagate the finalized watermark, since the downstream may depend on it.
         /// For example:
         ///     `WITH cte AS (SELECT i, count() FROM test_31_multishards_stream WHERE _tp_time > earliest_ts() PARTITION BY i) SELECT count() FROM cte`
-        /// As you can see, the outer global aggregation depends on the periodic watermark of the inner global aggregation 
+        /// As you can see, the outer global aggregation depends on the periodic watermark of the inner global aggregation
         propagateWatermarkAndClearExpiredStates(substream_ctx);
     }
     else if (need_finalization)
@@ -139,6 +140,25 @@ void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamCont
         checkpoint(chunk.getCheckpointContext());
         /// Propagate the checkpoint barrier to all down stream output ports
         setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0, nullptr, chunk.getChunkContext()});
+    }
+
+    if (MonotonicMilliseconds::now() - last_log_ts > log_metrics_interval_ms)
+    {
+        auto start = MonotonicMilliseconds::now();
+        AggregatedDataMetrics aggregated_data_metrics;
+        for (const auto & [_, ctx] : substream_contexts)
+            params->aggregator.updateMetrics(ctx->variants, aggregated_data_metrics);
+        auto end = MonotonicMilliseconds::now();
+
+        LOG_INFO(
+            log,
+            "Took {} milliseconds to log metrics. Substream metrics: total_substream_count={} hash_buffer_bytes={}; Aggregated data metrics: {}",
+            end - start,
+            substream_contexts.size(),
+            (sizeof(substream_contexts) + substream_contexts.size() * (sizeof(SubstreamContextPtr) + sizeof(SubstreamContext))),
+            aggregated_data_metrics.string());
+
+        last_log_ts = end;
     }
 }
 

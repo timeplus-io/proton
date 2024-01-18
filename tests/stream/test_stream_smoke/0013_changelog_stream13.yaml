@@ -44,9 +44,9 @@ tests:
           from v_12181627 emit changelog settings checkpoint_interval=1;
       - client: python
         query_type: table
-        depends_on_stream: v_12181627
+        depends_on: 12181627214
         kill: '12181627214'
-        kill_wait: 2
+        kill_wait: 3
         wait: 3
         query: insert into v_12181627(id, val) values(3, 30);
     - statements:
@@ -58,7 +58,8 @@ tests:
         query: recover from '12181627214'
       - client: python
         query_type: table
-        wait: 2
+        depends_on: 12181627214
+        wait: 1
         depends_on_stream: v_12181627
         query: insert into v_12181627(id, val) values(4, 40),(5, 50);
       - client: python
@@ -294,9 +295,9 @@ tests:
           from v_12180413 settings checkpoint_interval=1;
       - client: python
         query_type: table
-        depends_on_stream: v_12180413
+        depends_on: 12180413213
         kill: '12180413213'
-        kill_wait: 2
+        kill_wait: 3
         wait: 3
         query: insert into v_12180413(id, val) values(3, 30);
     - statements:
@@ -308,7 +309,8 @@ tests:
         query: recover from '12180413213'
       - client: python
         query_type: table
-        wait: 2
+        depends_on: 12180413213
+        wait: 1
         depends_on_stream: v_12180413
         query: insert into v_12180413(id, val) values(4, 40),(5, 50);
       - client: python

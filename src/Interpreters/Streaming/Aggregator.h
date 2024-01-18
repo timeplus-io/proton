@@ -102,7 +102,7 @@ using TimeBucketAggregatedDataWithKeys128TwoLevel = TimeBucketHashMap<UInt128, A
 using TimeBucketAggregatedDataWithKeys256TwoLevel = TimeBucketHashMap<UInt256, AggregateDataPtr, UInt256HashCRC32>;
 
 class Aggregator;
-
+struct AggregatedDataMetrics;
 struct AggregatedDataVariants : private boost::noncopyable
 {
     /** Working with states of aggregate functions in the pool is arranged in the following (inconvenient) way:
@@ -857,6 +857,8 @@ public:
 
     /// proton: starts
     Params & getParams() { return params; }
+
+    void updateMetrics(const AggregatedDataVariants & variants, AggregatedDataMetrics & metrics) const;
     /// proton: ends
 
 private:

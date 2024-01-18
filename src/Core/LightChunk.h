@@ -64,7 +64,7 @@ struct LightChunk
         for (const auto & column : data)
             res += column->allocatedMetadataBytes();
 
-        res += sizeof(data) + data.size() * sizeof(ColumnPtr);
+        res += sizeof(data) + data.capacity() * sizeof(ColumnPtr);
         return res;
     }
 

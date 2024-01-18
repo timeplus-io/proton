@@ -235,6 +235,17 @@ public:
         return res;
     }
 
+    /// proton: starts
+    size_t getBufferSizeInCells() const
+    {
+        size_t res = 0;
+        for (UInt32 i = 0; i < NUM_BUCKETS; ++i)
+            res += impls[i].getBufferSizeInCells();
+
+        return res;
+    }
+    /// proton: ends
+
     std::vector<Int64> buckets() const
     {
         std::vector<Int64> bucket_ids(NUM_BUCKETS);

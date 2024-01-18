@@ -131,6 +131,9 @@ protected:
     bool has_input = false;
 
     SubstreamHashMap<SubstreamContextPtr> substream_contexts;
+
+    static constexpr Int64 log_metrics_interval_ms = 30'000;
+    Int64 last_log_ts = 0;
 };
 
 }

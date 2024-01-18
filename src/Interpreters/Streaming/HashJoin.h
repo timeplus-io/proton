@@ -203,8 +203,8 @@ public:
 
     const Block & getOutputHeader() const { return output_header; }
 
-    void serialize(WriteBuffer & wb) const override;
-    void deserialize(ReadBuffer & rb) override;
+    void serialize(WriteBuffer & wb, VersionType version) const override;
+    void deserialize(ReadBuffer & rb, VersionType version) override;
 
     void cancel() override { }
 
@@ -247,6 +247,9 @@ public:
         /// Building hash map for joined blocks, then we can find previous
         /// join blocks quickly by using joined keys
         SERDE std::unique_ptr<HashJoinMapsVariants> maps;
+
+        void serialize(WriteBuffer & wb, VersionType version, const HashJoin & join) const;
+        void deserialize(ReadBuffer & rb, VersionType version, const HashJoin & join);
     };
 
     JoinStreamDescriptionPtr leftJoinStreamDescription() const noexcept override { return left_data.join_stream_desc; }
@@ -410,10 +413,10 @@ private:
         std::vector<String> required_keys_sources;
 
         bool validated_join_key_types = false;
-    };
 
-    friend void serialize(const JoinData & join_data, WriteBuffer & wb);
-    friend void deserialize(JoinData & join_data, ReadBuffer & rb);
+        void serialize(WriteBuffer & wb, VersionType version) const;
+        void deserialize(ReadBuffer & rb, VersionType version);
+    };
 
     /// Note: when left block joins right hashtable, use `right_data`
     SERDE JoinData right_data;
@@ -468,9 +471,10 @@ private:
                 left_block_and_right_range_bucket_no_intersection_skip,
                 right_block_and_left_range_bucket_no_intersection_skip);
         }
+
+        void serialize(WriteBuffer & wb, VersionType version) const;
+        void deserialize(ReadBuffer & rb, VersionType version);
     };
-    friend void serialize(const JoinGlobalMetrics & join_metrics, WriteBuffer & wb);
-    friend void deserialize(JoinGlobalMetrics & join_metrics, ReadBuffer & rb);
 
     SERDE JoinGlobalMetrics join_metrics;
 
@@ -484,5 +488,24 @@ struct HashJoinMapsVariants
     std::vector<HashJoin::MapsVariant> map_variants;
 };
 
+/// Serialize/Deserialize both `JoinDataBlockList` and `HashJoinMapsVariants`
+void serializeHashJoinMapsVariants(
+    const JoinDataBlockList & blocks,
+    const HashJoinMapsVariants & maps,
+    WriteBuffer & wb,
+    VersionType version,
+    const Block & header,
+    const HashJoin & join,
+    SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices = nullptr);
+
+void deserializeHashJoinMapsVariants(
+    JoinDataBlockList & blocks,
+    HashJoinMapsVariants & maps,
+    ReadBuffer & rb,
+    VersionType version,
+    Arena & pool,
+    const Block & header,
+    const HashJoin & join,
+    DeserializedIndicesToRowRefListMultiple<JoinDataBlock> * deserialized_indices_to_multiple_ref = nullptr);
 }
 }
