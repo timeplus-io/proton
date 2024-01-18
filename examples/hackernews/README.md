@@ -10,7 +10,7 @@ Simply run `docker compose up` in this folder and it will start
 3. A pre-configured Grafana instance to visulaize the live data.
 
 
-It will load new items every 15 second and send the data to Proton.
+It will start 5 bytewax workers and load 150 items on startup, then load new items every 15 seconds and send the data to Proton.
 
 ## How it works
 
