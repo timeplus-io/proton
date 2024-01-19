@@ -42,13 +42,17 @@ TARGET_FILE="proton"
 
 # Check if the proton file exists
 if [ -f "$TARGET_FILE" ]; then
-  echo -n "'proton' file exists. Do you want to overwrite it? (y/n): "
-  read REPLY
-  echo
-  if [ "$(echo $REPLY | cut -c1)" = "y" ] || [ "$(echo $REPLY | cut -c1)" = "Y" ]; then
+  read -p "'proton' file already exists. Do you want to overwrite it? (y/n): " answer
+  if [ "$answer" = "y" -o "$answer" = "Y" ]; then
     TARGET_FILE="proton"
   else
     TARGET_FILE=$BINARY_FILE
+    i=0
+    while [ -f "$BINARY_FILE" ]
+    do
+        BINARY_FILE="${BINARY_FILE}.${i}"
+        i=$(($i+1))
+    done
   fi
 fi
 
@@ -79,6 +83,7 @@ For detailed usage and more information, check out the Timeplus documentation:
 https://docs.timeplus.com/"
 else
   echo "Download failed or the binary for $OS-$ARCH is not available." >&2
+  exit 1
 fi
 
 if [ "${OS}" = "Linux" ]
