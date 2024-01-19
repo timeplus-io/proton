@@ -41,18 +41,19 @@ BINARY_FILE="proton-${LATEST_TAG}-${OS}-${ARCH}"
 TARGET_FILE="proton"
 
 # Check if the proton file exists
+
+# Fix me, what if I wanna use this script 3 times?
+# if `proton` not exist, we use proton
+# else 
+#     1.use `"proton-${LATEST_TAG}-${OS}-${ARCH}"` (by default)
+#     2.overwrite it(only work on manual bash install.sh)
+
 if [ -f "$TARGET_FILE" ]; then
   read -p "'proton' file already exists. Do you want to overwrite it? (y/n): " answer
   if [ "$answer" = "y" -o "$answer" = "Y" ]; then
     TARGET_FILE="proton"
   else
     TARGET_FILE=$BINARY_FILE
-    i=0
-    while [ -f "$BINARY_FILE" ]
-    do
-        BINARY_FILE="${BINARY_FILE}.${i}"
-        i=$(($i+1))
-    done
   fi
 fi
 
