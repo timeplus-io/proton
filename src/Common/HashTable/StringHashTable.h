@@ -147,6 +147,7 @@ public:
     size_t size() const { return hasZero() ? 1 : 0; }
     bool empty() const { return !hasZero(); }
     size_t getBufferSizeInBytes() const { return sizeof(Cell); }
+    size_t getBufferSizeInCells() const { return 1; }
     size_t getCollisions() const { return 0; }
 };
 
@@ -438,6 +439,14 @@ public:
         return m0.getBufferSizeInBytes() + m1.getBufferSizeInBytes() + m2.getBufferSizeInBytes() + m3.getBufferSizeInBytes()
             + ms.getBufferSizeInBytes();
     }
+
+    /// proton: starts.
+    size_t getBufferSizeInCells() const
+    {
+        return m0.getBufferSizeInCells() + m1.getBufferSizeInCells() + m2.getBufferSizeInCells() + m3.getBufferSizeInCells()
+            + ms.getBufferSizeInCells();
+    }
+    /// proton: ends.
 
     void clearAndShrink()
     {

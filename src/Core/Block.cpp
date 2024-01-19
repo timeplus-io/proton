@@ -390,10 +390,27 @@ size_t Block::bytes() const
 
 size_t Block::allocatedBytes() const
 {
+    return allocatedMetadataBytes() + allocatedDataBytes();
+}
+
+size_t Block::allocatedDataBytes() const
+{
     size_t res = 0;
     for (const auto & elem : data)
         res += elem.column->allocatedBytes();
 
+    return res;
+}
+
+size_t Block::allocatedMetadataBytes() const
+{
+    size_t res = 0;
+    for (const auto & elem : data)
+        res += elem.column->allocatedMetadataBytes();
+
+    res += sizeof(data) + data.capacity() * sizeof(ColumnWithTypeAndName);
+    res += sizeof(index_by_name) + index_by_name.size() * sizeof(IndexByName::value_type);
+    res += sizeof(info);
     return res;
 }
 

@@ -2,9 +2,46 @@ services:
   proton:
     image: ghcr.io/timeplus-io/proton:latest
     pull_policy: always
-  hackernews_bytewax:
+    ports:
+      - 8463:8463
+      - 3218:3218
+    healthcheck:
+      test: ["CMD", "curl", "http://localhost:3218/proton/ping"]
+      interval: 2s
+      timeout: 10s
+      retries: 3
+      start_period: 10s  
+  init-proton:
+    image: ghcr.io/timeplus-io/proton:latest
+    command:
+      - sh
+      - -c
+      - |
+        proton-client -h proton -n --query "CREATE STREAM IF NOT EXISTS hn_stories_raw(raw string);CREATE STREAM IF NOT EXISTS hn_comments_raw(raw string);CREATE MATERIALIZED VIEW IF NOT EXISTS hn_stories AS SELECT to_time(raw:time) AS _tp_time,raw:id::int AS id,raw:title AS title,raw:by AS by, raw FROM hn_stories_raw;CREATE MATERIALIZED VIEW IF NOT EXISTS hn_comments AS SELECT to_time(raw:time) AS _tp_time,raw:id::int AS id,raw:root_id::int AS root_id,raw:by AS by, raw FROM hn_comments_raw;CREATE VIEW IF NOT EXISTS story AS SELECT * FROM hn_stories WHERE _tp_time>earliest_ts();CREATE VIEW IF NOT EXISTS comment AS SELECT * FROM hn_comments WHERE _tp_time>earliest_ts();"
+    depends_on:
+      proton:
+        condition: service_healthy
+  hn_stream:
+    build:
+      context: .  
     image: timeplus/hackernews_bytewax:latest
     environment:
       - PROTON_HOST=proton
     depends_on:
-      - proton
+      init-proton:
+        condition: service_completed_successfully
+  grafana:
+    image: grafana/grafana:latest
+    pull_policy: always
+    ports:
+      - 3000:3000
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: 1
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_INSTALL_PLUGINS: timeplus-proton-datasource
+    volumes:
+      - ./grafana_provisioning:/etc/grafana/provisioning
+    depends_on:
+      - proton  
+
+

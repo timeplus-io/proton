@@ -34,9 +34,9 @@ SubstreamContextPtr SessionAggregatingTransformWithSubstream::getOrCreateSubstre
         substream_ctx->setField(
             {SessionInfoQueue{},
              /// Field serializer
-             [](const std::any & field, WriteBuffer & wb) { serialize(std::any_cast<const SessionInfoQueue &>(field), wb); },
+             [](const std::any & field, WriteBuffer & wb, VersionType) { serialize(std::any_cast<const SessionInfoQueue &>(field), wb); },
              /// Field deserializer
-             [](std::any & field, ReadBuffer & rb) { deserialize(std::any_cast<SessionInfoQueue &>(field), rb); }});
+             [](std::any & field, ReadBuffer & rb, VersionType) { deserialize(std::any_cast<SessionInfoQueue &>(field), rb); }});
     return substream_ctx;
 }
 

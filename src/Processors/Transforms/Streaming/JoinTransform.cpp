@@ -312,15 +312,15 @@ inline void JoinTransform::rangeJoinBidirectionally(Chunks chunks)
 void JoinTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
-        join->serialize(wb);
+        join->serialize(wb, getVersion());
         DB::writeIntBinary(watermark, wb);
     });
 }
 
 void JoinTransform::recover(CheckpointContextPtr ckpt_ctx)
 {
-    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) {
-        join->deserialize(rb);
+    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType version_, ReadBuffer & rb) {
+        join->deserialize(rb, version_);
         DB::readIntBinary(watermark, rb);
     });
 }

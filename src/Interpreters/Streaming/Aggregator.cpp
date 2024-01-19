@@ -30,6 +30,7 @@
 #include <Formats/SimpleNativeReader.h>
 #include <Formats/SimpleNativeWriter.h>
 #include <Interpreters/CompiledAggregateFunctionsHolder.h>
+#include <Interpreters/Streaming/AggregatedDataMetrics.h>
 #include <Common/HashMapsTemplate.h>
 #include <Common/VersionRevision.h>
 #include <Common/logger_useful.h>
@@ -57,6 +58,7 @@ namespace ErrorCodes
     extern const int RECOVER_CHECKPOINT_FAILED;
     extern const int AGGREGATE_FUNCTION_NOT_APPLICABLE;
     extern const int NOT_IMPLEMENTED;
+    extern const int SERVER_REVISION_IS_TOO_OLD;
 }
 
 namespace Streaming
@@ -3336,13 +3338,15 @@ void Aggregator::recover(AggregatedDataVariants & data_variants, ReadBuffer & rb
 {
     /// Serialization layout
     /// [version] + [states layout]
-    VersionType version = 0;
-    readIntBinary(version, rb);
+    VersionType recovered_version = 0;
+    readIntBinary(recovered_version, rb);
+    assert(recovered_version <= getVersion());
 
     /// FIXME: Legacy layout needs to be cleaned after no use
-    if (version <= 1)
+    if (recovered_version <= 1)
         return doRecoverLegacy(data_variants, rb);
 
+    /// Recover STATE V2
     return doRecover(data_variants, rb);
 }
 
@@ -3735,10 +3739,13 @@ bool Aggregator::shouldClearStates(ConvertAction action, bool final_) const
     }
 }
 
-VersionType Aggregator::getVersionFromRevision(UInt64 revision [[maybe_unused]]) const
+VersionType Aggregator::getVersionFromRevision(UInt64 revision) const
 {
-    /// FIXME: Enable @p revision ? always 1 for now
-    return static_cast<VersionType>(2);
+    if (revision >= STATE_V2_MIN_REVISION)
+        return static_cast<VersionType>(2);
+    else
+        throw Exception(
+            ErrorCodes::SERVER_REVISION_IS_TOO_OLD, "State of AggregatedDataVariants is not yet implemented in revision {}", revision);
 }
 
 VersionType Aggregator::getVersion() const
@@ -4331,6 +4338,37 @@ bool Aggregator::checkAndProcessResult(AggregatedDataVariants & result, bool & n
     }
 
     return false;
+}
+
+void Aggregator::updateMetrics(const AggregatedDataVariants & variants, AggregatedDataMetrics & metrics) const
+{
+    switch (variants.type)
+    {
+        case AggregatedDataVariants::Type::EMPTY: break;
+        case AggregatedDataVariants::Type::without_key:
+        {
+            metrics.total_aggregated_rows += 1;
+            metrics.total_bytes_of_aggregate_states += total_size_of_aggregate_states;
+            break;
+        }
+
+    #define M(NAME, IS_TWO_LEVEL) \
+        case AggregatedDataVariants::Type::NAME: \
+        { \
+            auto & table = variants.NAME->data; \
+            metrics.total_aggregated_rows += table.size(); \
+            metrics.hash_buffer_bytes += table.getBufferSizeInBytes(); \
+            metrics.hash_buffer_cells += table.getBufferSizeInCells(); \
+            metrics.total_bytes_of_aggregate_states += table.size() * total_size_of_aggregate_states; \
+            break; \
+        }
+
+        APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
+    #undef M
+    }
+
+    for (const auto & arena : variants.aggregates_pools)
+        metrics.total_bytes_in_arena += arena->size();
 }
 /// proton: ends
 }

@@ -1,129 +1,91 @@
 <p align="center">
-  <img alt="Proton – open source, unified streaming and data processing engine for real-time analytics" src="design/proton-logo-white-bg.png"
-  />
-</p>
-<p align="center">
-  <a href="https://github.com/timeplus-io/proton/blob/develop/LICENSE"><img src="https://img.shields.io/github/license/timeplus-io/proton?label=license&logo=github&color=blue" alt="License" /></a>
-  <a href="https://github.com/timeplus-io/proton/"><img src="https://img.shields.io/github/stars/timeplus-io/proton?logo=github" /></a>
-  <a href="https://timeplus.com/slack"><img src="https://img.shields.io/badge/Join%20Slack-blue?logo=slack" alt="Slack" /></a>
-  <a href="https://linkedin.com/company/timeplusinc"><img src="https://img.shields.io/badge/timeplusinc-0077B5?style=social&logo=linkedin" alt="follow on LinkedIn"></a>
-  <a href="https://www.youtube.com/@timeplusdata"><img src="https://img.shields.io/youtube/channel/views/UCRQCOw9wOiqHZkm7ftAMdTQ" alt="YouTube" /></a>
-  <a href="https://twitter.com/intent/follow?screen_name=timeplusdata"><img src="https://img.shields.io/twitter/follow/timeplusdata" alt="Twitter(X)" /></a>
+  <img alt="Proton – An open-source, fast and lightweight streaming SQL engine, 🚀 powered by ClickHouse" src="design/proton-logo-white-bg.png"/> <br/>
+  <b> A fast and lightweight streaming SQL engine, 🚀 powered by ClickHouse</b> <br/><br/>
+  📄 <a href="https://docs.timeplus.com/proton" target="_blank">Documentation</a>&nbsp;&nbsp;
+  🚀 <a href="https://demo.timeplus.cloud/" target="_blank">Live Demo</a>&nbsp;&nbsp;
+  🌎 <a href="https://timeplus.com/" target="_blank">Timeplus</a> <br/><br/>
+  <a href="https://github.com/timeplus-io/proton/"><img src="https://img.shields.io/github/stars/timeplus-io/proton?logo=github" /></a>&nbsp;
+  <a href="https://github.com/timeplus-io/proton/pkgs/container/proton"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fuwkp37dgeb6d2oc5fxu6oles2i0eevmm.lambda-url.us-west-2.on.aws%2F" /></a>&nbsp; 
+  <a href="https://github.com/timeplus-io/proton/blob/develop/LICENSE"><img src="https://img.shields.io/github/v/release/timeplus-io/proton" alt="Release" /></a>&nbsp;
+  <a href="https://www.youtube.com/@timeplusdata"><img src="https://img.shields.io/youtube/channel/views/UCRQCOw9wOiqHZkm7ftAMdTQ" alt="YouTube" /></a>&nbsp;
+  <a href="https://timeplus.com/slack"><img src="https://img.shields.io/badge/Join%20Slack-blue?logo=slack" alt="Slack" /></a>&nbsp;
+  <a href="https://linkedin.com/company/timeplusinc"><img src="https://img.shields.io/badge/timeplusinc-0077B5?style=social&logo=linkedin" alt="follow on LinkedIn"/></a>&nbsp;
+  <a href="https://twitter.com/intent/follow?screen_name=timeplusdata"><img src="https://img.shields.io/twitter/follow/timeplusdata?label=" alt="Twitter(X)" /></a>&nbsp;
+  <a href="https://github.com/timeplus-io/proton/blob/develop/LICENSE"><img src="https://img.shields.io/github/license/timeplus-io/proton?label=license&logo=github&color=blue" alt="License" /></a>&nbsp;  
 </p>
 
-
 <p align="center">
-  <a href="#introduction"><strong>Introduction</strong></a> ·
-  <a href="#architecture"><strong>Architecture</strong></a> ·
-  <a href="#get-started"><strong>Get Started</strong></a> ·
-  <a href="#whats-next"><strong>What's next</strong></a> ·
-  <a href="#documentation"><strong>Documentation</strong></a> ·
+  <a href="#-why-use-proton"><strong>Why Use Proton</strong></a> ·
+  <a href="#-demo-video"><strong>Demo Video</strong></a> ·
+  <a href="#-deployment"><strong>Deployment</strong></a> ·
+  <a href="#-whats-next"><strong>What's Next</strong></a> ·
+  <a href="#-integrations"><strong>Integrations</strong></a> ·
   <a href="#contributing"><strong>Contributing</strong></a> ·
   <a href="#need-help"><strong>Need help?</strong></a>
 </p>
 
-## Introduction
+Proton is a streaming SQL engine, a fast and lightweight alternative to Apache Flink, 🚀 powered by ClickHouse. It enables developers to solve streaming data processing, routing and analytics challenges from Apache Kafka, Redpanda and more sources, and send aggregated data to the downstream systems. Proton is the core engine of [Timeplus](https://timeplus.com), which is a cloud native streaming analytics platform.
 
-Proton is a unified streaming and historical data analytics database in a single binary. It helps data engineers and platform engineers solve complex real-time analytics use cases, and powers the [Timeplus](https://timeplus.com) streaming analytics platform.
+## 💪 Why use Proton?
 
-Proton extends the historical data, storage, and computing functionality of the popular [ClickHouse project](https://github.com/clickhouse/clickhouse) with streaming and OLAP data processing.
+1. **[Apache Flink](https://github.com/apache/flink) or [ksqlDB](https://github.com/confluentinc/ksql) alternative**:  Proton provides powerful streaming SQL functionalities, such as streaming ETL, tumble/hop/session windows, watermarks, materialized views, CDC and data revision processing, and more.
+   
+2. **Fast**:  Proton is written in C++, with optimized performance through SIMD. [For example](https://www.timeplus.com/post/scary-fast), on an Apple MacBookPro with M2 Max, Proton can deliver 90 million EPS, 4 millisecond end-to-end latency, and high cardinality aggregation with 1 million unique keys.
+   
+3. **Lightweight**:  Proton is a single binary (\<500MB). No JVM or any other dependencies. You can also run it with Docker, or on an AWS t2.nano instance (1 vCPU and 0.5 GiB memory).
+   
+4. **Powered by the fast, resource efficient and mature [ClickHouse](https://github.com/clickhouse/clickhouse).**  Proton extends the historical data, storage, and computing functionality of ClickHouse with stream processing. Thousands of SQL functions are available in Proton. Billions of rows in are queried in milliseconds.
+   
+5. **Best streaming SQL engine for [Kafka](https://kafka.apache.org/) or [Redpanda](https://redpanda.com/)**: 
+ Query the live data in Kafka or other compatiable streaming data platforms, with [external streams](https://docs.timeplus.com/proton-kafka).
 
-Why use Proton?
+![Proton Architecture](design/proton-architecture.webp)
+See our [architecture](https://docs.timeplus.com/proton-architecture) doc for technical details and our [FAQ](https://docs.timeplus.com/proton-faq) for more information.
 
-- **A unified, lightweight engine** to connect streaming and historical data processing tasks with efficiency and robust performance.
-- **A smooth developer experience** with powerful streaming and analytical functionality.
-- **Flexible deployments** with Proton's single binary and no external service dependencies.
-- **Low total cost of ownership** compared to other analytical frameworks.
+## 🎬 Demo Video
 
-Plus built-in support for powerful streaming and analytical functionality:
+2-minute short video👇. Check out [the full video at YouTube](https://youtu.be/vi4Yl6L4_Dw?t=283).
 
-| Functionality                                                | Description                                                  |
-| ------------------------------------------------------------ | ------------------------------------------------------------ |
-| <b>[Data transformation](https://docs.timeplus.com/usecases#data)</b> | Scrub sensitive fields, derive new columns from raw data, or convert identifiers to human-readable information. |
-| <b>[Joining streams](https://docs.timeplus.com/joins)</b>    | Combine data from different sources to add freshness to the resulting stream. |
-| <b>[Aggregating streams](https://docs.timeplus.com/functions_for_agg)</b> | Developer-friendly functions to derive insights from streaming and historical data. |
-| <b>Windowed stream processing ([tumble](https://docs.timeplus.com/functions_for_streaming#tumble) / [hop](https://docs.timeplus.com/functions_for_streaming#hop) / [session](https://docs.timeplus.com/functions_for_streaming#session))</b> | Collect insightful snapshots of streaming data.              |
-| <b>[Substreams](https://docs.timeplus.com/substream)</b>     | Maintain separate watermarks and streaming windows.          |
-| <b>[Data revision processing (changelog)](https://docs.timeplus.com/changelog-stream)</b> | Create and manage non-append streams with primary keys and change data capture (CDC) semantics. |
-| <b>[Federated streaming queries](https://docs.timeplus.com/external-stream)</b> | Query streaming data in external systems (e.g. Kafka) without duplicating them. |
-| <b>[Materialized views](https://docs.timeplus.com/view#m_view)</b> | Create long-running and internally-stored queries.           |
+https://github.com/timeplus-io/proton/assets/5076438/8ceca355-d992-4798-b861-1e0334fc4438
 
-## Architecture
+## ⚡ Deployment
 
-![Architecture](design/proton-high-level-arch.svg)
-
-See our [architecture](https://docs.timeplus.com/proton-architecture) doc for technical details and the [FAQ](https://docs.timeplus.com/proton-faq) for more information on the various editions of Proton, how it's related to ClickHouse, and why we chose Apache License 2.0.
-
-## Get started
-### Single Binary
-
-If you’re an Apache Kafka or Redpanda user, you can install Proton as a single binary via:
+### A single binary:
 
 ```shell
 curl -sSf https://raw.githubusercontent.com/timeplus-io/proton/develop/install.sh | sh
 ```
 
-This will install the Proton binary in the current folder, then you can start the server via `proton server start` and start a new terminal window with `proton client` to start the SQL shell.
-
-For Mac users, you can also use [Homebrew](https://brew.sh/) to manage the install/upgrade/uninstall:
-
-```shell
-brew tap timeplus-io/timeplus
-brew install proton
-```
-
-Next, create an external stream in Proton with SQL to consume data from your Kafka or Redpanda. Follow this [tutorial](https://docs.timeplus.com/proton-kafka#tutorial) for SQL snippets.
-
-### Docker Compose
-
-If you don’t want to setup Kafka or Redpanda, you can use [the docker-compose.yml file](examples/carsharing/docker-compose.yml) in examples/carsharing. Download the file to a local folder. Make sure you have Docker Engine and Desktop installed. Use `docker compose up` to start the demonstration stack.
-
-Next, you can open the shell of the Proton container and run your first streaming SQL. To print out the new data being generated, you can run the following sample SQL:
-
-```sql
-select * from car_live_data
-```
-
-To get the total number of events in the historical store, you can run the following SQL:
-
-```sql
-select count() from table(car_live_data)
-```
-
-To show the number of event events, at certain intervals (2 seconds, by default), you can run: 
-
-```sql
-select count() from car_live_data
-```
-
-Congratulations! You have successfully installed Proton and run queries for both historical and streaming analytics.
-
-### Docker
-
-With [Docker engine](https://docs.docker.com/engine/install/) installed on your local machine, pull and run the latest version of the Proton Docker image.
+### Docker:
 
 ```bash
 docker run -d --pull always --name proton ghcr.io/timeplus-io/proton:latest
 ```
 
-Connect to your `proton` container and run the `proton-client` tool to connect to the local Proton server:
+### Docker Compose:
 
-```bash
-docker exec -it proton proton-client -n
-```
+The [Docker Compose stack](https://github.com/timeplus-io/proton/tree/develop/examples/ecommerce) demonstrates how to read/write data in Kafka/Redpanda with external streams.
 
-If you stop the container and want to start it again, run `docker start proton`.
+### Timeplus Cloud:
 
-### Query a test stream
+One step to try Proton in [Timeplus Cloud](https://us.timeplus.cloud/)
 
-From `proton-client`, run the following SQL to create a stream of random data:
+
+## 🔎 Usage
+You can start the server via `proton server start` and start a new terminal window with `proton client` to start the SQL shell.
+
+From `proton client`, run the following SQL to create a stream of random data:
 
 ```sql
--- Create a stream with random data.
-CREATE RANDOM STREAM devices(device string default 'device'||to_string(rand()%4), temperature float default rand()%1000/10);
-
--- Run the long-running stream query.
-SELECT device, count(*), min(temperature), max(temperature) FROM devices GROUP BY device;
+-- Create a stream with random data
+CREATE RANDOM STREAM devices(
+  device string default 'device'||to_string(rand()%4), 
+  temperature float default rand()%1000/10)
+```
+```sql
+-- Run the streaming SQL
+SELECT device, count(*), min(temperature), max(temperature) 
+FROM devices GROUP BY device
 ```
 
 You should see data like the following:
@@ -137,12 +99,12 @@ You should see data like the following:
 └─────────┴─────────┴──────────────────┴──────────────────┘
 ```
 
-### What's next?
-
-Now that you're running Proton and have created your first stream, query, and view, you can explore [reading and writing data from Apache Kafka](https://docs.timeplus.com/proton-kafka#tutorial) with External Streams, or view the [Proton documentation](https://docs.timeplus.com/proton) to explore additional capabilities.
-
+### ⏩ What's next?
 To see more examples of using Proton, check out the [examples](https://github.com/timeplus-io/proton/tree/develop/examples) folder.
 
+To access more features, such as sources, sinks, dashboards, alerts, and data lineage, create a workspace on [Timeplus Cloud](https://us.timeplus.cloud) or try our [live demo](https://demo.timeplus.cloud) with pre-built live data and dashboards.
+
+## 🧩 Integrations
 The following drivers are available:
 
 * https://github.com/timeplus-io/proton-java-driver JDBC and other Java clients
@@ -157,16 +119,11 @@ Integrations with other systems:
 * Homebrew https://github.com/timeplus-io/homebrew-timeplus
 * dbt https://github.com/timeplus-io/dbt-proton
 
-## Get more with Timeplus
-
-To access more features, such as sources, sinks, dashboards, alerts, data lineage, create a workspace at [Timeplus Cloud](https://us.timeplus.cloud) or try the [live demo](https://demo.timeplus.cloud) with pre-built live data and dashboards.
-
 ## Documentation
 
-We publish full documentation for Proton at [docs.timeplus.com](https://docs.timeplus.com/proton) alongside documentation for the Timeplus (Cloud and Enterprise) platform.
+We publish full documentation for Proton at [docs.timeplus.com](https://docs.timeplus.com/proton) alongside documentation for the Timeplus (Cloud and BYOC) platform.
 
 We also have a [FAQ](https://docs.timeplus.com/proton-faq/) for detailing how we chose Apache License 2.0, how Proton is related to ClickHouse, what features are available in Proton versus Timeplus, and more.
-
 
 ## Contributing
 
@@ -174,17 +131,15 @@ We welcome your contributions! If you are looking for issues to work on, try loo
 
 Please see the [wiki](https://github.com/timeplus-io/proton/wiki/Contributing) for more details, and [BUILD.md](https://github.com/timeplus-io/proton/blob/develop/BUILD.md) to compile Proton in different platforms.
 
-We also encourage you to join the [Timeplus Community Slack](https://timeplus.com/slack) to ask questions and meet other active contributors from Timeplus and beyond.
+We also encourage you to join our [Timeplus Community Slack](https://timeplus.com/slack) to ask questions and meet other active contributors from Timeplus and beyond.
 
 ## Need help?
 
-Join the [Timeplus Community Slack](https://timeplus.com/slack) to connect with Timeplus engineers and other Proton
-users.
+Join our [Timeplus Community Slack](https://timeplus.com/slack) to connect with Timeplus engineers and other Proton users.
 
 For filing bugs, suggesting improvements, or requesting new features, see the [open issues](https://github.com/timeplus-io/proton/issues) here on GitHub.
 
 ## Licensing
 
-Proton uses Apache License 2.0. See details in the [LICENSE](https://github.com/timeplus-io/proton/blob/develop/LICENSE).
-
+Proton uses Apache License 2.0. See details in the [LICENSE](https://github.com/timeplus-io/proton/blob/master/LICENSE).
 

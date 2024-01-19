@@ -408,7 +408,7 @@ Cluster::Cluster(const Poco::Util::AbstractConfiguration & config,
             auto pool = ConnectionPoolFactory::instance().get(
                 static_cast<unsigned>(settings.distributed_connections_pool_size),
                 address.host_name, address.port,
-                address.default_database, address.user, address.password,
+                address.default_database, address.user, address.password, address.quota_key,
                 address.cluster, address.cluster_secret,
                 "server", address.compression,
                 address.secure, address.priority);
@@ -481,7 +481,7 @@ Cluster::Cluster(const Poco::Util::AbstractConfiguration & config,
                 auto replica_pool = ConnectionPoolFactory::instance().get(
                     static_cast<unsigned>(settings.distributed_connections_pool_size),
                     replica.host_name, replica.port,
-                    replica.default_database, replica.user, replica.password,
+                    replica.default_database, replica.user, replica.password, replica.quota_key,
                     replica.cluster, replica.cluster_secret,
                     "server", replica.compression,
                     replica.secure, replica.priority);
@@ -560,7 +560,7 @@ Cluster::Cluster(
             auto replica_pool = ConnectionPoolFactory::instance().get(
                         static_cast<unsigned>(settings.distributed_connections_pool_size),
                         replica.host_name, replica.port,
-                        replica.default_database, replica.user, replica.password,
+                        replica.default_database, replica.user, replica.password, replica.quota_key,
                         replica.cluster, replica.cluster_secret,
                         "server", replica.compression, replica.secure, replica.priority);
             all_replicas.emplace_back(replica_pool);
@@ -668,6 +668,7 @@ Cluster::Cluster(Cluster::ReplicasAsShardsTag, const Cluster & from, const Setti
                 address.default_database,
                 address.user,
                 address.password,
+                address.quota_key,
                 address.cluster,
                 address.cluster_secret,
                 "server",

@@ -1,6 +1,5 @@
 #include <Interpreters/Streaming/HashJoin.h>
 #include <Interpreters/Streaming/joinData.h>
-#include <Interpreters/Streaming/joinSerder.h>
 
 #include <Interpreters/JoinUtils.h>
 
@@ -18,6 +17,34 @@ HashBlocks::~HashBlocks() = default;
 HashMapSizes HashBlocks::hashMapSizes(const DB::Streaming::HashJoin * hash_join) const
 {
     return maps->sizes(hash_join);
+}
+
+void HashBlocks::serialize(
+    WriteBuffer & wb,
+    VersionType version,
+    const Block & header,
+    const HashJoin & join,
+    SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices) const
+{
+    assert(maps);
+    serializeHashJoinMapsVariants(blocks, *maps, wb, version, header, join, serialized_row_ref_list_multiple_to_indices);
+
+    /// FIXME: Useless for now
+    // BlockNullmapList blocks_nullmaps;
+}
+
+void HashBlocks::deserialize(
+    ReadBuffer & rb,
+    VersionType version,
+    const Block & header,
+    const HashJoin & join,
+    DeserializedIndicesToRowRefListMultiple<JoinDataBlock> * deserialized_indices_to_multiple_ref)
+{
+    assert(maps);
+    deserializeHashJoinMapsVariants(blocks, *maps, rb, version, pool, header, join, deserialized_indices_to_multiple_ref);
+
+    /// FIXME: Useless for now
+    // BlockNullmapList blocks_nullmaps;
 }
 
 BufferedStreamData::BufferedStreamData(HashJoin * join_)
@@ -58,7 +85,7 @@ size_t BufferedStreamData::removeOldBuckets(std::string_view stream)
                 break;
         }
 
-        remaining_bytes = metrics.total_bytes;
+        remaining_bytes = metrics.totalBytes();
     }
 
     if (!buckets_to_remove.empty())
@@ -67,7 +94,7 @@ size_t BufferedStreamData::removeOldBuckets(std::string_view stream)
             "Removing data in range buckets={} in {} stream. Remaining bytes={} blocks={}",
             fmt::join(buckets_to_remove.begin(), buckets_to_remove.end(), ","),
             stream,
-            metrics.total_bytes,
+            metrics.totalBytes(),
             metrics.total_blocks);
 
     return remaining_bytes;
@@ -284,7 +311,7 @@ String BufferedStreamData::joinMetricsString() const
 }
 
 void BufferedStreamData::serialize(
-    WriteBuffer & wb, SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices) const
+    WriteBuffer & wb, VersionType version, SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices) const
 {
     std::scoped_lock lock(mutex);
 
@@ -299,21 +326,22 @@ void BufferedStreamData::serialize(
     DB::writeIntBinary(block_id, wb);
 
     assert(current_hash_blocks);
-    Streaming::serialize(*current_hash_blocks, sample_block, *join, wb, serialized_row_ref_list_multiple_to_indices);
+    DB::serialize(*current_hash_blocks, wb, version, sample_block, *join, serialized_row_ref_list_multiple_to_indices);
 
     DB::writeIntBinary<UInt32>(static_cast<UInt32>(range_bucket_hash_blocks.size()), wb);
     for (const auto & [bucket, hash_blocks] : range_bucket_hash_blocks)
     {
         DB::writeIntBinary(bucket, wb);
         assert(hash_blocks);
-        Streaming::serialize(*hash_blocks, sample_block, *join, wb, serialized_row_ref_list_multiple_to_indices);
+        DB::serialize(*hash_blocks, wb, version, sample_block, *join, serialized_row_ref_list_multiple_to_indices);
     }
 
-    metrics.serialize(wb);
+    if (version <= CachedBlockMetrics::SERDE_REQUIRED_MAX_VERSION)
+        DB::serialize(metrics, wb, version);
 }
 
 void BufferedStreamData::deserialize(
-    ReadBuffer & rb, DeserializedIndicesToRowRefListMultiple<JoinDataBlock> * deserialized_indices_to_row_ref_list_multiple)
+    ReadBuffer & rb, VersionType version, DeserializedIndicesToRowRefListMultiple<JoinDataBlock> * deserialized_indices_to_row_ref_list_multiple)
 {
     std::scoped_lock lock(mutex);
 
@@ -330,7 +358,7 @@ void BufferedStreamData::deserialize(
     DB::readIntBinary(block_id, rb);
 
     assert(current_hash_blocks);
-    Streaming::deserialize(*current_hash_blocks, sample_block, *join, rb, deserialized_indices_to_row_ref_list_multiple);
+    DB::deserialize(*current_hash_blocks, rb, version, sample_block, *join, deserialized_indices_to_row_ref_list_multiple);
 
     UInt32 size;
     Int64 bucket;
@@ -342,10 +370,11 @@ void BufferedStreamData::deserialize(
         assert(inserted);
         /// Init hash table
         join->initHashMaps(iter->second->maps->map_variants);
-        Streaming::deserialize(*iter->second, sample_block, *join, rb, deserialized_indices_to_row_ref_list_multiple);
+        DB::deserialize(*iter->second, rb, version, sample_block, *join, deserialized_indices_to_row_ref_list_multiple);
     }
 
-    metrics.deserialize(rb);
+    if (version <= CachedBlockMetrics::SERDE_REQUIRED_MAX_VERSION)
+        DB::deserialize(metrics, rb, version);
 }
 
 HashBlocksPtr BufferedStreamData::newHashBlocks()

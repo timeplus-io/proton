@@ -3,7 +3,7 @@
 #include <Processors/IProcessor.h>
 #include <Processors/RowsBeforeLimitCounter.h>
 #include <Core/SortDescription.h>
-#include <base/SerdeTag.h>
+#include <Common/serde.h>
 namespace DB
 {
 namespace Streaming

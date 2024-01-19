@@ -453,7 +453,7 @@ BlocksWithShard ConcurrentHashJoin::dispatchBlock(const std::vector<size_t> & ke
     return result;
 }
 
-void ConcurrentHashJoin::serialize(WriteBuffer & wb) const
+void ConcurrentHashJoin::serialize(WriteBuffer & wb, VersionType version) const
 {
     /// Only last join thread to do serialization
     if (serialize_requested.fetch_add(1) + 1 == num_used_hash_joins)
@@ -466,7 +466,7 @@ void ConcurrentHashJoin::serialize(WriteBuffer & wb) const
         for (const auto & hash_join : hash_joins)
         {
             std::lock_guard lock(hash_join->mutex);
-            hash_join->data->serialize(wb);
+            hash_join->data->serialize(wb, version);
         }
 
         serialize_requested.store(0, std::memory_order_relaxed);
@@ -485,7 +485,7 @@ void ConcurrentHashJoin::serialize(WriteBuffer & wb) const
     }
 }
 
-void ConcurrentHashJoin::deserialize(ReadBuffer & rb)
+void ConcurrentHashJoin::deserialize(ReadBuffer & rb, VersionType version)
 {
     bool is_serialized;
     DB::readBoolText(is_serialized, rb);
@@ -505,7 +505,7 @@ void ConcurrentHashJoin::deserialize(ReadBuffer & rb)
     for (auto & hash_join : hash_joins)
     {
         std::lock_guard lock(hash_join->mutex);
-        hash_join->data->deserialize(rb);
+        hash_join->data->deserialize(rb, version);
     }
 }
 

@@ -1,6 +1,5 @@
 #include <Interpreters/Streaming/RowRefs.h>
 
-#include <Interpreters/Streaming/joinSerder.h>
 #include <base/types.h>
 #include <Common/ColumnsHashing.h>
 #include <Common/typeid_cast.h>

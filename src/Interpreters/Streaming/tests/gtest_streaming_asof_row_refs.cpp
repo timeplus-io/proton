@@ -140,7 +140,7 @@ void commonTest(size_t data_block_size, const std::vector<Case> & cases)
             else
                 ASSERT_TRUE(result == nullptr);
         }
-        ASSERT_EQ(join_metrics.current_total_blocks, 0);
+        ASSERT_EQ(join_metrics.total_blocks, 0);
     }
 }
 }

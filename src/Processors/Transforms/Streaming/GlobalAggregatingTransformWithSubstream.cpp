@@ -33,12 +33,12 @@ SubstreamContextPtr GlobalAggregatingTransformWithSubstream::getOrCreateSubstrea
         substream_ctx->setField(
             {std::make_shared<RetractedDataVariants>(),
             /// Field serializer
-            [this](const std::any & field, WriteBuffer & wb) {
+            [this](const std::any & field, WriteBuffer & wb, VersionType) {
                 const auto & data = std::any_cast<const RetractedDataVariantsPtr &>(field);
                 params->aggregator.checkpoint(*data, wb);
             },
             /// Field deserializer
-            [this](std::any & field, ReadBuffer & rb) {
+            [this](std::any & field, ReadBuffer & rb, VersionType) {
                 auto & data = std::any_cast<RetractedDataVariantsPtr &>(field);
                 params->aggregator.recover(*data, rb);
             }});
