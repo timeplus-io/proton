@@ -201,7 +201,10 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
     if (zookeeper_log)
         logs.emplace_back(zookeeper_log.get());
     if (session_log)
+    {
         logs.emplace_back(session_log.get());
+        global_context->addWarningMessage("Table system.session_log is enabled. It's unreliable and may contain garbage. Do not use it for any kind of security monitoring.");
+    }
     if (processors_profile_log)
         logs.emplace_back(processors_profile_log.get());
     if (cache_log)

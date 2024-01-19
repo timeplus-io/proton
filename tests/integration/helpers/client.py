@@ -16,34 +16,45 @@ class Client:
 
         self.command += ['--host', self.host, '--port', str(self.port), '--stacktrace']
 
-    def query(self, sql,
-              stdin=None,
-              timeout=None,
-              settings=None,
-              user=None,
-              password=None,
-              database=None,
-              ignore_error=False,
-              query_id=None):
-        return self.get_query_request(sql,
-                                      stdin=stdin,
-                                      timeout=timeout,
-                                      settings=settings,
-                                      user=user,
-                                      password=password,
-                                      database=database,
-                                      ignore_error=ignore_error,
-                                      query_id=query_id).get_answer()
+    def query(
+        self,
+        sql,
+        stdin=None,
+        timeout=None,
+        settings=None,
+        user=None,
+        password=None,
+        database=None,
+        host=None,
+        ignore_error=False,
+        query_id=None,
+    ):
+        return self.get_query_request(
+            sql,
+            stdin=stdin,
+            timeout=timeout,
+            settings=settings,
+            user=user,
+            password=password,
+            database=database,
+            host=host,
+            ignore_error=ignore_error,
+            query_id=query_id,
+        ).get_answer()
 
-    def get_query_request(self, sql,
-                          stdin=None,
-                          timeout=None,
-                          settings=None,
-                          user=None,
-                          password=None,
-                          database=None,
-                          ignore_error=False,
-                          query_id=None):
+    def get_query_request(
+        self,
+        sql,
+        stdin=None,
+        timeout=None,
+        settings=None,
+        user=None,
+        password=None,
+        database=None,
+        host=None,
+        ignore_error=False,
+        query_id=None,
+    ):
         command = self.command[:]
 
         if stdin is None:
@@ -57,14 +68,13 @@ class Client:
                 command += ['--' + setting, str(value)]
 
         if user is not None:
-            command += ['--user', user]
-
+            command += ["--user", user]
         if password is not None:
-            command += ['--password', password]
-
+            command += ["--password", password]
         if database is not None:
-            command += ['--database', database]
-
+            command += ["--database", database]
+        if host is not None:
+            command += ["--host", host]
         if query_id is not None:
             command += ['--query_id', query_id]
 
