@@ -1,0 +1,33 @@
+{
+  "input": {
+    "label": "coinbase",
+    "websocket": {
+      "url": "wss://ws-feed.exchange.coinbase.com",
+      "open_message": "{\"type\": \"subscribe\",\"product_ids\": [\"ETH-USD\",\"ETH-EUR\"],\"channels\": [\"ticker\"]}",
+      "open_message_type": "text"
+    }
+  },
+  "output": {
+    "http_client": {
+      "url": "http://proton:8123/proton/v1/ingest/streams/tickers",
+      "verb": "POST",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "batching": {
+        "count": 10,
+        "period": "1000ms",
+        "processors": [
+          {
+            "archive": {
+              "format": "json_array"
+            }
+          },
+          {
+            "mapping": "root.columns = this.index(0).keys()\nroot.data = this.map_each( row -> root.columns.map_each( key -> row.get(key)) )\n"
+          }
+        ]
+      }
+    }
+  }
+}
