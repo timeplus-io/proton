@@ -6,10 +6,12 @@ services:
     pull_policy: always
     ports:
     - "3218:3218" # HTTP Streaming
+    volumes:
+    - ./initdb.d:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD", "curl", "http://localhost:3218/proton/ping"]
-      interval: 2s
-      timeout: 10s
+      interval: 5s
+      timeout: 15s
       retries: 3
       start_period: 10s
 
@@ -20,13 +22,15 @@ services:
     ports:
     - "4195:4195"
 
-  init-stream:
+  init-pipeline:
     image: ghcr.io/timeplus-io/proton:latest
     command:
       - sh
       - -c
       - |
-        proton-client -h proton --query "CREATE STREAM IF NOT EXISTS tickers (best_ask decimal(10,2), best_ask_size decimal(10,8), best_bid decimal(10,2), best_bid_size decimal(10,8), high_24h decimal(10,2), last_size decimal(10,8), low_24h decimal(10,2), open_24h decimal(10,2), price decimal(10,2), product_id string, sequence int, side string, time datetime, trade_id int, type string, volume_24h decimal(20,8), volume_30d decimal(20,8))"
+        curl http://benthos:4195/streams/test -X POST  -d  @/pipeline/pipeline.json
+    volumes:
+    - ./pipeline:/pipeline
     depends_on:
       proton:
         condition: service_healthy
