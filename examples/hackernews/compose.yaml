@@ -1,26 +1,20 @@
 services:
+
   proton:
     image: ghcr.io/timeplus-io/proton:latest
     pull_policy: always
     ports:
       - 8463:8463
       - 3218:3218
+    volumes:
+      - ./init_sql:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD", "curl", "http://localhost:3218/proton/ping"]
-      interval: 2s
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/?query=show+create+comment || exit 1
+      interval: 5s
       timeout: 10s
       retries: 3
       start_period: 10s  
-  init-proton:
-    image: ghcr.io/timeplus-io/proton:latest
-    command:
-      - sh
-      - -c
-      - |
-        proton-client -h proton -n --query "CREATE STREAM IF NOT EXISTS hn_stories_raw(raw string);CREATE STREAM IF NOT EXISTS hn_comments_raw(raw string);CREATE MATERIALIZED VIEW IF NOT EXISTS hn_stories AS SELECT to_time(raw:time) AS _tp_time,raw:id::int AS id,raw:title AS title,raw:by AS by, raw FROM hn_stories_raw;CREATE MATERIALIZED VIEW IF NOT EXISTS hn_comments AS SELECT to_time(raw:time) AS _tp_time,raw:id::int AS id,raw:root_id::int AS root_id,raw:by AS by, raw FROM hn_comments_raw;CREATE VIEW IF NOT EXISTS story AS SELECT * FROM hn_stories WHERE _tp_time>earliest_ts();CREATE VIEW IF NOT EXISTS comment AS SELECT * FROM hn_comments WHERE _tp_time>earliest_ts();"
-    depends_on:
-      proton:
-        condition: service_healthy
+      
   hn_stream:
     build:
       context: .  
@@ -28,8 +22,9 @@ services:
     environment:
       - PROTON_HOST=proton
     depends_on:
-      init-proton:
-        condition: service_completed_successfully
+      proton:
+        condition: service_healthy
+
   grafana:
     image: grafana/grafana:latest
     pull_policy: always
@@ -39,9 +34,8 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: 1
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
       GF_INSTALL_PLUGINS: timeplus-proton-datasource
+      GF_LOG_LEVEL: error
     volumes:
       - ./grafana_provisioning:/etc/grafana/provisioning
     depends_on:
-      - proton  
-
-
+      - hn_stream

@@ -40,7 +40,7 @@ CREATE STREAM IF NOT EXISTS tickers (
 
 ## Create a ingest data pipeline
 
-run command `make create` to create following Benthos data pipeline, note you need install `jq` and `curl` to run this command
+following ingest pipeline will be created by `init-pipeline` container
 
 ```
 input:

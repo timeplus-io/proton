@@ -6,23 +6,14 @@ services:
        - 3218:3218 #http port for JDBC driver, default streaming mode
        - 8123:8123 #http port for JDBC driver, default batch mode
        - 8463:8463 #tcp port for go driver or grafana plugin
+     volumes:
+      - ./init_sql:/docker-entrypoint-initdb.d  
      healthcheck:
-        test: ["CMD", "curl", "http://localhost:3218/proton/ping"]
+        test: wget --no-verbose --tries=1 --spider http://localhost:8123/?query=show+create+phone || exit 1
         interval: 2s
         timeout: 10s
         retries: 3
         start_period: 10s
-
-  init-proton:
-    image: ghcr.io/timeplus-io/proton:latest
-    command:
-      - sh
-      - -c
-      - |
-        proton-client -h proton -n --query "CREATE STREAM IF NOT EXISTS phone(raw string)"
-    depends_on:
-      proton:
-        condition: service_healthy         
 
   proxy:
     image: timeplus/sensor-logger-proxy
@@ -43,8 +34,9 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: 1
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
       GF_INSTALL_PLUGINS: timeplus-proton-datasource
+      GF_LOG_LEVEL: error
     volumes:
       - ./grafana_provisioning:/etc/grafana/provisioning
     depends_on:
-      init-proton:
-        condition: service_completed_successfully
+      proton:
+        condition: service_healthy
