@@ -430,7 +430,9 @@ void StorageMaterializedView::initBackgroundState()
                                 retry_times,
                                 getStorageID().getFullTableName(),
                                 e.what()));
-                        std::this_thread::sleep_for(recover_interval);
+
+                        /// For some queries that always go wrong, we don’t want to recover too frequently. Now wait 5s, 10s, 15s, ... 30s, 30s for each time
+                        std::this_thread::sleep_for(recover_interval * std::min<size_t>(retry_times, 6));
 
                         /// Retry recovering with recover mode
                         if (current_status == State::EXECUTING_PIPELINE)
