@@ -53,6 +53,7 @@ extern const int RESOURCE_NOT_INITED;
 extern const int QUERY_WAS_CANCELLED;
 extern const int MEMORY_LIMIT_EXCEEDED;
 extern const int DIRECTORY_DOESNT_EXIST;
+extern const int UNEXPECTED_ERROR_CODE;
 }
 
 
@@ -429,7 +430,9 @@ void StorageMaterializedView::initBackgroundState()
                                 retry_times,
                                 getStorageID().getFullTableName(),
                                 e.what()));
-                        std::this_thread::sleep_for(recover_interval);
+
+                        /// For some queries that always go wrong, we don’t want to recover too frequently. Now wait 5s, 10s, 15s, ... 30s, 30s for each time
+                        std::this_thread::sleep_for(recover_interval * std::min<size_t>(retry_times, 6));
 
                         /// Retry recovering with recover mode
                         if (current_status == State::EXECUTING_PIPELINE)
@@ -567,6 +570,16 @@ void StorageMaterializedView::executeBackgroundPipeline(BlockIO & io, ContextMut
     executor.setCancelCallback(
         [this] { return background_state.is_cancelled.load(); }, local_context->getSettingsRef().interactive_delay / 1000);
     executor.execute();
+
+    /// If the pipeline is finished, we need check whether it's cancelled or not. If not, it's abnormal.
+    /// For exmaple:
+    /// A background query likes stream join table, and the table has no data, the background pipeline will be finished immediately.
+    /// In this case, we need throw a exception to notify users and retry it.
+    if (!((*io.process_list_entry)->isKilled() || background_state.is_cancelled.load()))
+        throw Exception(
+            ErrorCodes::UNEXPECTED_ERROR_CODE,
+            "The background pipeline for materialized view {} finished unexpectedly, it's abnormal.",
+            getStorageID().getFullTableName());
 }
 
 void StorageMaterializedView::read(
