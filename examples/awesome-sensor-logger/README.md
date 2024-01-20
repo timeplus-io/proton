@@ -11,7 +11,6 @@ Install [Docker Desktop](https://docs.docker.com/desktop/) and fork this repo or
 * latest version of Proton, to receive the live data and apply stream processing
 * latest version of Grafana, to visualize the live data with streaming SQL
 * a lightweight proxy server to convert JSON from sensor loggers to the format for Proton Ingest API
-* a short-live container to start proton client and create the stream `phone`
 
 Wait for about half a minute to have all containers up running.
 

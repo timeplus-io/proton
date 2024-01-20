@@ -18,4 +18,3 @@ CREATE STREAM IF NOT EXISTS tickers (
     volume_24h decimal(20,8),
     volume_30d decimal(20,8)
 )
-
