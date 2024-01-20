@@ -226,6 +226,7 @@ jobs:
 
         PROTON_BINARY=proton-$PROTON_TAG-Darwin-x86_64
         echo "Proton Binary Name: $PROTON_BINARY"
+        sha256sum $GITHUB_WORKSPACE/output/proton
 
         mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/$PROTON_BINARY
     secrets:
@@ -284,6 +285,7 @@ jobs:
 
         PROTON_BINARY=proton-$PROTON_TAG-Darwin-arm64
         echo "Proton Binary Name: $PROTON_BINARY"
+        sha256sum $GITHUB_WORKSPACE/output/proton
 
         mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/$PROTON_BINARY
     secrets:
