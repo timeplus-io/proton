@@ -154,7 +154,7 @@ void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
     if (!new_rows)
         return;
 
-    auto result_block  = non_virtual_header.cloneWithColumns(format_executor->getResultColumns());
+    auto result_block = non_virtual_header.cloneWithColumns(format_executor->getResultColumns());
     convert_non_virtual_to_physical_action->execute(result_block);
 
     MutableColumns new_data(result_block.mutateColumns());
@@ -240,8 +240,13 @@ void KafkaSource::initFormatExecutor(const Kafka * kafka)
 {
     const auto & data_format = kafka->dataFormat();
 
-    auto input_format
-        = FormatFactory::instance().getInputFormat(data_format, read_buffer, non_virtual_header, query_context, max_block_size);
+    auto input_format = FormatFactory::instance().getInputFormat(
+        data_format,
+        read_buffer,
+        non_virtual_header,
+        query_context,
+        max_block_size,
+        kafka->getFormatSettings(query_context));
 
     format_executor = std::make_unique<StreamingFormatExecutor>(
         non_virtual_header,
