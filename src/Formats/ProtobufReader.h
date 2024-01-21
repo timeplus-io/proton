@@ -33,7 +33,9 @@ public:
     void readStringAndAppend(PaddedPODArray<UInt8> & str);
 
     bool eof() const { return in.eof(); }
+    /// proton: starts
     void setReadBuffer(ReadBuffer & buf);
+    /// proton: ends
 
 private:
     void readBinary(void * data, size_t size);

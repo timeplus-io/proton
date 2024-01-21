@@ -145,6 +145,12 @@ void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
     external_stream_counter->addToReadBytes(kmessage->len);
     external_stream_counter->addToReadCounts(new_rows);
 
+    if (format_error)
+    {
+        LOG_ERROR(log, "Failed to parse message at {}: {}", kmessage->offset, format_error.value());
+        format_error.reset();
+    }
+
     if (!new_rows)
         return;
 
@@ -238,7 +244,13 @@ void KafkaSource::initFormatExecutor(const Kafka * kafka)
         = FormatFactory::instance().getInputFormat(data_format, read_buffer, non_virtual_header, query_context, max_block_size);
 
     format_executor = std::make_unique<StreamingFormatExecutor>(
-        non_virtual_header, std::move(input_format), [](const MutableColumns &, Exception &) -> size_t { return 0; });
+        non_virtual_header,
+        std::move(input_format),
+        [this](const MutableColumns &, Exception & ex) -> size_t
+        {
+            format_error = ex.what();
+            return 0;
+        });
 
     auto converting_dag = ActionsDAG::makeConvertingActions(
         non_virtual_header.cloneEmpty().getColumnsWithTypeAndName(),
