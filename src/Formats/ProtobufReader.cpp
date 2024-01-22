@@ -3,7 +3,6 @@
 #if USE_PROTOBUF
 #   include <IO/ReadHelpers.h>
 
-
 namespace DB
 {
 namespace ErrorCodes
@@ -437,12 +436,21 @@ void ProtobufReader::ignoreGroup()
         ErrorCodes::UNKNOWN_PROTOBUF_FORMAT);
 }
 
-
+/// proton: starts
 void ProtobufReader::setReadBuffer(ReadBuffer & buf)
 {
     in.swap(buf);
+    /// reset states
     cursor = 0;
+    current_message_level = 0;
+    current_message_end = 0;
+    parent_message_ends.clear();
+    field_number = 0;
+    next_field_number = 0;
+    field_end = 0;
 }
+/// proton: ends
+
 }
 
 #endif

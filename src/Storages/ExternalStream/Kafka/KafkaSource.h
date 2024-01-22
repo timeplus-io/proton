@@ -82,6 +82,7 @@ private:
 
     bool request_virtual_columns = false;
 
+    std::optional<String> format_error;
     std::vector<Chunk> result_chunks;
     std::vector<Chunk>::iterator iter;
     MutableColumns current_batch;
