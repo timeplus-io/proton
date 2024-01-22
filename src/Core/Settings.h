@@ -809,6 +809,7 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(Float, replay_speed, 0., "Control the replay speed..0 < replay_speed < 1, means replay slower.replay_speed == 1, means replay by actual ingest interval.1 < replay_speed < <max_limit>, means replay faster", 0) \
     M(UInt64, max_events, 0, "Total events to generate for random stream", 0) \
     M(Int64, eps, -1, "control the random stream eps in query time, defalut value is -1, if it is 0 means no limit.", 0) \
+    M(Bool, fill_missing_window_for_aggr, false, "fill missing window if not exist for aggr query", 0) \
 // End of GLOBAL_SETTINGS
 
 #define CONFIGURABLE_GLOBAL_SETTINGS(M) \
