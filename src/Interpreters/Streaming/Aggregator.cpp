@@ -1821,6 +1821,9 @@ void NO_INLINE Aggregator::mergeDataImpl(
     {
         if (inserted)
         {
+            /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
+            dst = nullptr;
+
             /// If there are multiple sources, there are more than one AggregatedDataVariant. Aggregator always creates a new AggregatedDataVariant and merge all other
             /// AggregatedDataVariants to the new created one. After finalize(), it does not clean up aggregate state except the new create AggregatedDataVariant.
             /// If it does not alloc new memory for the 'dst' (i.e. aggregate state of the new AggregatedDataVariant which get destroyed after finalize()) but reuse
@@ -3064,17 +3067,17 @@ void Aggregator::serializeAggregateStates(const AggregateDataPtr & place, WriteB
 
 void Aggregator::deserializeAggregateStates(AggregateDataPtr & place, ReadBuffer & rb, Arena * arena) const
 {
+    /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
+    place = nullptr;
+
     UInt8 has_states;
     readIntBinary(has_states, rb);
     if (has_states)
     {
-        if (!place)
-        {
-            /// Allocate states for all aggregate functions
-            AggregateDataPtr aggregate_data = arena->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-            createAggregateStates(aggregate_data);
-            place = aggregate_data;
-        }
+        /// Allocate states for all aggregate functions
+        AggregateDataPtr aggregate_data = arena->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+        createAggregateStates(aggregate_data);
+        place = aggregate_data;
 
         for (size_t i = 0; i < params.aggregates_size; ++i)
             aggregate_functions[i]->deserialize(place + offsets_of_aggregate_states[i], rb, std::nullopt, arena);
