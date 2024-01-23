@@ -20,7 +20,7 @@ public:
 
     ~WatermarkTransform() override = default;
 
-    String getName() const override { return watermark->getName() + "Transform"; }
+    String getName() const override;
 
     void checkpoint(CheckpointContextPtr ckpt_ctx) override;
     void recover(CheckpointContextPtr ckpt_ctx) override;

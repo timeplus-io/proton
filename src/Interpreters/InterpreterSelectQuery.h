@@ -198,7 +198,7 @@ private:
     void finalCheckAndOptimizeForStreamingQuery();
     bool shouldKeepAggregateState() const;
     void buildShufflingQueryPlan(QueryPlan & query_plan);
-    void buildWatermarkQueryPlan(QueryPlan & query_plan) const;
+    void buildWatermarkQueryPlan(QueryPlan & query_plan);
     void buildStreamingProcessingQueryPlanBeforeJoin(QueryPlan & query_plan);
     void buildStreamingProcessingQueryPlanAfterJoin(QueryPlan & query_plan);
     void checkEmitVersion();
@@ -257,6 +257,9 @@ private:
     mutable std::optional<bool> is_streaming_query;
     bool shuffled_before_join = false;
     bool light_shuffled = false;
+
+    Streaming::WatermarkEmitMode watermark_emit_mode;
+
     /// Overall data stream semantic defines the output semantic of the current layer of SELECT
     Streaming::DataStreamSemanticPair data_stream_semantic_pair;
     /// proton: ends

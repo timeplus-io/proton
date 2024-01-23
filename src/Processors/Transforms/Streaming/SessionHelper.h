@@ -9,6 +9,9 @@ class ColumnTuple;
 
 namespace Streaming
 {
+enum class WatermarkStrategy;
+enum class WatermarkEmitMode;
+
 namespace SessionHelper
 {
 void assignWindow(
@@ -20,6 +23,20 @@ void assignWindow(
     size_t time_col_pos,
     size_t session_start_col_pos,
     size_t session_end_col_pos);
+
+/// @brief Get max window can be finalized
+/// @return last finalized session info, return nullptr if no finalized session
+SessionInfoPtr getLastFinalizedSession(const SessionInfoQueue & sessions);
+
+/// @brief Remove expired sessions that not active
+/// @return last removed expired session id
+SessionID removeExpiredSessions(SessionInfoQueue & sessions);
+
+/// @brief Get windows with buckets
+WindowsWithBuckets getWindowsWithBuckets(const SessionInfoQueue & sessions);
+
+/// @brief Validate watermark strategy and emit mode for session window
+void validateWatermarkStrategyAndEmitMode(WatermarkStrategy & strategy, WatermarkEmitMode & mode, SessionWindowParams & params);
 }
 }
 }

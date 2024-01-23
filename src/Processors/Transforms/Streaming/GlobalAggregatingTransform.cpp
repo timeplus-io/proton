@@ -75,9 +75,6 @@ bool GlobalAggregatingTransform::needFinalization(Int64 min_watermark) const
 
 bool GlobalAggregatingTransform::prepareFinalization(Int64 min_watermark)
 {
-    if (min_watermark == INVALID_WATERMARK)
-        return false;
-
     std::lock_guard lock(many_data->watermarks_mutex);
     if (std::ranges::all_of(many_data->watermarks, [](const auto & wm) { return wm != INVALID_WATERMARK; }))
     {

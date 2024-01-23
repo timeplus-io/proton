@@ -5,11 +5,15 @@
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Streaming/TimeTransformHelper.h>
 
+#include <ranges>
+
 namespace DB
 {
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
+extern const int UNSUPPORTED_WATERMARK_STRATEGY;
+extern const int UNSUPPORTED_WATERMARK_EMIT_MODE;
 }
 
 namespace Streaming
@@ -232,6 +236,62 @@ void assignWindow(
     }
 }
 
+SessionInfoPtr getLastFinalizedSession(const SessionInfoQueue & sessions)
+{
+    for (const auto & session : sessions | std::views::reverse)
+    {
+        if (!session->active)
+            return session;
+    }
+    return nullptr;
+}
+
+SessionID removeExpiredSessions(SessionInfoQueue & sessions)
+{
+    auto last_expired_session_id = -1;
+    while (!sessions.empty() && !sessions.front()->active)
+    {
+        last_expired_session_id = sessions.front()->id;
+        sessions.pop_front();
+    }
+    return last_expired_session_id;
+}
+
+WindowsWithBuckets getWindowsWithBuckets(const SessionInfoQueue & sessions)
+{
+    WindowsWithBuckets windows_with_buckets;
+    windows_with_buckets.reserve(sessions.size());
+    for (const auto & session : sessions)
+        windows_with_buckets.emplace_back(WindowWithBuckets{{session->win_start, session->win_end}, {session->id}});
+
+    return windows_with_buckets;
+}
+
+void validateWatermarkStrategyAndEmitMode(WatermarkStrategy & strategy, WatermarkEmitMode & mode, SessionWindowParams & params)
+{
+    /// TODO: So far, we always push down assign session window logic for session window aggregating
+    assert(params.assign_window_pushdown);
+
+    /// FIXME: Set default strategy, configurable in the future ?
+    if (strategy == WatermarkStrategy::Unknown)
+        strategy = WatermarkStrategy::Ascending;
+
+    if (mode == WatermarkEmitMode::Unknown)
+        mode = WatermarkEmitMode::None;
+
+    /// Supported checking
+    if (strategy != WatermarkStrategy::Ascending)
+        throw Exception(
+            ErrorCodes::UNSUPPORTED_WATERMARK_STRATEGY,
+            "Unsupported watermark strategy '{} for SESSION window",
+            magic_enum::enum_name(strategy));
+
+    if (mode != WatermarkEmitMode::None && mode != WatermarkEmitMode::OnUpdate && mode != WatermarkEmitMode::Periodic && mode != WatermarkEmitMode::PeriodicOnUpdate)
+        throw Exception(
+            ErrorCodes::UNSUPPORTED_WATERMARK_EMIT_MODE,
+            "Unsupported watermark emit mode '{}' for SESSION window",
+            magic_enum::enum_name(mode));
+}
 }
 }
 }

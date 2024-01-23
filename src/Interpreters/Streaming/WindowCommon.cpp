@@ -863,6 +863,9 @@ void reassignWindow(Chunk & chunk, const Window & window, bool time_col_is_datet
     };
 
     auto rows = chunk.rows();
+    if (!rows)
+        return;
+
     auto columns = chunk.detachColumns();
     if (start_pos.has_value())
         fill_time(columns.at(*start_pos), window.start);

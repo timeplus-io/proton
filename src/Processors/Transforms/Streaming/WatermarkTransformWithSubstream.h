@@ -21,7 +21,7 @@ public:
 
     ~WatermarkTransformWithSubstream() override = default;
 
-    String getName() const override { return watermark_template->getName() + "TransformWithSubstream"; }
+    String getName() const override;
     Status prepare() override;
     void work() override;
     void checkpoint(CheckpointContextPtr) override;

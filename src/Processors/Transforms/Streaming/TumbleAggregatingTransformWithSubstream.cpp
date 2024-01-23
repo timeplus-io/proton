@@ -1,4 +1,5 @@
 #include <Processors/Transforms/Streaming/TumbleAggregatingTransformWithSubstream.h>
+#include <Processors/Transforms/Streaming/TumbleHelper.h>
 
 namespace DB
 {
@@ -14,80 +15,25 @@ TumbleAggregatingTransformWithSubstream::TumbleAggregatingTransformWithSubstream
 {
 }
 
-WindowsWithBuckets
-TumbleAggregatingTransformWithSubstream::getFinalizedWindowsWithBuckets(Int64 watermark, const SubstreamContextPtr & substream_ctx) const
+WindowsWithBuckets TumbleAggregatingTransformWithSubstream::getWindowsWithBuckets(const SubstreamContextPtr & substream_ctx) const
 {
-    if (unlikely(watermark == INVALID_WATERMARK))
-        return {}; /// No window
+    return TumbleHelper::getWindowsWithBuckets(
+        window_params, params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START, [&, this]() {
+            return params->aggregator.buckets(substream_ctx->variants);
+        });
+}
 
-    WindowsWithBuckets windows_with_buckets;
-
-    /// When watermark reached to the current window, there may still be some events within the current window will arrive in future
-    /// So we can project some windows before the current window.
-    /// `last_finalized_window_start <=> current_window_start - window_interval`
-    /// `last_finalized_window_end <=> current_window_start`
-    auto current_window_start = toStartTime(
-        watermark, window_params.interval_kind, window_params.window_interval, *window_params.time_zone, window_params.time_scale);
-    if (params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START)
-    {
-        auto max_finalized_bucket = addTime(
-            current_window_start,
-            window_params.interval_kind,
-            -window_params.window_interval,
-            *window_params.time_zone,
-            window_params.time_scale);
-
-        const auto & final_buckets = params->aggregator.bucketsBefore(substream_ctx->variants, max_finalized_bucket);
-        for (auto time_bucket : final_buckets)
-            windows_with_buckets.emplace_back(WindowWithBuckets{
-                {time_bucket,
-                 addTime(
-                     time_bucket,
-                     window_params.interval_kind,
-                     window_params.window_interval,
-                     *window_params.time_zone,
-                     window_params.time_scale)},
-                {time_bucket}});
-    }
-    else
-    {
-        auto max_finalized_bucket = current_window_start;
-        const auto & final_buckets = params->aggregator.bucketsBefore(substream_ctx->variants, max_finalized_bucket);
-        for (auto time_bucket : final_buckets)
-            windows_with_buckets.emplace_back(WindowWithBuckets{
-                {addTime(
-                     time_bucket,
-                     window_params.interval_kind,
-                     -window_params.window_interval,
-                     *window_params.time_zone,
-                     window_params.time_scale),
-                 time_bucket},
-                {time_bucket}});
-    }
-
-    return windows_with_buckets;
+Window TumbleAggregatingTransformWithSubstream::getLastFinalizedWindow(const SubstreamContextPtr & substream_ctx) const
+{
+    return TumbleHelper::getLastFinalizedWindow(substream_ctx->finalized_watermark, window_params);
 }
 
 void TumbleAggregatingTransformWithSubstream::removeBucketsImpl(Int64 watermark, const SubstreamContextPtr & substream_ctx)
 {
-    size_t max_time_bucket_can_be_removed = 0;
-    /// When watermark reached to the current window, there may still be some events within the current window will arrive in future
-    /// So we can project some windows before the current window.
-    /// `last_finalized_window_start <=> current_window_start - window_interval`
-    /// `last_finalized_window_end <=> current_window_start`
-    auto current_window_start = toStartTime(
-        watermark, window_params.interval_kind, window_params.window_interval, *window_params.time_zone, window_params.time_scale);
-    if (params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START)
-        max_time_bucket_can_be_removed = addTime(
-            current_window_start,
-            window_params.interval_kind,
-            -window_params.window_interval,
-            *window_params.time_zone,
-            window_params.time_scale);
-    else
-        max_time_bucket_can_be_removed = current_window_start;
+    auto last_expired_time_bucket = TumbleHelper::getLastExpiredTimeBucket(
+        watermark, window_params, params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START);
 
-    params->aggregator.removeBucketsBefore(substream_ctx->variants, max_time_bucket_can_be_removed);
+    params->aggregator.removeBucketsBefore(substream_ctx->variants, last_expired_time_bucket);
 }
 
 }

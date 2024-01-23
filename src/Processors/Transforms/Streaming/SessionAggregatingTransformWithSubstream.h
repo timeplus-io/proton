@@ -18,7 +18,8 @@ public:
 private:
     SubstreamContextPtr getOrCreateSubstreamContext(const SubstreamID & id) override;
     std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, const SubstreamContextPtr & substream_ctx) override;
-    WindowsWithBuckets getFinalizedWindowsWithBuckets(Int64 watermark, const SubstreamContextPtr & substream_ctx) const override;
+    WindowsWithBuckets getWindowsWithBuckets(const SubstreamContextPtr & substream_ctx) const override;
+    Window getLastFinalizedWindow(const SubstreamContextPtr & substream_ctx) const override;
     void removeBucketsImpl(Int64 watermark, const SubstreamContextPtr & substream_ctx) override;
     bool needReassignWindow() const override { return true; }
 

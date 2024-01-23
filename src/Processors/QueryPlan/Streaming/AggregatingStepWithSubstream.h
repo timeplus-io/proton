@@ -19,7 +19,8 @@ public:
         Aggregator::Params params_,
         bool final_,
         bool emit_version_,
-        bool emit_changelog_);
+        bool emit_changelog_,
+        WatermarkEmitMode watermark_emit_mode_);
 
     String getName() const override { return "StreamingAggregatingWithSubstream"; }
 
@@ -37,6 +38,7 @@ private:
     bool final;
     bool emit_version;
     bool emit_changelog;
+    WatermarkEmitMode watermark_emit_mode;
 
     Processors aggregating;
 };

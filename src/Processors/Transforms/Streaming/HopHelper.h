@@ -4,7 +4,12 @@
 
 namespace DB
 {
-namespace Streaming::HopHelper
+namespace Streaming
+{
+enum class WatermarkStrategy;
+enum class WatermarkEmitMode;
+
+namespace HopHelper
 {
 WindowInterval gcdWindowInterval(const ColumnWithTypeAndName & interval_col1, const ColumnWithTypeAndName & interval_col2);
 
@@ -12,12 +17,15 @@ WindowInterval gcdWindowInterval(const ColumnWithTypeAndName & interval_col1, co
 Window getLastFinalizedWindow(Int64 watermark, const HopWindowParams & params);
 
 /// @brief Get max exprired time bucket can be remove by the @param watermark
-/// @param is_start_time_bucket. true: <gcd window start time>, otherwise: <gcd window end time>
-size_t getLastExpiredTimeBucket(Int64 watermark, const HopWindowParams & params, bool is_start_time_bucket);
+/// @param is_start_time_bucket. true: <gcd window start time>, false: <gcd window end time>
+Int64 getLastExpiredTimeBucket(Int64 watermark, const HopWindowParams & params, bool is_start_time_bucket);
 
-/// @brief Get windows with buckets can be finalized by the @param watermark
-using BucketsGetter = std::function<std::vector<Int64>(Int64 /*max_bucket*/)>;
-WindowsWithBuckets
-getFinalizedWindowsWithBuckets(Int64 watermark, const HopWindowParams & params, bool is_start_time_bucket, BucketsGetter buckets_getter);
+/// @brief Get windows with buckets
+using BucketsGetter = std::function<std::vector<Int64>()>;
+WindowsWithBuckets getWindowsWithBuckets(const HopWindowParams & params, bool is_start_time_bucket, BucketsGetter buckets_getter);
+
+/// @brief Validate watermark strategy and emit mode for hop window
+void validateWatermarkStrategyAndEmitMode(WatermarkStrategy & strategy, WatermarkEmitMode & mode, HopWindowParams & params);
+}
 }
 }

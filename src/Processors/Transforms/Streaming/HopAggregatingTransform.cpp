@@ -30,12 +30,10 @@ HopAggregatingTransform::HopAggregatingTransform(
 {
 }
 
-WindowsWithBuckets HopAggregatingTransform::getLocalFinalizedWindowsWithBucketsImpl(Int64 watermark_) const
+WindowsWithBuckets HopAggregatingTransform::getLocalWindowsWithBucketsImpl() const
 {
-    return HopHelper::getFinalizedWindowsWithBuckets(
-        watermark_, window_params, params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START, [this](Int64 max_bucket) {
-            return getBucketsBefore(max_bucket);
-        });
+    return HopHelper::getWindowsWithBuckets(
+        window_params, params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START, [this]() { return getBuckets(); });
 }
 
 void HopAggregatingTransform::removeBucketsImpl(Int64 watermark_)

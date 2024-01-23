@@ -4,6 +4,12 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int UNSUPPORTED_WATERMARK_STRATEGY;
+extern const int UNSUPPORTED_WATERMARK_EMIT_MODE;
+}
+
 namespace Streaming::HopHelper
 {
 WindowInterval gcdWindowInterval(const ColumnWithTypeAndName & interval_col1, const ColumnWithTypeAndName & interval_col2)
@@ -30,11 +36,11 @@ WindowInterval gcdWindowInterval(const ColumnWithTypeAndName & interval_col1, co
 /// 2) `window-2`, which contains `bucket-2`, `bucket-3`, `bucket-4`
 Window getLastFinalizedWindow(Int64 watermark, const HopWindowParams & params)
 {
-    if (unlikely(watermark == INVALID_WATERMARK))
-        return {INVALID_WATERMARK, INVALID_WATERMARK}; /// No window
-
     /// `last_finalized_window_end <= watermark`
     auto current_window_start = toStartTime(watermark, params.interval_kind, params.slide_interval, *params.time_zone, params.time_scale);
+    if (current_window_start > watermark) [[unlikely]]
+        return {INVALID_WATERMARK, INVALID_WATERMARK}; /// No window
+
     auto last_finalized_window_end
         = addTime(current_window_start, params.interval_kind, params.window_interval, *params.time_zone, params.time_scale);
 
@@ -63,7 +69,7 @@ Window getLastFinalizedWindow(Int64 watermark, const HopWindowParams & params)
 /// 1) `window-1`, which contains `bucket-0`, `bucket-1`, `bucket-2`
 /// 2) `window-2`, which contains `bucket-2`, `bucket-3`, `bucket-4`
 /// So we can remove max bucket `bucket-3` (before next window-3)
-size_t getLastExpiredTimeBucket(Int64 watermark, const HopWindowParams & params, bool is_start_time_bucket)
+Int64 getLastExpiredTimeBucket(Int64 watermark, const HopWindowParams & params, bool is_start_time_bucket)
 {
     auto last_finalized_window = getLastFinalizedWindow(watermark, params);
     if (unlikely(!last_finalized_window.isValid()))
@@ -91,30 +97,12 @@ size_t getLastExpiredTimeBucket(Int64 watermark, const HopWindowParams & params,
         return addTime(last_finalized_window.start, params.interval_kind, params.slide_interval, *params.time_zone, params.time_scale);
 }
 
-WindowsWithBuckets
-getFinalizedWindowsWithBuckets(Int64 watermark, const HopWindowParams & params, bool is_start_time_bucket, BucketsGetter buckets_getter)
+WindowsWithBuckets getWindowsWithBuckets(const HopWindowParams & params, bool is_start_time_bucket, BucketsGetter buckets_getter)
 {
-    if (unlikely(watermark == INVALID_WATERMARK))
-        return {}; /// No window
-
-    if (unlikely(watermark == TIMEOUT_WATERMARK))
-    {
-        /// Assume the actual watermark greater than the current max window.
-        if (auto final_buckets = buckets_getter(watermark); !final_buckets.empty())
-        {
-            auto max_window_start = toStartTime(
-                is_start_time_bucket ? final_buckets.back() : final_buckets.back() - 1,
-                params.interval_kind,
-                params.slide_interval,
-                *params.time_zone,
-                params.time_scale);
-            auto max_window_end
-                = addTime(max_window_start, params.interval_kind, params.window_interval, *params.time_zone, params.time_scale);
-            return getFinalizedWindowsWithBuckets(max_window_end, params, is_start_time_bucket, std::move(buckets_getter));
-        }
-        else
-            return {}; /// No window
-    }
+    /// Get final buckets
+    const auto & buckets = buckets_getter();
+    if (buckets.empty())
+        return {};
 
     Window window;
     Int64 min_bucket_of_window, max_bucket_of_window;
@@ -132,23 +120,24 @@ getFinalizedWindowsWithBuckets(Int64 watermark, const HopWindowParams & params, 
     };
 
     /// Initial first window
-    window = HopHelper::getLastFinalizedWindow(watermark, params);
+    window.start = toStartTime(
+        is_start_time_bucket ? buckets.back() : buckets.back() - 1,
+        params.interval_kind,
+        params.slide_interval,
+        *params.time_zone,
+        params.time_scale);
+    window.end = addTime(window.start, params.interval_kind, params.window_interval, *params.time_zone, params.time_scale);
     if (unlikely(!window.isValid()))
         return {};
 
     calc_window_min_max_buckets();
 
-    /// Get final buckets
-    const auto & final_buckets = buckets_getter(max_bucket_of_window);
-    if (final_buckets.empty())
-        return {};
-
-    /// Collect finalized windows
+    /// Collect windows
     WindowsWithBuckets windows_with_buckets;
-    while (*final_buckets.begin() <= max_bucket_of_window)
+    while (*buckets.begin() <= max_bucket_of_window)
     {
         auto window_with_buckets = windows_with_buckets.emplace(windows_with_buckets.begin(), WindowWithBuckets{window, {}});
-        for (auto time_bucket : final_buckets)
+        for (auto time_bucket : buckets)
         {
             if (time_bucket >= min_bucket_of_window && time_bucket <= max_bucket_of_window)
                 window_with_buckets->buckets.emplace_back(time_bucket);
@@ -168,6 +157,29 @@ getFinalizedWindowsWithBuckets(Int64 watermark, const HopWindowParams & params, 
     }
 
     return windows_with_buckets;
+}
+
+void validateWatermarkStrategyAndEmitMode(WatermarkStrategy & strategy, WatermarkEmitMode & mode, HopWindowParams & params)
+{
+    /// FIXME: Set default strategy, configurable in the future ?
+    if (strategy == WatermarkStrategy::Unknown)
+        strategy = WatermarkStrategy::OutOfOrdernessInWindowAndBatch;
+
+    if (mode == WatermarkEmitMode::Unknown)
+        mode = WatermarkEmitMode::OnWindow;
+
+    /// Supported checking
+    if (strategy == WatermarkStrategy::None)
+        throw Exception(
+            ErrorCodes::UNSUPPORTED_WATERMARK_STRATEGY,
+            "Unsupported watermark strategy '{} for HOP window",
+            magic_enum::enum_name(strategy));
+
+    if (mode != WatermarkEmitMode::OnWindow && mode != WatermarkEmitMode::OnUpdate && mode != WatermarkEmitMode::Periodic && mode != WatermarkEmitMode::PeriodicOnUpdate)
+        throw Exception(
+            ErrorCodes::UNSUPPORTED_WATERMARK_EMIT_MODE,
+            "Unsupported watermark emit mode '{}' for HOP window",
+            magic_enum::enum_name(mode));
 }
 }
 }

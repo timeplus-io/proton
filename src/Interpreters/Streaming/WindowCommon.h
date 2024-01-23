@@ -273,6 +273,9 @@ struct SessionWindowParams : WindowParams
     bool start_with_inclusion;
     bool end_with_inclusion;
 
+    /// TODO: So far, always assign session window in aggr
+    bool assign_window_pushdown = true;
+
     SessionWindowParams(TableFunctionDescriptionPtr window_desc);
 };
 

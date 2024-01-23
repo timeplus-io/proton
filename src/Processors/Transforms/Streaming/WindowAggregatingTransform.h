@@ -29,10 +29,10 @@ protected:
 
     void clearExpiredState(Int64 finalized_watermark) override;
 
-    std::vector<Int64> getBucketsBefore(Int64 max_buckets) const;
+    std::vector<Int64> getBuckets() const;
 
 private:
-    virtual WindowsWithBuckets getLocalFinalizedWindowsWithBucketsImpl(Int64 watermark) const = 0;
+    virtual WindowsWithBuckets getLocalWindowsWithBucketsImpl() const = 0;
     virtual void removeBucketsImpl(Int64 watermark) = 0;
     virtual bool needReassignWindow() const = 0;
 
@@ -41,6 +41,9 @@ private:
 
     std::optional<size_t> window_start_col_pos;
     std::optional<size_t> window_end_col_pos;
+
+    bool only_emit_finalized_windows = true;
+    bool only_convert_updates = false;
 };
 }
 }

@@ -3,6 +3,8 @@
 #include <Interpreters/Streaming/TableFunctionDescription.h>
 #include <Processors/Transforms/Streaming/SessionHelper.h>
 
+#include <ranges>
+
 namespace DB
 {
 namespace Streaming
@@ -54,49 +56,40 @@ std::pair<bool, bool> SessionAggregatingTransform::executeOrMergeColumns(Chunk &
         if (chunk.hasTimeoutWatermark())
             sessions.back()->active = false; /// force to finalize current session
 
-        for (auto riter = sessions.rbegin(); riter != sessions.rend(); ++riter)
+        auto last_finalized_session = SessionHelper::getLastFinalizedSession(sessions);
+        if (last_finalized_session)
         {
-            if (!(*riter)->active)
-            {
-                chunk.setWatermark((*riter)->id);
-                return result;
-            }
+            chunk.setWatermark(last_finalized_session->win_end);
+            return result;
         }
     }
 
-    chunk.clearWatermark();
+    if (chunk.hasWatermark())
+    {
+        /// When get here, there are two scenarios:
+        /// 1) No sessions, and have periodic watermark or timeout watermark
+        /// 2) Only has one active session, and have periodic watermark
+        /// For case 2), we can set session start as watermark to just emit current session (for periodic emit)
+        if (!sessions.empty())
+        {
+            assert(sessions.size() == 1 && sessions.front()->active);
+            chunk.setWatermark(sessions.front()->win_start);
+        }
+    }
 
     return result;
 }
 
-WindowsWithBuckets SessionAggregatingTransform::getLocalFinalizedWindowsWithBucketsImpl(Int64 watermark_) const
+WindowsWithBuckets SessionAggregatingTransform::getLocalWindowsWithBucketsImpl() const
 {
-    auto & sessions = many_data->getField<SessionInfoQueue>();
-    WindowsWithBuckets windows_with_buckets;
-    for (const auto & session : sessions)
-    {
-        if (session->id <= watermark_)
-        {
-            assert(!session->active || watermark_ == TIMEOUT_WATERMARK);
-            windows_with_buckets.emplace_back(WindowWithBuckets{{session->win_start, session->win_end}, {session->id}});
-        }
-    }
-
-    return windows_with_buckets;
+    return SessionHelper::getWindowsWithBuckets(many_data->getField<SessionInfoQueue>());
 }
 
-void SessionAggregatingTransform::removeBucketsImpl(Int64 watermark_)
+void SessionAggregatingTransform::removeBucketsImpl(Int64 /*watermark_*/)
 {
     auto & sessions = many_data->getField<SessionInfoQueue>();
-    for (auto iter = sessions.begin(); iter != sessions.end();)
-    {
-        if ((*iter)->id > watermark_)
-            break;
-
-        iter = sessions.erase(iter);
-    }
-
-    params->aggregator.removeBucketsBefore(variants, watermark_);
+    Int64 last_expired_time_bucket = SessionHelper::removeExpiredSessions(sessions);
+    params->aggregator.removeBucketsBefore(variants, last_expired_time_bucket);
 }
 
 }
