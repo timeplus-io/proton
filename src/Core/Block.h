@@ -110,6 +110,8 @@ public:
 
     /// Approximate number of allocated bytes in memory - for profiling and limits.
     size_t allocatedBytes() const;
+    size_t allocatedDataBytes() const;
+    size_t allocatedMetadataBytes() const;
 
     operator bool() const { return !!columns(); }
     bool operator!() const { return !this->operator bool(); }

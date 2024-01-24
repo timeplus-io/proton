@@ -4,6 +4,7 @@
 #include <Common/ColumnsHashing.h>
 #include <Common/HashTable/FixedHashMap.h>
 #include <Common/HashTable/HashMap.h>
+#include <Common/HashTable/StringHashTable.h>
 
 namespace DB
 {
@@ -81,19 +82,27 @@ enum class HashType
 #undef M
 };
 
+template <size_t initial_size_degree = 8>
+struct ConservativeHashTableGrowerWithPrecalculation : public HashTableGrowerWithPrecalculation<initial_size_degree>
+{
+    /// Grows to power of 2 when reached 1<<20 (1048572), otherwise grows rapidly,
+    /// it is different from HashTableGrowerWithPrecalculation which use 1<<23 (`8388608`) as threshold
+    void increaseSize() { this->increaseSizeDegree(this->sizeDegree() >= 20 ? 1 : 2); }
+};
+
 template <typename Mapped>
 struct HashMapsTemplate
 {
     using MappedType = Mapped;
     std::unique_ptr<FixedHashMap<UInt8, Mapped>> key8;
     std::unique_ptr<FixedHashMap<UInt16, Mapped>> key16;
-    std::unique_ptr<HashMap<UInt32, Mapped, HashCRC32<UInt32>>> key32;
-    std::unique_ptr<HashMap<UInt64, Mapped, HashCRC32<UInt64>>> key64;
-    std::unique_ptr<HashMapWithSavedHash<StringRef, Mapped>> key_string;
-    std::unique_ptr<HashMapWithSavedHash<StringRef, Mapped>> key_fixed_string;
-    std::unique_ptr<HashMap<UInt128, Mapped, UInt128HashCRC32>> keys128;
-    std::unique_ptr<HashMap<UInt256, Mapped, UInt256HashCRC32>> keys256;
-    std::unique_ptr<HashMap<UInt128, Mapped, UInt128TrivialHash>> hashed;
+    std::unique_ptr<HashMap<UInt32, Mapped, HashCRC32<UInt32>, ConservativeHashTableGrowerWithPrecalculation<>>> key32;
+    std::unique_ptr<HashMap<UInt64, Mapped, HashCRC32<UInt64>, ConservativeHashTableGrowerWithPrecalculation<>>> key64;
+    std::unique_ptr<HashMapWithSavedHash<StringRef, Mapped, DefaultHash<StringRef>, StringHashTableGrower<>>> key_string;
+    std::unique_ptr<HashMapWithSavedHash<StringRef, Mapped, DefaultHash<StringRef>, StringHashTableGrower<>>> key_fixed_string;
+    std::unique_ptr<HashMap<UInt128, Mapped, UInt128HashCRC32, ConservativeHashTableGrowerWithPrecalculation<>>> keys128;
+    std::unique_ptr<HashMap<UInt256, Mapped, UInt256HashCRC32, ConservativeHashTableGrowerWithPrecalculation<>>> keys256;
+    std::unique_ptr<HashMap<UInt128, Mapped, UInt128TrivialHash, ConservativeHashTableGrowerWithPrecalculation<>>> hashed;
 
     void create(HashType which)
     {
@@ -124,7 +133,7 @@ struct HashMapsTemplate
         UNREACHABLE();
     }
 
-    size_t getTotalByteCountImpl() const
+    size_t getBufferSizeInBytes() const
     {
         switch (type)
         {

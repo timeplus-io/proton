@@ -3,7 +3,7 @@
 #include <Core/Types.h>
 #include <Interpreters/Streaming/WindowCommon.h>
 #include <Interpreters/TreeRewriter.h>
-#include <base/SerdeTag.h>
+#include <Common/serde.h>
 
 namespace Poco
 {
@@ -58,7 +58,13 @@ public:
     virtual String getName() const { return "WatermarkStamper"; }
 
     void preProcess(const Block & header);
+
     void process(Chunk & chunk);
+
+    /// During mute watermark, we still need to process the chunk to update max_event_ts
+    void processWithMutedWatermark(Chunk & chunk);
+
+    void processAfterUnmuted(Chunk & chunk);
 
     bool requiresPeriodicOrTimeoutEmit() const { return periodic_interval || timeout_interval; }
 
@@ -80,7 +86,10 @@ private:
 
     void logLateEvents();
 
-    virtual Int64 calculateWatermark(Int64 event_ts) const;
+    ALWAYS_INLINE Int64 calculateWatermark(Int64 event_ts) const;
+    ALWAYS_INLINE Int64 calculateWatermarkPerRow(Int64 event_ts) const;
+
+    virtual Int64 calculateWatermarkImpl(Int64 event_ts) const;
 
     void initPeriodicTimer(const WindowInterval & interval);
 

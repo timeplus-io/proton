@@ -17,7 +17,7 @@ public:
     WatermarkStamperPtr clone() const override { return std::make_unique<HopWatermarkStamper>(*this); }
 
 private:
-    Int64 calculateWatermark(Int64 event_ts) const override;
+    Int64 calculateWatermarkImpl(Int64 event_ts) const override;
 
     HopWindowParams & window_params;
 };

@@ -1,0 +1,220 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 2,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "timeplus-proton-datasource",
+        "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        {
+          "addNow": false,
+          "datasource": {
+            "type": "timeplus-proton-datasource",
+            "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
+          },
+          "isStreaming": true,
+          "queryText": "select array_join(xyz) as v, multi_if(v[1]=1,'x',v[1]=2,'y','z') as axis, v[2] as value, time from(\nselect to_datetime64((p:time::int64)/1000000000,3) as time,[[1,to_float32_or_zero(p:values.x)],[2,to_float32_or_zero(p:values.y)],[3,to_float32_or_zero(p:values.z)]] as xyz from (select array_join(json_extract_array(raw,'payload')) as p from phone where p:name='gyroscope')\n)",
+          "refId": "A"
+        }
+      ],
+      "title": "Bar Chart",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "timeplus-proton-datasource",
+        "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "pointSize": {
+              "fixed": 5
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "show": "points"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "dims": {
+          "exclude": [
+            "z"
+          ]
+        },
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "series": [],
+        "seriesMapping": "auto",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "addNow": false,
+          "datasource": {
+            "type": "timeplus-proton-datasource",
+            "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
+          },
+          "isStreaming": true,
+          "queryText": "select to_datetime64((p:time::int64)/1000000000,3) as time,to_float32_or_zero(p:values.x) as x,to_float32_or_zero(p:values.y) as y,to_float32_or_zero(p:values.z) as z from (select array_join(json_extract_array(raw,'payload')) as p from phone where p:name='gyroscope')\n",
+          "refId": "A"
+        }
+      ],
+      "title": "XY Chart",
+      "type": "xychart"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": [],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-3m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Phone Sensor",
+  "uid": "a3406569-2c08-454c-8791-64064366e107",
+  "version": 3,
+  "weekStart": ""
+}

@@ -41,11 +41,16 @@ BINARY_FILE="proton-${LATEST_TAG}-${OS}-${ARCH}"
 TARGET_FILE="proton"
 
 # Check if the proton file exists
+
+# Fix me, what if I wanna use this script 3 times?
+# if `proton` not exist, we use proton
+# else 
+#     1.use `"proton-${LATEST_TAG}-${OS}-${ARCH}"` (by default)
+#     2.overwrite it(only work on manual bash install.sh)
+
 if [ -f "$TARGET_FILE" ]; then
-  echo -n "'proton' file exists. Do you want to overwrite it? (y/n): "
-  read REPLY
-  echo
-  if [ "$(echo $REPLY | cut -c1)" = "y" ] || [ "$(echo $REPLY | cut -c1)" = "Y" ]; then
+  read -p "'proton' file already exists. Do you want to overwrite it? (y/n): " answer
+  if [ "$answer" = "y" -o "$answer" = "Y" ]; then
     TARGET_FILE="proton"
   else
     TARGET_FILE=$BINARY_FILE
@@ -79,6 +84,7 @@ For detailed usage and more information, check out the Timeplus documentation:
 https://docs.timeplus.com/"
 else
   echo "Download failed or the binary for $OS-$ARCH is not available." >&2
+  exit 1
 fi
 
 if [ "${OS}" = "Linux" ]

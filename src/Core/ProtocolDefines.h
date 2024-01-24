@@ -8,7 +8,6 @@
 #define DBMS_MIN_REVISION_WITH_SERVER_DISPLAY_NAME 54372
 #define DBMS_MIN_REVISION_WITH_VERSION_PATCH 54401
 //#define DBMS_MIN_REVISION_WITH_SERVER_LOGS 54406
-//#define DBMS_MIN_REVISION_WITH_CLIENT_SUPPORT_EMBEDDED_DATA 54415
 /// Minimum revision with exactly the same set of aggregation methods and rules to select them.
 /// Two-level (bucketed) aggregation is incompatible if servers are inconsistent in these rules
 /// (keys will be placed in different buckets and result will not be fully aggregated).
@@ -60,3 +59,11 @@
 //#define DBMS_MIN_PROTOCOL_VERSION_WITH_INITIAL_QUERY_START_TIME 54449
 
 #define DBMS_MIN_PROTOCOL_VERSION_WITH_PARAMETERS 54459
+
+#define DBMS_MIN_PROTOCOL_VERSION_WITH_PROFILE_EVENTS_IN_INSERT 54456
+
+#define DBMS_MIN_PROTOCOL_VERSION_WITH_VIEW_IF_PERMITTED 54457
+
+#define DBMS_MIN_PROTOCOL_VERSION_WITH_ADDENDUM 54458
+
+#define DBMS_MIN_PROTOCOL_VERSION_WITH_QUOTA_KEY 54458

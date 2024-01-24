@@ -1,6 +1,7 @@
 #include <Processors/Transforms/Streaming/AggregatingTransform.h>
 
 #include <Checkpoint/CheckpointCoordinator.h>
+#include <Interpreters/Streaming/AggregatedDataMetrics.h>
 #include <Common/ProtonCommon.h>
 
 namespace DB
@@ -162,7 +163,10 @@ void AggregatingTransform::consume(Chunk chunk)
     if (chunk.hasWatermark())
         finalizeAlignment(chunk.getChunkContext());
     else if (need_finalization)
+    {
         finalize(chunk.getChunkContext());
+        logAggregatingMetrics();
+    }
     else if (chunk.requestCheckpoint())
         checkpointAlignment(chunk.getCheckpointContext());
 
@@ -213,12 +217,12 @@ void AggregatingTransform::emitVersion(Chunk & chunk)
         auto col = params->version_type->createColumn();
         col->reserve(rows);
         for (size_t i = 0; i < rows; i++)
-            col->insert(many_data->version++);
+            col->insert(many_data->emited_version++);
         chunk.addColumn(std::move(col));
     }
     else
     {
-        Int64 version = many_data->version++;
+        Int64 version = many_data->emited_version++;
         chunk.addColumn(params->version_type->createColumnConst(rows, version)->convertToFullColumnIfConst());
     }
 }
@@ -321,26 +325,9 @@ void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
     auto start = MonotonicMilliseconds::now();
 
     /// Blocking all variants's processing of AggregatingTransform
-    std::vector<std::unique_lock<std::timed_mutex>> lock_holders;
-    lock_holders.reserve(many_data->variants_mutexes.size());
-    for (auto & mutex : many_data->variants_mutexes)
-        lock_holders.emplace_back(*mutex, std::try_to_lock);
-
-    /// Lock for each varitants mutex
-    bool all_locks_acquired = true;
-    do
-    {
-        all_locks_acquired = true;
-        for (auto & lock_holder : lock_holders)
-        {
-            if (isCancelled())
-                return;
-
-            if (!lock_holder.owns_lock())
-                if (!lock_holder.try_lock_for(finalizing_check_interval_ms))
-                    all_locks_acquired = false;
-        }
-    } while (!all_locks_acquired);
+    auto lock_holders = lockAllDataVariants();
+    if (isCancelled())
+        return;
 
     auto mutate_chunk_ctx = ChunkContext::mutate(chunk_ctx);
     mutate_chunk_ctx->setWatermark(*try_finalizing_watermark);
@@ -354,6 +341,9 @@ void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
         end - start,
         many_data->variants.size(),
         many_data->finalized_watermark.load(std::memory_order_relaxed));
+
+    if (MonotonicMilliseconds::now() - many_data->last_log_ts.load(std::memory_order_relaxed) > log_metrics_interval_ms)
+        logAggregatingMetricsWithoutLock();
 }
 
 bool AggregatingTransform::propagateWatermarkAndClearExpiredStates()
@@ -418,6 +408,69 @@ bool AggregatingTransform::propagateCheckpointAndReset()
     return false;
 }
 
+void AggregatingTransform::logAggregatingMetrics()
+{
+    auto start_ts = MonotonicMilliseconds::now();
+    if (start_ts - many_data->last_log_ts.load(std::memory_order_relaxed) <= log_metrics_interval_ms)
+        return;
+
+    std::unique_lock<std::mutex> lock(many_data->finalizing_mutex, std::try_to_lock);
+    if (!lock.owns_lock())
+        return; /// Anothor thread is finalizing, so we try in next `work()`
+
+    /// Check logged by other threads
+    if (MonotonicMilliseconds::now() - many_data->last_log_ts.load(std::memory_order_relaxed) <= log_metrics_interval_ms)
+        return;
+
+    auto lock_holders = lockAllDataVariants();
+    if (isCancelled())
+        return;
+
+    logAggregatingMetricsWithoutLock(start_ts);
+}
+
+void AggregatingTransform::logAggregatingMetricsWithoutLock(Int64 start_ts)
+{
+    AggregatedDataMetrics aggregated_data_metrics;
+    for (const auto & data_variants : many_data->variants)
+        params->aggregator.updateMetrics(*data_variants, aggregated_data_metrics);
+
+    auto end_ts = MonotonicMilliseconds::now();
+    LOG_INFO(
+        log,
+        "Took {} milliseconds to log metrics. Aggregated data metrics: {}",
+        end_ts - start_ts,
+        aggregated_data_metrics.string());
+
+    many_data->last_log_ts.store(end_ts, std::memory_order_relaxed);
+}
+
+std::vector<std::unique_lock<std::timed_mutex>> AggregatingTransform::lockAllDataVariants()
+{
+    std::vector<std::unique_lock<std::timed_mutex>> lock_holders;
+    lock_holders.reserve(many_data->variants_mutexes.size());
+    for (auto & mutex : many_data->variants_mutexes)
+        lock_holders.emplace_back(*mutex, std::try_to_lock);
+
+    /// Lock for each varitants mutex
+    bool all_locks_acquired = true;
+    do
+    {
+        all_locks_acquired = true;
+        for (auto & lock_holder : lock_holders)
+        {
+            if (isCancelled())
+                return {};
+
+            if (!lock_holder.owns_lock())
+                if (!lock_holder.try_lock_for(finalizing_check_interval_ms))
+                    all_locks_acquired = false;
+        }
+    } while (!all_locks_acquired);
+
+    return lock_holders;
+}
+
 void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
@@ -432,7 +485,7 @@ void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 
             DB::writeIntBinary(many_data->finalized_watermark.load(std::memory_order_relaxed), wb);
             DB::writeIntBinary(many_data->finalized_window_end.load(std::memory_order_relaxed), wb);
-            DB::writeIntBinary(many_data->version.load(std::memory_order_relaxed), wb);
+            DB::writeIntBinary(many_data->emited_version.load(std::memory_order_relaxed), wb);
 
             assert(num_variants == many_data->rows_since_last_finalizations.size());
             for (const auto & last_row : many_data->rows_since_last_finalizations)
@@ -441,7 +494,7 @@ void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
             bool has_field = many_data->hasField();
             DB::writeBoolText(has_field, wb);
             if (has_field)
-                many_data->any_field.serializer(many_data->any_field.field, wb);
+                many_data->any_field.serializer(many_data->any_field.field, wb, getVersion());
         }
 
         /// Serializing no shared data
@@ -458,7 +511,7 @@ void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 
 void AggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
 {
-    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) {
+    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType version_, ReadBuffer & rb) {
         bool is_last_checkpointing_transform;
         DB::readBoolText(is_last_checkpointing_transform, rb);
 
@@ -484,7 +537,7 @@ void AggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
 
             Int64 last_version = 0;
             DB::readIntBinary(last_version, rb);
-            many_data->version = last_version;
+            many_data->emited_version = last_version;
 
             assert(num_variants == many_data->rows_since_last_finalizations.size());
             for (auto & rows_since_last_finalization : many_data->rows_since_last_finalizations)
@@ -497,7 +550,7 @@ void AggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
             bool has_field;
             DB::readBoolText(has_field, rb);
             if (has_field)
-                many_data->any_field.deserializer(many_data->any_field.field, rb);
+                many_data->any_field.deserializer(many_data->any_field.field, rb, version_);
         }
 
         /// Serializing local or stable data during checkpointing

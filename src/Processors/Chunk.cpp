@@ -153,10 +153,27 @@ UInt64 Chunk::bytes() const
 
 UInt64 Chunk::allocatedBytes() const
 {
+    return allocatedMetadataBytes() + allocatedDataBytes();
+}
+
+UInt64 Chunk::allocatedDataBytes() const
+{
     UInt64 res = 0;
     for (const auto & column : columns)
         res += column->allocatedBytes();
+    return res;
+}
 
+UInt64 Chunk::allocatedMetadataBytes() const
+{
+    UInt64 res = 0;
+    for (const auto & column : columns)
+        res += column->allocatedMetadataBytes();
+
+    res += sizeof(columns) + columns.capacity() * sizeof(ColumnPtr);
+    res += sizeof(num_rows);
+    res += sizeof(chunk_info);
+    res += sizeof(chunk_ctx);
     return res;
 }
 

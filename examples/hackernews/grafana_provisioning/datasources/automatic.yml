@@ -1,0 +1,26 @@
+apiVersion: 1
+
+datasources:
+- name: Proton
+  type: timeplus-proton-datasource
+  uid: c24e0faf-1490-4321-a373-7b2b07ca2e38
+  typeName: Proton
+  access: proxy
+  url: 
+  password:
+  user:
+  database: 
+  isDefault: true
+  basicAuth: false
+  basicAuthUser:
+  basicAuthPassword:
+  withCredentials:
+  jsonData:
+    host: proton
+  readOnly: false
+  secureJsonData:
+    tlsCACert: ""
+    tlsClientCert: ""
+    tlsClientKey: ""
+  version: 1
+  editable: true

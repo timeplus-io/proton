@@ -272,7 +272,7 @@ Pipe ReadFromMergeTree::readInOrder(
 
     for (const auto & part : parts_with_range)
     {
-        auto source = (read_type == ReadType::InReverseOrder || create_streaming_source) /// proton: we like reverse read according to event timestamp
+        auto source = (read_type == ReadType::InReverseOrder)
                     ? createSource<MergeTreeReverseSelectProcessor>(part, required_columns, use_uncompressed_cache, has_limit_below_one_block)
                     : createSource<MergeTreeInOrderSelectProcessor>(part, required_columns, use_uncompressed_cache, has_limit_below_one_block);
 

@@ -400,7 +400,7 @@ BlockIO InterpreterSelectWithUnionQuery::execute()
         BuildQueryPipelineSettings::fromContext(context), context);
 
     /// proton : starts, setup execute mode
-    builder->setExecuteMode(queryExecuteMode(query_plan.isStreaming(), context->getSettingsRef()));
+    builder->setExecuteMode(queryExecuteMode(query_plan.isStreaming(), options.is_subquery, context->getSettingsRef()));
     /// proton : ends
 
     res.pipeline = QueryPipelineBuilder::getPipeline(std::move(*builder));

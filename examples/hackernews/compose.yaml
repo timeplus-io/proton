@@ -1,10 +1,41 @@
 services:
+
   proton:
     image: ghcr.io/timeplus-io/proton:latest
     pull_policy: always
-  hackernews_bytewax:
+    ports:
+      - 8463:8463
+      - 3218:3218
+    volumes:
+      - ./init_sql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/?query=show+create+comment || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 3
+      start_period: 10s  
+      
+  hn_stream:
+    build:
+      context: .  
     image: timeplus/hackernews_bytewax:latest
     environment:
       - PROTON_HOST=proton
     depends_on:
-      - proton
+      proton:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:latest
+    pull_policy: always
+    ports:
+      - 3000:3000
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: 1
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_INSTALL_PLUGINS: timeplus-proton-datasource
+      GF_LOG_LEVEL: error
+    volumes:
+      - ./grafana_provisioning:/etc/grafana/provisioning
+    depends_on:
+      - hn_stream

@@ -53,14 +53,14 @@ GlobalAggregatingTransform::GlobalAggregatingTransform(
         many_data->setField(
             {std::move(retracted_data),
              /// Field serializer
-             [this](const std::any & field, WriteBuffer & wb) {
+             [this](const std::any & field, WriteBuffer & wb, VersionType) {
                  const auto & data = std::any_cast<const ManyRetractedDataVariants &>(field);
                  DB::writeIntBinary(data.size(), wb);
                  for (const auto & elem : data)
                      params->aggregator.checkpoint(*elem, wb);
              },
              /// Field deserializer
-             [this](std::any & field, ReadBuffer & rb) {
+             [this](std::any & field, ReadBuffer & rb, VersionType) {
                  auto & data = std::any_cast<ManyRetractedDataVariants &>(field);
                  size_t num;
                  DB::readIntBinary(num, rb);

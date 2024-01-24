@@ -440,31 +440,27 @@ void JoinTransformWithAlignment::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
         /// Serializing join algorithm state
-        join->serialize(wb);
+        join->serialize(wb, getVersion());
 
         /// Serializing left_input state
         left_input.serialize(wb);
 
         /// Serializing right_input state
         right_input.serialize(wb);
-
-        /// Serializing Stats ?
     });
 }
 
 void JoinTransformWithAlignment::recover(CheckpointContextPtr ckpt_ctx)
 {
-    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType /*version*/, ReadBuffer & rb) {
+    ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType version_, ReadBuffer & rb) {
         /// Deserializing join algorithm state
-        join->deserialize(rb);
+        join->deserialize(rb, version_);
 
         /// Deserializing left_input state
         left_input.deserialize(rb);
 
         /// Deserializing right_input state
         right_input.deserialize(rb);
-
-        /// Deserializing Stats ?
     });
 
     /// Re-init last data ts

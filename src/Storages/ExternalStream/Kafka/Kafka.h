@@ -15,7 +15,7 @@ class IStorage;
 class Kafka final : public StorageExternalStreamImpl
 {
 public:
-    Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach, ExternalStreamCounterPtr external_stream_counter_);
+    Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach, ExternalStreamCounterPtr external_stream_counter_, ContextPtr context);
     ~Kafka() override = default;
 
     void startup() override { }
@@ -41,32 +41,32 @@ public:
     const String & topic() const { return settings->topic.value; }
     const klog::KConfParams & properties() const { return kafka_properties; }
     const klog::KafkaWALAuth & auth() const noexcept { return *auth_info; }
-    bool hasCustomShardingExpr() const { return !engine_args.empty(); }
     const ASTPtr & shardingExprAst() const { assert(!engine_args.empty()); return engine_args[0]; }
+    bool hasCustomShardingExpr() const;
     klog::KafkaWALSimpleConsumerPtr getConsumer(int32_t fetch_wait_max_ms = 200) const;
 
 private:
     void calculateDataFormat(const IStorage * storage);
     void cacheVirtualColumnNamesAndTypes();
     std::vector<Int64> getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const;
+    void validateMessageKey(const String & message_key, IStorage * storage, const ContextPtr & context);
     void validate(const std::vector<int32_t> & shards_to_query = {});
-
     static std::vector<int32_t> parseShards(const std::string & shards_setting);
 
-private:
     StorageID storage_id;
+    ASTs engine_args;
+    klog::KConfParams kafka_properties;
     String data_format;
-
-    Poco::Logger * log;
+    const std::unique_ptr<klog::KafkaWALAuth> auth_info;
+    ExternalStreamCounterPtr external_stream_counter;
 
     NamesAndTypesList virtual_column_names_and_types;
-    klog::KConfParams kafka_properties;
-    const ASTs engine_args;
-    const std::unique_ptr<klog::KafkaWALAuth> auth_info;
 
     std::mutex shards_mutex;
     int32_t shards = 0;
 
-    ExternalStreamCounterPtr external_stream_counter;
+    ASTPtr message_key_ast;
+
+    Poco::Logger * logger;
 };
 }

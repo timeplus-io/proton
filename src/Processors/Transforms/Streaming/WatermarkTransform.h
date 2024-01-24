@@ -33,7 +33,7 @@ private:
     SERDE WatermarkStamperPtr watermark;
 
     bool skip_stamping_for_backfill_data;
-    bool is_backfilling_data = false;
+    bool mute_watermark = false;
 };
 }
 }

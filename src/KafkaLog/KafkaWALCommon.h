@@ -47,6 +47,7 @@ initRdKafkaTopicHandle(const std::string & topic, KConfParams & params, rd_kafka
 nlog::RecordPtr kafkaMsgToRecord(rd_kafka_message_t * msg, const nlog::SchemaContext & schema_ctx, bool copy_topic = false);
 
 DescribeResult describeTopic(const String & name, struct rd_kafka_s * rk, Poco::Logger * log);
+DescribeResult describeTopic(rd_kafka_topic_t * rkt, struct rd_kafka_s * rk, Poco::Logger * log);
 
 std::vector<int64_t> getOffsetsForTimestamps(
     struct rd_kafka_s * rd_handle,

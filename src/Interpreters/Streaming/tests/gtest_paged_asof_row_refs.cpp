@@ -255,7 +255,7 @@ void commonTest(size_t keys, size_t page_size, size_t total_pages, size_t keep_v
     if ((keep_versions <= keys) && (keep_versions % chunk_rows))
         ++blocks_kept_around;
 
-    ASSERT_EQ(metrics.current_total_blocks, blocks_kept_around);
+    ASSERT_EQ(metrics.total_blocks, blocks_kept_around);
 
     /// We have kept the last `keep_versions` rows
     /// So the keys we kept around is [keys - keep_versions + 1, keys] if keep_versions <= keys

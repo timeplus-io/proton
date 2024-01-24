@@ -70,7 +70,7 @@ public:
         if (hasWatermark())
         {
             flags &= ~WATERMARK_FLAG;
-            ts_1 = 0;
+            ts_1 = Streaming::INVALID_WATERMARK;
         }
     }
 
@@ -205,6 +205,8 @@ public:
 
     UInt64 bytes() const;
     UInt64 allocatedBytes() const;
+    UInt64 allocatedDataBytes() const;
+    UInt64 allocatedMetadataBytes() const;
 
     std::string dumpStructure() const;
 

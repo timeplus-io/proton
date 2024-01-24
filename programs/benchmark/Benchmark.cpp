@@ -61,7 +61,7 @@ public:
     Benchmark(unsigned concurrency_, double delay_,
             Strings && hosts_, Ports && ports_, bool round_robin_,
             bool cumulative_, bool secure_, const String & default_database_,
-            const String & user_, const String & password_, const String & stage,
+            const String & user_, const String & password_, const String & quota_key_, const String & stage,
             bool randomize_, size_t max_iterations_, double max_time_,
             const String & json_path_, size_t confidence_,
             const String & query_id_, const String & query_to_execute_, bool continue_on_errors_,
@@ -90,7 +90,7 @@ public:
             connections.emplace_back(std::make_unique<ConnectionPool>(
                 concurrency,
                 cur_host, cur_port,
-                default_database_, user_, password_,
+                default_database_, user_, password_, quota_key_,
                 /* cluster_= */ "",
                 /* cluster_secret_= */ "",
                 /* client_name_= */ "benchmark",
@@ -599,6 +599,24 @@ int mainBenchmark(int argc, char ** argv)
     {
         using boost::program_options::value;
 
+        /// Note: according to the standard, subsequent calls to getenv can mangle previous result.
+        /// So we copy the results to std::string.
+        std::optional<std::string> env_user_str;
+        std::optional<std::string> env_password_str;
+        std::optional<std::string> env_quota_key_str;
+
+        const char * env_user = getenv("TIMEPLUS_USER"); // NOLINT(concurrency-mt-unsafe)
+        if (env_user != nullptr)
+            env_user_str.emplace(std::string(env_user));
+
+        const char * env_password = getenv("TIMEPLUS_PASSWORD"); // NOLINT(concurrency-mt-unsafe)
+        if (env_password != nullptr)
+            env_password_str.emplace(std::string(env_password));
+
+        const char * env_quota_key = getenv("TIMEPLUS_QUOTA_KEY"); // NOLINT(concurrency-mt-unsafe)
+        if (env_quota_key != nullptr)
+            env_quota_key_str.emplace(std::string(env_quota_key));
+
         boost::program_options::options_description desc = createOptionsDescription("Allowed options", getTerminalWidth());
         desc.add_options()
             ("help",                                                            "produce help message")
@@ -615,8 +633,9 @@ int mainBenchmark(int argc, char ** argv)
             ("roundrobin",                                                      "Instead of comparing queries for different --host/--port just pick one random --host/--port for every query and send query to it.")
             ("cumulative",                                                      "prints cumulative data instead of data per interval")
             ("secure,s",                                                        "Use TLS connection")
-            ("user",          value<std::string>()->default_value("default"),   "")
-            ("password",      value<std::string>()->default_value(""),          "")
+            ("user,u",        value<std::string>()->default_value(env_user_str.value_or("default")), "")
+            ("password",      value<std::string>()->default_value(env_password_str.value_or("")), "")
+            ("quota_key",      value<std::string>()->default_value(env_quota_key_str.value_or("")), "")
             ("database",      value<std::string>()->default_value("default"),   "")
             ("stacktrace",                                                      "print stack traces of exceptions")
             ("confidence",    value<size_t>()->default_value(5), "set the level of confidence for T-test [0=80%, 1=90%, 2=95%, 3=98%, 4=99%, 5=99.5%(default)")
@@ -665,6 +684,7 @@ int mainBenchmark(int argc, char ** argv)
             options["database"].as<std::string>(),
             options["user"].as<std::string>(),
             options["password"].as<std::string>(),
+            options["quota_key"].as<std::string>(),
             options["stage"].as<std::string>(),
             options["randomize"].as<bool>(),
             options["iterations"].as<size_t>(),

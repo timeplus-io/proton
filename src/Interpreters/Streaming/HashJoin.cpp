@@ -1,6 +1,5 @@
 #include <Interpreters/Streaming/HashJoin.h>
 #include <Interpreters/Streaming/joinDispatch.h>
-#include <Interpreters/Streaming/joinSerder.h>
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnSparse.h>
@@ -2369,17 +2368,17 @@ void HashJoin::reviseJoinStrictness()
 
 void HashJoin::checkLimits() const
 {
-    const auto & left_metrics = left_data.buffered_data->getJoinMetrics();
-    const auto & right_metrics = right_data.buffered_data->getJoinMetrics();
-    auto current_total_bytes = left_metrics.current_total_bytes + right_metrics.current_total_bytes;
+    const auto & left_total_bytes = left_data.buffered_data->getJoinMetrics().totalBytes();
+    const auto & right_total_bytes = right_data.buffered_data->getJoinMetrics().totalBytes();
+    auto current_total_bytes = left_total_bytes + right_total_bytes;
     if (current_total_bytes >= join_max_cached_bytes)
         throw Exception(
             ErrorCodes::SET_SIZE_LIMIT_EXCEEDED,
             "Streaming join's memory reaches max size: {}, current total: {}, left total: {}, right total: {}",
             join_max_cached_bytes,
             current_total_bytes,
-            left_metrics.current_total_bytes,
-            right_metrics.current_total_bytes);
+            left_total_bytes,
+            right_total_bytes);
 }
 
 void HashJoin::validateAsofJoinKey()
@@ -2463,7 +2462,7 @@ HashMapSizes HashJoin::sizesOfMapsVariant(const MapsVariant & maps_variant) cons
     HashMapSizes sizes;
     joinDispatch(streaming_kind, streaming_strictness, maps_variant, [&](auto /*kind_*/, auto /*strictness_*/, auto & maps) {
         sizes.keys = maps.getTotalRowCount();
-        sizes.buffer_size_in_bytes = maps.getTotalByteCountImpl();
+        sizes.buffer_size_in_bytes = maps.getBufferSizeInBytes();
         sizes.buffer_bytes_in_cells = maps.getBufferSizeInCells();
     });
     return sizes;
@@ -2525,7 +2524,7 @@ HashMapSizes HashJoinMapsVariants::sizes(const HashJoin * join) const
     return sizes;
 }
 
-void HashJoin::serialize(WriteBuffer & wb) const
+void HashJoin::serialize(WriteBuffer & wb, VersionType version) const
 {
     /// Part-1: ON clauses
     DB::writeStringBinary(TableJoin::formatClauses(table_join->getClauses(), true), wb);
@@ -2547,9 +2546,9 @@ void HashJoin::serialize(WriteBuffer & wb) const
 
     /// Part-4: Buffered data of left/right join stream
     if (bidirectional_hash_join)
-        Streaming::serialize(left_data, wb);
+        DB::serialize(left_data, wb, version);
 
-    Streaming::serialize(right_data, wb);
+    DB::serialize(right_data, wb, version);
 
     /// Part-5: Asof type (Optional)
     bool need_asof = streaming_strictness == Strictness::Range || streaming_strictness == Strictness::Asof;
@@ -2565,15 +2564,15 @@ void HashJoin::serialize(WriteBuffer & wb) const
     if (join_results.has_value())
     {
         assert(retract_push_down && emit_changelog);
-        Streaming::serialize(*join_results, *this, wb);
+        DB::serialize(*join_results, wb, version, *this);
     }
 
     /// Part-7: Others
     DB::writeIntBinary(combined_watermark.load(), wb);
-    Streaming::serialize(join_metrics, wb);
+    DB::serialize(join_metrics, wb, version);
 }
 
-void HashJoin::deserialize(ReadBuffer & rb)
+void HashJoin::deserialize(ReadBuffer & rb, VersionType version)
 {
     { /// Part-1: ON clauses
         auto clauses_str = TableJoin::formatClauses(table_join->getClauses(), true);
@@ -2665,9 +2664,9 @@ void HashJoin::deserialize(ReadBuffer & rb)
 
     /// Part-4: Buffered data of left/right join stream
     if (bidirectional_hash_join)
-        Streaming::deserialize(left_data, rb);
+        DB::deserialize(left_data, rb, version);
 
-    Streaming::deserialize(right_data, rb);
+    DB::deserialize(right_data, rb, version);
 
     /// Part-5: Asof type (Optional)
     bool need_asof = streaming_strictness == Strictness::Range || streaming_strictness == Strictness::Asof;
@@ -2706,7 +2705,7 @@ void HashJoin::deserialize(ReadBuffer & rb)
                 join_results.has_value());
 
         assert(retract_push_down && emit_changelog);
-        Streaming::deserialize(*join_results, *this, rb);
+        DB::deserialize(*join_results, rb, version, *this);
     }
 
     /// Part-7: Others
@@ -2714,8 +2713,226 @@ void HashJoin::deserialize(ReadBuffer & rb)
     DB::readIntBinary(recovered_combined_watermark, rb);
     combined_watermark = recovered_combined_watermark;
 
-    Streaming::deserialize(join_metrics, rb);
+    DB::deserialize(join_metrics, rb, version);
 }
 
+void HashJoin::JoinResults::serialize(WriteBuffer & wb, VersionType version, const HashJoin & join) const
+{
+    std::scoped_lock lock(mutex);
+    assert(maps);
+    serializeHashJoinMapsVariants(blocks, *maps, wb, version, sample_block, join);
+
+    if (version <= CachedBlockMetrics::SERDE_REQUIRED_MAX_VERSION)
+        DB::serialize(metrics, wb, version);
+}
+
+void HashJoin::JoinResults::deserialize(ReadBuffer & rb, VersionType version, const HashJoin & join)
+{
+    std::scoped_lock lock(mutex);
+    assert(maps);
+    deserializeHashJoinMapsVariants(blocks, *maps, rb, version, pool, sample_block, join);
+
+    if (version <= CachedBlockMetrics::SERDE_REQUIRED_MAX_VERSION)
+        DB::deserialize(metrics, rb, version);
+}
+
+void HashJoin::JoinData::serialize(WriteBuffer & wb, VersionType version) const
+{
+    bool has_data = static_cast<bool>(buffered_data);
+    writeBoolText(has_data, wb);
+    if (!has_data)
+        return;
+
+    bool has_primary_key_hash_table = static_cast<bool>(primary_key_hash_table);
+    writeBoolText(has_primary_key_hash_table, wb);
+    if (has_primary_key_hash_table)
+    {
+        SerializedRowRefListMultipleToIndices serialized_row_ref_list_multiple_to_indices;
+        DB::serialize(*buffered_data, wb, version, &serialized_row_ref_list_multiple_to_indices);
+
+        primary_key_hash_table->map.serialize(
+            /*MappedSerializer*/
+            [&](const RowRefListMultipleRefPtr<JoinDataBlock> & mapped, WriteBuffer & wb_) {
+                mapped->serialize(serialized_row_ref_list_multiple_to_indices, wb_);
+            },
+            wb);
+    }
+    else
+        DB::serialize(*buffered_data, wb, version, nullptr);
+}
+
+void HashJoin::JoinData::deserialize(ReadBuffer & rb, VersionType version)
+{
+    bool has_data = static_cast<bool>(buffered_data);
+    bool recovered_has_data;
+    readBoolText(recovered_has_data, rb);
+    if (recovered_has_data != has_data)
+        throw Exception(
+            ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+            "Failed to recover hash join checkpoint. The data of hash join are not the same, checkpointed={}, current={}",
+            recovered_has_data ? "Has JoinData" : "No JoinData",
+            has_data ? "Has JoinData" : "No JoinData");
+
+    if (!has_data)
+        return;
+
+    bool has_primary_key_hash_table = static_cast<bool>(primary_key_hash_table);
+    bool recovered_has_primary_key_hash_table;
+    readBoolText(recovered_has_primary_key_hash_table, rb);
+    if (recovered_has_primary_key_hash_table != has_primary_key_hash_table)
+        throw Exception(
+            ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+            "Failed to recover hash join checkpoint. The primary key hash table of hash join are not the same, checkpointed={}, current={}",
+            recovered_has_primary_key_hash_table ? "Has PrimaryKeyHashTable" : "No PrimaryKeyHashTable",
+            has_primary_key_hash_table ? "Has PrimaryKeyHashTable" : "No PrimaryKeyHashTable");
+
+    if (has_primary_key_hash_table)
+    {
+        DeserializedIndicesToRowRefListMultiple<JoinDataBlock> deserialized_indices_to_multiple_ref;
+        DB::deserialize(*buffered_data, rb, version, &deserialized_indices_to_multiple_ref);
+
+        primary_key_hash_table->map.deserialize(
+            /*MappedDeserializer*/
+            [&](RowRefListMultipleRefPtr<JoinDataBlock> & mapped, Arena &, ReadBuffer & rb_) {
+                mapped = std::make_unique<RowRefListMultipleRef<JoinDataBlock>>();
+                mapped->deserialize(deserialized_indices_to_multiple_ref, rb_);
+            },
+            primary_key_hash_table->pool,
+            rb);
+    }
+    else
+        DB::deserialize(*buffered_data, rb, version, nullptr);
+}
+
+void HashJoin::JoinGlobalMetrics::serialize(WriteBuffer & wb, VersionType) const
+{
+    DB::writeBinary(total_join, wb);
+    DB::writeBinary(left_block_and_right_range_bucket_no_intersection_skip, wb);
+    DB::writeBinary(right_block_and_left_range_bucket_no_intersection_skip, wb);
+}
+
+void HashJoin::JoinGlobalMetrics::deserialize(ReadBuffer & rb, VersionType)
+{
+    DB::readBinary(total_join, rb);
+    DB::readBinary(left_block_and_right_range_bucket_no_intersection_skip, rb);
+    DB::readBinary(right_block_and_left_range_bucket_no_intersection_skip, rb);
+}
+
+void serializeHashJoinMapsVariants(
+    const JoinDataBlockList & blocks,
+    const HashJoinMapsVariants & maps,
+    WriteBuffer & wb,
+    VersionType version,
+    const Block & header,
+    const HashJoin & join,
+    SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices)
+{
+    SerializedBlocksToIndices serialized_blocks_to_indices;
+    DB::serialize(blocks, wb, version, header, &serialized_blocks_to_indices);
+
+    assert(maps.map_variants.size() >= 1);
+    DB::writeIntBinary<UInt16>(static_cast<UInt16>(maps.map_variants.size()), wb);
+
+    std::vector<const std::decay_t<decltype(maps.map_variants[0])> *> maps_vector;
+    for (const auto & map : maps.map_variants)
+        maps_vector.push_back(&map);
+
+    auto mapped_serializer = [&](const auto & mapped_, WriteBuffer & wb_) {
+        using Mapped = std::decay_t<decltype(mapped_)>;
+        if constexpr (std::is_same_v<Mapped, RangeAsofRowRefs<JoinDataBlock>>)
+        {
+            assert(join.getAsofType().has_value());
+            mapped_.serialize(*join.getAsofType(), serialized_blocks_to_indices, wb_);
+        }
+        else if constexpr (std::is_same_v<Mapped, AsofRowRefs<JoinDataBlock>>)
+        {
+            assert(join.getAsofType().has_value());
+            mapped_.serialize(*join.getAsofType(), serialized_blocks_to_indices, wb_);
+        }
+        else if constexpr (std::is_same_v<Mapped, RowRefWithRefCount<JoinDataBlock>>)
+        {
+            mapped_.serialize(serialized_blocks_to_indices, wb_);
+        }
+        else if constexpr (std::is_same_v<Mapped, RowRefListMultiplePtr<JoinDataBlock>>)
+        {
+            mapped_->serialize(serialized_blocks_to_indices, wb_, serialized_row_ref_list_multiple_to_indices);
+        }
+        else if constexpr (std::is_same_v<Mapped, RowRefList<JoinDataBlock>>)
+        {
+            mapped_.serialize(serialized_blocks_to_indices, wb_);
+        }
+        else
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "The mapped type {} of hash join map isn't supported", typeid(Mapped).name());
+    };
+
+    joinDispatch(
+        join.getStreamingKind(), join.getStreamingStrictness(), maps_vector, [&](auto /*kind_*/, auto /*strictness_*/, const auto & mapv) {
+            for (auto * map : mapv)
+                map->serialize(mapped_serializer, wb);
+        });
+}
+
+void deserializeHashJoinMapsVariants(
+    JoinDataBlockList & blocks,
+    HashJoinMapsVariants & maps,
+    ReadBuffer & rb,
+    VersionType version,
+    Arena & pool,
+    const Block & header,
+    const HashJoin & join,
+    DeserializedIndicesToRowRefListMultiple<JoinDataBlock> * deserialized_indices_to_multiple_ref)
+{
+    DeserializedIndicesToBlocks<JoinDataBlock> deserialized_indices_to_blocks;
+    DB::deserialize(blocks, rb, version, header, &deserialized_indices_to_blocks);
+
+    UInt16 maps_size;
+    DB::readIntBinary<UInt16>(maps_size, rb);
+    if (maps_size != maps.map_variants.size())
+        throw Exception(
+            ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+            "Failed to recover hash join checkpoint. The number of hash join maps varitans are not the same, checkpointed={}, current={}",
+            maps_size,
+            maps.map_variants.size());
+    assert(maps_size >= 1);
+
+    std::vector<std::decay_t<decltype(maps.map_variants[0])> *> maps_vector;
+    for (auto & map : maps.map_variants)
+        maps_vector.push_back(&map);
+
+    auto mapped_deserializer = [&](auto & mapped_, [[maybe_unused]] Arena & pool_, ReadBuffer & rb_) {
+        using Mapped = std::decay_t<decltype(mapped_)>;
+        if constexpr (std::is_same_v<Mapped, RangeAsofRowRefs<JoinDataBlock>>)
+        {
+            assert(join.getAsofType().has_value());
+            mapped_.deserialize(*join.getAsofType(), deserialized_indices_to_blocks, rb_);
+        }
+        else if constexpr (std::is_same_v<Mapped, AsofRowRefs<JoinDataBlock>>)
+        {
+            assert(join.getAsofType().has_value());
+            mapped_.deserialize(*join.getAsofType(), &blocks, deserialized_indices_to_blocks, rb_);
+        }
+        else if constexpr (std::is_same_v<Mapped, RowRefWithRefCount<JoinDataBlock>>)
+        {
+            mapped_.deserialize(&blocks, deserialized_indices_to_blocks, rb_);
+        }
+        else if constexpr (std::is_same_v<Mapped, RowRefListMultiplePtr<JoinDataBlock>>)
+        {
+            mapped_ = std::make_unique<RowRefListMultiple<JoinDataBlock>>();
+            mapped_->deserialize(&blocks, deserialized_indices_to_blocks, rb_, deserialized_indices_to_multiple_ref);
+        }
+        else if constexpr (std::is_same_v<Mapped, RowRefList<JoinDataBlock>>)
+        {
+            mapped_.deserialize(pool_, deserialized_indices_to_blocks, rb_);
+        }
+        else
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "The mapped type {} of hash join map isn't supported", typeid(Mapped).name());
+    };
+
+    joinDispatch(
+        join.getStreamingKind(), join.getStreamingStrictness(), maps_vector, [&](auto /*kind_*/, auto /*strictness_*/, auto & mapv) {
+            for (auto * map : mapv)
+                map->deserialize(mapped_deserializer, pool, rb);
+        });
+}
 }
 }
