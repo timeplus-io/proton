@@ -19,7 +19,10 @@ StorageExternalTable::StorageExternalTable(
 {
     auto type = settings->type.value;
     if (type == "clickhouse")
-        external_table = std::make_unique<ExternalTable::ClickHouse>(std::move(settings));
+    {
+        auto ctx = getContext();
+        external_table = std::make_unique<ExternalTable::ClickHouse>(std::move(settings), ctx);
+    }
     else
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unknown external table type: {}", type);
 }

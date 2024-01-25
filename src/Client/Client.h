@@ -38,7 +38,7 @@ private:
 
     std::atomic_bool cancelled {false};
 
-    ContextPtr & context;
+    ContextPtr & context [[maybe_unused]];
     Poco::Logger * logger;
 };
 

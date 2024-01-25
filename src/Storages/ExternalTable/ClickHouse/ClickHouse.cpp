@@ -53,8 +53,15 @@ void ClickHouse::startup()
         .on_data = [log = logger](Block & block)
         {
             LOG_INFO(log, "DESCRIBE TABLE returns {} columns and {} rows", block.columns(), block.rows());
+            auto cols = block.getColumns();
             for (size_t i = 0; i < block.rows(); ++i)
             {
+                String msg = "row " + std::to_string(i) + " :";
+                for (const auto & col : cols)
+                {
+                  msg += col->getName() + ": ";
+                  msg += (*col)[i].getTypeName();
+                }
             }
         }
     });
