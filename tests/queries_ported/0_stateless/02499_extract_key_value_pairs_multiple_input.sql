@@ -481,6 +481,18 @@ WITH
 SELECT
     x;
 
+-- https://github.com/ClickHouse/ClickHouse/issues/56357
+WITH
+    extract_key_value_pairs('{"a":"1", "b":"2"}') as s_map,
+    CAST(
+        array_map(
+            (x) -> (x, s_map[x]), array_sort(map_keys(s_map))
+        ),
+        'map(string,string)'
+    ) AS x
+SELECT
+    x;
+
 -- check str_to_map alias (it is case-insensitive)
 WITH
     sTr_tO_mAp('name:neymar, age:31 team:psg,nationality:brazil') AS s_map,
