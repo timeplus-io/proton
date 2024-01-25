@@ -202,6 +202,8 @@ REGISTER_FUNCTION(ExtractKeyValuePairs)
             └──────────────────┘
             ```)")
     );
+    factory.registerAlias("str_to_map", NameExtractKeyValuePairs::name, FunctionFactory::CaseInsensitive);
+    factory.registerAlias("map_from_string", NameExtractKeyValuePairs::name, FunctionFactory::CaseInsensitive);
 }
 
 }
