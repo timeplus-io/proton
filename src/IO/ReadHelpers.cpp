@@ -317,12 +317,24 @@ template void readStringUntilEOFInto<PaddedPODArray<UInt8>>(PaddedPODArray<UInt8
 /** Parse the escape sequence, which can be simple (one character after backslash) or more complex (multiple characters).
   * It is assumed that the cursor is located on the `\` symbol
   */
-template <typename Vector>
-static void parseComplexEscapeSequence(Vector & s, ReadBuffer & buf)
+template <typename Vector, typename ReturnType = void>
+static ReturnType parseComplexEscapeSequence(Vector & s, ReadBuffer & buf)
 {
+    static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
+
+    auto error = [](const char * message [[maybe_unused]], int code [[maybe_unused]])
+    {
+        if constexpr (throw_exception)
+            throw Exception(message, code);
+        return ReturnType(false);
+    };
+
     ++buf.position();
+
     if (buf.eof())
-        throw Exception("Cannot parse escape sequence", ErrorCodes::CANNOT_PARSE_ESCAPE_SEQUENCE);
+    {
+        return error("Cannot parse escape sequence", ErrorCodes::CANNOT_PARSE_ESCAPE_SEQUENCE);
+    }
 
     char char_after_backslash = *buf.position();
 
@@ -331,7 +343,14 @@ static void parseComplexEscapeSequence(Vector & s, ReadBuffer & buf)
         ++buf.position();
         /// escape sequence of the form \xAA
         char hex_code[2];
-        readPODBinary(hex_code, buf);
+
+        auto bytes_read = buf.read(hex_code, sizeof(hex_code));
+
+        if (bytes_read != sizeof(hex_code))
+        {
+            return error("Cannot parse escape sequence", ErrorCodes::CANNOT_PARSE_ESCAPE_SEQUENCE);
+        }
+
         s.push_back(unhex2(hex_code));
     }
     else if (char_after_backslash == 'N')
@@ -361,8 +380,13 @@ static void parseComplexEscapeSequence(Vector & s, ReadBuffer & buf)
         s.push_back(decoded_char);
         ++buf.position();
     }
+    return ReturnType(true);
 }
 
+bool parseComplexEscapeSequence(String & s, ReadBuffer & buf)
+{
+    return parseComplexEscapeSequence<String, bool>(s, buf);
+}
 
 template <typename Vector, typename ReturnType>
 static ReturnType parseJSONEscapeSequence(Vector & s, ReadBuffer & buf)
