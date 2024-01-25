@@ -754,18 +754,10 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[
 
     /// proton: starts. we shall show original name.
     /// e.g. for 'date_add(now(), 1s)', we don't show 'now() + 1s'.
+    /// TODO: we can do a better impl after porting latest community code, for now reverted
+    /// proton: ends.
     if (parsed_special_function.has_value())
-    {
-        if (parsed_special_function.value() && ParserToken(TokenType::ClosingRoundBracket).ignore(pos))
-        {
-            if (auto parsed_special_func = node->as<ASTFunction>())
-                parsed_special_func->covered_name = function_name_lowercase;
-
-            return true;
-        }
-        return false;
-    }
-    /// proton: ends
+        return parsed_special_function.value() && ParserToken(TokenType::ClosingRoundBracket).ignore(pos);
 
     auto pos_after_bracket = pos;
     auto old_expected = expected;
