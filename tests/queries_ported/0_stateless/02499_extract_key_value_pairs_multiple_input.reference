@@ -333,6 +333,18 @@ WITH
 SELECT
     x;
 {}
+-- key value delimiter should be considered valid part of value
+WITH
+    extract_key_value_pairs('formula=1+2=3 argument1=1 argument2=2 result=3, char="=" char2== string="foo=bar"', '=') AS s_map,
+    CAST(
+            array_map(
+                    (x) -> (x, s_map[x]), array_sort(map_keys(s_map))
+                ),
+            'map(string,string)'
+        ) AS x
+SELECT
+    x;
+{'argument1':'1','argument2':'2','char':'=','char2':'=','formula':'1+2=3','result':'3','string':'foo=bar'}
 -- check str_to_map alias (it is case-insensitive)
 WITH
     sTr_tO_mAp('name:neymar, age:31 team:psg,nationality:brazil') AS s_map,

@@ -121,9 +121,9 @@ SELECT
     x;
 
 -- semi-colon as pair delimiter
--- expected output: {'age':'31','name':'neymar','team':'psg'}
+-- expected output: {'age':'31','anotherkey':'anothervalue','name':'neymar','random_key':'value_with_comma,still_part_of_value:still_part_of_value','team':'psg'}
 WITH
-    extract_key_value_pairs('name:neymar;age:31;team:psg;invalid1:invalid1,invalid2:invalid2', ':', ';') AS s_map,
+    extract_key_value_pairs('name:neymar;age:31;team:psg;random_key:value_with_comma,still_part_of_value:still_part_of_value;anotherkey:anothervalue', ':', ';') AS s_map,
     CAST(
         array_map(
             (x) -> (x, s_map[x]), array_sort(map_keys(s_map))
@@ -460,6 +460,18 @@ SELECT
 -- should not fail because pair delimiters contains 8 characters, which is within the limit
 WITH
     extract_key_value_pairs('not_important', ':', '12345678', '\'') AS s_map,
+    CAST(
+            array_map(
+                    (x) -> (x, s_map[x]), array_sort(map_keys(s_map))
+                ),
+            'map(string,string)'
+        ) AS x
+SELECT
+    x;
+
+-- key value delimiter should be considered valid part of value
+WITH
+    extract_key_value_pairs('formula=1+2=3 argument1=1 argument2=2 result=3, char="=" char2== string="foo=bar"', '=') AS s_map,
     CAST(
             array_map(
                     (x) -> (x, s_map[x]), array_sort(map_keys(s_map))
