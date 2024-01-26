@@ -816,8 +816,8 @@ Pipe StorageRandom::read(
     }
     else
     {
-        Float64 eps_thread = static_cast<_Float64>(static_cast<UInt64>(eps) / shards);
-        Float64 remainder = static_cast<_Float64>(static_cast<UInt64>(eps) % shards);
+        Float64 eps_thread = static_cast<Float64>(static_cast<UInt64>(eps) / shards);
+        Float64 remainder = static_cast<Float64>(static_cast<UInt64>(eps) % shards);
         /// number of data generated per second is bigger than the number of thread;
         for (size_t i = 0; i < shards - 1; i++)
         {
