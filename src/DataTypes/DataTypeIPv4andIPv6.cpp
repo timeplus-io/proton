@@ -12,6 +12,9 @@ void registerDataTypeIPv4andIPv6(DataTypeFactory & factory)
     factory.registerAlias("inet4", "ipv4", DataTypeFactory::CaseInsensitive);
     factory.registerSimpleDataType("ipv6", [] { return DataTypePtr(std::make_shared<DataTypeIPv6>()); }, DataTypeFactory::CaseInsensitive);
     factory.registerAlias("inet6", "ipv6", DataTypeFactory::CaseInsensitive);
+
+    factory.registerClickHouseAlias("INET4", "inet4");
+    factory.registerClickHouseAlias("INET6", "inet6");
 }
 
 }

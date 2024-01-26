@@ -94,5 +94,7 @@ void registerDataTypeString(DataTypeFactory & factory)
     /// factory.registerAlias("VARBINARY", "string", DataTypeFactory::CaseInsensitive);
     /// factory.registerAlias("GEOMETRY", "string", DataTypeFactory::CaseInsensitive); //mysql
 
+    factory.registerClickHouseAlias("String", "string");
+    // factory.registerClickHouseAlias("VARCHAR", "VARCHAR");
 }
 }

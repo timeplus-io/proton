@@ -113,6 +113,13 @@ void registerDataTypeDecimal(DataTypeFactory & factory)
     /// factory.registerAlias("DEC", "decimal", DataTypeFactory::CaseInsensitive);
     /// factory.registerAlias("NUMERIC", "decimal", DataTypeFactory::CaseInsensitive);
     /// factory.registerAlias("FIXED", "decimal", DataTypeFactory::CaseInsensitive);
+
+    // factory.registerClickHouseAlias("Decimal32", "decimal32");
+    // factory.registerClickHouseAlias("Decimal64", "decimal64");
+    // factory.registerClickHouseAlias("Decimal128", "decimal128");
+    // factory.registerClickHouseAlias("Decimal256", "decimal256");
+
+    // factory.registerClickHouseAlias("Decimal", "decimal");
 }
 
 /// Explicit template instantiations.

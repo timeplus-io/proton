@@ -35,6 +35,10 @@ using Connections = std::vector<ConnectionPtr>;
 class NativeReader;
 class NativeWriter;
 
+/// proton: starts
+class IDataTypeTranslator;
+/// proton: ends
+
 
 /** Connection with database server, to use by client.
   * How to use - see Core/Protocol.h
@@ -155,6 +159,10 @@ public:
         if (in)
             in->setAsyncCallback(std::move(async_callback));
     }
+
+    /// proton: starts
+    void setDataTypeTranslator(IDataTypeTranslator * translator);
+    /// proton: ends
 private:
     String host;
     UInt16 port;
@@ -273,6 +281,10 @@ private:
     void initBlockProfileEventsInput();
 
     [[noreturn]] void throwUnexpectedPacket(UInt64 packet_type, const char * expected) const;
+
+    /// proton: starts
+    IDataTypeTranslator * data_type_translator = nullptr;
+    /// proton: ends
 };
 
 class AsyncCallbackSetter

@@ -35,9 +35,9 @@ public:
     DataTypePtr get(TypeIndex type) const;
     /// proton: ends.
 
-    DataTypePtr get(const String & full_name) const;
-    DataTypePtr get(const String & family_name, const ASTPtr & parameters) const;
-    DataTypePtr get(const ASTPtr & ast) const;
+    DataTypePtr get(const String & full_name/* proton: starts */, bool compatible_with_clickhouse = false/* proton: ends */) const;
+    DataTypePtr get(const String & family_name, const ASTPtr & parameters/* proton: starts */, bool compatible_with_clickhouse = false/* proton: ends */) const;
+    DataTypePtr get(const ASTPtr & ast/* proton: starts */, bool compatible_with_clickhouse = false/* proton: ends */) const;
     DataTypePtr getCustom(DataTypeCustomDescPtr customization) const;
 
     /// Register a type family by its name.
@@ -67,6 +67,7 @@ private:
     const DataTypesDictionary & getCaseInsensitiveMap() const override { return case_insensitive_data_types; }
 
     String getFactoryName() const override { return "DataTypeFactory"; }
+
 };
 
 void registerDataTypeNumbers(DataTypeFactory & factory);

@@ -5,6 +5,10 @@
 #include <Common/PODArray.h>
 #include <Core/Block.h>
 
+/// proton: starts
+#include <DataTypes/IDataTypeTranslator.h>
+/// proton: ends
+
 namespace DB
 {
 
@@ -39,6 +43,10 @@ public:
 
     Block read();
 
+    /// proton: starts
+    void setDataTypeTranslator(IDataTypeTranslator * translator);
+    /// proton: ends
+
 private:
     ReadBuffer & istr;
     Block header;
@@ -55,6 +63,10 @@ private:
     PODArray<double> avg_value_size_hints;
 
     void updateAvgValueSizeHints(const Block & block);
+
+    /// proton: starts
+    IDataTypeTranslator * data_type_translator {nullptr};
+    /// proton: ends
 };
 
 }

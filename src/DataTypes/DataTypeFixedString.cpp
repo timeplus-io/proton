@@ -60,6 +60,8 @@ static DataTypePtr create(const ASTPtr & arguments)
 void registerDataTypeFixedString(DataTypeFactory & factory)
 {
     factory.registerDataType("fixed_string", create);
+
+    factory.registerClickHouseAlias("FixedString", "fixed_string");
 }
 
 }

@@ -145,5 +145,7 @@ static DataTypePtr create(const ASTPtr & arguments)
 void registerDataTypeMap(DataTypeFactory & factory)
 {
     factory.registerDataType("map", create);
+
+    factory.registerClickHouseAlias("Map", "map");
 }
 }

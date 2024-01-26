@@ -75,6 +75,8 @@ static DataTypePtr create(const ASTPtr & arguments)
 void registerDataTypeNullable(DataTypeFactory & factory)
 {
     factory.registerDataType("nullable", create);
+
+    factory.registerClickHouseAlias("Nullable", "nullable");
 }
 
 

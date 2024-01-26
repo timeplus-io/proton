@@ -985,6 +985,10 @@ void Connection::initBlockInput()
         }
 
         block_in = std::make_unique<NativeReader>(*maybe_compressed_in, server_revision);
+        /// proton: starts
+        if (data_type_translator)
+            block_in->setDataTypeTranslator(data_type_translator);
+        /// proton: ends
     }
 }
 
@@ -995,6 +999,10 @@ void Connection::initBlockLogsInput()
     {
         /// Have to return superset of SystemLogsQueue::getSampleBlock() columns
         block_logs_in = std::make_unique<NativeReader>(*in, server_revision);
+        /// proton: starts
+        if (data_type_translator)
+            block_logs_in->setDataTypeTranslator(data_type_translator);
+        /// proton: ends
     }
 }
 
@@ -1004,6 +1012,10 @@ void Connection::initBlockProfileEventsInput()
     if (!block_profile_events_in)
     {
         block_profile_events_in = std::make_unique<NativeReader>(*in, server_revision);
+        /// proton: starts
+        if (block_profile_events_in)
+            block_profile_events_in->setDataTypeTranslator(data_type_translator);
+        /// proton: ends
     }
 }
 
@@ -1084,5 +1096,18 @@ ServerConnectionPtr Connection::createConnection(const ConnectionParameters & pa
         parameters.compression,
         parameters.security);
 }
+
+/// proton: starts
+void Connection::setDataTypeTranslator(IDataTypeTranslator * translator)
+{
+    data_type_translator = translator;
+    if (block_in)
+        block_in->setDataTypeTranslator(data_type_translator);
+    if (block_logs_in)
+        block_logs_in->setDataTypeTranslator(data_type_translator);
+    if (block_profile_events_in)
+        block_profile_events_in->setDataTypeTranslator(data_type_translator);
+}
+/// proton: ends
 
 }

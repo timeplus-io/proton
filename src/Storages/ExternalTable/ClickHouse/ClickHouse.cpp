@@ -1,5 +1,9 @@
+#include <Client/LibClient.h>
+#include <DataTypes/ClickHouseDataTypeTranslator.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <Storages/ExternalTable/ClickHouse/ClickHouse.h>
-#include "Client/Client.h"
+#include <Storages/ExternalTable/ClickHouse/ClickHouseSink.h>
+#include <Storages/ColumnsDescription.h>
 
 namespace DB
 {
@@ -23,36 +27,25 @@ ClickHouse::ClickHouse(ExternalTableSettingsPtr settings, ContextPtr & context_)
     if (!port)
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid port in ClickHouse address");
 
-    connection_pool = ConnectionPoolFactory::instance().get(
-        100 /*max_connections*/,
-        host, port,
-        "default" /*default_database*/,
-        "default" /*user*/,
-        "" /*password*/,
-        "" /*quota_key*/,
-        "" /*cluster*/,
-        "" /*cluster_secret*/,
-         "Timeplus Proton" /*client_name*/,
-        Protocol::Compression::Enable,
-        Protocol::Secure::Disable,
-        0 /*priority*/);
-
-    timeouts = ConnectionTimeouts(
+    connection_params.host = host;
+    connection_params.port = port;
+    connection_params.user = settings->user.value;
+    connection_params.password = settings->password.value;
+    connection_params.default_database = "default";
+    connection_params.timeouts = {
         10 * 60 * 1'000'000 /*connection_timeout_*/,
         10 * 60 * 1'000'000 /*send_timeout_*/,
         10 * 60 * 1'000'000 /*receive_timeout_*/
-    );
+    };
 }
 
 void ClickHouse::startup()
 {
-    NameToNameMap map;
-    auto conn = connection_pool->get(timeouts);
-    Client client {conn, timeouts, context, logger};
+#ifdef GO_ON_PRODUCTIOn
     client.executeQuery("DESCRIBE TABLE " + table, {
-        .on_data = [log = logger](Block & block)
+        .on_data = [this](Block & block)
         {
-            LOG_INFO(log, "DESCRIBE TABLE returns {} columns and {} rows", block.columns(), block.rows());
+            LOG_INFO(logger, "DESCRIBE TABLE returns {} columns and {} rows", block.columns(), block.rows());
             auto cols = block.getColumns();
             for (size_t i = 0; i < block.rows(); ++i)
             {
@@ -65,6 +58,70 @@ void ClickHouse::startup()
             }
         }
     });
+#endif
+    LOG_INFO(logger, "startup");
+}
+
+SinkToStoragePtr ClickHouse::write(const ASTPtr &  /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr  /*context*/)
+{
+    return std::make_shared<ClickHouseSink>(metadata_snapshot->getSampleBlock(), logger);
+}
+
+ColumnsDescription ClickHouse::getTableStructure()
+{
+    auto conn = std::make_shared<Connection>(
+        connection_params.host,
+        connection_params.port,
+        connection_params.default_database,
+        connection_params.user,
+        connection_params.password,
+        connection_params.quota_key,
+        "", /*cluster*/
+        "", /*cluster_secret*/
+        "TimeplusProton",
+        connection_params.compression,
+        connection_params.security);
+
+    conn->setDataTypeTranslator(&ClickHouseDataTypeTranslator::instance());
+
+    LOG_INFO(logger, "executing SQL: DESCRIBE TABLE {}", table);
+    conn->sendQuery(connection_params.timeouts, "DESCRIBE TABLE " + table, {}, "", QueryProcessingStage::Complete, nullptr, nullptr, false);
+    LOG_INFO(logger, "receiving data");
+
+    ColumnsDescription ret {};
+
+    LibClient client {std::move(conn), connection_params.timeouts, context, logger};
+    client.receiveResult({
+        .on_data = [this, &ret](Block & block)
+        {
+            LOG_INFO(logger, "DESCRIBE TABLE returns {} columns and {} rows", block.columns(), block.rows());
+            if (!block.rows())
+                return;
+
+            const auto & cols = block.getColumns();
+            const auto & factory = DataTypeFactory::instance();
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                ColumnDescription col_desc {};
+                {
+                    const auto & col = block.getByName("name");
+                    col_desc.name = col.column->getDataAt(i).toString();
+                }
+                {
+                    const auto & col = block.getByName("type");
+                    col_desc.type = factory.get(col.column->getDataAt(i).toString(), true);
+                }
+                {
+                    const auto & col = block.getByName("comment");
+                    col_desc.comment = col.column->getDataAt(i).toString();
+                }
+                LOG_INFO(logger, "row {}: col_name = {}, col_type = {}", i, col_desc.name, col_desc.type);
+                ret.add(col_desc, String(), false, false);
+            }
+        }
+    });
+
+    return ret;
 }
 
 }

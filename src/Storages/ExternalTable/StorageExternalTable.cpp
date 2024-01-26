@@ -4,18 +4,16 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Storages/ExternalTable/StorageExternalTable.h>
-#include <Storages/StorageFactory.h>
 #include "Storages/ExternalTable/ClickHouse/ClickHouse.h"
 
 namespace DB
 {
 
 StorageExternalTable::StorageExternalTable(
-        const StorageID & table_id_,
         std::unique_ptr<ExternalTableSettings>  settings,
-        ContextPtr context_)
-: IStorage(table_id_)
-, WithContext(context_->getGlobalContext())
+        const StorageFactory::Arguments & args)
+: IStorage(args.table_id)
+, WithContext(args.getContext()->getGlobalContext())
 {
     auto type = settings->type.value;
     if (type == "clickhouse")
@@ -25,6 +23,8 @@ StorageExternalTable::StorageExternalTable(
     }
     else
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unknown external table type: {}", type);
+
+    setStorageMetadata(args);
 }
 
 SinkToStoragePtr StorageExternalTable::write(
@@ -35,19 +35,27 @@ SinkToStoragePtr StorageExternalTable::write(
     return external_table->write(query, metadata_snapshot, context_);
 }
 
+void StorageExternalTable::setStorageMetadata(const StorageFactory::Arguments & args)
+{
+    StorageInMemoryMetadata storage_metadata;
+    storage_metadata.setColumns(external_table->getTableStructure());
+
+    storage_metadata.setConstraints(args.constraints);
+    storage_metadata.setComment(args.comment);
+    setInMemoryMetadata(storage_metadata);
+}
+
 void registerStorageExternalTable(StorageFactory & factory)
 {
     auto creator_fn = [](const StorageFactory::Arguments & args)
     {
-        if (args.storage_def->settings)
-        {
-            auto settings = std::make_unique<ExternalTableSettings>();
-            settings->loadFromQuery(*args.storage_def);
-
-            return StorageExternalTable::create(args.table_id, std::move(settings), args.getContext());
-        }
-        else
+        if (!args.storage_def->settings)
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "External table requires correct settings setup");
+
+        auto settings = std::make_unique<ExternalTableSettings>();
+        settings->loadFromQuery(*args.storage_def);
+
+        return StorageExternalTable::create(std::move(settings), args);
     };
 
     factory.registerStorage(
@@ -58,6 +66,5 @@ void registerStorageExternalTable(StorageFactory & factory)
             .supports_schema_inference = true,
         });
 }
-
 
 }

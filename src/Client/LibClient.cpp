@@ -1,4 +1,4 @@
-#include <Client/Client.h>
+#include <Client/LibClient.h>
 #include "Processors/Chunk.h"
 
 namespace DB
@@ -11,14 +11,14 @@ extern const int TIMEOUT_EXCEEDED;
 extern const int UNKNOWN_PACKET_FROM_SERVER;
 }
 
-Client::Client(IConnectionPool::Entry connection_, ConnectionTimeouts timeouts_, ContextPtr & context_, Poco::Logger * logger_)
+LibClient::LibClient(ConnectionPtr connection_, ConnectionTimeouts timeouts_, ContextPtr & context_, Poco::Logger * logger_)
     : connection(connection_)
     , timeouts(timeouts_)
     , context(context_)
     , logger(logger_)
 {}
 
-void Client::executeQuery(String query, const Callbacks & callbacks)
+void LibClient::executeQuery(String query, const Callbacks & callbacks)
 {
     size_t processed_rows {0};
     int retries_left = 10;
@@ -54,7 +54,7 @@ void Client::executeQuery(String query, const Callbacks & callbacks)
 
 /// Receives and processes packets coming from server.
 /// Also checks if query execution should be cancelled.
-void Client::receiveResult(const Callbacks & callbacks)
+void LibClient::receiveResult(const Callbacks & callbacks)
 {
     const auto receive_timeout = timeouts.receive_timeout;
     constexpr size_t default_poll_interval = 1000000; /// in microseconds
@@ -98,7 +98,7 @@ void Client::receiveResult(const Callbacks & callbacks)
         LOG_INFO(logger, "Query was cancelled.");
 }
 
-void Client::cancelQuery()
+void LibClient::cancelQuery()
 {
     connection->sendCancel();
     cancelled = true;
@@ -107,7 +107,7 @@ void Client::cancelQuery()
 /// Receive a part of the result, or progress info or an exception and process it.
 /// Returns true if one should continue receiving packets.
 /// Output of result is suppressed if query was cancelled.
-bool Client::receiveAndProcessPacket(bool cancelled_, const Callbacks & callbacks)
+bool LibClient::receiveAndProcessPacket(bool cancelled_, const Callbacks & callbacks)
 {
     Packet packet = connection->receivePacket();
 
@@ -124,37 +124,45 @@ bool Client::receiveAndProcessPacket(bool cancelled_, const Callbacks & callback
             return true;
 
         case Protocol::Server::Progress:
-            callbacks.on_progress(packet.progress);
+            if (callbacks.on_progress)
+                callbacks.on_progress(packet.progress);
             return true;
 
         case Protocol::Server::ProfileInfo:
-            callbacks.on_profile_info(packet.profile_info);
+            if (callbacks.on_profile_info)
+                callbacks.on_profile_info(packet.profile_info);
             return true;
 
         case Protocol::Server::Totals:
             if (!cancelled_)
-                callbacks.on_totals(packet.block);
+                if (callbacks.on_totals)
+                    callbacks.on_totals(packet.block);
             return true;
 
         case Protocol::Server::Extremes:
             if (!cancelled_)
-                callbacks.on_extremes(packet.block);
+                if (callbacks.on_extremes)
+                    callbacks.on_extremes(packet.block);
             return true;
 
         case Protocol::Server::Exception:
-            callbacks.on_receive_exception_from_server(std::move(packet.exception));
+            if (callbacks.on_receive_exception_from_server)
+                callbacks.on_receive_exception_from_server(std::move(packet.exception));
             return false;
 
         case Protocol::Server::Log:
-            callbacks.on_log_data(packet.block);
+            if (callbacks.on_log_data)
+                callbacks.on_log_data(packet.block);
             return true;
 
         case Protocol::Server::EndOfStream:
-            callbacks.on_end_of_stream();
+            if (callbacks.on_end_of_stream)
+                callbacks.on_end_of_stream();
             return false;
 
         case Protocol::Server::ProfileEvents:
-            callbacks.on_profile_events(packet.block);
+            if (callbacks.on_profile_events)
+                callbacks.on_profile_events(packet.block);
             return true;
 
         default:
@@ -163,44 +171,44 @@ bool Client::receiveAndProcessPacket(bool cancelled_, const Callbacks & callback
     }
 }
 
-// void Client::onProgress(const Progress & value)
+// void LibClient::onProgress(const Progress & value)
 // {
 //     LOG_INFO(logger, "onProgress called with read_rows = {}", value.read_rows);
 // }
 //
-// void Client::onData(Block & block)
+// void LibClient::onData(Block & block)
 // {
 //     /// TBD
 // }
 //
-// void Client::onLogData(Block & block) {
+// void LibClient::onLogData(Block & block) {
 //     LOG_INFO(logger, "onLogData called with columns = {}, rows = {}", block.columns(), block.rows());
 // }
 //
-// void Client::onTotals(Block & block)
+// void LibClient::onTotals(Block & block)
 // {
 //     LOG_INFO(logger, "onTotals called with columns = {}, rows = {}", block.columns(), block.rows());
 // }
 //
-// void Client::onExtremes(Block & block)
+// void LibClient::onExtremes(Block & block)
 // {
 //     LOG_INFO(logger, "onExtremes called with columns = {}, rows = {}", block.columns(), block.rows());
 // }
 //
-// void Client::onReceiveExceptionFromServer(std::unique_ptr<Exception> && e)
+// void LibClient::onReceiveExceptionFromServer(std::unique_ptr<Exception> && e)
 // {
 //     LOG_INFO(logger, "received server exception: {}", e->what());
 // }
 //
-// void Client::onProfileInfo(const ProfileInfo & profile_info)
+// void LibClient::onProfileInfo(const ProfileInfo & profile_info)
 // {
 //     LOG_INFO(logger, "received ProfileInfo: rows={}", profile_info.rows);
 // }
-// void Client::onEndOfStream()
+// void LibClient::onEndOfStream()
 // {
 //     LOG_INFO(logger, "received EndOfStream");
 // }
-// void Client::onProfileEvents(Block & block)
+// void LibClient::onProfileEvents(Block & block)
 // {
 //     LOG_INFO(logger, "received ProfileEvents rows = {}", block.rows());
 // }

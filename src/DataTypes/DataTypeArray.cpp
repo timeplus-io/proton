@@ -71,6 +71,8 @@ static DataTypePtr create(const ASTPtr & arguments)
 void registerDataTypeArray(DataTypeFactory & factory)
 {
     factory.registerDataType("array", create);
+
+    factory.registerClickHouseAlias("Array", "array");
 }
 
 }

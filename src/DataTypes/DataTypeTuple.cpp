@@ -373,6 +373,8 @@ static DataTypePtr create(const ASTPtr & arguments)
 void registerDataTypeTuple(DataTypeFactory & factory)
 {
     factory.registerDataType("tuple", create);
+
+    factory.registerClickHouseAlias("Tuple", "tuple");
 }
 
 }

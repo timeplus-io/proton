@@ -140,7 +140,7 @@ Block NativeReader::read()
         /// Type
         String type_name;
         readStringBinary(type_name, istr);
-        column.type = data_type_factory.get(type_name);
+        column.type = data_type_factory.get(type_name/* proton: starts */, !!data_type_translator/* proton: ends */);
 
         setVersionToAggregateFunctions(column.type, true, server_revision);
 
@@ -230,4 +230,10 @@ void NativeReader::updateAvgValueSizeHints(const Block & block)
     }
 }
 
+/// proton: starts
+void NativeReader::setDataTypeTranslator(IDataTypeTranslator * translator)
+{
+    data_type_translator = translator;
+}
+/// proton: ends
 }

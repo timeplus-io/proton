@@ -162,6 +162,8 @@ static DataTypePtr create(const ASTPtr & arguments)
 void registerDataTypeLowCardinality(DataTypeFactory & factory)
 {
     factory.registerDataType("low_cardinality", create);
+
+    factory.registerClickHouseAlias("LowCardinality", "low_cardinality");
 }
 
 

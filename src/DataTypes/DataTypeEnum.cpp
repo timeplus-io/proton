@@ -315,6 +315,10 @@ void registerDataTypeEnum(DataTypeFactory & factory)
 
     /// MySQL
     /// factory.registerAlias("ENUM", "enum", DataTypeFactory::CaseInsensitive);
+
+    factory.registerClickHouseAlias("Enum8", "enum8");
+    factory.registerClickHouseAlias("Enum16", "enum16");
+    factory.registerClickHouseAlias("Enum", "enum");
 }
 
 }

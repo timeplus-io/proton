@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Client/ConnectionPool.h>
+#include <Client/ConnectionParameters.h>
 #include <Storages/ExternalTable/ExternalTableImpl.h>
 #include <Storages/ExternalTable/ExternalTableSettings.h>
 
@@ -18,12 +18,12 @@ public:
     void startup() override;
     void shutdown() override {}
 
+    ColumnsDescription getTableStructure() override;
+
     SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) override;
 
 private:
-    ConnectionPoolPtr connection_pool;
-    ConnectionTimeouts timeouts;
-
+    ConnectionParameters connection_params;
     String table;
 
     ContextPtr & context;

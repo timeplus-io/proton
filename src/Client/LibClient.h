@@ -20,20 +20,20 @@ struct Callbacks
     std::function<void(Block & block)>  on_profile_events;
 };
 
-/// Client is for using as a library client without all the complexities for handling terminal stuff like ClientBase does.
-class Client final
+/// LibClient is for using as a library client without all the complexities for handling terminal stuff like ClientBase does.
+class LibClient final
 {
 public:
-    Client(IConnectionPool::Entry connection_, ConnectionTimeouts timeouts_, ContextPtr & context_, Poco::Logger * logger_);
+    LibClient(ConnectionPtr connection_, ConnectionTimeouts timeouts_, ContextPtr & context_, Poco::Logger * logger_);
 
     void executeQuery(String query, const Callbacks & callbacks);
+    void receiveResult(const Callbacks & callbacks);
     void cancelQuery();
 
 private:
-    void receiveResult(const Callbacks & callbacks);
     bool receiveAndProcessPacket(bool cancelled_, const Callbacks & callbacks);
 
-    IConnectionPool::Entry connection;
+    ConnectionPtr connection;
     ConnectionTimeouts timeouts;
 
     std::atomic_bool cancelled {false};

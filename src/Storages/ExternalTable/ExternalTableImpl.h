@@ -14,6 +14,8 @@ public:
     virtual void startup() = 0;
     virtual void shutdown() = 0;
 
+    virtual ColumnsDescription getTableStructure() = 0;
+
     virtual SinkToStoragePtr write(const ASTPtr & /* query */, const StorageMetadataPtr & /* metadata_snapshot */, ContextPtr /* context */)
 {
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Ingesting data to this type of external stream is not supported");

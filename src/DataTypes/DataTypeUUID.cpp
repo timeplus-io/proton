@@ -29,6 +29,8 @@ MutableColumnPtr DataTypeUUID::createColumn() const
 void registerDataTypeUUID(DataTypeFactory & factory)
 {
     factory.registerSimpleDataType("uuid", [] { return DataTypePtr(std::make_shared<DataTypeUUID>()); });
+
+    factory.registerClickHouseAlias("Uuid", "uuid");
 }
 
 }

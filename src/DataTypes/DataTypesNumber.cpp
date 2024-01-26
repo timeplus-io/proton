@@ -91,6 +91,34 @@ void registerDataTypeNumbers(DataTypeFactory & factory)
     /// factory.registerAlias("SET", "uint64", DataTypeFactory::CaseInsensitive);  /// MySQL
     /// factory.registerAlias("YEAR", "uint16", DataTypeFactory::CaseInsensitive);
     /// factory.registerAlias("TIME", "int64", DataTypeFactory::CaseInsensitive);
+
+    factory.registerClickHouseAlias("UInt8", "uint8");
+    factory.registerClickHouseAlias("UInt16", "uint16");
+    factory.registerClickHouseAlias("UInt32", "uint32");
+    factory.registerClickHouseAlias("UInt64", "uint64");
+
+    factory.registerClickHouseAlias("Int8", "int8");
+    factory.registerClickHouseAlias("Int16", "int16");
+    factory.registerClickHouseAlias("Int32", "int32");
+    factory.registerClickHouseAlias("Int64", "int64");
+
+    factory.registerClickHouseAlias("Float32", "float32");
+    factory.registerClickHouseAlias("Float64", "float64");
+
+    factory.registerClickHouseAlias("UInt128", "uint128");
+    factory.registerClickHouseAlias("UInt256", "uint256");
+
+    factory.registerClickHouseAlias("Int128", "int128");
+    factory.registerClickHouseAlias("Int256", "int256");
+
+    factory.registerClickHouseAlias("BYTE", "byte");
+    factory.registerClickHouseAlias("SMALLINT", "smallint");
+    factory.registerClickHouseAlias("INT", "int");
+    factory.registerClickHouseAlias("UINT", "uint");
+    factory.registerClickHouseAlias("INTEGER", "integer");
+    factory.registerClickHouseAlias("BIGINT", "bigint");
+    factory.registerClickHouseAlias("FLOAT", "float");
+    factory.registerClickHouseAlias("DOUBLE", "double");
 }
 
 }

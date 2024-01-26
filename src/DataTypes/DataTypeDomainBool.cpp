@@ -15,6 +15,8 @@ void registerDataTypeDomainBool(DataTypeFactory & factory)
     });
 
     factory.registerAlias("boolean", "bool");
+
+    factory.registerClickHouseAlias("Bool", "bool");
 }
 
 }

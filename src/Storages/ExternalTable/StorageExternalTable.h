@@ -4,6 +4,8 @@
 #include <Storages/ExternalTable/ExternalTableSettings.h>
 #include <Storages/ExternalTable/ExternalTableImpl.h>
 #include <Storages/IStorage.h>
+#include <Storages/StorageFactory.h>
+
 #include <base/shared_ptr_helper.h>
 
 namespace DB
@@ -28,12 +30,11 @@ public:
         ContextPtr /*context*/) override;
 
 protected:
-    StorageExternalTable(
-        const StorageID & table_id_,
-        std::unique_ptr<ExternalTableSettings> settings,
-        ContextPtr context_);
+    StorageExternalTable(std::unique_ptr<ExternalTableSettings> settings, const StorageFactory::Arguments & args);
 
 private:
+    void setStorageMetadata(const StorageFactory::Arguments & args);
+
     IExternalTablePtr external_table;
 
     /// TBD

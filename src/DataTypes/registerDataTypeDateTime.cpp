@@ -111,6 +111,10 @@ void registerDataTypeDateTime(DataTypeFactory & factory)
     factory.registerDataType("datetime64", create64, DataTypeFactory::CaseInsensitive);
 
     /// factory.registerAlias("TIMESTAMP", "datetime", DataTypeFactory::CaseInsensitive);
+
+    // factory.registerClickHouseAlias("Datetime", "datetime");
+    // factory.registerClickHouseAlias("Datetime32", "datetime32");
+    // factory.registerClickHouseAlias("Datetime64", "datetime64");
 }
 
 }

@@ -35,6 +35,16 @@ protected:
             return name;
     }
 
+    /// proton: starts
+    String getClickHouseAliasToOrName(const String & name) const
+    {
+        if (clickhouse_names.contains(name))
+            return clickhouse_names.at(name);
+        else
+            return name;
+    }
+    /// proton: ends
+
     std::unordered_map<String, String> case_insensitive_name_mapping;
 
 public:
@@ -80,6 +90,38 @@ public:
         if (!aliases.emplace(alias_name, real_dict_name).second)
             throw Exception(factory_name + ": alias name '" + alias_name + "' is not unique", ErrorCodes::LOGICAL_ERROR);
     }
+
+    /// proton: starts
+    /// Register the name used by ClickHouse for value
+    /// real_name have to be already registered.
+    void registerClickHouseAlias(const String & alias_name, const String & alias_or_real_name)
+    {
+        const auto & creator_map = getMap();
+        const auto & case_insensitive_creator_map = getCaseInsensitiveMap();
+        const String factory_name = getFactoryName();
+
+        String real_dict_name;
+        String real_name = alias_or_real_name;
+        if (auto it = aliases.find(real_name); it != aliases.end())
+            real_name = it->second;
+        if (creator_map.count(real_name))
+            real_dict_name = real_name;
+        else if (auto real_name_lowercase = Poco::toLower(real_name); case_insensitive_creator_map.count(real_name_lowercase))
+            real_dict_name = real_name_lowercase;
+        else
+            throw Exception(factory_name + ": can't create ClickHouse alias '" + alias_name + "', the real name '" + alias_or_real_name + "' is not registered",
+                ErrorCodes::LOGICAL_ERROR);
+
+        String alias_name_lowercase = Poco::toLower(alias_name);
+
+        if (creator_map.count(alias_name) || case_insensitive_creator_map.count(alias_name_lowercase))
+            throw Exception(
+                factory_name + ": the ClickHouse alias name '" + alias_name + "' is already registered as real name", ErrorCodes::LOGICAL_ERROR);
+
+        if (!clickhouse_names.emplace(alias_name, real_dict_name).second)
+            throw Exception(factory_name + ": ClickHouse alias name '" + alias_name + "' is not unique", ErrorCodes::LOGICAL_ERROR);
+    }
+    /// proton: ends
 
     std::vector<String> getAllRegisteredNames() const override
     {
@@ -144,6 +186,11 @@ private:
 
     /// Case insensitive aliases
     AliasMap case_insensitive_aliases;
+
+    /// proton: starts
+    /// ClickHouse names map to data_types from previous two maps
+    AliasMap clickhouse_names;
+    /// proton: ends
 };
 
 }

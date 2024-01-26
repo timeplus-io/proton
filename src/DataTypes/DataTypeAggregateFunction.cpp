@@ -259,6 +259,8 @@ void setVersionToAggregateFunctions(DataTypePtr & type, bool if_empty, std::opti
 void registerDataTypeAggregateFunction(DataTypeFactory & factory)
 {
     factory.registerDataType("aggregate_function", create);
+
+    factory.registerClickHouseAlias("AggregateFunction", "aggregate_function");
 }
 
 }

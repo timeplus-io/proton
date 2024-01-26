@@ -145,6 +145,8 @@ static std::pair<DataTypePtr, DataTypeCustomDescPtr> create(const ASTPtr & argum
 void registerDataTypeDomainSimpleAggregateFunction(DataTypeFactory & factory)
 {
     factory.registerDataTypeCustom("simple_aggregate_function", create);
+
+    factory.registerClickHouseAlias("SimpleAggregateFunction", "simple_aggregate_function");
 }
 
 }
