@@ -13,7 +13,7 @@ namespace DB
 class ASTStorage;
 
 #define STORAGE_RANDOM_RELATED_SETTINGS(M) \
-    M(UInt64, eps, 1000, "Limit how many rows to be generated per second for each thread. Used by RANDOM STREAM. 0 means no limit", 0) \
+    M(Float, eps, 1000., "Limit how many rows to be generated per second for each thread. Used by RANDOM STREAM. 0 means no limit", 0) \
     M(UInt64, interval_time, 5, "the data generating interval, unit ms", 0) \
     M(UInt64, shards, 1, "Shards number for random stream", 0)
 
@@ -67,7 +67,7 @@ public:
 private:
     UInt64 shards;
     UInt64 random_seed = 0;
-    UInt64 events_per_second;
+    Float64 events_per_second;
     UInt64 interval_time;
 
 protected:
@@ -77,7 +77,7 @@ protected:
         const String & comment,
         std::optional<UInt64> random_seed,
         UInt64 shards_,
-        UInt64 events_per_second_,
+        Float64 events_per_second_,
         UInt64 interval_time_);
 };
 

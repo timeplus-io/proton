@@ -36,6 +36,8 @@
 #include <Common/logger_useful.h>
 #include <Common/randomSeed.h>
 
+#include <functional>
+
 namespace DB
 {
 
@@ -385,56 +387,80 @@ fillColumnWithData(const DataTypePtr type, UInt64 limit, std::tuple<Int64, Int32
     }
 }
 
+constexpr Float64 EPSILON = 1e-5;
+
 class GenerateRandomSource final : public ISource
 {
 public:
     GenerateRandomSource(
-        UInt64 block_size_,
+        UInt64 max_block_size_,
         UInt64 random_seed_,
         Block block_header_,
         const ColumnsDescription & our_columns_,
         ContextPtr context_,
-        UInt64 events_per_second_,
+        Float64 events_per_second_,
         UInt64 interval_time_,
         bool is_streaming_,
         UInt64 total_events_,
         size_t shard_num_)
         : ISource(Nested::flatten(prepareBlockToFill(block_header_)), true, ProcessorID::GenerateRandomSourceID)
-        , block_size(block_size_)
+        , max_block_size(max_block_size_)
         , block_full(std::move(block_header_))
         , our_columns(our_columns_)
         , context(context_)
-        , events_per_second(events_per_second_)
+        // , events_per_second(events_per_second_)
         , header_chunk(Nested::flatten(block_full.cloneEmpty()).getColumns(), 0)
-        , generate_interval(interval_time_)
+        , generate_interval_ms(interval_time_)
         , total_events(total_events_)
         , log(&Poco::Logger::get("GenerateRandSource"))
     {
         is_streaming = is_streaming_;
         data_generate_helper = std::make_tuple(shard_num_, 1, pcg64(random_seed_));
-        if (total_events == 0 && !is_streaming)
-            total_events = events_per_second ? events_per_second : block_size;
 
-        /**
-         * In order to generate events evenly within one second, we have the the interval_time parameter.
-         * The following code is used to calculate the number of data generated per interval
-         * For example: events_per_second = 2000, interval_time = 80ms.
-         *              1s = 1000ms, 1000ms / 80ms = 12(int / int, omit decimals), 1000ms % 80ms = 40ms
-         *              80 * 11 + (80 + 40) = 1000ms
-         * So we have 12 intervals, 11 normal interval(80ms) and 1 special interval(80ms + 40ms = 120ms)
-         * 
-         * Now calculate the number of data generated per interval:
-         *              2000 / 12 = 166, 2000 % 12 = 8
-         * So the number of data generated per normal interval is 166, and the number of data generated in the special interval is 166 + 8 = 174
-         *              166 * 11 + 174 = 2000
-         * Total number of data generated per second is 2000.
-         */
-        interval_count = 1000 / generate_interval;
-        last_interval_time = generate_interval + 1000 % generate_interval;
-        boundary_time = MonotonicMilliseconds::now() + last_interval_time;
-        normal_interval = events_per_second / interval_count;
-        last_interval_count = normal_interval + events_per_second % interval_count;
+        /// the minimum support eps is EPSILON, about 1 piece of data per day, if eps is less than EPSILON, we assume it's 0.
+        if (std::abs(events_per_second_) < EPSILON || !is_streaming)
+        {
+            events_per_second = 0;
+            batch_size_getter = [this]() { return unrestrcitedMode(); };
+            if (!is_streaming)
+                total_events = total_events == 0 ? max_block_size : total_events;
+        }
+        else if (events_per_second_ < 1)
+        {
+            /// For example, events_per_second_ = 0.5, we will generate 1 data every 2 seconds
+            generate_interval_ms = static_cast<UInt64>(1000 / events_per_second_);
 
+            /// every generate_interval_ms we will generate 1 piece of data
+            batch_size_getter = [this]() { return slowMode(); };
+        }
+        else
+        {
+            /// events_per_second_ > 1, we will generate data evenly within one second
+            events_per_second = static_cast<UInt64>(events_per_second_);
+
+            /**
+             * In order to generate events evenly within one second, we have the the interval_time parameter.
+             * The following code is used to calculate the number of data generated per interval
+             * For example: events_per_second = 2000, interval_time = 80ms.
+             *              1s = 1000ms, 1000ms / 80ms = 12(int / int, omit decimals), 1000ms % 80ms = 40ms
+             *              80 * 11 + (80 + 40) = 1000ms
+             * So we have 12 intervals, 11 normal interval(80ms) and 1 special interval(80ms + 40ms = 120ms)
+             * 
+             * Now calculate the number of data generated per interval:
+             *              2000 / 12 = 166, 2000 % 12 = 8
+             * So the number of data generated per normal interval is 166, and the number of data generated in the special interval is 166 + 8 = 174
+             *              166 * 11 + 174 = 2000
+             * Total number of data generated per second is 2000.
+             */
+            interval_count = 1000 / generate_interval_ms;
+            last_interval_ms = generate_interval_ms + 1000 % generate_interval_ms;
+            normal_interval_events = events_per_second / interval_count;
+            last_interval_events = normal_interval_events + events_per_second % interval_count;
+
+            batch_size_getter = [this]() { return normalMode(); };
+        }
+
+        boundary_time = MonotonicMilliseconds::now();
         for (const auto & elem : block_full)
         {
             bool is_reserved_column
@@ -446,8 +472,7 @@ public:
             block_to_fill.insert(elem);
         }
 
-        auto dag
-            = evaluateMissingDefaults(block_to_fill, block_full.getNamesAndTypesList(), our_columns, context, true, false, true);
+        auto dag = evaluateMissingDefaults(block_to_fill, block_full.getNamesAndTypesList(), our_columns, context, true, false, true);
         if (dag)
         {
             default_actions = std::make_shared<ExpressionActions>(
@@ -456,6 +481,57 @@ public:
     }
 
     String getName() const override { return "Random"; }
+
+    void checkTotalEventsAndSet(UInt64 & batch_size)
+    {
+        batch_size = std::min(batch_size, total_events - generated_events);
+        generated_events += batch_size;
+    }
+
+    /// there three modes of generating data
+    /// 1. unrestrcited mode: generate data as fast as you can
+    /// 2. slow mode: eps < 1
+    /// 3. normal mode: eps > 1
+    UInt64 unrestrcitedMode()
+    {
+        UInt64 batch_size = max_block_size;
+        if (total_events)
+            checkTotalEventsAndSet(batch_size);
+
+        return batch_size;
+    }
+
+    UInt64 slowMode()
+    {
+        auto now_time = MonotonicMilliseconds::now();
+        UInt64 batch_size = 0;
+        if (now_time >= boundary_time)
+        {
+            boundary_time += generate_interval_ms;
+            batch_size = 1;
+            if (total_events)
+                ++generated_events;
+        }
+        return batch_size;
+    }
+
+    UInt64 normalMode()
+    {
+        auto now_time = MonotonicMilliseconds::now();
+        UInt64 batch_size = 0;
+        if (now_time > boundary_time)
+        {
+            int is_special = index - index / interval_count * interval_count;
+            boundary_time += (is_special ? generate_interval_ms : last_interval_ms);
+            batch_size = is_special ? normal_interval_events : last_interval_events;
+            index++;
+
+            if (total_events)
+                checkTotalEventsAndSet(batch_size);
+        }
+
+        return batch_size;
+    }
 
 protected:
     Chunk generate() override
@@ -466,48 +542,8 @@ protected:
             return {};
         }
 
-        if (!is_streaming)
-        {
-            auto batch_size = std::min(block_size, total_events - generated_events);
-            generated_events += batch_size;
-
-            /// random stream table query will return a block_size of chunk and end query.
-            return doGenerate(batch_size);
-        }
-
-        if (events_per_second != 0)
-        {
-            /// hign performance mod operation from clickhouse
-            int is_special = index - index / interval_count * interval_count;
-            auto now_time = MonotonicMilliseconds::now();
-
-            UInt64 batch_size = 0;
-            if (now_time >= boundary_time)
-            {
-                /// it's time for next output
-                boundary_time += (is_special ? generate_interval : last_interval_time);
-                batch_size = is_special ? normal_interval : last_interval_count;
-                if (total_events)
-                {
-                    batch_size = std::min(batch_size, total_events - generated_events);
-                    generated_events += batch_size;
-                }
-                index++;
-            }
-
-            /// FIXME: if the batch size > max block size, we have to split it.
-            return doGenerate(batch_size);
-        }
-        else
-        {
-            auto batch_size = block_size;
-            if (total_events)
-            {
-                batch_size = std::min(block_size, total_events - generated_events);
-                generated_events += batch_size;
-            }
-            return doGenerate(batch_size);
-        }
+        UInt64 batch_size = batch_size_getter();
+        return doGenerate(batch_size);
     }
 
     Chunk doGenerate(UInt64 block_size_)
@@ -547,26 +583,33 @@ protected:
     }
 
 private:
-    UInt64 block_size;
+    std::function<UInt64()> batch_size_getter;
+
+    UInt64 max_block_size;
     Block block_full;
     Block block_to_fill;
     const ColumnsDescription our_columns;
     ContextPtr context;
+    Chunk header_chunk;
+
+    /// next output time
     Int64 boundary_time;
     UInt64 events_per_second;
-    UInt64 normal_interval = 0;
-    UInt64 last_interval_count = 0;
-    Chunk header_chunk;
-    size_t index = 0;
-    // Set the size of a window for random storages to generate data, measured in milliseconds.
-    const UInt64 generate_interval = 100;
-    UInt64 last_interval_time = 0;
+    /// Set the size of a window for random storages to generate data, measured in milliseconds.
+    UInt64 generate_interval_ms = 100;
+    /// (1s = 1000ms) / generate_interval_ms = interval_count
     size_t interval_count = 0;
+    /// events_per_second / interval_count = normal_interval_events
+    UInt64 normal_interval_events = 0;
+    UInt64 last_interval_events = 0;
+    UInt64 last_interval_ms = 0;
+    size_t index = 0;
     UInt64 total_events;
     UInt64 generated_events = 0;
+
     Poco::Logger * log;
     std::shared_ptr<ExpressionActions> default_actions = nullptr;
-    // <shard_num, sequence_num, rng>
+    /// <shard_num, sequence_num, rng>
     std::tuple<Int64, Int32, pcg64> data_generate_helper;
 
     static Block & prepareBlockToFill(Block & block)
@@ -615,7 +658,7 @@ StorageRandom::StorageRandom(
     const String & comment,
     std::optional<UInt64> random_seed_,
     UInt64 shards_,
-    UInt64 events_per_second_,
+    Float64 events_per_second_,
     UInt64 interval_time_)
     : IStorage(table_id_), shards(shards_), events_per_second(events_per_second_), interval_time(interval_time_)
 {
@@ -721,8 +764,8 @@ Pipe StorageRandom::read(
     auto events_share = max_events / shards;
     auto events_remainder = max_events % shards;
 
-    /// setting random stream eps in query time, if generate_eps is not defalut value, use generate_eps as eps first.
-    UInt64 eps = settings.eps < 0 ? events_per_second : static_cast<UInt64>(settings.eps);
+    /// setting random stream eps in query time, if settings.eps is not defalut value, use settings.eps as eps first.
+    Float64 eps = settings.eps < 0 ? events_per_second : settings.eps;
     if (eps < shards)
     {
         if (eps == 0)
@@ -736,7 +779,7 @@ Pipe StorageRandom::read(
                     block_header,
                     our_columns,
                     context,
-                    0,
+                    0.,
                     1000,
                     query_info.syntax_analyzer_result->streaming,
                     events_share,
@@ -773,8 +816,8 @@ Pipe StorageRandom::read(
     }
     else
     {
-        size_t eps_thread = eps / shards;
-        size_t remainder = eps % shards;
+        Float64 eps_thread = static_cast<Float64>(static_cast<UInt64>(eps) / shards);
+        Float64 remainder = static_cast<Float64>(static_cast<UInt64>(eps) % shards);
         /// number of data generated per second is bigger than the number of thread;
         for (size_t i = 0; i < shards - 1; i++)
         {
@@ -809,7 +852,7 @@ Pipe StorageRandom::read(
 
 NamesAndTypesList StorageRandom::getVirtuals() const
 {
-    return NamesAndTypesList {
+    return NamesAndTypesList{
         {ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, std::make_shared<DataTypeInt64>()},
         {ProtonConsts::RESERVED_SHARD, std::make_shared<DataTypeInt32>()},
     };
