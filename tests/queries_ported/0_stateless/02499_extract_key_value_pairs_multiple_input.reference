@@ -121,9 +121,9 @@ SELECT
     x;
 {}
 -- semi-colon as pair delimiter
--- expected output: {'age':'31','name':'neymar','team':'psg'}
+-- expected output: {'age':'31','anotherkey':'anothervalue','name':'neymar','random_key':'value_with_comma,still_part_of_value:still_part_of_value','team':'psg'}
 WITH
-    extract_key_value_pairs('name:neymar;age:31;team:psg;invalid1:invalid1,invalid2:invalid2', ':', ';') AS s_map,
+    extract_key_value_pairs('name:neymar;age:31;team:psg;random_key:value_with_comma,still_part_of_value:still_part_of_value;anotherkey:anothervalue', ':', ';') AS s_map,
     CAST(
         array_map(
             (x) -> (x, s_map[x]), array_sort(map_keys(s_map))
@@ -132,7 +132,7 @@ WITH
     ) AS x
 SELECT
     x;
-{'age':'31','name':'neymar','team':'psg'}
+{'age':'31','anotherkey':'anothervalue','name':'neymar','random_key':'value_with_comma,still_part_of_value:still_part_of_value','team':'psg'}
 -- both comma and semi-colon as pair delimiters
 -- expected output: {'age':'31','last_key':'last_value','name':'neymar','nationality':'brazil','team':'psg'}
 WITH
