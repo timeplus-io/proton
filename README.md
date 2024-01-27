@@ -37,7 +37,7 @@ Proton is a streaming SQL engine, a fast and lightweight alternative to Apache F
 4. **Powered by the fast, resource efficient and mature [ClickHouse](https://github.com/clickhouse/clickhouse).**  Proton extends the historical data, storage, and computing functionality of ClickHouse with stream processing. Thousands of SQL functions are available in Proton. Billions of rows in are queried in milliseconds.
    
 5. **Best streaming SQL engine for [Kafka](https://kafka.apache.org/) or [Redpanda](https://redpanda.com/)**: 
- Query the live data in Kafka or other compatiable streaming data platforms, with [external streams](https://docs.timeplus.com/proton-kafka).
+ Query the live data in Kafka or other compatible streaming data platforms, with [external streams](https://docs.timeplus.com/proton-kafka).
 
 ![Proton Architecture](design/proton-architecture.webp)
 See our [architecture](https://docs.timeplus.com/proton-architecture) doc for technical details and our [FAQ](https://docs.timeplus.com/proton-faq) for more information.
