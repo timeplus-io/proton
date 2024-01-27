@@ -5,10 +5,6 @@
 #include <Common/PODArray.h>
 #include <Core/Block.h>
 
-/// proton: starts
-#include <DataTypes/IDataTypeTranslator.h>
-/// proton: ends
-
 namespace DB
 {
 
@@ -44,7 +40,7 @@ public:
     Block read();
 
     /// proton: starts
-    void setDataTypeTranslator(IDataTypeTranslator * translator);
+    void setCompatibleWithClickHouse() { compatible_with_clickhouse = true; }
     /// proton: ends
 
 private:
@@ -65,7 +61,7 @@ private:
     void updateAvgValueSizeHints(const Block & block);
 
     /// proton: starts
-    IDataTypeTranslator * data_type_translator {nullptr};
+    bool compatible_with_clickhouse {false};
     /// proton: ends
 };
 

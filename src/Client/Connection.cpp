@@ -986,8 +986,8 @@ void Connection::initBlockInput()
 
         block_in = std::make_unique<NativeReader>(*maybe_compressed_in, server_revision);
         /// proton: starts
-        if (data_type_translator)
-            block_in->setDataTypeTranslator(data_type_translator);
+        if (compatible_with_clickhouse)
+            block_in->setCompatibleWithClickHouse();
         /// proton: ends
     }
 }
@@ -1000,8 +1000,7 @@ void Connection::initBlockLogsInput()
         /// Have to return superset of SystemLogsQueue::getSampleBlock() columns
         block_logs_in = std::make_unique<NativeReader>(*in, server_revision);
         /// proton: starts
-        if (data_type_translator)
-            block_logs_in->setDataTypeTranslator(data_type_translator);
+        if (compatible_with_clickhouse)            block_logs_in->setCompatibleWithClickHouse();
         /// proton: ends
     }
 }
@@ -1013,8 +1012,8 @@ void Connection::initBlockProfileEventsInput()
     {
         block_profile_events_in = std::make_unique<NativeReader>(*in, server_revision);
         /// proton: starts
-        if (block_profile_events_in)
-            block_profile_events_in->setDataTypeTranslator(data_type_translator);
+        if (compatible_with_clickhouse)
+            block_profile_events_in->setCompatibleWithClickHouse();
         /// proton: ends
     }
 }
@@ -1098,15 +1097,15 @@ ServerConnectionPtr Connection::createConnection(const ConnectionParameters & pa
 }
 
 /// proton: starts
-void Connection::setDataTypeTranslator(IDataTypeTranslator * translator)
+void Connection::setCompatibleWithClickHouse()
 {
-    data_type_translator = translator;
+    compatible_with_clickhouse = true;
     if (block_in)
-        block_in->setDataTypeTranslator(data_type_translator);
+        block_in->setCompatibleWithClickHouse();
     if (block_logs_in)
-        block_logs_in->setDataTypeTranslator(data_type_translator);
+        block_logs_in->setCompatibleWithClickHouse();
     if (block_profile_events_in)
-        block_profile_events_in->setDataTypeTranslator(data_type_translator);
+        block_profile_events_in->setCompatibleWithClickHouse();
 }
 /// proton: ends
 

@@ -64,7 +64,7 @@ void ClickHouse::startup()
 
 SinkToStoragePtr ClickHouse::write(const ASTPtr &  /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr  /*context*/)
 {
-    return std::make_shared<ClickHouseSink>(metadata_snapshot->getSampleBlock(), logger);
+    return std::make_shared<ClickHouseSink>(metadata_snapshot->getSampleBlock(), connection_params, logger);
 }
 
 ColumnsDescription ClickHouse::getTableStructure()
@@ -82,7 +82,7 @@ ColumnsDescription ClickHouse::getTableStructure()
         connection_params.compression,
         connection_params.security);
 
-    conn->setDataTypeTranslator(&ClickHouseDataTypeTranslator::instance());
+    conn->setCompatibleWithClickHouse();
 
     LOG_INFO(logger, "executing SQL: DESCRIBE TABLE {}", table);
     conn->sendQuery(connection_params.timeouts, "DESCRIBE TABLE " + table, {}, "", QueryProcessingStage::Complete, nullptr, nullptr, false);
