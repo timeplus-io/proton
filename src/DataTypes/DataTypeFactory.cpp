@@ -32,6 +32,46 @@ DataTypePtr DataTypeFactory::get(TypeIndex type) const
 {
     return get(typeIndexToTypeName(type));
 }
+
+String DataTypeFactory::getClickHouseNameFromName(const String & name) const
+{
+    /// Data type parser can be invoked from coroutines with small stack.
+    /// Value 315 is known to cause stack overflow in some test configurations (debug build, sanitizers)
+    /// let's make the threshold significantly lower.
+    /// It is impractical for user to have complex data types with this depth.
+
+#if defined(SANITIZER) || !defined(NDEBUG)
+    static constexpr size_t data_type_max_parse_depth = 150;
+#else
+    static constexpr size_t data_type_max_parse_depth = 300;
+#endif
+
+    ParserDataType parser;
+    ASTPtr ast = parseQuery(parser, name.data(), name.data() + name.size(), "data type", 0, data_type_max_parse_depth);
+    if (const auto * func = ast->as<ASTFunction>())
+    {
+        if (func->parameters)
+            throw Exception("Data type cannot have multiple parenthesized parameters.", ErrorCodes::ILLEGAL_SYNTAX_FOR_DATA_TYPE);
+
+        if (func->arguments)
+            throw Exception(ErrorCodes::ILLEGAL_SYNTAX_FOR_DATA_TYPE, "Data type with arguments is not supported yet, got {}.", func->name);
+
+        return getClickHouseAliasFromOrName(func->name);
+    }
+
+    if (const auto * ident = ast->as<ASTIdentifier>())
+    {
+        return getClickHouseAliasFromOrName(ident->name());
+    }
+
+    if (const auto * lit = ast->as<ASTLiteral>())
+    {
+        if (lit->value.isNull())
+            return "Null";
+    }
+
+    throw Exception("Unexpected AST element for data type.", ErrorCodes::UNEXPECTED_AST_STRUCTURE);
+}
 /// proton: ends.
 
 DataTypePtr DataTypeFactory::get(const String & full_name/* proton: starts*/, bool compatible_with_clickhouse/* proton: ends*/) const
@@ -83,7 +123,7 @@ DataTypePtr DataTypeFactory::get(const String & family_name_param, const ASTPtr 
     else
         family_name = getAliasToOrName(family_name_param);
 
-    if (endsWith(family_name, "_with_dictionary"))
+    if (endsWith(family_name, "_with_dictionary")/* proton: starts */ || (compatible_with_clickhouse && endsWith(family_name, "WithDictionary"))/* proton: ends */)
     {
         ASTPtr low_cardinality_params = std::make_shared<ASTExpressionList>();
         String param_name = family_name.substr(0, family_name.size() - strlen("_with_dictionary"));

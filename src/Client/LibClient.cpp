@@ -11,7 +11,7 @@ extern const int TIMEOUT_EXCEEDED;
 extern const int UNKNOWN_PACKET_FROM_SERVER;
 }
 
-LibClient::LibClient(ConnectionPtr connection_, ConnectionTimeouts timeouts_, ContextPtr & context_, Poco::Logger * logger_)
+LibClient::LibClient(Connection & connection_, ConnectionTimeouts timeouts_, ContextPtr & context_, Poco::Logger * logger_)
     : connection(connection_)
     , timeouts(timeouts_)
     , context(context_)
@@ -26,7 +26,7 @@ void LibClient::executeQuery(String query, const Callbacks & callbacks)
     {
         try
         {
-            connection->sendQuery(
+            connection.sendQuery(
                 timeouts,
                 query,
                 {},
@@ -34,7 +34,7 @@ void LibClient::executeQuery(String query, const Callbacks & callbacks)
                 QueryProcessingStage::Complete,
                 nullptr,
                 nullptr,
-                true);
+                false);
 
             receiveResult(callbacks);
 
@@ -86,7 +86,7 @@ void LibClient::receiveResult(const Callbacks & callbacks)
             /// Poll for changes after a cancellation check, otherwise it never reached
             /// because of progress updates from server.
 
-            if (connection->poll(poll_interval))
+            if (connection.poll(poll_interval))
                 break;
         }
 
@@ -100,7 +100,7 @@ void LibClient::receiveResult(const Callbacks & callbacks)
 
 void LibClient::cancelQuery()
 {
-    connection->sendCancel();
+    connection.sendCancel();
     cancelled = true;
 }
 
@@ -109,7 +109,7 @@ void LibClient::cancelQuery()
 /// Output of result is suppressed if query was cancelled.
 bool LibClient::receiveAndProcessPacket(bool cancelled_, const Callbacks & callbacks)
 {
-    Packet packet = connection->receivePacket();
+    Packet packet = connection.receivePacket();
 
     Chunk chunk {};
 
@@ -167,7 +167,7 @@ bool LibClient::receiveAndProcessPacket(bool cancelled_, const Callbacks & callb
 
         default:
             throw Exception(
-                ErrorCodes::UNKNOWN_PACKET_FROM_SERVER, "Unknown packet {} from server {}", packet.type, connection->getDescription());
+                ErrorCodes::UNKNOWN_PACKET_FROM_SERVER, "Unknown packet {} from server {}", packet.type, connection.getDescription());
     }
 }
 

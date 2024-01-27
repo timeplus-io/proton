@@ -32,6 +32,10 @@ public:
 
     static String getContentType() { return "application/octet-stream"; }
 
+    /// proton: starts
+    void setCompatibleWithClickHouse() { compatible_with_clickhouse = true; }
+    /// proton: end
+
 private:
     WriteBuffer & ostr;
     Block header;
@@ -40,6 +44,10 @@ private:
     size_t initial_size_of_file;    /// The initial size of the data file, if `append` done. Used for the index.
     /// If you need to write index, then `ostr` must be a CompressedWriteBuffer.
     CompressedWriteBuffer * ostr_concrete = nullptr;
+
+    /// proton: starts
+    bool compatible_with_clickhouse {false};
+    /// proton: ends
 };
 
 }

@@ -33,6 +33,7 @@ public:
 
     /// proton: starts.
     DataTypePtr get(TypeIndex type) const;
+    String getClickHouseNameFromName(const String & name) const;
     /// proton: ends.
 
     DataTypePtr get(const String & full_name/* proton: starts */, bool compatible_with_clickhouse = false/* proton: ends */) const;

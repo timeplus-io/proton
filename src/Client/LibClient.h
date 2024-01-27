@@ -24,7 +24,7 @@ struct Callbacks
 class LibClient final
 {
 public:
-    LibClient(ConnectionPtr connection_, ConnectionTimeouts timeouts_, ContextPtr & context_, Poco::Logger * logger_);
+    LibClient(Connection & connection_, ConnectionTimeouts timeouts_, ContextPtr & context_, Poco::Logger * logger_);
 
     void executeQuery(String query, const Callbacks & callbacks);
     void receiveResult(const Callbacks & callbacks);
@@ -33,7 +33,7 @@ public:
 private:
     bool receiveAndProcessPacket(bool cancelled_, const Callbacks & callbacks);
 
-    ConnectionPtr connection;
+    Connection & connection;
     ConnectionTimeouts timeouts;
 
     std::atomic_bool cancelled {false};

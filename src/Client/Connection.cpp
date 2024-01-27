@@ -589,6 +589,10 @@ void Connection::sendData(const Block & block, const String & name, bool scalar)
             maybe_compressed_out = out;
 
         block_out = std::make_unique<NativeWriter>(*maybe_compressed_out, block.cloneEmpty(), server_revision);
+        /// proton: starts
+        if (compatible_with_clickhouse)
+            block_out->setCompatibleWithClickHouse();
+        /// proton: ends
     }
 
     if (scalar)
@@ -1106,6 +1110,8 @@ void Connection::setCompatibleWithClickHouse()
         block_logs_in->setCompatibleWithClickHouse();
     if (block_profile_events_in)
         block_profile_events_in->setCompatibleWithClickHouse();
+    if (block_out)
+        block_out->setCompatibleWithClickHouse();
 }
 /// proton: ends
 

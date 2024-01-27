@@ -64,12 +64,12 @@ void ClickHouse::startup()
 
 SinkToStoragePtr ClickHouse::write(const ASTPtr &  /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr  /*context*/)
 {
-    return std::make_shared<ClickHouseSink>(metadata_snapshot->getSampleBlock(), connection_params, logger);
+    return std::make_shared<ClickHouseSink>(metadata_snapshot->getSampleBlock(), connection_params, context, logger);
 }
 
 ColumnsDescription ClickHouse::getTableStructure()
 {
-    auto conn = std::make_shared<Connection>(
+    auto conn = std::make_unique<Connection>(
         connection_params.host,
         connection_params.port,
         connection_params.default_database,
@@ -90,7 +90,7 @@ ColumnsDescription ClickHouse::getTableStructure()
 
     ColumnsDescription ret {};
 
-    LibClient client {std::move(conn), connection_params.timeouts, context, logger};
+    LibClient client {*conn, connection_params.timeouts, context, logger};
     client.receiveResult({
         .on_data = [this, &ret](Block & block)
         {

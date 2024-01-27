@@ -43,6 +43,14 @@ protected:
         else
             return name;
     }
+
+    String getClickHouseAliasFromOrName(const String & name) const
+    {
+        if (reversed_clickhouse_names.contains(name))
+            return reversed_clickhouse_names.at(name);
+        else
+            return name;
+    }
     /// proton: ends
 
     std::unordered_map<String, String> case_insensitive_name_mapping;
@@ -112,14 +120,9 @@ public:
             throw Exception(factory_name + ": can't create ClickHouse alias '" + alias_name + "', the real name '" + alias_or_real_name + "' is not registered",
                 ErrorCodes::LOGICAL_ERROR);
 
-        String alias_name_lowercase = Poco::toLower(alias_name);
-
-        if (creator_map.count(alias_name) || case_insensitive_creator_map.count(alias_name_lowercase))
-            throw Exception(
-                factory_name + ": the ClickHouse alias name '" + alias_name + "' is already registered as real name", ErrorCodes::LOGICAL_ERROR);
-
         if (!clickhouse_names.emplace(alias_name, real_dict_name).second)
             throw Exception(factory_name + ": ClickHouse alias name '" + alias_name + "' is not unique", ErrorCodes::LOGICAL_ERROR);
+        reversed_clickhouse_names.emplace(real_dict_name, alias_name);
     }
     /// proton: ends
 
@@ -190,6 +193,8 @@ private:
     /// proton: starts
     /// ClickHouse names map to data_types from previous two maps
     AliasMap clickhouse_names;
+    /// For looking up Proton type names from ClickHouse names
+    AliasMap reversed_clickhouse_names;
     /// proton: ends
 };
 

@@ -18,6 +18,8 @@ void registerDataTypeDate32(DataTypeFactory & factory)
 {
     factory.registerSimpleDataType(
         "date32", [] { return DataTypePtr(std::make_shared<DataTypeDate32>()); }, DataTypeFactory::CaseInsensitive);
+
+    factory.registerClickHouseAlias("Date32", "date32");
 }
 
 }

@@ -12,7 +12,7 @@ namespace ExternalTable
 class ClickHouseSink final : public SinkToStorage
 {
 public:
-    ClickHouseSink(const Block & header, const ConnectionParameters & params_, Poco::Logger * logger_);
+    ClickHouseSink(const Block & header, const ConnectionParameters & params_, ContextPtr & context_, Poco::Logger * logger_);
 
     String getName() const override { return "ClickHouseSink"; }
 
@@ -22,6 +22,7 @@ private:
     const ConnectionParameters & params;
     std::unique_ptr<Connection> conn;
 
+    ContextPtr & context;
     Poco::Logger * logger;
 };
 
