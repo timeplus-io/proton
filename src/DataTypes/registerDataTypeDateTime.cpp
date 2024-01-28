@@ -58,7 +58,7 @@ getArgument(const ASTPtr & arguments, size_t argument_index, const char * argume
     return argument->value.get<NearestResultType>();
 }
 
-static DataTypePtr create(const ASTPtr & arguments)
+static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]]/* proton: ends */)
 {
     if (!arguments || arguments->children.empty())
         return std::make_shared<DataTypeDateTime>();
@@ -77,7 +77,7 @@ static DataTypePtr create(const ASTPtr & arguments)
     return std::make_shared<DataTypeDateTime>(timezone.value_or(String{}));
 }
 
-static DataTypePtr create32(const ASTPtr & arguments)
+static DataTypePtr create32(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]] = false/* proton: ends */)
 {
     if (!arguments || arguments->children.empty())
         return std::make_shared<DataTypeDateTime>();
@@ -90,7 +90,7 @@ static DataTypePtr create32(const ASTPtr & arguments)
     return std::make_shared<DataTypeDateTime>(timezone);
 }
 
-static DataTypePtr create64(const ASTPtr & arguments)
+static DataTypePtr create64(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]] = false/* proton: ends */)
 {
     if (!arguments || arguments->children.empty())
         return std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale);

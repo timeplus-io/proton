@@ -32,7 +32,7 @@ String DataTypeNestedCustomName::getName() const
     return s.str();
 }
 
-static std::pair<DataTypePtr, DataTypeCustomDescPtr> create(const ASTPtr & arguments)
+static std::pair<DataTypePtr, DataTypeCustomDescPtr> create(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse = false/* proton: ends */)
 {
     if (!arguments || arguments->children.empty())
         throw Exception("The nested cannot be empty", ErrorCodes::EMPTY_DATA_PASSED);
@@ -48,7 +48,7 @@ static std::pair<DataTypePtr, DataTypeCustomDescPtr> create(const ASTPtr & argum
         if (!name_type)
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Data type Nested accepts only pairs with name and type");
 
-        auto nested_type = DataTypeFactory::instance().get(name_type->type);
+        auto nested_type = DataTypeFactory::instance().get(name_type->type, compatible_with_clickhouse);
         nested_types.push_back(std::move(nested_type));
         nested_names.push_back(name_type->name);
     }

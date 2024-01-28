@@ -127,7 +127,7 @@ bool DataTypeMap::checkKeyType(DataTypePtr key_type)
     return true;
 }
 
-static DataTypePtr create(const ASTPtr & arguments)
+static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse = false/* proton: ends */)
 {
     if (!arguments || arguments->children.size() != 2)
         throw Exception("The map data type family must have two arguments: key and value types", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
@@ -136,7 +136,7 @@ static DataTypePtr create(const ASTPtr & arguments)
     nested_types.reserve(arguments->children.size());
 
     for (const ASTPtr & child : arguments->children)
-        nested_types.emplace_back(DataTypeFactory::instance().get(child));
+        nested_types.emplace_back(DataTypeFactory::instance().get(child, compatible_with_clickhouse));
 
     return std::make_shared<DataTypeMap>(nested_types);
 }

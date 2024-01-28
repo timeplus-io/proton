@@ -39,7 +39,7 @@ SerializationPtr DataTypeString::doGetDefaultSerialization() const
     return std::make_shared<SerializationString>();
 }
 
-static DataTypePtr create(const ASTPtr & arguments)
+static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]] = false/* proton: ends */)
 {
     if (arguments && !arguments->children.empty())
     {

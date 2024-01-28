@@ -339,7 +339,7 @@ SerializationInfoPtr DataTypeTuple::getSerializationInfo(const IColumn & column)
 }
 
 
-static DataTypePtr create(const ASTPtr & arguments)
+static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse = false/* proton: ends */)
 {
     if (!arguments || arguments->children.empty())
         throw Exception("The tuple cannot be empty", ErrorCodes::EMPTY_DATA_PASSED);
@@ -354,11 +354,11 @@ static DataTypePtr create(const ASTPtr & arguments)
     {
         if (const auto * name_and_type_pair = child->as<ASTNameTypePair>())
         {
-            nested_types.emplace_back(DataTypeFactory::instance().get(name_and_type_pair->type));
+            nested_types.emplace_back(DataTypeFactory::instance().get(name_and_type_pair->type, compatible_with_clickhouse));
             names.emplace_back(name_and_type_pair->name);
         }
         else
-            nested_types.emplace_back(DataTypeFactory::instance().get(child));
+            nested_types.emplace_back(DataTypeFactory::instance().get(child, compatible_with_clickhouse));
     }
 
     if (names.empty())

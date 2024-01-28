@@ -44,7 +44,7 @@ SerializationPtr DataTypeFixedString::doGetDefaultSerialization() const
 }
 
 
-static DataTypePtr create(const ASTPtr & arguments)
+static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]] = false/* proton: ends */)
 {
     if (!arguments || arguments->children.size() != 1)
         throw Exception("The fixed_string data type family must have exactly one argument - size in bytes", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);

@@ -14,7 +14,7 @@ namespace ErrorCodes
 }
 
 template <typename T>
-static DataTypePtr createNumericDataType(const ASTPtr & arguments)
+static DataTypePtr createNumericDataType(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]] = false/* proton: ends */)
 {
     if (arguments)
     {
@@ -31,7 +31,6 @@ static DataTypePtr createNumericDataType(const ASTPtr & arguments)
     }
     return std::make_shared<DataTypeNumber<T>>();
 }
-
 
 void registerDataTypeNumbers(DataTypeFactory & factory)
 {

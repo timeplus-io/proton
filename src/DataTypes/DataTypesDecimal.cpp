@@ -65,7 +65,7 @@ SerializationPtr DataTypeDecimal<T>::doGetDefaultSerialization() const
 }
 
 
-static DataTypePtr create(const ASTPtr & arguments)
+static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]] = false/* proton: ends */)
 {
     if (!arguments || arguments->children.size() != 2)
         throw Exception("The decimal data type family must have exactly two arguments: precision and scale",
@@ -85,7 +85,7 @@ static DataTypePtr create(const ASTPtr & arguments)
 }
 
 template <typename T>
-static DataTypePtr createExact(const ASTPtr & arguments)
+static DataTypePtr createExact(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]] = false/* proton: ends */)
 {
     if (!arguments || arguments->children.size() != 1)
         throw Exception("The decimal data type family must have exactly two arguments: precision and scale",

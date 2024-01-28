@@ -239,7 +239,7 @@ static void autoAssignNumberForEnum(const ASTPtr & arguments)
 }
 
 template <typename DataTypeEnum>
-static DataTypePtr createExact(const ASTPtr & arguments)
+static DataTypePtr createExact(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]] = false/* proton: ends */)
 {
     if (!arguments || arguments->children.empty())
         throw Exception("Data type enum cannot be empty", ErrorCodes::EMPTY_DATA_PASSED);
@@ -279,7 +279,7 @@ static DataTypePtr createExact(const ASTPtr & arguments)
     return std::make_shared<DataTypeEnum>(values);
 }
 
-static DataTypePtr create(const ASTPtr & arguments)
+static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse = false/* proton: ends */)
 {
     if (!arguments || arguments->children.empty())
         throw Exception("Data type enum cannot be empty", ErrorCodes::EMPTY_DATA_PASSED);
@@ -301,10 +301,10 @@ static DataTypePtr create(const ASTPtr & arguments)
         Int64 value = value_literal->value.get<Int64>();
 
         if (value > std::numeric_limits<Int8>::max() || value < std::numeric_limits<Int8>::min())
-            return createExact<DataTypeEnum16>(arguments);
+            return createExact<DataTypeEnum16>(arguments, compatible_with_clickhouse);
     }
 
-    return createExact<DataTypeEnum8>(arguments);
+    return createExact<DataTypeEnum8>(arguments, compatible_with_clickhouse);
 }
 
 void registerDataTypeEnum(DataTypeFactory & factory)

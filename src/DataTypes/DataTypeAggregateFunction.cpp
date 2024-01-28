@@ -159,7 +159,7 @@ SerializationPtr DataTypeAggregateFunction::doGetDefaultSerialization() const
 }
 
 
-static DataTypePtr create(const ASTPtr & arguments)
+static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse = false/* proton: ends */)
 {
     String function_name;
     AggregateFunctionPtr function;
@@ -228,7 +228,7 @@ static DataTypePtr create(const ASTPtr & arguments)
             ErrorCodes::BAD_ARGUMENTS);
 
     for (size_t i = argument_types_start_idx; i < arguments->children.size(); ++i)
-        argument_types.push_back(DataTypeFactory::instance().get(arguments->children[i]));
+        argument_types.push_back(DataTypeFactory::instance().get(arguments->children[i], compatible_with_clickhouse));
 
     if (function_name.empty())
         throw Exception("Logical error: empty name of aggregate function passed", ErrorCodes::LOGICAL_ERROR);

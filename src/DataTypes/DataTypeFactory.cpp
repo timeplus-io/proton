@@ -140,7 +140,7 @@ DataTypePtr DataTypeFactory::get(const String & family_name_param, const ASTPtr 
         return get("low_cardinality", low_cardinality_params);
     }
 
-    return findCreatorByName(family_name)(parameters);
+    return findCreatorByName(family_name)(parameters, compatible_with_clickhouse);
 }
 
 DataTypePtr DataTypeFactory::getCustom(DataTypeCustomDescPtr customization) const
@@ -182,7 +182,7 @@ void DataTypeFactory::registerSimpleDataType(const String & name, SimpleCreator 
         throw Exception("DataTypeFactory: the data type " + name + " has been provided "
             " a null constructor", ErrorCodes::LOGICAL_ERROR);
 
-    registerDataType(name, [name, creator](const ASTPtr & ast)
+    registerDataType(name, [name, creator](const ASTPtr & ast/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]]/* proton: ends */)
     {
         if (ast)
             throw Exception("Data type " + name + " cannot have arguments", ErrorCodes::DATA_TYPE_CANNOT_HAVE_ARGUMENTS);
@@ -192,9 +192,9 @@ void DataTypeFactory::registerSimpleDataType(const String & name, SimpleCreator 
 
 void DataTypeFactory::registerDataTypeCustom(const String & family_name, CreatorWithCustom creator, CaseSensitiveness case_sensitiveness)
 {
-    registerDataType(family_name, [creator](const ASTPtr & ast)
+    registerDataType(family_name, [creator](const ASTPtr & ast/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]]/* proton: ends */)
     {
-        auto res = creator(ast);
+        auto res = creator(ast, compatible_with_clickhouse);
         res.first->setCustomization(std::move(res.second));
 
         return res.first;
@@ -203,7 +203,7 @@ void DataTypeFactory::registerDataTypeCustom(const String & family_name, Creator
 
 void DataTypeFactory::registerSimpleDataTypeCustom(const String &name, SimpleCreatorWithCustom creator, CaseSensitiveness case_sensitiveness)
 {
-    registerDataTypeCustom(name, [creator](const ASTPtr & /*ast*/)
+    registerDataTypeCustom(name, [creator](const ASTPtr & /*ast*//* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]]/* proton: ends */)
     {
         return creator();
     }, case_sensitiveness);
