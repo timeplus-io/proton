@@ -1,5 +1,4 @@
 #include <Client/LibClient.h>
-#include <DataTypes/ClickHouseDataTypeTranslator.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Storages/ExternalTable/ClickHouse/ClickHouse.h>
 #include <Storages/ExternalTable/ClickHouse/ClickHouseSink.h>

@@ -75,7 +75,7 @@ void ClickHouseSink::consume(Chunk chunk)
     /// Empty chunks are acting heartbeats
     if (!chunk.rows())
     {
-        conn->checkConnected(); /// ping to keep connection alive
+        // conn->checkConnected(); /// ping to keep connection alive
         return;
     }
 
@@ -88,6 +88,8 @@ void ClickHouseSink::consume(Chunk chunk)
 
     String query_to_sent {buf->str()};
     LOG_INFO(logger, "sending query {}", query_to_sent);
+
+    conn->forceConnected(params.timeouts); /// The connection chould have been idle for too long
     conn->sendQuery(params.timeouts, query_to_sent, {}, "", QueryProcessingStage::Complete, nullptr, nullptr, false);
     LOG_INFO(logger, "query sent!");
 
