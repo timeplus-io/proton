@@ -25,8 +25,8 @@ class LibClient final
 public:
     LibClient(Connection & connection_, ConnectionTimeouts timeouts_, Poco::Logger * logger_);
 
-    void executeQuery(String query, const Callbacks & callbacks);
-    void receiveResult(const Callbacks & callbacks);
+    void executeQuery(String query, const Callbacks & callbacks = {});
+    void receiveResult(const Callbacks & callbacks = {});
     void cancelQuery();
 
     void throwServerExceptionIfAny();

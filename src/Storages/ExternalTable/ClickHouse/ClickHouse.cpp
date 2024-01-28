@@ -31,9 +31,10 @@ ClickHouse::ClickHouse(const String & name, ExternalTableSettingsPtr settings, C
     connection_params.password = settings->password.value;
     connection_params.default_database = "default";
     connection_params.timeouts = {
-        10 * 60 * 1'000'000 /*connection_timeout_*/,
-        10 * 60 * 1'000'000 /*send_timeout_*/,
-        10 * 60 * 1'000'000 /*receive_timeout_*/
+        /*connection_timeout_=*/ 1 * 60 * 1'000'000,
+        /*send_timeout_=*/ 1 * 60 * 1'000'000,
+        /*receive_timeout_=*/ 1 * 60 * 1'000'000,
+        /*tcp_keep_alive_timeout_=*/ 10 * 60 * 1'000'000
     };
 }
 
@@ -64,17 +65,15 @@ ColumnsDescription ClickHouse::getTableStructure()
 
     conn->setCompatibleWithClickHouse();
 
-    LOG_INFO(logger, "executing SQL: DESCRIBE TABLE {}", table);
+    LOG_INFO(logger, "DESCRIBE TABLE {}", table);
     conn->sendQuery(connection_params.timeouts, "DESCRIBE TABLE " + table, {}, "", QueryProcessingStage::Complete, nullptr, nullptr, false);
-    LOG_INFO(logger, "receiving data");
 
     ColumnsDescription ret {};
 
     LibClient client {*conn, connection_params.timeouts, logger};
     client.receiveResult({
-        .on_data = [this, &ret](Block & block)
+        .on_data = [&ret](Block & block)
         {
-            LOG_INFO(logger, "DESCRIBE TABLE returns {} columns and {} rows", block.columns(), block.rows());
             if (!block.rows())
                 return;
 
@@ -95,14 +94,12 @@ ColumnsDescription ClickHouse::getTableStructure()
                     const auto & col = block.getByName("comment");
                     col_desc.comment = col.column->getDataAt(i).toString();
                 }
-                LOG_INFO(logger, "row {}: col_name = {}, col_type = {}", i, col_desc.name, col_desc.type);
                 ret.add(col_desc, String(), false, false);
             }
         }
     });
 
     client.throwServerExceptionIfAny();
-
     return ret;
 }
 

@@ -3,7 +3,6 @@
 #include <Client/Connection.h>
 #include <Formats/FormatFactory.h>
 #include <Processors/Sinks/SinkToStorage.h>
-// #include "IO/WriteBufferFromOStream.h"
 
 namespace DB
 {
@@ -31,8 +30,6 @@ private:
     const ConnectionParameters & params;
     std::unique_ptr<Connection> conn;
 
-    // std::ostringstream oss;
-    // std::unique_ptr<WriteBufferFromOStream> buf;
     std::unique_ptr<WriteBufferFromOwnString> buf;
     OutputFormatPtr output_format;
 

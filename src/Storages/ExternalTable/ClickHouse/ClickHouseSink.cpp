@@ -1,9 +1,9 @@
 #include <Client/ConnectionParameters.h>
-#include <Storages/ExternalTable/ClickHouse/ClickHouseSink.h>
 #include <Client/LibClient.h>
 #include <Formats/FormatFactory.h>
+#include <Interpreters/Context.h>
 #include <Processors/Formats/IOutputFormat.h>
-#include "Interpreters/Context.h"
+#include <Storages/ExternalTable/ClickHouse/ClickHouseSink.h>
 
 namespace DB
 {
@@ -45,14 +45,13 @@ ClickHouseSink::ClickHouseSink(
 
     conn->setCompatibleWithClickHouse();
 
-    // buf = std::make_unique<WriteBufferFromOStream>(oss);
     buf = std::make_unique<WriteBufferFromOwnString>();
     auto format_settings = getFormatSettings(context);
     format_settings.values.no_commas_between_rows = true;
     output_format = FormatFactory::instance().getOutputFormat("Values", *buf, header, context, {}, format_settings);
     output_format->setAutoFlush();
 
-    LOG_INFO(logger, "ClickHouseSink is read to send data to table {}", table);
+    LOG_INFO(logger, "ready to send data to ClickHouse table {} with {}", table, insert_into);
 }
 
 namespace
@@ -72,14 +71,8 @@ private:
 
 void ClickHouseSink::consume(Chunk chunk)
 {
-    /// Empty chunks are acting heartbeats
     if (!chunk.rows())
-    {
-        // conn->checkConnected(); /// ping to keep connection alive
         return;
-    }
-
-    LOG_INFO(logger, "consuming from chunk contains {} rows", chunk.rows());
 
     BufferResetter reset_buffer(*buf); /// makes sure buf gets reset afterwards
     buf->write(insert_into.data(), insert_into.size());
@@ -87,30 +80,12 @@ void ClickHouseSink::consume(Chunk chunk)
     output_format->write(block);
 
     String query_to_sent {buf->str()};
-    LOG_INFO(logger, "sending query {}", query_to_sent);
-
     conn->forceConnected(params.timeouts); /// The connection chould have been idle for too long
     conn->sendQuery(params.timeouts, query_to_sent, {}, "", QueryProcessingStage::Complete, nullptr, nullptr, false);
-    LOG_INFO(logger, "query sent!");
 
     LibClient client {*conn, params.timeouts, logger};
-    client.receiveResult({
-        .on_data = [this](Block & block_)
-        {
-            LOG_INFO(logger, "INSERT INTO returns {} columns and {} rows", block_.columns(), block_.rows());
-            if (!block_.rows())
-                return;
-
-            const auto & cols = block_.getColumns();
-            for (size_t i = 0; i < block_.rows(); ++i)
-            {
-                for (const auto & col : block_.getColumns())
-                LOG_INFO(logger, "row {}: col_name = {}", i, col->getName());
-            }
-        }
-    });
+    client.receiveResult();
     client.throwServerExceptionIfAny();
-    LOG_INFO(logger, "consume done!");
 }
 
 }
