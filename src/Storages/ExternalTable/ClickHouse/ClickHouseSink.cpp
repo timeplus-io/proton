@@ -86,7 +86,7 @@ void ClickHouseSink::consume(Chunk chunk)
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
     output_format->write(block);
 
-    String query_to_sent {buf->buffer().begin(), buf->offset()};
+    String query_to_sent {buf->str()};
     LOG_INFO(logger, "sending query {}", query_to_sent);
     conn->sendQuery(params.timeouts, query_to_sent, {}, "", QueryProcessingStage::Complete, nullptr, nullptr, false);
     LOG_INFO(logger, "query sent!");
