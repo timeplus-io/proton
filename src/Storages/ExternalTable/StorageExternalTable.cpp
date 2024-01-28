@@ -1,10 +1,7 @@
-#include <Core/QueryProcessingStage.h>
-#include <Client/Connection.h>
-#include <Client/ConnectionParameters.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Storages/ExternalTable/StorageExternalTable.h>
-#include "Storages/ExternalTable/ClickHouse/ClickHouse.h"
+#include <Storages/ExternalTable/ClickHouse/ClickHouse.h>
 
 namespace DB
 {
@@ -19,7 +16,7 @@ StorageExternalTable::StorageExternalTable(
     if (type == "clickhouse")
     {
         auto ctx = getContext();
-        external_table = std::make_unique<ExternalTable::ClickHouse>(std::move(settings), ctx);
+        external_table = std::make_unique<ExternalTable::ClickHouse>(args.table_id.getTableName(), std::move(settings), ctx);
     }
     else
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unknown external table type: {}", type);

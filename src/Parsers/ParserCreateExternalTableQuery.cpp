@@ -11,6 +11,7 @@ namespace DB
 bool DB::ParserCreateExternalTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_create("CREATE");
+    ParserKeyword s_attach("ATTACH");
     ParserKeyword s_or_replace("OR REPLACE");
     ParserKeyword s_external_table("EXTERNAL TABLE");
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
@@ -22,14 +23,19 @@ bool DB::ParserCreateExternalTableQuery::parseImpl(Pos & pos, ASTPtr & node, Exp
     ASTPtr table;
     ASTPtr settings;
 
+    bool attach = false;
     bool or_replace = false;
     bool if_not_exists = false;
 
-    if (!s_create.ignore(pos, expected))
+    if (s_create.ignore(pos, expected))
+    {
+        if (s_or_replace.ignore(pos, expected))
+            or_replace = true;
+    }
+    else if (s_attach.ignore(pos, expected))
+        attach = true;
+    else
         return false;
-
-    if (s_or_replace.ignore(pos, expected))
-        or_replace = true;
 
     if (!s_external_table.ignore(pos, expected))
         return false;
@@ -49,12 +55,18 @@ bool DB::ParserCreateExternalTableQuery::parseImpl(Pos & pos, ASTPtr & node, Exp
     auto create_query = std::make_shared<ASTCreateQuery>();
     node = create_query;
 
+    create_query->is_external = true;
     create_query->create_or_replace = or_replace;
     create_query->if_not_exists = if_not_exists;
 
     auto * table_id = table->as<ASTTableIdentifier>();
     create_query->database = table_id->getDatabase();
     create_query->table = table_id->getTable();
+    if (attach)
+    {
+        create_query->uuid = table_id->uuid;
+        create_query->attach = attach;
+    }
     if (create_query->database)
         create_query->children.push_back(create_query->database);
     if (create_query->table)

@@ -11,10 +11,9 @@ extern const int TIMEOUT_EXCEEDED;
 extern const int UNKNOWN_PACKET_FROM_SERVER;
 }
 
-LibClient::LibClient(Connection & connection_, ConnectionTimeouts timeouts_, ContextPtr & context_, Poco::Logger * logger_)
+LibClient::LibClient(Connection & connection_, ConnectionTimeouts timeouts_, Poco::Logger * logger_)
     : connection(connection_)
     , timeouts(timeouts_)
-    , context(context_)
     , logger(logger_)
 {}
 
@@ -146,8 +145,11 @@ bool LibClient::receiveAndProcessPacket(bool cancelled_, const Callbacks & callb
             return true;
 
         case Protocol::Server::Exception:
+            server_exception.swap(packet.exception);
+
             if (callbacks.on_receive_exception_from_server)
-                callbacks.on_receive_exception_from_server(std::move(packet.exception));
+                callbacks.on_receive_exception_from_server(*server_exception);
+
             return false;
 
         case Protocol::Server::Log:
@@ -171,46 +173,9 @@ bool LibClient::receiveAndProcessPacket(bool cancelled_, const Callbacks & callb
     }
 }
 
-// void LibClient::onProgress(const Progress & value)
-// {
-//     LOG_INFO(logger, "onProgress called with read_rows = {}", value.read_rows);
-// }
-//
-// void LibClient::onData(Block & block)
-// {
-//     /// TBD
-// }
-//
-// void LibClient::onLogData(Block & block) {
-//     LOG_INFO(logger, "onLogData called with columns = {}, rows = {}", block.columns(), block.rows());
-// }
-//
-// void LibClient::onTotals(Block & block)
-// {
-//     LOG_INFO(logger, "onTotals called with columns = {}, rows = {}", block.columns(), block.rows());
-// }
-//
-// void LibClient::onExtremes(Block & block)
-// {
-//     LOG_INFO(logger, "onExtremes called with columns = {}, rows = {}", block.columns(), block.rows());
-// }
-//
-// void LibClient::onReceiveExceptionFromServer(std::unique_ptr<Exception> && e)
-// {
-//     LOG_INFO(logger, "received server exception: {}", e->what());
-// }
-//
-// void LibClient::onProfileInfo(const ProfileInfo & profile_info)
-// {
-//     LOG_INFO(logger, "received ProfileInfo: rows={}", profile_info.rows);
-// }
-// void LibClient::onEndOfStream()
-// {
-//     LOG_INFO(logger, "received EndOfStream");
-// }
-// void LibClient::onProfileEvents(Block & block)
-// {
-//     LOG_INFO(logger, "received ProfileEvents rows = {}", block.rows());
-// }
-
+void LibClient::throwServerExceptionIfAny()
+{
+    if (server_exception)
+        server_exception->rethrow();
+}
 }

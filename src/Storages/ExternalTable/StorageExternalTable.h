@@ -20,6 +20,7 @@ public:
 
     bool isRemote() const override { return true; }
     bool isExternalTable() const override { return true; }
+    bool squashInsert() const noexcept override { return false; }
 
     void startup() override { external_table->startup(); }
     void shutdown() override { external_table->shutdown(); }

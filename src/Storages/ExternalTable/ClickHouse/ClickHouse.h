@@ -13,7 +13,7 @@ namespace ExternalTable
 class ClickHouse final : public IExternalTable
 {
 public:
-    explicit ClickHouse(ExternalTableSettingsPtr settings, ContextPtr & context_);
+    explicit ClickHouse(const String & name, ExternalTableSettingsPtr settings, ContextPtr & context [[maybe_unused]]);
 
     void startup() override;
     void shutdown() override {}
@@ -26,7 +26,6 @@ private:
     ConnectionParameters connection_params;
     String table;
 
-    ContextPtr & context;
     Poco::Logger * logger;
 };
 

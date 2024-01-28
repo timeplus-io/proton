@@ -11,10 +11,9 @@ namespace DB
 namespace ExternalTable
 {
 
-ClickHouse::ClickHouse(ExternalTableSettingsPtr settings, ContextPtr & context_)
-    : table(settings->table.value)
-    , context(context_)
-    , logger(&Poco::Logger::get("External-" + settings->address.value + "-" + settings->table.value))
+ClickHouse::ClickHouse(const String & name, ExternalTableSettingsPtr settings, ContextPtr &  /*context*/)
+    : table(settings->table.changed ? settings->table.value : name)
+    , logger(&Poco::Logger::get("ExternalTable-ClickHouse-" + table))
 {
     assert(settings->type.value == "clickhouse");
 
@@ -41,30 +40,12 @@ ClickHouse::ClickHouse(ExternalTableSettingsPtr settings, ContextPtr & context_)
 
 void ClickHouse::startup()
 {
-#ifdef GO_ON_PRODUCTIOn
-    client.executeQuery("DESCRIBE TABLE " + table, {
-        .on_data = [this](Block & block)
-        {
-            LOG_INFO(logger, "DESCRIBE TABLE returns {} columns and {} rows", block.columns(), block.rows());
-            auto cols = block.getColumns();
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                String msg = "row " + std::to_string(i) + " :";
-                for (const auto & col : cols)
-                {
-                  msg += col->getName() + ": ";
-                  msg += (*col)[i].getTypeName();
-                }
-            }
-        }
-    });
-#endif
     LOG_INFO(logger, "startup");
 }
 
-SinkToStoragePtr ClickHouse::write(const ASTPtr &  /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr  /*context*/)
+SinkToStoragePtr ClickHouse::write(const ASTPtr &  /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr  context)
 {
-    return std::make_shared<ClickHouseSink>(metadata_snapshot->getSampleBlock(), connection_params, context, logger);
+    return std::make_shared<ClickHouseSink>(table, metadata_snapshot->getSampleBlock(), connection_params, context, logger);
 }
 
 ColumnsDescription ClickHouse::getTableStructure()
@@ -90,7 +71,7 @@ ColumnsDescription ClickHouse::getTableStructure()
 
     ColumnsDescription ret {};
 
-    LibClient client {*conn, connection_params.timeouts, context, logger};
+    LibClient client {*conn, connection_params.timeouts, logger};
     client.receiveResult({
         .on_data = [this, &ret](Block & block)
         {
@@ -120,6 +101,8 @@ ColumnsDescription ClickHouse::getTableStructure()
             }
         }
     });
+
+    client.throwServerExceptionIfAny();
 
     return ret;
 }
