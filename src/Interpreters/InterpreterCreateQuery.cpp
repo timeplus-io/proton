@@ -892,7 +892,9 @@ void InterpreterCreateQuery::handleExternalStreamCreation(ASTCreateQuery & creat
     if (!create.is_external)
         return;
 
-    if (create.storage && create.storage->engine->name == "ExternalTable")
+    if (create.storage
+        && create.storage->engine
+        && create.storage->engine->name == "ExternalTable")
         return;
 
     auto sharding_expr_field = Field("");
