@@ -19,10 +19,11 @@ extern const int UDF_COMPILE_ERROR;
 extern const int UDF_INTERNAL_ERROR;
 }
 
-JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & source)
+JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & source, size_t max_v8_heap_size_in_bytes)
 {
     /// FIXME, create isolate from V8::V8 global isolates pool
     v8::Isolate::CreateParams isolate_params;
+    isolate_params.constraints.ConfigureDefaultsFromHeapSize(0, static_cast<size_t>(max_v8_heap_size_in_bytes * 1.2));
     isolate_params.array_buffer_allocator_shared
         = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
     isolate = std::unique_ptr<v8::Isolate, IsolateDeleter>(v8::Isolate::New(isolate_params), IsolateDeleter());
@@ -274,7 +275,7 @@ AggregateFunctionJavaScriptAdapter::AggregateFunctionJavaScriptAdapter(
     , num_arguments(types.size())
     , is_changelog_input(is_changelog_input_)
     , max_v8_heap_size_in_bytes(max_v8_heap_size_in_bytes_)
-    , blueprint(config->name, config->source)
+    , blueprint(config->name, config->source, max_v8_heap_size_in_bytes)
 {
 }
 
