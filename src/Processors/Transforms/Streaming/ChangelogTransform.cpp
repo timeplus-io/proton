@@ -140,6 +140,7 @@ void ChangelogTransform::work()
     }
     else if (std::all_of(delta_flags.begin(), delta_flags.end(), [](auto delta) { return delta < 0; }))
     {
+        input_data.chunk.setConsecutiveDataFlag();
         transformChunk(input_data.chunk);
         return;
     }
@@ -176,6 +177,10 @@ void ChangelogTransform::work()
         chunk_output.addColumn(col->cut(start_pos, delta_flags.size() - start_pos));
 
     chunk_output.setChunkContext(input_data.chunk.getChunkContext());
+    /// FIXME: for now, retracted data always need next consecutive data
+    if (delta_flags[start_pos] < 0)
+        chunk_output.setConsecutiveDataFlag();
+
     transformChunk(chunk_output);
 
     input_data.chunk.clear();
