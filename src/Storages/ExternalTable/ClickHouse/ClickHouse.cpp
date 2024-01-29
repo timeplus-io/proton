@@ -29,7 +29,8 @@ ClickHouse::ClickHouse(const String & name, ExternalTableSettingsPtr settings, C
     connection_params.port = port;
     connection_params.user = settings->user.value;
     connection_params.password = settings->password.value;
-    connection_params.default_database = "default";
+    connection_params.default_database = settings->database.value;
+    connection_params.security = settings->secure.value ? Protocol::Secure::Enable : Protocol::Secure::Disable;
     connection_params.timeouts = {
         /*connection_timeout_=*/ 1 * 60 * 1'000'000,
         /*send_timeout_=*/ 1 * 60 * 1'000'000,
