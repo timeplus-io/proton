@@ -143,7 +143,7 @@ void JoinTransform::work()
 
                     required_update_processing_index.reset();
                 }
-                else if (input_chunk.isRetractedData())
+                else if (input_chunk.isConsecutiveData())
                     required_update_processing_index = i;
 
                 if (input_chunk.hasWatermark())
@@ -279,7 +279,7 @@ inline void JoinTransform::joinBidirectionally(Chunks chunks)
             {
                 /// Don't watermark this block. We can concat retracted / result blocks or use avoid watermarking
                 auto chunk_ctx = ChunkContext::create();
-                chunk_ctx->setRetractedDataFlag();
+                chunk_ctx->setConsecutiveDataFlag();
                 output_chunks.emplace_back(retracted_block.getColumns(), retracted_block_rows, nullptr, std::move(chunk_ctx));
             }
 

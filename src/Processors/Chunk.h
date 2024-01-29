@@ -29,7 +29,7 @@ public:
     static constexpr UInt64 APPEND_TIME_FLAG = 0x2;
     static constexpr UInt64 HISTORICAL_DATA_START_FLAG = 0x4;
     static constexpr UInt64 HISTORICAL_DATA_END_FLAG = 0x8;
-    static constexpr UInt64 RETRACTED_DATA_FLAG = 0x10;
+    static constexpr UInt64 CONSECUTIVE_DATA_FLAG = 0x10;
     static constexpr UInt64 AVOID_WATERMARK_FLAG = 0x8000'0000'0000'0000;
 
     /// A pair of Int64, flags represent what they mean
@@ -74,13 +74,13 @@ public:
         }
     }
 
-    ALWAYS_INLINE void setRetractedDataFlag()
+    ALWAYS_INLINE void setConsecutiveDataFlag()
     {
-        flags |= RETRACTED_DATA_FLAG;
+        flags |= CONSECUTIVE_DATA_FLAG;
         setAvoidWatermark();
     }
 
-    ALWAYS_INLINE bool isRetractedData() const { return flags & RETRACTED_DATA_FLAG; }
+    ALWAYS_INLINE bool isConsecutiveData() const { return flags & CONSECUTIVE_DATA_FLAG; }
 
     ALWAYS_INLINE void setAvoidWatermark() { flags |= AVOID_WATERMARK_FLAG; }
 
@@ -280,9 +280,9 @@ public:
         columns.reserve(num_columns);
     }
 
-    bool isRetractedData() const
+    bool isConsecutiveData() const
     {
-        return chunk_ctx && chunk_ctx->isRetractedData();
+        return chunk_ctx && chunk_ctx->isConsecutiveData();
     }
 
     bool avoidWatermark() const
@@ -317,10 +317,10 @@ public:
         chunk_ctx = std::move(mutate_chunk_ctx);
     }
 
-    void setRetractedDataFlag()
+    void setConsecutiveDataFlag()
     {
         auto mutate_chunk_ctx = chunk_ctx ? ChunkContext::mutate(chunk_ctx) : ChunkContext::create();
-        mutate_chunk_ctx->setRetractedDataFlag();
+        mutate_chunk_ctx->setConsecutiveDataFlag();
         chunk_ctx = std::move(mutate_chunk_ctx);
     }
 
