@@ -40,17 +40,26 @@ ClickHouseSource::ClickHouseSource(
 
 Chunk ClickHouseSource::generate()
 {
-    // if (isCancelled())
-    // {
-    // }
+    if (isCancelled())
+    {
+        if (started)
+            client->cancelQuery();
 
-    /// TODO re-design the client API to provide a function to poll data instead of using callbacks.
-    client->executeQuery(query, {
-        .on_data = [](Block & blk)
-        {
-        }
-    });
-    return {};
+        return {};
+    }
+
+    if (!started)
+    {
+        started = true;
+        client->executeQuery(query);
+    }
+
+    auto block = client->pollData();
+    client->throwServerExceptionIfAny();
+    if (!block)
+        return {};
+
+    return {block->getColumns(), block->rows()};
 }
 
 }

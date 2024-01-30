@@ -1,3 +1,4 @@
+#include <Common/NetException.h>
 #include <Client/ConnectionParameters.h>
 #include <Client/LibClient.h>
 
@@ -9,6 +10,7 @@ namespace ErrorCodes
 extern const int DEADLOCK_AVOIDED;
 extern const int TIMEOUT_EXCEEDED;
 extern const int UNKNOWN_PACKET_FROM_SERVER;
+extern const int UNEXPECTED_PACKET_FROM_SERVER;
 }
 
 namespace
@@ -16,7 +18,7 @@ namespace
 
 std::unique_ptr<Connection> createConnection(const ConnectionParameters & parameters)
 {
-    return std::make_unique<Connection>(
+    auto ret = std::make_unique<Connection>(
         parameters.host,
         parameters.port,
         parameters.default_database,
@@ -28,6 +30,9 @@ std::unique_ptr<Connection> createConnection(const ConnectionParameters & parame
         "TimeplusProton",
         parameters.compression,
         parameters.security);
+
+    ret->setCompatibleWithClickHouse();
+    return ret;
 }
 
 size_t calculatePollInterval(const ConnectionTimeouts & timeouts)
@@ -57,6 +62,9 @@ void LibClient::reset()
 
 void LibClient::executeQuery(const String & query, const String & query_id)
 {
+    assert(!has_running_query);
+    has_running_query = true;
+
     reset();
 
     int retries_left = 10;
@@ -83,13 +91,25 @@ void LibClient::executeQuery(const String & query, const String & query_id)
             if (processed_rows == 0 && e.code() == ErrorCodes::DEADLOCK_AVOIDED && --retries_left)
                 LOG_ERROR(logger, "Got a transient error from the server, will retry ({} retries left)", retries_left);
             else
+            {
+                has_running_query = false;
                 throw;
+            }
         }
     }
 }
 
+void LibClient::executeInsertQuery(const String & query, const String & query_id)
+{
+    executeQuery(query, query_id);
+    receiveEndOfQuery();
+}
+
 std::optional<Block> LibClient::pollData()
 {
+    if (!has_running_query)
+        return std::nullopt;
+
     while (true)
     {
         Stopwatch receive_watch(CLOCK_MONOTONIC_COARSE);
@@ -116,7 +136,10 @@ std::optional<Block> LibClient::pollData()
         }
 
         if (!receiveAndProcessPacket())
+        {
+            has_running_query = false;
             return std::nullopt;
+        }
 
         return std::move(next_data);
     }
@@ -124,15 +147,21 @@ std::optional<Block> LibClient::pollData()
 
 void LibClient::cancelQuery()
 {
+    if (!has_running_query)
+        return;
+
     LOG_INFO(logger, "Query was cancelled.");
     connection->sendCancel();
     cancelled = true;
+    has_running_query = false;
 }
 
 /// Receive a part of the result, or progress info or an exception and process it.
 /// Returns true if one should continue receiving packets.
 bool LibClient::receiveAndProcessPacket()
 {
+    assert(has_running_query);
+
     Packet packet = connection->receivePacket();
 
     switch (packet.type)
@@ -178,6 +207,43 @@ bool LibClient::receiveAndProcessPacket()
         default:
             throw Exception(
                 ErrorCodes::UNKNOWN_PACKET_FROM_SERVER, "Unknown packet {} from server {}", packet.type, connection->getDescription());
+    }
+}
+
+/// Process Log packets, exit when receive Exception or EndOfStream
+bool LibClient::receiveEndOfQuery()
+{
+    while (true)
+    {
+        Packet packet = connection->receivePacket();
+
+        switch (packet.type)
+        {
+            case Protocol::Server::EndOfStream:
+                /// onEndOfStream();
+                return true;
+
+            case Protocol::Server::Exception:
+                server_exception.swap(packet.exception);
+                return false;
+
+            case Protocol::Server::Log:
+                /// onLogData(packet.block);
+                break;
+
+            case Protocol::Server::Progress:
+                /// onProgress(packet.progress);
+                break;
+
+            case Protocol::Server::ProfileEvents:
+                /// onProfileEvents(packet.block);
+                break;
+
+            default:
+                throw NetException(ErrorCodes::UNEXPECTED_PACKET_FROM_SERVER,
+                    "Unexpected packet from server (expected Exception, EndOfStream, Log, Progress or ProfileEvents. Got {})",
+                    String(Protocol::Server::toString(packet.type)));
+        }
     }
 }
 

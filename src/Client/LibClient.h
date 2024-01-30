@@ -14,8 +14,10 @@ public:
 
     LibClient(ConnectionParameters params_, Poco::Logger * logger_);
 
-    /// Sends the query to the server.
+    /// Sends the query to the server to execute. For insert queries, use `executeInsertQuery` instead.
     void executeQuery(const String & query, const String & query_id = "");
+    // Sends an insert query to the server to execute.
+    void executeInsertQuery(const String & query, const String & query_id = "");
     /// Cancels the currently running query, does nothing if there is no queries running.
     void cancelQuery();
     /// Polls data for a query previously sent with `executeQuery`. When no more data are available, the returned optional will be empty.
@@ -25,12 +27,15 @@ public:
 
 private:
     bool receiveAndProcessPacket();
+    bool receiveEndOfQuery();
+
     void reset();
 
     ConnectionParameters params;
     std::unique_ptr<Connection> connection;
     size_t poll_interval;
 
+    bool has_running_query {false};
     std::atomic_bool cancelled {false};
     size_t processed_rows {0};
     Block next_data;

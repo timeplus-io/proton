@@ -25,6 +25,8 @@ protected:
     Chunk generate() override;
 
 private:
+    bool started {false};
+
     std::unique_ptr<LibClient> client;
     String query;
 

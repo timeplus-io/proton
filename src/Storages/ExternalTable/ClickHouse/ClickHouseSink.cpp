@@ -37,25 +37,10 @@ ClickHouseSink::ClickHouseSink(
         Poco::Logger * logger_)
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
     , insert_into(constructInsertQuery(table, header))
-    , params(params_)
+    , client(std::make_unique<LibClient>(params_, logger_))
     , context(context_)
     , logger(logger_)
 {
-    conn = std::make_unique<Connection>(
-        params.host,
-        params.port,
-        params.default_database,
-        params.user,
-        params.password,
-        params.quota_key,
-        "", /*cluster*/
-        "", /*cluster_secret*/
-        "TimeplusProton",
-        params.compression,
-        params.security);
-
-    conn->setCompatibleWithClickHouse();
-
     buf = std::make_unique<WriteBufferFromOwnString>();
     auto format_settings = getFormatSettings(context);
     format_settings.values.no_commas_between_rows = true;
@@ -91,12 +76,9 @@ void ClickHouseSink::consume(Chunk chunk)
     output_format->write(block);
 
     String query_to_sent {buf->str()};
-    conn->forceConnected(params.timeouts); /// The connection chould have been idle for too long
-    conn->sendQuery(params.timeouts, query_to_sent, {}, "", QueryProcessingStage::Complete, nullptr, nullptr, false);
-
-    LibClient client {*conn, params.timeouts, logger};
-    client.receiveResult();
-    client.throwServerExceptionIfAny();
+    // conn->forceConnected(params.timeouts); /// The connection chould have been idle for too long
+    client->executeInsertQuery(query_to_sent);
+    client->throwServerExceptionIfAny();
 }
 
 }

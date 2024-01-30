@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Client/Connection.h>
+#include <Client/LibClient.h>
 #include <Formats/FormatFactory.h>
 #include <Processors/Sinks/SinkToStorage.h>
 
@@ -27,8 +27,7 @@ public:
 private:
     String insert_into;
 
-    const ConnectionParameters & params;
-    std::unique_ptr<Connection> conn;
+    std::unique_ptr<LibClient> client;
 
     std::unique_ptr<WriteBufferFromOwnString> buf;
     OutputFormatPtr output_format;
