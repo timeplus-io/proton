@@ -32,11 +32,12 @@ ClickHouse::ClickHouse(const String & name, ExternalTableSettingsPtr settings, C
     connection_params.password = settings->password.value;
     connection_params.default_database = settings->database.value;
     connection_params.security = settings->secure.value ? Protocol::Secure::Enable : Protocol::Secure::Disable;
+    /// TODO read from settings
     connection_params.timeouts = {
         /*connection_timeout_=*/ 1 * 60 * 1'000'000,
         /*send_timeout_=*/ 1 * 60 * 1'000'000,
         /*receive_timeout_=*/ 1 * 60 * 1'000'000,
-        /*tcp_keep_alive_timeout_=*/ 10 * 60 * 1'000'000
+        /*tcp_keep_alive_timeout_=*/ 5 * 60 * 1'000'000
     };
 }
 
@@ -54,17 +55,9 @@ Pipe ClickHouse::read(
     size_t  /*max_block_size*/,
     size_t /*num_streams*/)
 {
-    /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
-    /// We will need add one
-    Block header;
-    if (column_names.empty())
-        /// FIXME select 1
-        header = storage_snapshot->getSampleBlockForColumns({""});
-    else
-        header = storage_snapshot->getSampleBlockForColumns(column_names);
-
+    auto header = storage_snapshot->getSampleBlockForColumns(column_names);
     auto client = std::make_unique<LibClient>(connection_params, logger);
-    auto source = std::make_shared<ClickHouseSource>(table, header, std::move(client), processed_stage, context, logger);
+    auto source = std::make_shared<ClickHouseSource>(table, std::move(header), std::move(client), processed_stage, context, logger);
     return Pipe(std::move(source));
 }
 
@@ -75,29 +68,11 @@ SinkToStoragePtr ClickHouse::write(const ASTPtr &  /*query*/, const StorageMetad
 
 ColumnsDescription ClickHouse::getTableStructure()
 {
-    // auto conn = std::make_unique<Connection>(
-    //     connection_params.host,
-    //     connection_params.port,
-    //     connection_params.default_database,
-    //     connection_params.user,
-    //     connection_params.password,
-    //     connection_params.quota_key,
-    //     "", /*cluster*/
-    //     "", /*cluster_secret*/
-    //     "TimeplusProton",
-    //     connection_params.compression,
-    //     connection_params.security);
-    //
-    // conn->setCompatibleWithClickHouse();
-
-    // LOG_INFO(logger, "DESCRIBE TABLE {}", table);
-    // conn->sendQuery(connection_params.timeouts, "DESCRIBE TABLE " + table, {}, "", QueryProcessingStage::Complete, nullptr, nullptr, false);
-
     ColumnsDescription ret {};
 
     LibClient client {connection_params, logger};
-    LOG_INFO(logger, "DESCRIBE TABLE {}", table);
     client.executeQuery("DESCRIBE TABLE " + table);
+    LOG_INFO(logger, "Receiving table schema");
     while (true)
     {
         const auto & block = client.pollData();

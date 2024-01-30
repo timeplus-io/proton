@@ -67,8 +67,7 @@ void LibClient::executeQuery(const String & query, const String & query_id)
 
     reset();
 
-    int retries_left = 10;
-    while (retries_left)
+    while (true)
     {
         try
         {
@@ -86,10 +85,17 @@ void LibClient::executeQuery(const String & query, const String & query_id)
         }
         catch (const Exception & e)
         {
-            /// Retry when the server said "Client should retry" and no rows
-            /// has been received yet.
-            if (processed_rows == 0 && e.code() == ErrorCodes::DEADLOCK_AVOIDED && --retries_left)
-                LOG_ERROR(logger, "Got a transient error from the server, will retry ({} retries left)", retries_left);
+            /// connection lost
+            if (!connection->checkConnected())
+            {
+                LOG_ERROR(logger, "ClickHouse connection lost");
+                /// set the connection not connected so that sendQuery will reconnect
+                connection->disconnect();
+            }
+
+            /// Retry when the server said "Client should retry" and no rows has been received yet.
+            if (processed_rows == 0 && e.code() == ErrorCodes::DEADLOCK_AVOIDED)
+                LOG_ERROR(logger, "Got a transient error from the server, will retry");
             else
             {
                 has_running_query = false;
@@ -189,16 +195,17 @@ bool LibClient::receiveAndProcessPacket()
             // on_extremes(packet.block);
             return true;
 
+        case Protocol::Server::EndOfStream:
+            onEndOfStream();
+            return true;
+
         case Protocol::Server::Exception:
-            server_exception.swap(packet.exception);
+            onServerException(std::move(packet.exception));
             return false;
 
         case Protocol::Server::Log:
             /// on_server_log(packet.block);
             return true;
-
-        case Protocol::Server::EndOfStream:
-            return false;
 
         case Protocol::Server::ProfileEvents:
             /// on_profile_event(packet.block);
@@ -220,11 +227,11 @@ bool LibClient::receiveEndOfQuery()
         switch (packet.type)
         {
             case Protocol::Server::EndOfStream:
-                /// onEndOfStream();
+                onEndOfStream();
                 return true;
 
             case Protocol::Server::Exception:
-                server_exception.swap(packet.exception);
+                onServerException(std::move(packet.exception));
                 return false;
 
             case Protocol::Server::Log:
@@ -245,6 +252,17 @@ bool LibClient::receiveEndOfQuery()
                     String(Protocol::Server::toString(packet.type)));
         }
     }
+}
+
+void LibClient::onEndOfStream()
+{
+    has_running_query = false;
+}
+
+void LibClient::onServerException(std::unique_ptr<Exception> && exception)
+{
+    server_exception.swap(exception);
+    has_running_query = false;
 }
 
 void LibClient::throwServerExceptionIfAny()

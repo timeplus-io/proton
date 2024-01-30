@@ -31,6 +31,9 @@ private:
 
     void reset();
 
+    void onEndOfStream();
+    void onServerException(std::unique_ptr<Exception> && exception);
+
     ConnectionParameters params;
     std::unique_ptr<Connection> connection;
     size_t poll_interval;
