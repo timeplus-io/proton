@@ -88,7 +88,7 @@ convertToChangelogChunk(AggregatedDataVariants & data, RetractedDataVariants & r
     {
         auto retracted_delta_col = ColumnInt8::create(retracted_chunk.rows(), Int8(-1));
         retracted_chunk.addColumn(std::move(retracted_delta_col));
-        retracted_chunk.setRetractedDataFlag();
+        retracted_chunk.setConsecutiveDataFlag();
     }
 
     auto chunk = convertToChunkImpl(data, params, ConvertAction::StreamingEmit);

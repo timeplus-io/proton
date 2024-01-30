@@ -241,7 +241,7 @@ void AggregatingTransform::setCurrentChunk(Chunk chunk, Chunk retracted_chunk)
     if (retracted_chunk.rows())
     {
         current_chunk_retracted = std::move(retracted_chunk);
-        current_chunk_retracted.setRetractedDataFlag();
+        current_chunk_retracted.setConsecutiveDataFlag();
     }
 }
 

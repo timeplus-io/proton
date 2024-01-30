@@ -140,31 +140,10 @@ void ChangelogTransform::work()
     }
     else if (std::all_of(delta_flags.begin(), delta_flags.end(), [](auto delta) { return delta < 0; }))
     {
-        input_data.chunk.setRetractedDataFlag();
+        input_data.chunk.setConsecutiveDataFlag();
         transformChunk(input_data.chunk);
         return;
     }
-
-    /// cut every column in chunk_columns and put them into a new chunk
-    auto cut_cols_into_chunk = [&chunk_columns, this, &delta_flags](UInt64 & start_pos, UInt64 end_pos) {
-        Chunk chunk_output;
-
-        for (const auto & col : chunk_columns)
-            chunk_output.addColumn(col->cut(start_pos, end_pos - start_pos));
-
-        if (delta_flags[start_pos] < 0)
-        {
-            /// retract chunk
-            chunk_output.setRetractedDataFlag();
-            this->transformChunk(chunk_output);
-        }
-        else
-        {
-            /// update chunk
-            chunk_output.setChunkContext(input_data.chunk.getChunkContext());
-            this->transformChunk(chunk_output);
-        }
-    };
 
     /**
      * @brief Put consecutive data with the same _tp_delta value in a chunk.
@@ -175,16 +154,34 @@ void ChangelogTransform::work()
      * but also ensures that the _tp_delta values in the same chunk are the same. 
      */
     UInt64 start_pos = 0;
-    for (size_t end_pos = 0; end_pos < delta_flags.size(); ++end_pos)
+    for (size_t end_pos = 1; end_pos < delta_flags.size(); ++end_pos)
     {
         if (delta_flags[end_pos] != delta_flags[start_pos])
         {
-            cut_cols_into_chunk(start_pos, end_pos);
+            Chunk chunk_output;
+            for (const auto & col : chunk_columns)
+                chunk_output.addColumn(col->cut(start_pos, end_pos - start_pos));
+
+            /// consecutive chunk
+            chunk_output.setConsecutiveDataFlag();
+            transformChunk(chunk_output);
+
+            /// set next chunk start pos
             start_pos = end_pos;
         }
     }
+
     /// handle the last part
-    cut_cols_into_chunk(start_pos, delta_flags.size());
+    Chunk chunk_output;
+    for (const auto & col : chunk_columns)
+        chunk_output.addColumn(col->cut(start_pos, delta_flags.size() - start_pos));
+
+    chunk_output.setChunkContext(input_data.chunk.getChunkContext());
+    /// FIXME: for now, retracted data always need next consecutive data
+    if (delta_flags[start_pos] < 0)
+        chunk_output.setConsecutiveDataFlag();
+
+    transformChunk(chunk_output);
 
     input_data.chunk.clear();
 }

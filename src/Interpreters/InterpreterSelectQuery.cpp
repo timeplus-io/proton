@@ -3411,15 +3411,6 @@ void InterpreterSelectQuery::finalCheckAndOptimizeForStreamingQuery()
 {
     if (isStreamingQuery())
     {
-        /// Does not allow window func over a global aggregation
-        if (hasStreamingWindowFunc())
-        {
-            /// nested query
-            if (auto * proxy = storage->as<Streaming::ProxyStream>())
-                if (proxy->hasStreamingGlobalAggregation())
-                    throw Exception("Streaming query doesn't support window func over a global aggregation", ErrorCodes::NOT_IMPLEMENTED);
-        }
-
         /// For now, for the following scenarios, we disable backfill from historic data store
         /// 1) User select some virtual columns which is only available in streaming store, like `_tp_sn`, `_tp_index_time`
         /// 2) Seek by streaming store sequence number
