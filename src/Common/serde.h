@@ -27,6 +27,27 @@ void ALWAYS_INLINE deserialize(S & s, RB & rb, VersionType version, Args &&... a
     s.deserialize(rb, version, std::forward<Args>(args)...);
 }
 
+/// With owned versions
+template <typename S, typename WB, typename... Args>
+concept Serializable
+    = requires(const S & s, WB & wb, Args &&... args) { s.serialize(wb, std::forward<Args>(args)...); };
+
+template <typename S, typename RB, typename... Args>
+concept Deserializable
+    = requires(S & s, RB & rb, Args &&... args) { s.deserialize(rb, std::forward<Args>(args)...); };
+
+template <typename WB, typename... Args, Serializable<WB, Args...> S>
+void ALWAYS_INLINE serialize(const S & s, WB & wb, Args &&... args)
+{
+    s.serialize(wb, std::forward<Args>(args)...);
+}
+
+template <typename RB, typename... Args, Deserializable<RB, Args...> S>
+void ALWAYS_INLINE deserialize(S & s, RB & rb, Args &&... args)
+{
+    s.deserialize(rb, std::forward<Args>(args)...);
+}
+
 /// macro tag to indicate the data members or struct or class will
 /// be serialized / deserialized via network or file system IO.
 /// Hence, data structure versioning / backward / forward compatibility

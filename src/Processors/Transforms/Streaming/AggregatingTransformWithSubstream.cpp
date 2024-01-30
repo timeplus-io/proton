@@ -270,7 +270,7 @@ void AggregatingTransformWithSubstream::checkpoint(CheckpointContextPtr ckpt_ctx
         for (const auto & [id, substream_ctx] : substream_contexts)
         {
             assert(id == substream_ctx->id);
-            substream_ctx->serialize(wb, getVersion());
+            serialize(*substream_ctx, wb, getVersion());
         }
     });
 }
@@ -284,7 +284,7 @@ void AggregatingTransformWithSubstream::recover(CheckpointContextPtr ckpt_ctx)
         for (size_t i = 0; i < num_substreams; ++i)
         {
             auto substream_ctx = std::make_shared<SubstreamContext>(this);
-            substream_ctx->deserialize(rb, version_);
+            deserialize(*substream_ctx, rb, version_);
             substream_contexts.emplace(substream_ctx->id, std::move(substream_ctx));
         }
     });
@@ -294,7 +294,7 @@ void SubstreamContext::serialize(WriteBuffer & wb, VersionType version) const
 {
     DB::Streaming::serialize(id, wb);
 
-    aggregating_transform->params->aggregator.checkpoint(variants, wb);
+    DB::serialize(variants, wb, aggregating_transform->params->aggregator);
 
     DB::writeIntBinary(finalized_watermark, wb);
 
@@ -312,7 +312,7 @@ void SubstreamContext::deserialize(ReadBuffer & rb, VersionType version)
 {
     DB::Streaming::deserialize(id, rb);
 
-    aggregating_transform->params->aggregator.recover(variants, rb);
+    DB::deserialize(variants, rb, aggregating_transform->params->aggregator);
 
     DB::readIntBinary(finalized_watermark, rb);
 
