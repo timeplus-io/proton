@@ -57,7 +57,7 @@ Pipe ClickHouse::read(
     /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
     /// We will need add one
     Block header;
-    if (!column_names.empty())
+    if (column_names.empty())
         /// FIXME select 1
         header = storage_snapshot->getSampleBlockForColumns({""});
     else

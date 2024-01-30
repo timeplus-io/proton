@@ -25,6 +25,15 @@ public:
     void startup() override { external_table->startup(); }
     void shutdown() override { external_table->shutdown(); }
 
+    Pipe read(
+        const Names & column_names,
+        const StorageSnapshotPtr & storage_snapshot,
+        SelectQueryInfo & query_info,
+        ContextPtr context_,
+        QueryProcessingStage::Enum processed_stage,
+        size_t max_block_size,
+        size_t num_streams) override;
+
     SinkToStoragePtr write(
         const ASTPtr & /*query*/,
         const StorageMetadataPtr & /*metadata_snapshot*/,
@@ -37,16 +46,6 @@ private:
     void setStorageMetadata(const StorageFactory::Arguments & args);
 
     IExternalTablePtr external_table;
-
-    /// TBD
-    // Pipe read(
-    //     const Names & /*column_names*/,
-    //     const StorageSnapshotPtr & /*storage_snapshot*/,
-    //     SelectQueryInfo & /*query_info*/,
-    //     ContextPtr /*context*/,
-    //     QueryProcessingStage::Enum /*processed_stage*/,
-    //     size_t /*max_block_size*/,
-    //     size_t /*num_streams*/) override;
 };
 
 }
