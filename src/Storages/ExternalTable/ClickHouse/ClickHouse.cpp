@@ -48,15 +48,24 @@ void ClickHouse::startup()
 Pipe ClickHouse::read(
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
-    SelectQueryInfo & query_info,
+    SelectQueryInfo &  /*query_info*/,
     ContextPtr context,
     QueryProcessingStage::Enum processed_stage,
     size_t  /*max_block_size*/,
     size_t /*num_streams*/)
 {
+    /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
+    /// We will need add one
+    Block header;
+    if (!column_names.empty())
+        /// FIXME select 1
+        header = storage_snapshot->getSampleBlockForColumns({""});
+    else
+        header = storage_snapshot->getSampleBlockForColumns(column_names);
+
     auto client = std::make_unique<LibClient>(connection_params, logger);
-    auto source = std::make_unique<ClickHouseSource>(std::move(client), column_names, processed_stage, context);
-    return {source};
+    auto source = std::make_shared<ClickHouseSource>(table, header, std::move(client), processed_stage, context, logger);
+    return Pipe(std::move(source));
 }
 
 SinkToStoragePtr ClickHouse::write(const ASTPtr &  /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr  context)

@@ -28,6 +28,7 @@ ClickHouseSource::ClickHouseSource(
     const String & table,
     const Block & header,
     std::unique_ptr<LibClient> client_,
+    QueryProcessingStage::Enum /*processed_stage*/,
     ContextPtr context_,
     Poco::Logger * logger_)
     : ISource(header, true, ProcessorID::ClickHouseSourceID)
@@ -54,11 +55,16 @@ Chunk ClickHouseSource::generate()
         client->executeQuery(query);
     }
 
+    LOG_INFO(logger, "polling data");
     auto block = client->pollData();
     client->throwServerExceptionIfAny();
     if (!block)
+    {
+        LOG_INFO(logger, "no more data");
         return {};
+    }
 
+    LOG_INFO(logger, "received {} rows", block->rows());
     return {block->getColumns(), block->rows()};
 }
 

@@ -16,6 +16,7 @@ public:
         const String & table,
         const Block & header,
         std::unique_ptr<LibClient> client_,
+        QueryProcessingStage::Enum processed_stage,
         ContextPtr context_,
         Poco::Logger * logger_);
 
