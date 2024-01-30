@@ -39,6 +39,20 @@ public:
     }
 
     template <typename Func>
+    void ALWAYS_INLINE forEachValueOfUpdatedBuckets(Func && func, bool reset_updated = false)
+    {
+        for (auto i = 0u; i < this->NUM_BUCKETS; ++i)
+        {
+            if (this->isUpdatedBucket(i))
+            {
+                this->impls[i].forEachValue(func);
+                if (reset_updated)
+                    this->resetUpdated(i);
+            }
+        }
+    }
+
+    template <typename Func>
     void ALWAYS_INLINE mergeToViaEmplace(Self & that, Func && func)
     {
         for (auto i = 0u; i < this->NUM_BUCKETS; ++i)
