@@ -41,10 +41,7 @@ public:
 
     FormatSettings getFormatSettings(const ContextPtr & context) const
     {
-        auto format_settings = DB::getFormatSettings(context);
-        if (format_settings.schema.format_schema.empty())
-            format_settings.schema.format_schema = formatSchema();
-        return format_settings;
+        return settings->getFormatSettings(context);
     }
 
 protected:
