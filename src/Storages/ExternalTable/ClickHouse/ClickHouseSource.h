@@ -1,0 +1,37 @@
+#pragma once
+
+#include <Client/LibClient.h>
+#include <Processors/ISource.h>
+
+namespace DB
+{
+
+namespace ExternalTable
+{
+
+class ClickHouseSource final : public ISource
+{
+public:
+    ClickHouseSource(
+        const String & table,
+        const Block & header,
+        std::unique_ptr<LibClient> client_,
+        ContextPtr context_,
+        Poco::Logger * logger_);
+
+    String getName() const override { return "ClickHouseSource"; }
+
+protected:
+    Chunk generate() override;
+
+private:
+    std::unique_ptr<LibClient> client;
+    String query;
+
+    ContextPtr context;
+    Poco::Logger * logger;
+};
+
+}
+
+}

@@ -17,7 +17,7 @@ public:
         const String & table,
         const Block & header,
         const ConnectionParameters & params_,
-        ContextPtr & context_,
+        ContextPtr context_,
         Poco::Logger * logger_);
 
     String getName() const override { return "ClickHouseSink"; }
@@ -33,7 +33,7 @@ private:
     std::unique_ptr<WriteBufferFromOwnString> buf;
     OutputFormatPtr output_format;
 
-    ContextPtr & context;
+    ContextPtr context;
     Poco::Logger * logger;
 };
 

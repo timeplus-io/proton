@@ -11,25 +11,36 @@ namespace DB
 namespace ExternalTable
 {
 
+namespace
+{
+
+String constructInsertQuery(const String & table, const Block & header)
+{
+    assert(header.columns());
+    const auto & col_names = header.getNames();
+
+    auto query = "INSERT INTO " + backQuoteIfNeed(table) + " (" + backQuoteIfNeed(col_names[0]);
+    for (const auto & name : std::vector<String>(std::next(col_names.begin()), col_names.end()))
+        query.append(", " + backQuoteIfNeed(name));
+    query.append(") VALUES ");
+
+    return query;
+}
+
+}
+
 ClickHouseSink::ClickHouseSink(
         const String & table,
         const Block & header,
         const ConnectionParameters & params_,
-        ContextPtr & context_,
+        ContextPtr context_,
         Poco::Logger * logger_)
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
+    , insert_into(constructInsertQuery(table, header))
     , params(params_)
     , context(context_)
     , logger(logger_)
 {
-    const auto & col_names = header.getNames();
-    assert(!col_names.empty());
-
-    insert_into = "INSERT INTO " + backQuoteIfNeed(table) + " (" + backQuoteIfNeed(col_names[0]);
-    for (const auto & name : std::vector<String>(std::next(col_names.begin()), col_names.end()))
-        insert_into.append(", " + backQuoteIfNeed(name));
-    insert_into.append(") VALUES ");
-
     conn = std::make_unique<Connection>(
         params.host,
         params.port,

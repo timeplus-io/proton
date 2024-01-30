@@ -1,5 +1,5 @@
+#include <Client/ConnectionParameters.h>
 #include <Client/LibClient.h>
-#include "Processors/Chunk.h"
 
 namespace DB
 {
@@ -11,31 +11,68 @@ extern const int TIMEOUT_EXCEEDED;
 extern const int UNKNOWN_PACKET_FROM_SERVER;
 }
 
-LibClient::LibClient(Connection & connection_, ConnectionTimeouts timeouts_, Poco::Logger * logger_)
-    : connection(connection_)
-    , timeouts(timeouts_)
-    , logger(logger_)
-{}
-
-void LibClient::executeQuery(String query, const Callbacks & callbacks)
+namespace
 {
-    size_t processed_rows {0};
+
+std::unique_ptr<Connection> createConnection(const ConnectionParameters & parameters)
+{
+    return std::make_unique<Connection>(
+        parameters.host,
+        parameters.port,
+        parameters.default_database,
+        parameters.user,
+        parameters.password,
+        parameters.quota_key,
+        "", /* cluster */
+        "", /* cluster_secret */
+        "TimeplusProton",
+        parameters.compression,
+        parameters.security);
+}
+
+size_t calculatePollInterval(const ConnectionTimeouts & timeouts)
+{
+    const auto & receive_timeout = timeouts.receive_timeout;
+    constexpr size_t default_poll_interval = 1'000'000; /// in microseconds
+    constexpr size_t min_poll_interval = 5'000; /// in microseconds
+    return std::max(min_poll_interval, std::min<size_t>(receive_timeout.totalMicroseconds(), default_poll_interval));
+}
+
+}
+
+LibClient::LibClient(ConnectionParameters params_, Poco::Logger * logger_)
+    : params(params_)
+    , connection(createConnection(params))
+    , poll_interval(calculatePollInterval(params.timeouts))
+    , logger(logger_)
+{
+}
+
+void LibClient::reset()
+{
+    cancelled = false;
+    processed_rows = 0;
+    server_exception = nullptr;
+}
+
+void LibClient::executeQuery(const String & query, const String & query_id)
+{
+    reset();
+
     int retries_left = 10;
     while (retries_left)
     {
         try
         {
-            connection.sendQuery(
-                timeouts,
+            connection->sendQuery(
+                params.timeouts,
                 query,
                 {},
-                "",
+                query_id,
                 QueryProcessingStage::Complete,
                 nullptr,
                 nullptr,
                 false);
-
-            receiveResult(callbacks);
 
             break;
         }
@@ -51,33 +88,22 @@ void LibClient::executeQuery(String query, const Callbacks & callbacks)
     }
 }
 
-/// Receives and processes packets coming from server.
-/// Also checks if query execution should be cancelled.
-void LibClient::receiveResult(const Callbacks & callbacks)
+std::optional<Block> LibClient::pollData()
 {
-    const auto receive_timeout = timeouts.receive_timeout;
-    constexpr size_t default_poll_interval = 1000000; /// in microseconds
-    constexpr size_t min_poll_interval = 5000; /// in microseconds
-    const size_t poll_interval
-        = std::max(min_poll_interval, std::min<size_t>(receive_timeout.totalMicroseconds(), default_poll_interval));
-
     while (true)
     {
         Stopwatch receive_watch(CLOCK_MONOTONIC_COARSE);
 
         while (true)
         {
-            /// Has the Ctrl+C been pressed and thus the query should be cancelled?
-            /// If this is the case, inform the server about it and receive the remaining packets
-            /// to avoid losing sync.
             if (!cancelled)
             {
                 double elapsed = receive_watch.elapsedSeconds();
-                if (elapsed > receive_timeout.totalSeconds())
+                if (elapsed > params.timeouts.receive_timeout.totalSeconds())
                 {
                     cancelQuery();
 
-                    throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "Timeout exceeded while receiving data from server. Waited for {} seconds, timeout is {} seconds", static_cast<size_t>(elapsed), receive_timeout.totalSeconds());
+                    throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "Timeout exceeded while receiving data from server. Waited for {} seconds, timeout is {} seconds", static_cast<size_t>(elapsed), params.timeouts.receive_timeout.totalSeconds());
 
                 }
             }
@@ -85,32 +111,29 @@ void LibClient::receiveResult(const Callbacks & callbacks)
             /// Poll for changes after a cancellation check, otherwise it never reached
             /// because of progress updates from server.
 
-            if (connection.poll(poll_interval))
+            if (connection->poll(poll_interval))
                 break;
         }
 
-        if (!receiveAndProcessPacket(cancelled, callbacks))
-            break;
-    }
+        if (!receiveAndProcessPacket())
+            return std::nullopt;
 
-    if (cancelled)
-        LOG_INFO(logger, "Query was cancelled.");
+        return std::move(next_data);
+    }
 }
 
 void LibClient::cancelQuery()
 {
-    connection.sendCancel();
+    LOG_INFO(logger, "Query was cancelled.");
+    connection->sendCancel();
     cancelled = true;
 }
 
 /// Receive a part of the result, or progress info or an exception and process it.
 /// Returns true if one should continue receiving packets.
-/// Output of result is suppressed if query was cancelled.
-bool LibClient::receiveAndProcessPacket(bool cancelled_, const Callbacks & callbacks)
+bool LibClient::receiveAndProcessPacket()
 {
-    Packet packet = connection.receivePacket();
-
-    Chunk chunk {};
+    Packet packet = connection->receivePacket();
 
     switch (packet.type)
     {
@@ -118,58 +141,43 @@ bool LibClient::receiveAndProcessPacket(bool cancelled_, const Callbacks & callb
             return true;
 
         case Protocol::Server::Data:
-            if (!cancelled_)
-                callbacks.on_data(packet.block);
+            next_data = std::move(packet.block);
             return true;
 
         case Protocol::Server::Progress:
-            if (callbacks.on_progress)
-                callbacks.on_progress(packet.progress);
+            // on_progress(packet.progress);
             return true;
 
         case Protocol::Server::ProfileInfo:
-            if (callbacks.on_profile_info)
-                callbacks.on_profile_info(packet.profile_info);
+            // on_profile_info(packet.profile_info);
             return true;
 
         case Protocol::Server::Totals:
-            if (!cancelled_)
-                if (callbacks.on_totals)
-                    callbacks.on_totals(packet.block);
+            // on_totals(packet.block);
             return true;
 
         case Protocol::Server::Extremes:
-            if (!cancelled_)
-                if (callbacks.on_extremes)
-                    callbacks.on_extremes(packet.block);
+            // on_extremes(packet.block);
             return true;
 
         case Protocol::Server::Exception:
             server_exception.swap(packet.exception);
-
-            if (callbacks.on_receive_exception_from_server)
-                callbacks.on_receive_exception_from_server(*server_exception);
-
             return false;
 
         case Protocol::Server::Log:
-            if (callbacks.on_log_data)
-                callbacks.on_log_data(packet.block);
+            /// on_server_log(packet.block);
             return true;
 
         case Protocol::Server::EndOfStream:
-            if (callbacks.on_end_of_stream)
-                callbacks.on_end_of_stream();
             return false;
 
         case Protocol::Server::ProfileEvents:
-            if (callbacks.on_profile_events)
-                callbacks.on_profile_events(packet.block);
+            /// on_profile_event(packet.block);
             return true;
 
         default:
             throw Exception(
-                ErrorCodes::UNKNOWN_PACKET_FROM_SERVER, "Unknown packet {} from server {}", packet.type, connection.getDescription());
+                ErrorCodes::UNKNOWN_PACKET_FROM_SERVER, "Unknown packet {} from server {}", packet.type, connection->getDescription());
     }
 }
 
@@ -178,4 +186,5 @@ void LibClient::throwServerExceptionIfAny()
     if (server_exception)
         server_exception->rethrow();
 }
+
 }
