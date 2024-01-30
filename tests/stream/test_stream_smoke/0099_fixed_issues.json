@@ -640,7 +640,7 @@
             {"client":"python", "query_type": "table", "query": "drop stream if exists v_12183487"},
             {"client":"python", "query_type": "table", "wait":2, "query": "create stream v_12183487(id int, val int) primary key id settings shards=3;"},
             {"client":"python", "query_type": "stream", "wait":2, "depends_on_stream":"v_12183487", "query_id":"12183487213", "query":"subscribe to select sum_distinct_streaming(val), sum(val), count_distinct(val), count(val) from v_12183487 settings checkpoint_interval=1;"},
-            {"client":"python", "query_type": "table", "depends_on_stream": "v_12183487", "kill":"12183487213", "kill_wait":2, "wait": 3, "query": "insert into v_12183487(id, val) values(3, 30);"}
+            {"client":"python", "query_type": "table", "depends_on": "12183487213", "kill":"12183487213", "kill_wait":3, "wait": 2, "query": "insert into v_12183487(id, val) values(3, 30);"}
           ]
         },
         {
