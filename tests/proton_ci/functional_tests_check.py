@@ -47,7 +47,7 @@ def get_run_command(check_name, output_path):
     env.append("-e MAX_CONCURRENT_QUERIES=200")
     env.append("-e MAX_CONCURRENT_INSERT_QUERIES=200")
     env.append("-e MAX_CONCURRENT_SELECT_QUERIES=200")
-    env.append("-e PROTON_TELEMETRY_ENABLED=false")
+    env.append("-e TELEMETRY_ENABLED=false")
 
     # Add TSAN_OPTIONS if sanitize environment variable is set to 'thread'
     if os.getenv('sanitize') == 'thread':

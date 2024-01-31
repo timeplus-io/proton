@@ -146,7 +146,7 @@ keep_alive_timeout: 3
 
 # Enable telemetry. This is used to collect the version and runtime environment information to Timeplus, Inc.
 telemetry_enabled:
-    "@from_env": PROTON_TELEMETRY_ENABLED
+    "@from_env": TELEMETRY_ENABLED
     "@replace": true
     "#text": true
 
