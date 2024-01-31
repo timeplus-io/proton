@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Client/LibClient.h>
+#include <Client/ClickHouseClient.h>
 #include <Formats/FormatFactory.h>
 #include <Processors/Sinks/SinkToStorage.h>
 
@@ -27,7 +27,7 @@ public:
 private:
     String insert_into;
 
-    std::unique_ptr<LibClient> client;
+    std::unique_ptr<ClickHouseClient> client;
 
     std::unique_ptr<WriteBufferFromOwnString> buf;
     OutputFormatPtr output_format;

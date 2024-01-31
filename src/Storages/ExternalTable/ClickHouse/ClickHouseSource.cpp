@@ -27,7 +27,7 @@ String constructSelectQuery(const String & table, const Block & header)
 ClickHouseSource::ClickHouseSource(
     const String & table,
     const Block & header,
-    std::unique_ptr<LibClient> client_,
+    std::unique_ptr<ClickHouseClient> client_,
     QueryProcessingStage::Enum /*processed_stage*/,
     ContextPtr context_,
     Poco::Logger * logger_)

@@ -1,6 +1,6 @@
 #include <Common/NetException.h>
 #include <Client/ConnectionParameters.h>
-#include <Client/LibClient.h>
+#include <Client/ClickHouseClient.h>
 
 namespace DB
 {
@@ -45,7 +45,7 @@ size_t calculatePollInterval(const ConnectionTimeouts & timeouts)
 
 }
 
-LibClient::LibClient(ConnectionParameters params_, Poco::Logger * logger_)
+ClickHouseClient::ClickHouseClient(ConnectionParameters params_, Poco::Logger * logger_)
     : params(params_)
     , connection(createConnection(params))
     , poll_interval(calculatePollInterval(params.timeouts))
@@ -53,14 +53,14 @@ LibClient::LibClient(ConnectionParameters params_, Poco::Logger * logger_)
 {
 }
 
-void LibClient::reset()
+void ClickHouseClient::reset()
 {
     cancelled = false;
     processed_rows = 0;
     server_exception = nullptr;
 }
 
-void LibClient::executeQuery(const String & query, const String & query_id)
+void ClickHouseClient::executeQuery(const String & query, const String & query_id)
 {
     assert(!has_running_query);
     has_running_query = true;
@@ -105,13 +105,13 @@ void LibClient::executeQuery(const String & query, const String & query_id)
     }
 }
 
-void LibClient::executeInsertQuery(const String & query, const String & query_id)
+void ClickHouseClient::executeInsertQuery(const String & query, const String & query_id)
 {
     executeQuery(query, query_id);
     receiveEndOfQuery();
 }
 
-std::optional<Block> LibClient::pollData()
+std::optional<Block> ClickHouseClient::pollData()
 {
     if (!has_running_query)
         return std::nullopt;
@@ -151,7 +151,7 @@ std::optional<Block> LibClient::pollData()
     }
 }
 
-void LibClient::cancelQuery()
+void ClickHouseClient::cancelQuery()
 {
     if (!has_running_query)
         return;
@@ -164,7 +164,7 @@ void LibClient::cancelQuery()
 
 /// Receive a part of the result, or progress info or an exception and process it.
 /// Returns true if one should continue receiving packets.
-bool LibClient::receiveAndProcessPacket()
+bool ClickHouseClient::receiveAndProcessPacket()
 {
     assert(has_running_query);
 
@@ -218,7 +218,7 @@ bool LibClient::receiveAndProcessPacket()
 }
 
 /// Process Log packets, exit when receive Exception or EndOfStream
-bool LibClient::receiveEndOfQuery()
+bool ClickHouseClient::receiveEndOfQuery()
 {
     while (true)
     {
@@ -254,18 +254,18 @@ bool LibClient::receiveEndOfQuery()
     }
 }
 
-void LibClient::onEndOfStream()
+void ClickHouseClient::onEndOfStream()
 {
     has_running_query = false;
 }
 
-void LibClient::onServerException(std::unique_ptr<Exception> && exception)
+void ClickHouseClient::onServerException(std::unique_ptr<Exception> && exception)
 {
     server_exception.swap(exception);
     has_running_query = false;
 }
 
-void LibClient::throwServerExceptionIfAny()
+void ClickHouseClient::throwServerExceptionIfAny()
 {
     if (server_exception)
         server_exception->rethrow();

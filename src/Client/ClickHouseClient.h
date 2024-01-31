@@ -6,13 +6,13 @@
 namespace DB
 {
 
-/// LibClient is for using as a library client without all the complexities for handling terminal stuff like ClientBase does.
+/// ClickHouseClient is a client that is compatiable with the ClickHouse protocol and can be used to talk to ClickHouse servers.
 /// This is not thread-safe.
-class LibClient final
+class ClickHouseClient final
 {
 public:
 
-    LibClient(ConnectionParameters params_, Poco::Logger * logger_);
+    ClickHouseClient(ConnectionParameters params_, Poco::Logger * logger_);
 
     /// Sends the query to the server to execute. For insert queries, use `executeInsertQuery` instead.
     void executeQuery(const String & query, const String & query_id = "");

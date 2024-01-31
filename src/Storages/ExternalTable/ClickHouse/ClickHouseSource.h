@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Client/LibClient.h>
+#include <Client/ClickHouseClient.h>
 #include <Processors/ISource.h>
 
 namespace DB
@@ -15,7 +15,7 @@ public:
     ClickHouseSource(
         const String & table,
         const Block & header,
-        std::unique_ptr<LibClient> client_,
+        std::unique_ptr<ClickHouseClient> client_,
         QueryProcessingStage::Enum processed_stage,
         ContextPtr context_,
         Poco::Logger * logger_);
@@ -28,7 +28,7 @@ protected:
 private:
     bool started {false};
 
-    std::unique_ptr<LibClient> client;
+    std::unique_ptr<ClickHouseClient> client;
     String query;
 
     ContextPtr context;

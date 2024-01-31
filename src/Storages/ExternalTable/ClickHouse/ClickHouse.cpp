@@ -1,4 +1,4 @@
-#include <Client/LibClient.h>
+#include <Client/ClickHouseClient.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Storages/ExternalTable/ClickHouse/ClickHouse.h>
 #include <Storages/ExternalTable/ClickHouse/ClickHouseSink.h>
@@ -56,7 +56,7 @@ Pipe ClickHouse::read(
     size_t /*num_streams*/)
 {
     auto header = storage_snapshot->getSampleBlockForColumns(column_names);
-    auto client = std::make_unique<LibClient>(connection_params, logger);
+    auto client = std::make_unique<ClickHouseClient>(connection_params, logger);
     auto source = std::make_shared<ClickHouseSource>(table, std::move(header), std::move(client), processed_stage, context, logger);
     return Pipe(std::move(source));
 }
@@ -70,7 +70,7 @@ ColumnsDescription ClickHouse::getTableStructure()
 {
     ColumnsDescription ret {};
 
-    LibClient client {connection_params, logger};
+    ClickHouseClient client {connection_params, logger};
     client.executeQuery("DESCRIBE TABLE " + table);
     LOG_INFO(logger, "Receiving table schema");
     while (true)

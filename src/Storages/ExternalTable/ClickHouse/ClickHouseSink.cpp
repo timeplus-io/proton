@@ -1,5 +1,5 @@
+#include <Client/ClickHouseClient.h>
 #include <Client/ConnectionParameters.h>
-#include <Client/LibClient.h>
 #include <Formats/FormatFactory.h>
 #include <Interpreters/Context.h>
 #include <Processors/Formats/IOutputFormat.h>
@@ -37,7 +37,7 @@ ClickHouseSink::ClickHouseSink(
         Poco::Logger * logger_)
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
     , insert_into(constructInsertQuery(table, header))
-    , client(std::make_unique<LibClient>(params_, logger_))
+    , client(std::make_unique<ClickHouseClient>(params_, logger_))
     , context(context_)
     , logger(logger_)
 {
