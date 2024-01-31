@@ -6,7 +6,8 @@ TEST(ExternalStreamSettings, getFormatSettings)
 {
     DB::Settings settings_for_context{};
     settings_for_context.format_csv_delimiter = '/';
-    auto context = std::make_shared<DB::Context>();
+    auto shared_context = DB::Context::createShared();
+    auto context = DB::Context::createGlobal(shared_context.get());
     context->setSettings(settings_for_context);
 
     DB::ExternalStreamSettings ex_stream_settings{};
