@@ -82,8 +82,15 @@ AsynchronousMetrics::AsynchronousMetrics(
     openFileIfExists("/proc/uptime", uptime);
     openFileIfExists("/proc/net/dev", net_dev);
 
-    openFileIfExists("/sys/fs/cgroup/memory/memory.limit_in_bytes", cgroupmem_limit_in_bytes);
-    openFileIfExists("/sys/fs/cgroup/memory/memory.usage_in_bytes", cgroupmem_usage_in_bytes);
+    /// CGroups v2
+    openFileIfExists("/sys/fs/cgroup/memory.max", cgroupmem_limit_in_bytes);
+    openFileIfExists("/sys/fs/cgroup/memory.current", cgroupmem_usage_in_bytes);
+
+    /// CGroups v1
+    if (!cgroupmem_limit_in_bytes)
+        openFileIfExists("/sys/fs/cgroup/memory/memory.limit_in_bytes", cgroupmem_limit_in_bytes);
+    if (!cgroupmem_usage_in_bytes)
+        openFileIfExists("/sys/fs/cgroup/memory/memory.usage_in_bytes", cgroupmem_usage_in_bytes);
 
     openSensors();
     openBlockDevices();
@@ -923,26 +930,19 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
 
     if (cgroupmem_limit_in_bytes && cgroupmem_usage_in_bytes)
     {
-        try {
+        try
+        {
             cgroupmem_limit_in_bytes->rewind();
             cgroupmem_usage_in_bytes->rewind();
 
-            uint64_t cgroup_mem_limit_in_bytes = 0;
-            uint64_t cgroup_mem_usage_in_bytes = 0;
+            uint64_t limit = 0;
+            uint64_t usage = 0;
 
-            readText(cgroup_mem_limit_in_bytes, *cgroupmem_limit_in_bytes);
-            readText(cgroup_mem_usage_in_bytes, *cgroupmem_usage_in_bytes);
+            tryReadText(limit, *cgroupmem_limit_in_bytes);
+            tryReadText(usage, *cgroupmem_usage_in_bytes);
 
-            if (cgroup_mem_limit_in_bytes && cgroup_mem_usage_in_bytes)
-            {
-                new_values["CgroupMemoryTotal"] = cgroup_mem_limit_in_bytes;  
-                new_values["CgroupMemoryUsed"] = cgroup_mem_usage_in_bytes; 
-            }
-            else
-            {
-                LOG_DEBUG(log, "Cannot read statistics about the cgroup memory total and used. Total got '{}', Used got '{}'.",
-                    cgroup_mem_limit_in_bytes, cgroup_mem_usage_in_bytes);
-            }
+            new_values["CGroupMemoryTotal"] = limit;
+            new_values["CGroupMemoryUsed"] = usage;
         }
         catch (...)
         {
