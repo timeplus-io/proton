@@ -91,7 +91,6 @@ void NativeWriter::write(const Block & block)
         index_block.columns.resize(columns);
     }
 
-    const auto & factory = DataTypeFactory::instance();
     for (size_t i = 0; i < columns; ++i)
     {
         /// For the index.
@@ -111,11 +110,6 @@ void NativeWriter::write(const Block & block)
 
         /// Type
         String type_name = column.type->getName();
-
-        /// proton: starts
-        if (compatible_with_clickhouse)
-            type_name = factory.getClickHouseNameFromName(type_name);
-        /// proton: ends
 
         writeStringBinary(type_name, ostr);
 
