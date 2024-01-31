@@ -247,15 +247,6 @@ if [ -n "$MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO" ]; then
     fi
 fi
 
-if [ -n "$TELEMETRY_ENABLED" ]; then
-    # Replace `telemetry_enabled: true` in config.yaml with customized one
-    sed -i"" "s/telemetry_enabled: true/telemetry_enabled: $TELEMETRY_ENABLED/g" "$PROTON_CONFIG"
-    if [[ $? -ne 0 ]]; then
-        echo >&2 'Failed to setup telemetry_enabled for stream storage.'
-        exit 1
-    fi
-fi
-
 if [ "$STREAM_STORAGE_TYPE" = "kafka" ]; then
     sed -i"" "/kafka:/{n;s/enabled: false/enabled: true/g}" "$PROTON_CONFIG"
     if [[ $? -ne 0 ]]; then
