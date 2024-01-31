@@ -53,10 +53,10 @@ struct ExternalStreamSettings : public BaseSettings<ExternalStreamSettingsTraits
 
         /// settings from context have higher priority
 #define SET_CHANGED_SETTINGS(TYPE, NAME, DEFAULT, DESCRIPTION, FLAGS) \
-        if ((NAME).changed) \
-            settings.NAME = (NAME); \
         if (settings_from_context.NAME.changed) \
-            settings.NAME = settings_from_context.NAME;
+            settings.NAME = settings_from_context.NAME; \
+        else if ((NAME).changed) \
+            settings.NAME = (NAME);
 
         FORMAT_FACTORY_SETTINGS(SET_CHANGED_SETTINGS)
 
