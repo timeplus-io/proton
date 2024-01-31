@@ -82,6 +82,9 @@ AsynchronousMetrics::AsynchronousMetrics(
     openFileIfExists("/proc/uptime", uptime);
     openFileIfExists("/proc/net/dev", net_dev);
 
+    openFileIfExists("/sys/fs/cgroup/memory/memory.limit_in_bytes", cgroupmem_limit_in_bytes);
+    openFileIfExists("/sys/fs/cgroup/memory/memory.usage_in_bytes", cgroupmem_usage_in_bytes);
+
     openSensors();
     openBlockDevices();
     openEDAC();
@@ -911,6 +914,35 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             }
 
             proc_stat_values_other = current_other_values;
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+    }
+
+    if (cgroupmem_limit_in_bytes && cgroupmem_usage_in_bytes)
+    {
+        try {
+            cgroupmem_limit_in_bytes->rewind();
+            cgroupmem_usage_in_bytes->rewind();
+
+            uint64_t cgroup_mem_limit_in_bytes = 0;
+            uint64_t cgroup_mem_usage_in_bytes = 0;
+
+            readText(cgroup_mem_limit_in_bytes, *cgroupmem_limit_in_bytes);
+            readText(cgroup_mem_usage_in_bytes, *cgroupmem_usage_in_bytes);
+
+            if (cgroup_mem_limit_in_bytes && cgroup_mem_usage_in_bytes)
+            {
+                new_values["CgroupMemoryTotal"] = cgroup_mem_limit_in_bytes;  
+                new_values["CgroupMemoryUsed"] = cgroup_mem_usage_in_bytes; 
+            }
+            else
+            {
+                LOG_DEBUG(log, "Cannot read statistics about the cgroup memory total and used. Total got '{}', Used got '{}'.",
+                    cgroup_mem_limit_in_bytes, cgroup_mem_usage_in_bytes);
+            }
         }
         catch (...)
         {
