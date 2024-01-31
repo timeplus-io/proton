@@ -27,7 +27,7 @@ services:
       - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
-      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - PROTON_TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -59,7 +59,7 @@ services:
       - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
-      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - PROTON_TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"      
@@ -92,7 +92,7 @@ services:
       - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
-      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - PROTON_TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"  
@@ -124,7 +124,7 @@ services:
       - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
-      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - PROTON_TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -156,7 +156,7 @@ services:
       - MAX_CONCURRENT_STREAMING_QUERIES=100   # Default: 100
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
-      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - PROTON_TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"    
@@ -190,7 +190,7 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - STREAM_STORAGE_TYPE=kafka
-      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - PROTON_TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -229,7 +229,7 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - STREAM_STORAGE_TYPE=kafka
-      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - PROTON_TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -269,7 +269,7 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - STREAM_STORAGE_TYPE=kafka
-      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - PROTON_TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -308,7 +308,7 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - STREAM_STORAGE_TYPE=kafka
-      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - PROTON_TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -347,7 +347,7 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - STREAM_STORAGE_TYPE=kafka
-      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - PROTON_TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -386,7 +386,7 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - STREAM_STORAGE_TYPE=kafka
-      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - PROTON_TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
@@ -425,7 +425,7 @@ services:
       - MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.9 # Default: 0.9
       - MAX_SERVER_MEMORY_CACHE_TO_RAM_RATIO=0.5 # Default: 0.5
       - STREAM_STORAGE_TYPE=kafka
-      - TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
+      - PROTON_TELEMETRY_ENABLED=false # Turn off telemetry on smoke test
 
     command: >
       /bin/bash -c "echo sleeping; sleep 2; /entrypoint.sh"
