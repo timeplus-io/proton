@@ -13,6 +13,7 @@ class ClickHouseSource final : public ISource
 {
 public:
     ClickHouseSource(
+        const String & database,
         const String & table,
         const Block & header,
         std::unique_ptr<ClickHouseClient> client_,

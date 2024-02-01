@@ -9,7 +9,7 @@ namespace ExternalTable
 
 namespace
 {
-String constructSelectQuery(const String & table, const Block & header)
+String constructSelectQuery(const String & database, const String & table, const Block & header)
 {
     assert(header.columns());
     const auto & col_names = header.getNames();
@@ -17,7 +17,7 @@ String constructSelectQuery(const String & table, const Block & header)
     auto query = "SELECT " + backQuoteIfNeed(col_names[0]);
     for (const auto & name : std::vector<String>(std::next(col_names.begin()), col_names.end()))
         query.append(", " + backQuoteIfNeed(name));
-    query.append(" FROM " + table);
+    query.append(" FROM " + (database.empty() ? "" : backQuoteIfNeed(database) + ".") + table);
 
     return query;
 }
@@ -25,6 +25,7 @@ String constructSelectQuery(const String & table, const Block & header)
 }
 
 ClickHouseSource::ClickHouseSource(
+    const String & database,
     const String & table,
     const Block & header,
     std::unique_ptr<ClickHouseClient> client_,
@@ -33,7 +34,7 @@ ClickHouseSource::ClickHouseSource(
     Poco::Logger * logger_)
     : ISource(header, true, ProcessorID::ClickHouseSourceID)
     , client(std::move(client_))
-    , query(constructSelectQuery(table, header))
+    , query(constructSelectQuery(database, table, header))
     , context(context_)
     , logger(logger_)
 {

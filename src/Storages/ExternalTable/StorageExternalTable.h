@@ -46,6 +46,7 @@ private:
     void setStorageMetadata(const StorageFactory::Arguments & args);
 
     IExternalTablePtr external_table;
+    ThreadPool background_jobs {1};
 };
 
 }

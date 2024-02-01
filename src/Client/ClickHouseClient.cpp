@@ -59,13 +59,14 @@ void ClickHouseClient::reset()
     server_exception = nullptr;
 }
 
-void ClickHouseClient::executeQuery(const String & query, const String & query_id)
+void ClickHouseClient::executeQuery(const String & query, const String & query_id, bool fail_quick)
 {
     assert(!has_running_query);
     has_running_query = true;
 
     reset();
 
+    bool suppress_error_log {false};
     while (true)
     {
         try
@@ -84,24 +85,33 @@ void ClickHouseClient::executeQuery(const String & query, const String & query_i
         }
         catch (const Exception & e)
         {
+            if (fail_quick)
+                e.rethrow();
+
             /// connection lost
             if (!connection->checkConnected())
             {
-                LOG_ERROR(logger, "Connection lost");
+                if (!suppress_error_log)
+                    LOG_ERROR(logger, "Connection lost");
                 /// set the connection not connected so that sendQuery will reconnect
                 connection->disconnect();
+                std::this_thread::sleep_for(std::chrono::seconds(2));
             }
             /// Retry when the server said "Client should retry" and no rows has been received yet.
             else if (processed_rows == 0 && e.code() == ErrorCodes::DEADLOCK_AVOIDED)
             {
-                LOG_ERROR(logger, "Got a transient error from the server, will retry in 1 second");
+                if (!suppress_error_log)
+                    LOG_ERROR(logger, "Got a transient error from the server, will retry in 1 second");
                 std::this_thread::sleep_for(std::chrono::seconds(1));
             }
             else
             {
                 has_running_query = false;
-                throw;
+                e.rethrow();
             }
+
+            /// Otherwise, it will keep generating the same error log again and again until the connection is back.
+            suppress_error_log = true;
         }
     }
 }

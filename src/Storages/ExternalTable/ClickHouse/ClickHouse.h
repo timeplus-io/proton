@@ -33,6 +33,7 @@ public:
 
 private:
     ConnectionParameters connection_params;
+    String database;
     String table;
 
     Poco::Logger * logger;

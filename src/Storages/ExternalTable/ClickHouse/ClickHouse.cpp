@@ -13,7 +13,8 @@ namespace ExternalTable
 {
 
 ClickHouse::ClickHouse(const String & name, ExternalTableSettingsPtr settings)
-    : table(settings->table.changed ? settings->table.value : name)
+    : database(settings->database.value)
+    , table(settings->table.changed ? settings->table.value : name)
     , logger(&Poco::Logger::get("ExternalTable-ClickHouse-" + table))
 {
     assert(settings->type.value == "clickhouse");
@@ -58,13 +59,13 @@ Pipe ClickHouse::read(
 {
     auto header = storage_snapshot->getSampleBlockForColumns(column_names);
     auto client = std::make_unique<ClickHouseClient>(connection_params, logger);
-    auto source = std::make_shared<ClickHouseSource>(table, std::move(header), std::move(client), processed_stage, context, logger);
+    auto source = std::make_shared<ClickHouseSource>(database, table, std::move(header), std::move(client), processed_stage, context, logger);
     return Pipe(std::move(source));
 }
 
 SinkToStoragePtr ClickHouse::write(const ASTPtr &  /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr  context)
 {
-    return std::make_shared<ClickHouseSink>(table, metadata_snapshot->getSampleBlock(), connection_params, context, logger);
+    return std::make_shared<ClickHouseSink>(database, table, metadata_snapshot->getSampleBlock(), connection_params, context, logger);
 }
 
 ColumnsDescription ClickHouse::getTableStructure()
@@ -72,7 +73,9 @@ ColumnsDescription ClickHouse::getTableStructure()
     ColumnsDescription ret {};
 
     ClickHouseClient client {connection_params, logger};
-    client.executeQuery("DESCRIBE TABLE " + table);
+    auto query = "DESCRIBE TABLE " + (database.empty() ? "" : backQuoteIfNeed(database) + ".") + backQuoteIfNeed(table);
+    /// This has to fail quickly otherwise it will block Proton from starting.
+    client.executeQuery(query, /*query_id=*/"", /*fail_quick=*/true);
     LOG_INFO(logger, "Receiving table schema");
     while (true)
     {

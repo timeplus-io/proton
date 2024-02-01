@@ -19,7 +19,7 @@ public:
     /// Sends the query to the server to execute. For insert queries, use `executeInsertQuery` instead.
     /// Make sure keep calling the `pollData` method until it returns an empty optional, until which the
     /// client won't be able to execute another query.
-    void executeQuery(const String & query, const String & query_id = "");
+    void executeQuery(const String & query, const String & query_id = "", bool fail_quick = false);
     /// Sends an insert query to the server to execute. The difference between this and executeQuery is that,
     /// after calling this method, there is no need to call the `pollData` method.
     void executeInsertQuery(const String & query, const String & query_id = "");

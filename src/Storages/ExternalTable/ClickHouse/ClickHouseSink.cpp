@@ -14,12 +14,12 @@ namespace ExternalTable
 namespace
 {
 
-String constructInsertQuery(const String & table, const Block & header)
+String constructInsertQuery(const String & database, const String & table, const Block & header)
 {
     assert(header.columns());
     const auto & col_names = header.getNames();
 
-    auto query = "INSERT INTO " + backQuoteIfNeed(table) + " (" + backQuoteIfNeed(col_names[0]);
+    auto query = "INSERT INTO " + (database.empty() ? "" : backQuoteIfNeed(database) + ".") + backQuoteIfNeed(table) + " (" + backQuoteIfNeed(col_names[0]);
     for (const auto & name : std::vector<String>(std::next(col_names.begin()), col_names.end()))
         query.append(", " + backQuoteIfNeed(name));
     query.append(") VALUES ");
@@ -30,13 +30,15 @@ String constructInsertQuery(const String & table, const Block & header)
 }
 
 ClickHouseSink::ClickHouseSink(
+
+const String & database,
         const String & table,
         const Block & header,
         const ConnectionParameters & params_,
         ContextPtr context_,
         Poco::Logger * logger_)
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
-    , insert_into(constructInsertQuery(table, header))
+    , insert_into(constructInsertQuery(database, table, header))
     , client(std::make_unique<ClickHouseClient>(params_, logger_))
     , context(context_)
     , logger(logger_)

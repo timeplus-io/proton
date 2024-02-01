@@ -14,6 +14,7 @@ class ClickHouseSink final : public SinkToStorage
 {
 public:
     ClickHouseSink(
+        const String & database,
         const String & table,
         const Block & header,
         const ConnectionParameters & params_,
