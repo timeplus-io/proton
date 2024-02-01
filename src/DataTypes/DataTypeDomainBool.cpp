@@ -16,7 +16,9 @@ void registerDataTypeDomainBool(DataTypeFactory & factory)
 
     factory.registerAlias("boolean", "bool");
 
+    /// proton: starts
     factory.registerClickHouseAlias("Bool", "bool");
+    /// proton: ends
 }
 
 }

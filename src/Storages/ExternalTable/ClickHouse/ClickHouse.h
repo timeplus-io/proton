@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Client/ConnectionParameters.h>
-#include <Storages/ExternalTable/ExternalTableImpl.h>
+#include <Storages/ExternalTable/IExternalTable.h>
 #include <Storages/ExternalTable/ExternalTableSettings.h>
 
 namespace DB
@@ -13,7 +13,7 @@ namespace ExternalTable
 class ClickHouse final : public IExternalTable
 {
 public:
-    explicit ClickHouse(const String & name, ExternalTableSettingsPtr settings, ContextPtr & context [[maybe_unused]]);
+    explicit ClickHouse(const String & name, ExternalTableSettingsPtr settings);
 
     void startup() override;
     void shutdown() override {}

@@ -64,7 +64,7 @@ static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool com
     if (!arguments || arguments->children.size() != 1)
         throw Exception("array data type family must have exactly one argument - type of elements", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    return std::make_shared<DataTypeArray>(DataTypeFactory::instance().get(arguments->children[0], compatible_with_clickhouse));
+    return std::make_shared<DataTypeArray>(DataTypeFactory::instance().get(arguments->children[0]/* proton: starts */, compatible_with_clickhouse/* proton: ends */));
 }
 
 
@@ -72,7 +72,9 @@ void registerDataTypeArray(DataTypeFactory & factory)
 {
     factory.registerDataType("array", create);
 
+    /// proton: starts
     factory.registerClickHouseAlias("Array", "array");
+    /// proton: ends
 }
 
 }

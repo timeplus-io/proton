@@ -38,6 +38,13 @@ void registerDataTypeDomainGeo(DataTypeFactory & factory)
         return std::make_pair(DataTypeFactory::instance().get("array(polygon)"),
             std::make_unique<DataTypeCustomDesc>(std::make_unique<DataTypeMultiPolygonName>()));
     });
+
+    /// proton: starts
+    factory.registerClickHouseAlias("Point", "point");
+    factory.registerClickHouseAlias("Ring", "ring");
+    factory.registerClickHouseAlias("Polygon", "polygon");
+    factory.registerClickHouseAlias("MultiPolygon", "multi_polygon");
+    /// proton: ends
 }
 
 }

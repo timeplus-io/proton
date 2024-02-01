@@ -44,7 +44,7 @@ SerializationPtr DataTypeFixedString::doGetDefaultSerialization() const
 }
 
 
-static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]] = false/* proton: ends */)
+static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, [[maybe_unused]] bool compatible_with_clickhouse = false/* proton: ends */)
 {
     if (!arguments || arguments->children.size() != 1)
         throw Exception("The fixed_string data type family must have exactly one argument - size in bytes", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
@@ -61,7 +61,9 @@ void registerDataTypeFixedString(DataTypeFactory & factory)
 {
     factory.registerDataType("fixed_string", create);
 
+    /// proton: starts
     factory.registerClickHouseAlias("FixedString", "fixed_string");
+    /// proton: ends
 }
 
 }

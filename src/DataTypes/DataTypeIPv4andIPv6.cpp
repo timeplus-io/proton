@@ -13,10 +13,12 @@ void registerDataTypeIPv4andIPv6(DataTypeFactory & factory)
     factory.registerSimpleDataType("ipv6", [] { return DataTypePtr(std::make_shared<DataTypeIPv6>()); }, DataTypeFactory::CaseInsensitive);
     factory.registerAlias("inet6", "ipv6", DataTypeFactory::CaseInsensitive);
 
+    /// proton: starts
     factory.registerClickHouseAlias("IPv4", "ipv4");
     factory.registerClickHouseAlias("INET4", "inet4");
     factory.registerClickHouseAlias("IPv6", "ipv6");
     factory.registerClickHouseAlias("INET6", "inet6");
+    /// proton: ends
 }
 
 }

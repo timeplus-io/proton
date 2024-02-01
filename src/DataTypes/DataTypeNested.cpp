@@ -48,7 +48,7 @@ static std::pair<DataTypePtr, DataTypeCustomDescPtr> create(const ASTPtr & argum
         if (!name_type)
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Data type Nested accepts only pairs with name and type");
 
-        auto nested_type = DataTypeFactory::instance().get(name_type->type, compatible_with_clickhouse);
+        auto nested_type = DataTypeFactory::instance().get(name_type->type/* proton: starts */, compatible_with_clickhouse/* proton: ends */);
         nested_types.push_back(std::move(nested_type));
         nested_names.push_back(name_type->name);
     }
@@ -63,7 +63,9 @@ void registerDataTypeNested(DataTypeFactory & factory)
 {
     factory.registerDataTypeCustom("nested", create);
 
+    /// proton: starts
     factory.registerClickHouseAlias("Nested", "nested");
+    /// proton: ends
 }
 
 DataTypePtr createNested(const DataTypes & types, const Names & names)

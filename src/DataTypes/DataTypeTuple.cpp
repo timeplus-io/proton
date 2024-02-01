@@ -354,11 +354,11 @@ static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool com
     {
         if (const auto * name_and_type_pair = child->as<ASTNameTypePair>())
         {
-            nested_types.emplace_back(DataTypeFactory::instance().get(name_and_type_pair->type, compatible_with_clickhouse));
+            nested_types.emplace_back(DataTypeFactory::instance().get(name_and_type_pair->type/* proton: starts */, compatible_with_clickhouse/* proton: ends */));
             names.emplace_back(name_and_type_pair->name);
         }
         else
-            nested_types.emplace_back(DataTypeFactory::instance().get(child, compatible_with_clickhouse));
+            nested_types.emplace_back(DataTypeFactory::instance().get(child/* proton: starts */, compatible_with_clickhouse/* proton: ends */));
     }
 
     if (names.empty())
@@ -374,7 +374,9 @@ void registerDataTypeTuple(DataTypeFactory & factory)
 {
     factory.registerDataType("tuple", create);
 
+    /// proton: starts
     factory.registerClickHouseAlias("Tuple", "tuple");
+    /// proton: ends
 }
 
 }

@@ -4,7 +4,6 @@
 #include <IO/WriteHelpers.h>
 #include <IO/VarInt.h>
 #include <Compression/CompressedWriteBuffer.h>
-#include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/Serializations/SerializationInfo.h>
 
 #include <Formats/IndexForNativeFormat.h>

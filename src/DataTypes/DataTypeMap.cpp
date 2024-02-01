@@ -136,7 +136,7 @@ static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool com
     nested_types.reserve(arguments->children.size());
 
     for (const ASTPtr & child : arguments->children)
-        nested_types.emplace_back(DataTypeFactory::instance().get(child, compatible_with_clickhouse));
+        nested_types.emplace_back(DataTypeFactory::instance().get(child/* proton: starts */, compatible_with_clickhouse/* proton: ends */));
 
     return std::make_shared<DataTypeMap>(nested_types);
 }
@@ -146,6 +146,8 @@ void registerDataTypeMap(DataTypeFactory & factory)
 {
     factory.registerDataType("map", create);
 
+    /// proton: starts
     factory.registerClickHouseAlias("Map", "map");
+    /// proton: ends
 }
 }

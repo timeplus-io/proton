@@ -19,7 +19,9 @@ void registerDataTypeDate(DataTypeFactory & factory)
 {
     factory.registerSimpleDataType("date", [] { return DataTypePtr(std::make_shared<DataTypeDate>()); }, DataTypeFactory::CaseInsensitive);
 
+    /// proton: starts
     factory.registerClickHouseAlias("Date", "date");
+    /// proton: ends
 }
 
 }

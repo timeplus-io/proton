@@ -2,6 +2,7 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Storages/ExternalTable/StorageExternalTable.h>
 #include <Storages/ExternalTable/ClickHouse/ClickHouse.h>
+#include "Storages/ExternalTable/ExternalTableFactory.h"
 
 namespace DB
 {
@@ -12,14 +13,7 @@ StorageExternalTable::StorageExternalTable(
 : IStorage(args.table_id)
 , WithContext(args.getContext()->getGlobalContext())
 {
-    auto type = settings->type.value;
-    if (type == "clickhouse")
-    {
-        auto ctx = getContext();
-        external_table = std::make_unique<ExternalTable::ClickHouse>(args.table_id.getTableName(), std::move(settings), ctx);
-    }
-    else
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unknown external table type: {}", type);
+    external_table = ExternalTableFactory::instance().getExternalTable(args.table_id.getTableName(), std::move(settings));
 
     setStorageMetadata(args);
 }

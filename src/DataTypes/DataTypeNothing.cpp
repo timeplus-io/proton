@@ -27,7 +27,9 @@ void registerDataTypeNothing(DataTypeFactory & factory)
 {
     factory.registerSimpleDataType("nothing", [] { return DataTypePtr(std::make_shared<DataTypeNothing>()); });
 
+    /// proton: starts
     factory.registerClickHouseAlias("Nothing", "nothing");
+    /// proton: ends
 }
 
 }

@@ -39,7 +39,7 @@ SerializationPtr DataTypeString::doGetDefaultSerialization() const
     return std::make_shared<SerializationString>();
 }
 
-static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]] = false/* proton: ends */)
+static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, [[maybe_unused]] bool compatible_with_clickhouse = false/* proton: ends */)
 {
     if (arguments && !arguments->children.empty())
     {
@@ -94,7 +94,8 @@ void registerDataTypeString(DataTypeFactory & factory)
     /// factory.registerAlias("VARBINARY", "string", DataTypeFactory::CaseInsensitive);
     /// factory.registerAlias("GEOMETRY", "string", DataTypeFactory::CaseInsensitive); //mysql
 
+    /// proton: starts
     factory.registerClickHouseAlias("String", "string");
-    // factory.registerClickHouseAlias("VARCHAR", "VARCHAR");
+    /// proton: ends
 }
 }

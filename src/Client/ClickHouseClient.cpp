@@ -1,5 +1,4 @@
 #include <Common/NetException.h>
-#include <Client/ConnectionParameters.h>
 #include <Client/ClickHouseClient.h>
 
 namespace DB
@@ -74,11 +73,11 @@ void ClickHouseClient::executeQuery(const String & query, const String & query_i
             connection->sendQuery(
                 params.timeouts,
                 query,
-                {},
+                {} /*query_parameters*/,
                 query_id,
                 QueryProcessingStage::Complete,
-                nullptr,
-                nullptr,
+                nullptr /*settings*/,
+                nullptr /*client_info*/,
                 false);
 
             break;
@@ -88,14 +87,16 @@ void ClickHouseClient::executeQuery(const String & query, const String & query_i
             /// connection lost
             if (!connection->checkConnected())
             {
-                LOG_ERROR(logger, "ClickHouse connection lost");
+                LOG_ERROR(logger, "Connection lost");
                 /// set the connection not connected so that sendQuery will reconnect
                 connection->disconnect();
             }
-
             /// Retry when the server said "Client should retry" and no rows has been received yet.
-            if (processed_rows == 0 && e.code() == ErrorCodes::DEADLOCK_AVOIDED)
-                LOG_ERROR(logger, "Got a transient error from the server, will retry");
+            else if (processed_rows == 0 && e.code() == ErrorCodes::DEADLOCK_AVOIDED)
+            {
+                LOG_ERROR(logger, "Got a transient error from the server, will retry in 1 second");
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
             else
             {
                 has_running_query = false;
@@ -147,7 +148,7 @@ std::optional<Block> ClickHouseClient::pollData()
             return std::nullopt;
         }
 
-        return std::move(next_data);
+        return std::move(polled_data);
     }
 }
 
@@ -156,7 +157,7 @@ void ClickHouseClient::cancelQuery()
     if (!has_running_query)
         return;
 
-    LOG_INFO(logger, "Query was cancelled.");
+    LOG_INFO(logger, "Query cancelled.");
     connection->sendCancel();
     cancelled = true;
     has_running_query = false;
@@ -176,7 +177,8 @@ bool ClickHouseClient::receiveAndProcessPacket()
             return true;
 
         case Protocol::Server::Data:
-            next_data = std::move(packet.block);
+            processed_rows += packet.block.rows();
+            polled_data = std::move(packet.block);
             return true;
 
         case Protocol::Server::Progress:

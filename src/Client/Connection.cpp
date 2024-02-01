@@ -1000,7 +1000,8 @@ void Connection::initBlockLogsInput()
         /// Have to return superset of SystemLogsQueue::getSampleBlock() columns
         block_logs_in = std::make_unique<NativeReader>(*in, server_revision);
         /// proton: starts
-        if (compatible_with_clickhouse)            block_logs_in->setCompatibleWithClickHouse();
+        if (compatible_with_clickhouse)
+            block_logs_in->setCompatibleWithClickHouse();
         /// proton: ends
     }
 }

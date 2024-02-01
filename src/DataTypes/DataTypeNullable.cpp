@@ -66,7 +66,7 @@ static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool com
     if (!arguments || arguments->children.size() != 1)
         throw Exception("Nullable data type family must have exactly one argument - nested type", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    DataTypePtr nested_type = DataTypeFactory::instance().get(arguments->children[0], compatible_with_clickhouse);
+    DataTypePtr nested_type = DataTypeFactory::instance().get(arguments->children[0]/* proton: starts */, compatible_with_clickhouse/* proton: ends */);
 
     return std::make_shared<DataTypeNullable>(nested_type);
 }
@@ -76,7 +76,9 @@ void registerDataTypeNullable(DataTypeFactory & factory)
 {
     factory.registerDataType("nullable", create);
 
+    /// proton: starts
     factory.registerClickHouseAlias("Nullable", "nullable");
+    /// proton: ends
 }
 
 

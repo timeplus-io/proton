@@ -4,6 +4,7 @@
 #include <Storages/ExternalTable/ClickHouse/ClickHouseSink.h>
 #include <Storages/ExternalTable/ClickHouse/ClickHouseSource.h>
 #include <Storages/ColumnsDescription.h>
+#include "Storages/ExternalTable/ExternalTableFactory.h"
 
 namespace DB
 {
@@ -11,7 +12,7 @@ namespace DB
 namespace ExternalTable
 {
 
-ClickHouse::ClickHouse(const String & name, ExternalTableSettingsPtr settings, ContextPtr &  /*context*/)
+ClickHouse::ClickHouse(const String & name, ExternalTableSettingsPtr settings)
     : table(settings->table.changed ? settings->table.value : name)
     , logger(&Poco::Logger::get("ExternalTable-ClickHouse-" + table))
 {
@@ -108,6 +109,14 @@ ColumnsDescription ClickHouse::getTableStructure()
     return ret;
 }
 
+}
+
+void registerClickHouseExternalTable(ExternalTableFactory & factory)
+{
+    factory.registerExternalTable("clickhouse", [](const String & name, ExternalTableSettingsPtr settings)
+    {
+        return std::make_unique<ExternalTable::ClickHouse>(name, std::move(settings));
+    });
 }
 
 }

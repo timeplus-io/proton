@@ -2,7 +2,7 @@
 
 #include <Interpreters/Context_fwd.h>
 #include <Storages/ExternalTable/ExternalTableSettings.h>
-#include <Storages/ExternalTable/ExternalTableImpl.h>
+#include <Storages/ExternalTable/IExternalTable.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageFactory.h>
 

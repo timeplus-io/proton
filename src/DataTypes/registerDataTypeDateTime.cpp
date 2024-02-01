@@ -58,7 +58,7 @@ getArgument(const ASTPtr & arguments, size_t argument_index, const char * argume
     return argument->value.get<NearestResultType>();
 }
 
-static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]]/* proton: ends */)
+static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, [[maybe_unused]] bool compatible_with_clickhouse/* proton: ends */)
 {
     if (!arguments || arguments->children.empty())
         return std::make_shared<DataTypeDateTime>();
@@ -77,7 +77,7 @@ static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool com
     return std::make_shared<DataTypeDateTime>(timezone.value_or(String{}));
 }
 
-static DataTypePtr create32(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]] = false/* proton: ends */)
+static DataTypePtr create32(const ASTPtr & arguments/* proton: starts */, [[maybe_unused]] bool compatible_with_clickhouse = false/* proton: ends */)
 {
     if (!arguments || arguments->children.empty())
         return std::make_shared<DataTypeDateTime>();
@@ -90,7 +90,7 @@ static DataTypePtr create32(const ASTPtr & arguments/* proton: starts */, bool c
     return std::make_shared<DataTypeDateTime>(timezone);
 }
 
-static DataTypePtr create64(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]] = false/* proton: ends */)
+static DataTypePtr create64(const ASTPtr & arguments/* proton: starts */, [[maybe_unused]] bool compatible_with_clickhouse = false/* proton: ends */)
 {
     if (!arguments || arguments->children.empty())
         return std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale);
@@ -112,9 +112,11 @@ void registerDataTypeDateTime(DataTypeFactory & factory)
 
     /// factory.registerAlias("TIMESTAMP", "datetime", DataTypeFactory::CaseInsensitive);
 
+    /// proton: starts
     factory.registerClickHouseAlias("Datetime", "datetime");
     factory.registerClickHouseAlias("Datetime32", "datetime32");
     factory.registerClickHouseAlias("Datetime64", "datetime64");
+    /// proton: ends
 }
 
 }

@@ -67,7 +67,6 @@ private:
     const DataTypesDictionary & getCaseInsensitiveMap() const override { return case_insensitive_data_types; }
 
     String getFactoryName() const override { return "DataTypeFactory"; }
-
 };
 
 void registerDataTypeNumbers(DataTypeFactory & factory);

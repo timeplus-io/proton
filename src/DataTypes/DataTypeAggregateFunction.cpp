@@ -228,7 +228,7 @@ static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool com
             ErrorCodes::BAD_ARGUMENTS);
 
     for (size_t i = argument_types_start_idx; i < arguments->children.size(); ++i)
-        argument_types.push_back(DataTypeFactory::instance().get(arguments->children[i], compatible_with_clickhouse));
+        argument_types.push_back(DataTypeFactory::instance().get(arguments->children[i]/* proton: starts */, compatible_with_clickhouse/* proton: ends */));
 
     if (function_name.empty())
         throw Exception("Logical error: empty name of aggregate function passed", ErrorCodes::LOGICAL_ERROR);
@@ -260,7 +260,9 @@ void registerDataTypeAggregateFunction(DataTypeFactory & factory)
 {
     factory.registerDataType("aggregate_function", create);
 
+    /// proton: starts
     factory.registerClickHouseAlias("AggregateFunction", "aggregate_function");
+    /// proton: ends
 }
 
 }

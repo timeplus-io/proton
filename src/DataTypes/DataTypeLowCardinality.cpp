@@ -156,14 +156,16 @@ static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool com
         throw Exception("The low_cardinality data type family must have single argument - type of elements",
                         ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    return std::make_shared<DataTypeLowCardinality>(DataTypeFactory::instance().get(arguments->children[0], compatible_with_clickhouse));
+    return std::make_shared<DataTypeLowCardinality>(DataTypeFactory::instance().get(arguments->children[0]/* proton: starts */, compatible_with_clickhouse/* proton: ends */));
 }
 
 void registerDataTypeLowCardinality(DataTypeFactory & factory)
 {
     factory.registerDataType("low_cardinality", create);
 
+    /// proton: starts
     factory.registerClickHouseAlias("LowCardinality", "low_cardinality");
+    /// proton: ends
 }
 
 

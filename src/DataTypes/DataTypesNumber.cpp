@@ -14,7 +14,7 @@ namespace ErrorCodes
 }
 
 template <typename T>
-static DataTypePtr createNumericDataType(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]] = false/* proton: ends */)
+static DataTypePtr createNumericDataType(const ASTPtr & arguments/* proton: starts */,  [[maybe_unused]] bool compatible_with_clickhouse = false/* proton: ends */)
 {
     if (arguments)
     {
@@ -91,6 +91,7 @@ void registerDataTypeNumbers(DataTypeFactory & factory)
     /// factory.registerAlias("YEAR", "uint16", DataTypeFactory::CaseInsensitive);
     /// factory.registerAlias("TIME", "int64", DataTypeFactory::CaseInsensitive);
 
+    /// proton: starts
     factory.registerClickHouseAlias("UInt8", "uint8");
     factory.registerClickHouseAlias("UInt16", "uint16");
     factory.registerClickHouseAlias("UInt32", "uint32");
@@ -118,6 +119,7 @@ void registerDataTypeNumbers(DataTypeFactory & factory)
     factory.registerClickHouseAlias("BIGINT", "bigint");
     factory.registerClickHouseAlias("FLOAT", "float");
     factory.registerClickHouseAlias("DOUBLE", "double");
+    /// proton: ends
 }
 
 }

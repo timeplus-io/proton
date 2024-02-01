@@ -239,7 +239,7 @@ static void autoAssignNumberForEnum(const ASTPtr & arguments)
 }
 
 template <typename DataTypeEnum>
-static DataTypePtr createExact(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]] = false/* proton: ends */)
+static DataTypePtr createExact(const ASTPtr & arguments/* proton: starts */, [[maybe_unused]] bool compatible_with_clickhouse = false/* proton: ends */)
 {
     if (!arguments || arguments->children.empty())
         throw Exception("Data type enum cannot be empty", ErrorCodes::EMPTY_DATA_PASSED);
@@ -301,10 +301,10 @@ static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool com
         Int64 value = value_literal->value.get<Int64>();
 
         if (value > std::numeric_limits<Int8>::max() || value < std::numeric_limits<Int8>::min())
-            return createExact<DataTypeEnum16>(arguments, compatible_with_clickhouse);
+            return createExact<DataTypeEnum16>(arguments/* proton: starts */, compatible_with_clickhouse/* proton: ends */);
     }
 
-    return createExact<DataTypeEnum8>(arguments, compatible_with_clickhouse);
+    return createExact<DataTypeEnum8>(arguments/* proton: starts */, compatible_with_clickhouse/* proton: ends */);
 }
 
 void registerDataTypeEnum(DataTypeFactory & factory)
@@ -316,9 +316,11 @@ void registerDataTypeEnum(DataTypeFactory & factory)
     /// MySQL
     /// factory.registerAlias("ENUM", "enum", DataTypeFactory::CaseInsensitive);
 
+    /// proton: starts
     factory.registerClickHouseAlias("Enum8", "enum8");
     factory.registerClickHouseAlias("Enum16", "enum16");
     factory.registerClickHouseAlias("Enum", "enum");
+    /// proton: ends
 }
 
 }
