@@ -2,6 +2,8 @@
 
 #include <Core/BaseSettings.h>
 #include <Core/Settings.h>
+#include <Formats/FormatFactory.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -43,6 +45,25 @@ DECLARE_SETTINGS_TRAITS(ExternalStreamSettingsTraits, LIST_OF_EXTERNAL_STREAM_SE
 struct ExternalStreamSettings : public BaseSettings<ExternalStreamSettingsTraits>
 {
     void loadFromQuery(ASTStorage & storage_def);
+
+    FormatSettings getFormatSettings(const ContextPtr & context)
+    {
+        FormatFactorySettings settings {};
+        const auto & settings_from_context = context->getSettingsRef();
+
+        /// settings from context have higher priority
+#define SET_CHANGED_SETTINGS(TYPE, NAME, DEFAULT, DESCRIPTION, FLAGS) \
+        if (settings_from_context.NAME.changed) \
+            settings.NAME = settings_from_context.NAME; \
+        else if ((NAME).changed) \
+            settings.NAME = (NAME);
+
+        FORMAT_FACTORY_SETTINGS(SET_CHANGED_SETTINGS)
+
+#undef SET_CHANGED_SETTINGS
+
+        return DB::getFormatSettings(context, settings);
+    }
 };
 
 }
