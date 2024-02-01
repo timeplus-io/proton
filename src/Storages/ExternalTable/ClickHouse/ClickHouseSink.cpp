@@ -75,9 +75,7 @@ void ClickHouseSink::consume(Chunk chunk)
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
     output_format->write(block);
 
-    String query_to_sent {buf->str()};
-    // conn->forceConnected(params.timeouts); /// The connection chould have been idle for too long
-    client->executeInsertQuery(query_to_sent);
+    client->executeInsertQuery(buf->str());
     client->throwServerExceptionIfAny();
 }
 
