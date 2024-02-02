@@ -37,7 +37,7 @@
 #include <Core/Streaming/SubstreamID.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Interpreters/Aggregator.h>
-#include <Interpreters/Streaming/AggregateDataEx.h>
+#include <Interpreters/Streaming/UpdatesTrackingData.h>
 #include <Interpreters/Streaming/WindowCommon.h>
 #include <Parsers/ASTFunction.h>
 #include <Common/HashTable/Hash.h>
@@ -76,11 +76,10 @@ namespace Streaming
   *  best suited for different cases, and this approach is just one of them, chosen for a combination of reasons.
   */
 
-enum class AggregateStateType
+enum class ConvertType : uint8_t
 {
-    Normal,
-    OnlyUpdated,
-    OnlyRetracted,
+    Normal = 0,
+    OnlyUpdates = 1,
 };
 
 /// using TimeBucketAggregatedDataWithUInt16Key = TimeBucketHashMap<FixedImplicitZeroHashMap<UInt16, AggregateDataPtr>>;
@@ -129,7 +128,6 @@ SERDE struct AggregatedDataVariants : private boost::noncopyable
     /// Pools for states of aggregate functions. Ownership will be later transferred to ColumnAggregateFunction.
     Arenas aggregates_pools;
     Arena * aggregates_pool{};    /// The pool that is currently used for allocation.
-    std::unique_ptr<Arena> retracted_pool;  /// Use an independent pool to manage retracted data, which will be cleared after each finalization
 
     /** Specialization for the case when there are no keys, and for keys not fitted into max_rows_to_group_by.
       */
@@ -371,16 +369,15 @@ SERDE struct AggregatedDataVariants : private boost::noncopyable
         /// proton: ends;
     }
 
+    /// \param reset - clean up all in memory states and the corresponding arena pools used to hold these states
     void reset();
 
-    void resetAggregatesPool()
+    void resetAndCreateAggregatesPools()
     {
         aggregates_pools = Arenas(1, std::make_shared<Arena>());
         aggregates_pool = aggregates_pools.back().get();
         aggregates_pool->enableRecycle(true);
     }
-
-    void resetRetractedPool() { retracted_pool = std::make_unique<Arena>(); }
 
     /// Number of rows (different keys).
     size_t size() const
@@ -667,8 +664,7 @@ public:
 
         WindowParamsPtr window_params;
 
-        bool tracking_changes = false;
-        bool tracking_updated = false;
+        TrackingUpdatesType tracking_updates_type;
         /// proton: ends
 
         /// proton: starts
@@ -690,8 +686,7 @@ public:
             ssize_t delta_col_pos_ = -1,
             size_t window_keys_num_ = 0,
             WindowParamsPtr window_params_ = nullptr,
-            bool tracking_changes_ = false,
-            bool tracking_updated_ = false)
+            TrackingUpdatesType tracking_updates_type_ = TrackingUpdatesType::None)
         : src_header(src_header_),
             intermediate_header(intermediate_header_),
             keys(keys_), aggregates(aggregates_), keys_size(keys.size()), aggregates_size(aggregates.size()),
@@ -709,8 +704,7 @@ public:
             delta_col_pos(delta_col_pos_),
             window_keys_num(window_keys_num_),
             window_params(window_params_),
-            tracking_changes(tracking_changes_),
-            tracking_updated(tracking_updated_)
+            tracking_updates_type(tracking_updates_type_)
         {
         }
         /// proton: ends
@@ -750,17 +744,21 @@ public:
     /// Process one block. Return {should_abort, need_finalization} pair
     /// should_abort: if the processing should be aborted (with group_by_overflow_mode = 'break') return true, otherwise false.
     /// need_finalization : only for UDA aggregation. If there is no UDA, always false
-    std::pair<bool, bool> executeOnBlock(const Block & block,
+    std::pair<bool, bool> executeOnBlock(
+        const Block & block,
         AggregatedDataVariants & result,
         ColumnRawPtrs & key_columns,
-        AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
-        bool & no_more_keys) const;
+        AggregateColumns & aggregate_columns /// Passed to not create them anew for each block
+    ) const;
 
-    std::pair<bool, bool> executeOnBlock(Columns columns,
-        size_t row_begin, size_t row_end,
+    std::pair<bool, bool> executeOnBlock(
+        Columns columns,
+        size_t row_begin,
+        size_t row_end,
         AggregatedDataVariants & result,
-        ColumnRawPtrs & key_columns, AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
-        bool & no_more_keys) const;
+        ColumnRawPtrs & key_columns,
+        AggregateColumns & aggregate_columns /// Passed to not create them anew for each block
+    ) const;
 
     /// Execute and retract state for changed groups:
     /// 1) For new group:
@@ -780,15 +778,12 @@ public:
         size_t row_begin,
         size_t row_end,
         AggregatedDataVariants & result,
+        AggregatedDataVariants & retracted_result,
         ColumnRawPtrs & key_columns,
-        AggregateColumns & aggregate_columns, /// Passed to not create them anew for each block
-        bool & no_more_keys) const;
-
-    bool mergeOnBlock(Block block, AggregatedDataVariants & result, bool & no_more_keys) const;
+        AggregateColumns & aggregate_columns /// Passed to not create them anew for each block
+    ) const;
 
     /** Convert the aggregation data structure into a block.
-      * If overflow_row = true, then aggregates for rows that are not included in max_rows_to_group_by are put in the first block.
-      *
       * If final = false, then ColumnAggregateFunction is created as the aggregation columns with the state of the calculations,
       *  which can then be combined with other states (for distributed query processing or checkpoint).
       * If final = true, then columns with ready values are created as aggregate columns.
@@ -808,9 +803,11 @@ public:
       *       a. SELECT count(), avg(i), sum(k) FROM ( <-- second level global aggr, need prune its state at this level
       *            SELECT avg(i) AS i, sum(k) AS k FROM my_stream GROUP BY device_id <-- first level global aggr, don't prune states
       *          );
+      *
+      * \param max_threads      - limits max threads for converting two level aggregate state in parallel
       */
-    BlocksList convertToBlocks(AggregatedDataVariants & data_variants, bool final, bool clear_states, size_t max_threads) const;
-    BlocksList mergeAndConvertToBlocks(ManyAggregatedDataVariants & data_variants, bool final, bool clear_states, size_t max_threads) const;
+    BlocksList convertToBlocks(AggregatedDataVariants & data_variants, bool final, size_t max_threads) const;
+    BlocksList mergeAndConvertToBlocks(ManyAggregatedDataVariants & data_variants, bool final, size_t max_threads) const;
 
     /// For Tumble/Session window function, there is only one bucket
     /// For Hop window function, merge multiple gcd windows (buckets) to a hop window
@@ -818,30 +815,22 @@ public:
     ///   gcd_bucket1 - [00:00, 00:02)
     ///                            =>  result block - [00:00, 00:04)
     ///   gcd_bucket2 - [00:02, 00:04)
-    Block spliceAndConvertBucketsToBlock(
-        AggregatedDataVariants & variants, bool final, bool clear_states, const std::vector<Int64> & gcd_buckets) const;
-    Block mergeAndSpliceAndConvertBucketsToBlock(
-        ManyAggregatedDataVariants & variants, bool final, bool clear_states, const std::vector<Int64> & gcd_buckets) const;
+    Block spliceAndConvertBucketsToBlock(AggregatedDataVariants & variants, bool final, const std::vector<Int64> & gcd_buckets) const;
+    Block mergeAndSpliceAndConvertBucketsToBlock(ManyAggregatedDataVariants & variants, bool final, const std::vector<Int64> & gcd_buckets) const;
 
-    /// Convert the `updated data` (different with `normal data`)
-    BlocksList convertUpdatedToBlocks(AggregatedDataVariants & data_variants) const;
+    /// Only convert the states of update groups tracked
+    BlocksList convertUpdatesToBlocks(AggregatedDataVariants & data_variants) const;
 
-    /// \return: merged updated data if exists
-    /// NOTE: The merged data is as `normal data`, which should use `convertToBlocks` to convert
-    AggregatedDataVariantsPtr mergeUpdatedGroups(ManyAggregatedDataVariants & data_variants) const;
+    /// \return: merged updated data if exists, when there is no update data, return nullptr
+    AggregatedDataVariantsPtr mergeUpdateGroups(ManyAggregatedDataVariants & data_variants) const;
 
-    /// Convert the `retracted data` (different with `normal data`)
-    BlocksList convertRetractedToBlocks(AggregatedDataVariants & data_variants) const;
+    /// For some streaming queries with `emit on update` or `emit changelog`, need tracking updates (with retract)
+    bool needTrackUpdates() const { return params.tracking_updates_type != TrackingUpdatesType::None; }
+    TrackingUpdatesType trackingUpdatesType() const { return params.tracking_updates_type; }
 
-    /// \return: merged retracted data if exists
-    /// NOTE: The merged data is as `normal data`, which should use `convertToBlocks` to convert
-    AggregatedDataVariantsPtr mergeRetractedGroups(ManyAggregatedDataVariants & data_variants) const;
-
-    /// Used for merge legacy retracted data into result
-    void mergeRetractedInto(AggregatedDataVariants & result, AggregatedDataVariants && retracted_result) const;
-
-    bool hasExpandedData() const { return expanded_data_type != ExpandedDataType::None; }
-    ExpandedDataType expandedDataType() const { return expanded_data_type; }
+    /// Used for merge changed groups and return the <retracted_state, aggregated_state> of changed groups
+    std::pair<AggregatedDataVariantsPtr, AggregatedDataVariantsPtr>
+    mergeRetractedGroups(ManyAggregatedDataVariants & aggregated_data, ManyAggregatedDataVariants & retracted_data) const;
 
     std::vector<Int64> bucketsBefore(const AggregatedDataVariants & result, Int64 max_bucket) const;
     void removeBucketsBefore(AggregatedDataVariants & result, Int64 max_bucket) const;
@@ -849,22 +838,12 @@ public:
     /// If @p always_merge_into_empty is true, always add an empty variants at front even if there is only one 
     ManyAggregatedDataVariantsPtr prepareVariantsToMerge(ManyAggregatedDataVariants & data_variants, bool always_merge_into_empty = false) const;
 
-    using BucketToBlocks = std::map<Int32, BlocksList>;
-    /// Merge partially aggregated blocks separated to buckets into one data structure.
-    void mergeBlocks(BucketToBlocks bucket_to_blocks, AggregatedDataVariants & result, size_t max_threads);
-
-    /// Merge several partially aggregated blocks into one.
-    /// Precondition: for all blocks block.info.is_overflows flag must be the same.
-    /// (either all blocks are from overflow data or none blocks are).
-    /// The resulting block has the same value of is_overflows flag.
-    Block mergeBlocks(BlocksList & blocks, bool final, bool clear_states, bool only_updated);
-
     /** Split block with partially-aggregated data to many blocks, as if two-level method of aggregation was used.
       * This is needed to simplify merging of that data with other results, that are already two-level.
       */
     std::vector<Block> convertBlockToTwoLevel(const Block & block) const;
 
-    void initStatesForWithoutKeyOrOverflow(AggregatedDataVariants & data_variants) const;
+    void initStatesForWithoutKey(AggregatedDataVariants & data_variants) const;
 
     /// For external aggregation.
     void writeToTemporaryFile(AggregatedDataVariants & data_variants, const String & tmp_path) const;
@@ -940,8 +919,6 @@ private:
 
     bool all_aggregates_has_trivial_destructor = false;
 
-    ExpandedDataType expanded_data_type = ExpandedDataType::None;
-
     /// How many RAM were used to process the query before processing the first block.
     Int64 memory_usage_before_aggregation = 0;
 
@@ -971,8 +948,7 @@ private:
 
     /** Create states of aggregate functions for one key.
       */
-    template <bool use_compiled_functions = false, bool skip_expanded_data = false>
-    void createAggregateStates(AggregateDataPtr & aggregate_data) const;
+    void createAggregateStates(AggregateDataPtr & aggregate_data, bool prefix_with_updates_tracking_state = true) const;
 
     /** Call `destroy` methods for states of aggregate functions.
       * Used in the exception handler for aggregation, since RAII in this case is not applicable.
@@ -984,51 +960,25 @@ private:
         size_t row_begin,
         size_t row_end,
         ColumnRawPtrs & key_columns,
-        AggregateFunctionInstruction * aggregate_instructions,
-        bool no_more_keys,
-        AggregateDataPtr overflow_row = nullptr) const;
+        AggregateFunctionInstruction * aggregate_instructions) const;
 
     /// Process one data block, aggregate the data into a hash table.
     template <typename Method>
-    bool executeImpl(
+    bool executeImplBatch(
         Method & method,
         Arena * aggregates_pool,
         size_t row_begin,
         size_t row_end,
         ColumnRawPtrs & key_columns,
-        AggregateFunctionInstruction * aggregate_instructions,
-        bool no_more_keys,
-        AggregateDataPtr overflow_row) const;
-
-    /// Specialization for a particular value no_more_keys.
-    template <bool no_more_keys, bool use_compiled_functions, typename Method>
-    bool executeImplBatch(
-        Method & method,
-        typename Method::State & state,
-        Arena * aggregates_pool,
-        size_t row_begin,
-        size_t row_end,
-        AggregateFunctionInstruction * aggregate_instructions,
-        AggregateDataPtr overflow_row) const;
+        AggregateFunctionInstruction * aggregate_instructions) const;
 
     /// For case when there are no keys (all aggregate into one row). For UDA with own strategy, return 'true' means the UDA should emit after execution
-    template <bool use_compiled_functions>
     bool executeWithoutKeyImpl(
         AggregatedDataWithoutKey & res,
         size_t row_begin,
         size_t row_end,
         AggregateFunctionInstruction * aggregate_instructions,
         Arena * arena) const;
-
-#if 0 /// Unused for now
-    static void executeOnIntervalWithoutKeyImpl(
-        AggregatedDataWithoutKey & res,
-        size_t row_begin,
-        size_t row_end,
-        AggregateFunctionInstruction * aggregate_instructions,
-        Arena * arena,
-        const IColumn * delta_col);
-#endif
 
     template <typename Method>
     void writeToTemporaryFileImpl(
@@ -1046,7 +996,7 @@ private:
 
     /// Merge data from hash table `src` into `dst`.
     using EmptyKeyHandler = void *;
-    template <typename Method, bool use_compiled_functions, typename Table, typename KeyHandler = EmptyKeyHandler>
+    template <typename Method, typename Table, typename KeyHandler = EmptyKeyHandler>
     void mergeDataImpl(
         Table & table_dst,
         Table & table_src,
@@ -1061,7 +1011,7 @@ private:
 
     template <typename Method, typename Table>
     Block convertToBlockImpl(
-        Method & method, Table & data, Arena * arena, Arenas & aggregates_pools, bool final, size_t rows, bool clear_states, AggregateStateType type) const;
+        Method & method, Table & data, Arena * arena, Arenas & aggregates_pools, bool final, size_t rows, bool clear_states, ConvertType type) const;
 
     template <typename Mapped>
     void insertAggregatesIntoColumns(
@@ -1070,13 +1020,12 @@ private:
         Arena * arena,
         bool clear_states) const;
 
-    template <bool use_compiled_functions>
     Block insertResultsIntoColumns(
         PaddedPODArray<AggregateDataPtr> & places, OutputBlockColumns && out_cols, Arena * arena, bool clear_states) const;
 
-    template <typename Method, bool use_compiled_functions, AggregateStateType type, typename Table>
+    template <typename Method, typename Table>
     Block convertToBlockImplFinal(
-        Method & method, Table & data, Arena * arena, Arenas & aggregates_pools, size_t rows, bool clear_states) const;
+        Method & method, Table & data, Arena * arena, Arenas & aggregates_pools, size_t rows, bool clear_states, ConvertType type) const;
 
     template <typename Method, typename Table>
     Block convertToBlockImplNotFinal(Method & method, Table & data, Arenas & aggregates_pools, size_t rows) const;
@@ -1089,7 +1038,7 @@ private:
         bool final,
         bool clear_states,
         Int64 bucket,
-        AggregateStateType type = AggregateStateType::Normal) const;
+        ConvertType type = ConvertType::Normal) const;
 
     /// proton: starts.
     template <typename Method>
@@ -1111,58 +1060,34 @@ private:
     void serializeAggregateStates(const AggregateDataPtr & place, WriteBuffer & wb) const;
     void deserializeAggregateStates(AggregateDataPtr & place, ReadBuffer & rb, Arena * arena) const;
 
-    void clearDataVariants(AggregatedDataVariants & data_variants) const;
-
-    /// @return does need abort ?
-    bool checkAndProcessResult(AggregatedDataVariants & result, bool & no_more_keys) const;
+    /// \return true means execution must be aborted, false means normal 
+    bool checkAndProcessResult(AggregatedDataVariants & result) const;
 
     template <typename Method>
     bool executeAndRetractImpl(
         Method & method,
         Arena * aggregates_pool,
+        Method & retracted_method,
         Arena * retracted_pool,
         size_t row_begin,
         size_t row_end,
         ColumnRawPtrs & key_columns,
         AggregateFunctionInstruction * aggregate_instructions) const;
 
-    template <typename Method, bool is_two_level>
-    void mergeUpdatedGroupsImpl(ManyAggregatedDataVariants & non_empty_data, Arena * arena) const;
     template <typename Method>
-    void mergeRetractedGroupsImpl(ManyAggregatedDataVariants & non_empty_data, Arena * arena) const;
+    void mergeRetractedGroupsImpl(ManyAggregatedDataVariants & aggregated_data, ManyAggregatedDataVariants & retracted_data) const;
 
-    template <typename Method>
-    void mergeRetractedIntoImpl(Method & method, Method & retracted_method, Arena * arena) const;
+    template <typename Method, bool is_two_level>
+    void mergeUpdateGroupsImpl(ManyAggregatedDataVariants & non_empty_data, Arena * arena) const;
     /// proton: ends.
 
-    Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool is_overflows, bool clear_states, AggregateStateType type = AggregateStateType::Normal) const;
-    Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final, bool clear_states, AggregateStateType type = AggregateStateType::Normal) const;
-    BlocksList prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, bool clear_states, size_t max_threads, AggregateStateType type = AggregateStateType::Normal) const;
+    Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool clear_states, ConvertType type = ConvertType::Normal) const;
+    Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final, bool clear_states, ConvertType type = ConvertType::Normal) const;
+    BlocksList prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, bool clear_states, size_t max_threads, ConvertType type = ConvertType::Normal) const;
 
     template <typename Method>
     BlocksList prepareBlocksAndFillTwoLevelImpl(
-        AggregatedDataVariants & data_variants, Method & method, bool final, bool clear_states, ThreadPool * thread_pool, AggregateStateType type) const;
-
-    template <bool no_more_keys, typename Method, typename Table>
-    void mergeStreamsImplCase(
-        Block & block,
-        Arena * aggregates_pool,
-        Method & method,
-        Table & data,
-        AggregateDataPtr overflow_row) const;
-
-    template <typename Method, typename Table>
-    void mergeStreamsImpl(
-        Block & block,
-        Arena * aggregates_pool,
-        Method & method,
-        Table & data,
-        AggregateDataPtr overflow_row,
-        bool no_more_keys) const;
-
-    void mergeWithoutKeyStreamsImpl(
-        Block & block,
-        AggregatedDataVariants & result) const;
+        AggregatedDataVariants & data_variants, Method & method, bool final, bool clear_states, ThreadPool * thread_pool, ConvertType type) const;
 
     template <typename Method>
     void mergeBucketImpl(
@@ -1187,9 +1112,8 @@ private:
       * If it is exceeded, then, depending on the group_by_overflow_mode, either
       * - throws an exception;
       * - returns false, which means that execution must be aborted;
-      * - sets the variable no_more_keys to true.
       */
-    bool checkLimits(size_t result_size, bool & no_more_keys) const;
+    bool checkLimits(size_t result_size) const;
 
     void prepareAggregateInstructions(
         Columns columns,
@@ -1213,9 +1137,9 @@ public:
     /// Existed versions:
     ///   STATE V1 - Legacy version (REVISION 1)
     ///   STATE V2 - REVISION 1 (Enable revision)
-    ///   STATE V3 - REVISION 3 (Add expanded data)
+    ///   STATE V3 - REVISION 3 (Add updates tracking state)
     static constexpr UInt64 STATE_V2_MIN_REVISION = 1;
-    static constexpr UInt64 STATE_V3_MIN_REVISION = 3;
+    // static constexpr UInt64 STATE_V3_MIN_REVISION = 3; /// will enable it later
 
     VersionType getVersionFromRevision(UInt64 revision) const;
     VersionType getVersion() const;
@@ -1224,11 +1148,9 @@ public:
     void recover(AggregatedDataVariants & data_variants, ReadBuffer & rb) const;
 
 private:
-    /// [Version-3]
     void doCheckpointV3(const AggregatedDataVariants & data_variants, WriteBuffer & wb) const;
     void doRecoverV3(AggregatedDataVariants & data_variants, ReadBuffer & rb) const;
 
-    /// [Version-2]
     void doCheckpointV2(const AggregatedDataVariants & data_variants, WriteBuffer & wb) const;
     void doRecoverV2(AggregatedDataVariants & data_variants, ReadBuffer & rb) const;
 

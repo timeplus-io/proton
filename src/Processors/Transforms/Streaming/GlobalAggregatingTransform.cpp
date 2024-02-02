@@ -9,7 +9,6 @@ namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
 extern const int UNSUPPORTED;
-extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
 namespace Streaming
@@ -41,58 +40,35 @@ GlobalAggregatingTransform::GlobalAggregatingTransform(
     if (unlikely(params->params.overflow_row))
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Overflow row processing is not implemented in global aggregation");
 
+    /// Need extra retracted data
     if (params->emit_changelog)
     {
         if (params->emit_version)
             throw Exception(ErrorCodes::UNSUPPORTED, "'emit_version()' is not supported in global aggregation emit changelog");
 
-        bool retract_enabled = false;
+        ManyRetractedDataVariants retracted_data(many_data->variants.size());
+        for (auto & elem : retracted_data)
+            elem = std::make_shared<AggregatedDataVariants>();
+
         many_data->setField(
-            {retract_enabled,
+            {std::move(retracted_data),
              /// Field serializer
-             [](const std::any & field, WriteBuffer & wb, [[maybe_unused]] VersionType version) {
-                 assert(version >= IMPL_V2_MIN_VERSION);
-                 DB::writeBoolText(std::any_cast<bool>(field), wb);
+             [this](const std::any & field, WriteBuffer & wb, VersionType) {
+                 const auto & data = std::any_cast<const ManyRetractedDataVariants &>(field);
+                 DB::writeIntBinary(data.size(), wb);
+                 for (const auto & elem : data)
+                     elem->serialize(wb, params->aggregator);
              },
              /// Field deserializer
-             [this](std::any & field, ReadBuffer & rb, VersionType version) {
-                 if (version >= IMPL_V2_MIN_VERSION)
+             [this](std::any & field, ReadBuffer & rb, VersionType) {
+                 auto & data = std::any_cast<ManyRetractedDataVariants &>(field);
+                 size_t num;
+                 DB::readIntBinary(num, rb);
+                 data.resize(num);
+                 for (auto & elem : data)
                  {
-                     DB::readBoolText(std::any_cast<bool &>(field), rb);
-                 }
-                 else
-                 {
-                     /// Convert old impl to new impl V2
-                     if (params->aggregator.expandedDataType() != ExpandedDataType::UpdatedWithRetracted)
-                         throw Exception(
-                             ErrorCodes::RECOVER_CHECKPOINT_FAILED,
-                             "Failed to recover aggregation checkpoint. Recover old version '{}' checkpoint, checkpointed need retracted, "
-                             "but "
-                             "current not need",
-                             version);
-
-                     size_t retracted_num;
-                     DB::readIntBinary(retracted_num, rb);
-                     if (retracted_num != many_data->variants.size())
-                         throw Exception(
-                             ErrorCodes::RECOVER_CHECKPOINT_FAILED,
-                             "Failed to recover aggregation checkpoint. Recover old version '{}' checkpoint but the scale of the pipeline "
-                             "is "
-                             "inconsistent, checkpointed={}, current={}",
-                             version,
-                             retracted_num,
-                             many_data->variants.size());
-
-                     bool has_retracted = false;
-                     for (auto & current : many_data->variants)
-                     {
-                         AggregatedDataVariants retracted;
-                         DB::deserialize(retracted, rb, params->aggregator);
-                         has_retracted |= retracted.size() > 0;
-                         params->aggregator.mergeRetractedInto(*current, std::move(retracted));
-                     }
-
-                     std::any_cast<bool &>(field) = many_data->emited_version > 0 || has_retracted; /// retracted enabled
+                     elem = std::make_shared<AggregatedDataVariants>();
+                     elem->deserialize(rb, params->aggregator);
                  }
              }});
     }
@@ -126,18 +102,15 @@ std::pair<bool, bool> GlobalAggregatingTransform::executeOrMergeColumns(Chunk & 
 {
     if (params->emit_changelog)
     {
-        assert(!params->only_merge);
+        assert(!params->only_merge && !no_more_keys);
+
+        auto & retracted_variants = many_data->getField<ManyRetractedDataVariants>()[current_variant];
+        auto & aggregated_variants = many_data->variants[current_variant];
+
         /// Blocking finalization during execution on current variant
         std::lock_guard lock(variants_mutex);
-
-        /// Enable retract after first finalization
-        auto retract_enabled = many_data->getField<bool>();
-        if (retract_enabled) [[likely]]
-            return params->aggregator.executeAndRetractOnBlock(
-                chunk.detachColumns(), 0, num_rows, variants, key_columns, aggregate_columns, no_more_keys);
-        else
-            return params->aggregator.executeOnBlock(
-                chunk.detachColumns(), 0, num_rows, variants, key_columns, aggregate_columns, no_more_keys);
+        return params->aggregator.executeAndRetractOnBlock(
+            chunk.detachColumns(), 0, num_rows, *aggregated_variants, *retracted_variants, key_columns, aggregate_columns);
     }
     else
         return AggregatingTransform::executeOrMergeColumns(chunk, num_rows);
@@ -154,9 +127,8 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 
     if (params->emit_changelog)
     {
-        auto [retracted_chunk, chunk] = AggregatingHelper::mergeAndConvertToChangelogChunk(many_data->variants, *params);
-        /// Enable retract after first finalization
-        many_data->getField<bool &>() |= chunk.rows();
+        auto [retracted_chunk, chunk] = AggregatingHelper::mergeAndConvertToChangelogChunk(
+            many_data->variants, many_data->getField<ManyRetractedDataVariants>(), *params);
 
         chunk.setChunkContext(chunk_ctx);
         setCurrentChunk(std::move(chunk), std::move(retracted_chunk));

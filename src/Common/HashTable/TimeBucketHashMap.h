@@ -38,11 +38,11 @@ public:
     {
         for (auto & p : this->impls)
         {
-            if (this->isUpdatedBucket(p.first))
+            if (this->isBucketUpdated(p.first))
             {
                 p.second.forEachValue(func);
                 if (reset_updated)
-                    this->resetUpdated(p.first);
+                    this->resetUpdatedBucket(p.first);
             }
         }
     }

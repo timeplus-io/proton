@@ -226,10 +226,10 @@ std::pair<bool, bool> AggregatingTransformWithSubstream::executeOrMergeColumns(C
     /// according to partition keys
     auto num_rows = chunk.getNumRows();
 
-    assert(!params->only_merge);
+    assert(!params->only_merge && !no_more_keys);
 
     return params->aggregator.executeOnBlock(
-        chunk.detachColumns(), 0, num_rows, substream_ctx->variants, key_columns, aggregate_columns, no_more_keys);
+        chunk.detachColumns(), 0, num_rows, substream_ctx->variants, key_columns, aggregate_columns);
 }
 
 SubstreamContextPtr AggregatingTransformWithSubstream::getOrCreateSubstreamContext(const SubstreamID & id)
@@ -270,7 +270,7 @@ void AggregatingTransformWithSubstream::checkpoint(CheckpointContextPtr ckpt_ctx
         for (const auto & [id, substream_ctx] : substream_contexts)
         {
             assert(id == substream_ctx->id);
-            serialize(*substream_ctx, wb, getVersion());
+            substream_ctx->serialize(wb, getVersion());
         }
     });
 }
@@ -284,7 +284,7 @@ void AggregatingTransformWithSubstream::recover(CheckpointContextPtr ckpt_ctx)
         for (size_t i = 0; i < num_substreams; ++i)
         {
             auto substream_ctx = std::make_shared<SubstreamContext>(this);
-            deserialize(*substream_ctx, rb, version_);
+            substream_ctx->deserialize(rb, version_);
             substream_contexts.emplace(substream_ctx->id, std::move(substream_ctx));
         }
     });
@@ -294,7 +294,7 @@ void SubstreamContext::serialize(WriteBuffer & wb, VersionType version) const
 {
     DB::Streaming::serialize(id, wb);
 
-    DB::serialize(variants, wb, aggregating_transform->params->aggregator);
+    variants.serialize(wb, aggregating_transform->params->aggregator);
 
     DB::writeIntBinary(finalized_watermark, wb);
 
@@ -312,7 +312,7 @@ void SubstreamContext::deserialize(ReadBuffer & rb, VersionType version)
 {
     DB::Streaming::deserialize(id, rb);
 
-    DB::deserialize(variants, rb, aggregating_transform->params->aggregator);
+    variants.deserialize(rb, aggregating_transform->params->aggregator);
 
     DB::readIntBinary(finalized_watermark, rb);
 

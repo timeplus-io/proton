@@ -189,22 +189,11 @@ void AggregatingTransform::consume(Chunk chunk)
 std::pair<bool, bool> AggregatingTransform::executeOrMergeColumns(Chunk & chunk, size_t num_rows)
 {
     auto columns = chunk.detachColumns();
-    if (params->only_merge)
-    {
-        auto block = getInputs().front().getHeader().cloneWithColumns(columns);
-        materializeBlockInplace(block);
-        /// FIXME
-        /// Blocking finalization during execution on current variant
-        std::lock_guard lock(variants_mutex);
-        auto success = params->aggregator.mergeOnBlock(block, variants, no_more_keys);
-        return {!success, false};
-    }
-    else
-    {
-        /// Blocking finalization during execution on current variant
-        std::lock_guard lock(variants_mutex);
-        return params->aggregator.executeOnBlock(std::move(columns), 0, num_rows, variants, key_columns, aggregate_columns, no_more_keys);
-    }
+    assert(!params->only_merge && !no_more_keys);
+
+    /// Blocking finalization during execution on current variant
+    std::lock_guard lock(variants_mutex);
+    return params->aggregator.executeOnBlock(std::move(columns), 0, num_rows, variants, key_columns, aggregate_columns);
 }
 
 void AggregatingTransform::emitVersion(Chunk & chunk)

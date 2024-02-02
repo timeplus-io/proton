@@ -21,8 +21,6 @@ protected:
 
 private:
     void finalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx) override;
-
-    static constexpr VersionType IMPL_V2_MIN_VERSION = 3;
 };
 
 }

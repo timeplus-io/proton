@@ -9,7 +9,6 @@ namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
 extern const int UNSUPPORTED;
-extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
 namespace Streaming
@@ -29,41 +28,19 @@ GlobalAggregatingTransformWithSubstream::GlobalAggregatingTransformWithSubstream
 SubstreamContextPtr GlobalAggregatingTransformWithSubstream::getOrCreateSubstreamContext(const SubstreamID & id)
 {
     auto substream_ctx = AggregatingTransformWithSubstream::getOrCreateSubstreamContext(id);
-    /// Need extra retracted data for old version impl
     if (params->emit_changelog && !substream_ctx->hasField())
     {
-        bool retract_enabled = false;
         substream_ctx->setField(
-            {retract_enabled,
+            {std::make_shared<RetractedDataVariants>(),
              /// Field serializer
-             [](const std::any & field, WriteBuffer & wb, VersionType version) {
-                 assert(version >= IMPL_V2_MIN_VERSION);
-                 DB::writeBoolText(std::any_cast<bool>(field), wb);
+             [this](const std::any & field, WriteBuffer & wb, VersionType) {
+                 const auto & data = std::any_cast<const RetractedDataVariantsPtr &>(field);
+                 data->serialize(wb, params->aggregator);
              },
              /// Field deserializer
-             [substream_ctx, this](std::any & field, ReadBuffer & rb, VersionType version) {
-                 if (version >= IMPL_V2_MIN_VERSION)
-                 {
-                     DB::readBoolText(std::any_cast<bool &>(field), rb);
-                 }
-                 else
-                 {
-                     /// Convert old impl to new impl V2
-                     if (params->aggregator.expandedDataType() != ExpandedDataType::UpdatedWithRetracted)
-                         throw Exception(
-                             ErrorCodes::RECOVER_CHECKPOINT_FAILED,
-                             "Failed to recover aggregation checkpoint. Recover old version '{}' checkpoint, checkpointed need retracted, "
-                             "but "
-                             "current not need",
-                             version);
-
-                     AggregatedDataVariants retracted;
-                     DB::deserialize(retracted, rb, params->aggregator);
-                     bool has_retracted = retracted.size() > 0;
-                     params->aggregator.mergeRetractedInto(substream_ctx->variants, std::move(retracted));
-
-                     std::any_cast<bool &>(field) = substream_ctx->emited_version > 0 || has_retracted; /// retracted enabled
-                 }
+             [this](std::any & field, ReadBuffer & rb, VersionType) {
+                 auto & data = std::any_cast<RetractedDataVariantsPtr &>(field);
+                 data->deserialize(rb, params->aggregator);
              }});
     }
     return substream_ctx;
@@ -74,15 +51,14 @@ GlobalAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, co
 {
     if (params->emit_changelog)
     {
-        assert(!params->only_merge);
+        assert(!params->only_merge && !no_more_keys);
+
         auto num_rows = chunk.getNumRows();
-        auto retract_enabled = substream_ctx->getField<bool>();
-        if (retract_enabled) [[likely]]
-            return params->aggregator.executeAndRetractOnBlock(
-                chunk.detachColumns(), 0, num_rows, substream_ctx->variants, key_columns, aggregate_columns, no_more_keys);
-        else
-            return params->aggregator.executeOnBlock(
-                chunk.detachColumns(), 0, num_rows, substream_ctx->variants, key_columns, aggregate_columns, no_more_keys);
+        auto & retracted_variants = substream_ctx->getField<RetractedDataVariantsPtr>();
+        auto & aggregated_variants = substream_ctx->variants;
+
+        return params->aggregator.executeAndRetractOnBlock(
+            chunk.detachColumns(), 0, num_rows, aggregated_variants, *retracted_variants, key_columns, aggregate_columns);
     }
     else
         return AggregatingTransformWithSubstream::executeOrMergeColumns(chunk, substream_ctx);
@@ -111,10 +87,8 @@ void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
     auto start = MonotonicMilliseconds::now();
     if (params->emit_changelog)
     {
-        auto [retracted_chunk, chunk] = AggregatingHelper::convertToChangelogChunk(variants, *params);
-        /// Enable retract after first finalization
-        substream_ctx->getField<bool &>() |= chunk.rows();
-
+        auto [retracted_chunk, chunk]
+            = AggregatingHelper::convertToChangelogChunk(variants, *substream_ctx->getField<RetractedDataVariantsPtr>(), *params);
         chunk.setChunkContext(chunk_ctx);
         setCurrentChunk(std::move(chunk), std::move(retracted_chunk));
     }

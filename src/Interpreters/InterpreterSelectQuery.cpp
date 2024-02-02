@@ -3261,8 +3261,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         streaming_group_by,
         delta_col_pos,
         window_keys_num,
-        query_info.streaming_window_params,
-        data_stream_semantic_pair.isChangelogOutput());
+        query_info.streaming_window_params);
 
     auto merge_threads = max_streams;
     auto temporary_data_merge_threads = settings.aggregation_memory_efficient_merge_threads

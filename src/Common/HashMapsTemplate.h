@@ -70,14 +70,14 @@ template <typename Map, typename MappedSerializer>
 void serializeTwoLevelHashMap(const Map & map, MappedSerializer && mapped_serializer, WriteBuffer & wb)
 {
     serializeHashMap<Map, MappedSerializer>(map, std::move(mapped_serializer), wb);
-    map.writeBucketUpdatedFlags(wb);
+    map.writeUpdatedBuckets(wb);
 }
 
 template <typename Map, typename MappedDeserializer>
 void deserializeTwoLevelHashMap(Map & map, MappedDeserializer && mapped_deserializer, Arena & pool, ReadBuffer & rb)
 {
     deserializeHashMap<Map, MappedDeserializer>(map, std::move(mapped_deserializer), pool, rb);
-    map.readBucketUpdatedFlags(rb); /// recover buckets updated status
+    map.readUpdatedBuckets(rb); /// recover buckets updated status
 }
 
 /// HashMapsTemplate is a taken from HashJoin class and make it standalone

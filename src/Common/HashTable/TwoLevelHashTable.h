@@ -90,7 +90,7 @@ public:
     using ConstLookupResult = typename Impl::ConstLookupResult;
 
     Impl impls[NUM_BUCKETS];
-    bool bucket_updated_flags[NUM_BUCKETS] = {false};
+    bool updated_buckets[NUM_BUCKETS] = {false};
 
 
     TwoLevelHashTable() = default;
@@ -120,7 +120,7 @@ public:
             size_t hash_value = cell->getHash(src);
             size_t buck = getBucketFromHash(hash_value);
             impls[buck].insertUniqueNonZero(cell, hash_value);
-            bucket_updated_flags[buck] = true;
+            updated_buckets[buck] = true;
         }
     }
 
@@ -273,7 +273,7 @@ public:
     {
         size_t buck = getBucketFromHash(hash_value);
         impls[buck].emplace(key_holder, it, inserted, hash_value);
-        bucket_updated_flags[buck] = true;
+        updated_buckets[buck] = true;
     }
 
     LookupResult ALWAYS_INLINE find(Key x, size_t hash_value)
@@ -297,7 +297,7 @@ public:
         for (UInt32 i = 0; i < NUM_BUCKETS; ++i)
         {
             impls[i].write(wb);
-            DB::writeBoolText(bucket_updated_flags[i], wb);
+            DB::writeBinary(updated_buckets[i], wb);
         }
     }
 
@@ -307,11 +307,12 @@ public:
         {
             if (i != 0)
                 DB::writeChar(',', wb);
+
             /// <impl,updated>
             DB::writeChar('<', wb);
             impls[i].writeText(wb);
             DB::writeChar(',', wb);
-            DB::writeBoolText(bucket_updated_flags[i], wb);
+            DB::writeBoolText(updated_buckets[i], wb);
             DB::writeChar('>', wb);
         }
     }
@@ -321,7 +322,7 @@ public:
         for (UInt32 i = 0; i < NUM_BUCKETS; ++i)
         {
             impls[i].read(rb);
-            DB::readBoolText(bucket_updated_flags[i], rb);
+            DB::readBinary(updated_buckets[i], rb);
         }
     }
 
@@ -331,12 +332,12 @@ public:
         {
             if (i != 0)
                 DB::assertChar(',', rb);
-            
+
             /// <impl,updated>
             DB::assertChar('<', rb);
             impls[i].readText(rb);
             DB::assertChar(',', rb);
-            DB::readBoolText(bucket_updated_flags[i], rb);
+            DB::readBoolText(updated_buckets[i], rb);
             DB::assertChar('>', rb);
         }
     }
@@ -386,30 +387,30 @@ public:
         return bucket_ids;
     }
 
-    bool isUpdatedBucket(Int64 bucket_) const
+    bool isBucketUpdated(Int64 bucket_) const
     {
-        return bucket_updated_flags[bucket_];
+        return updated_buckets[bucket_];
     }
 
-    void resetUpdated(Int64 bucket_)
+    void resetUpdatedBucket(Int64 bucket_)
     {
-        bucket_updated_flags[bucket_] = false;
+        updated_buckets[bucket_] = false;
     }
 
-    void writeBucketUpdatedFlags(DB::WriteBuffer & wb) const
+    void writeUpdatedBuckets(DB::WriteBuffer & wb) const
     {
         DB::writeVarUInt(NUM_BUCKETS, wb);
-        for (const auto & elem : bucket_updated_flags)
-            DB::writeBoolText(elem, wb);
+        for (const auto & elem : updated_buckets)
+            DB::writeBinary(elem, wb);
     }
 
-    void readBucketUpdatedFlags(DB::ReadBuffer & rb)
+    void readUpdatedBuckets(DB::ReadBuffer & rb)
     {
         size_t size = 0;
         DB::readVarUInt(size, rb);
         assert(size == NUM_BUCKETS);
-        for (auto & elem : bucket_updated_flags)
-            DB::readBoolText(elem, rb);
+        for (auto & elem : updated_buckets)
+            DB::readBinary(elem, rb);
     }
     /// proton : ends
 };

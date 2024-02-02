@@ -39,7 +39,7 @@ public:
     using ConstLookupResult = typename Impl::ConstLookupResult;
 
     Impl impls[NUM_BUCKETS];
-    bool bucket_updated_flags[NUM_BUCKETS] = {false};
+    bool updated_buckets[NUM_BUCKETS] = {false};
 
     TwoLevelStringHashTable() {}
 
@@ -54,28 +54,28 @@ public:
             size_t hash_value = v.getHash(src.m1);
             size_t buck = getBucketFromHash(hash_value);
             impls[buck].m1.insertUniqueNonZero(&v, hash_value);
-            bucket_updated_flags[buck] = true;
+            updated_buckets[buck] = true;
         }
         for (auto & v : src.m2)
         {
             size_t hash_value = v.getHash(src.m2);
             size_t buck = getBucketFromHash(hash_value);
             impls[buck].m2.insertUniqueNonZero(&v, hash_value);
-            bucket_updated_flags[buck] = true;
+            updated_buckets[buck] = true;
         }
         for (auto & v : src.m3)
         {
             size_t hash_value = v.getHash(src.m3);
             size_t buck = getBucketFromHash(hash_value);
             impls[buck].m3.insertUniqueNonZero(&v, hash_value);
-            bucket_updated_flags[buck] = true;
+            updated_buckets[buck] = true;
         }
         for (auto & v : src.ms)
         {
             size_t hash_value = v.getHash(src.ms);
             size_t buck = getBucketFromHash(hash_value);
             impls[buck].ms.insertUniqueNonZero(&v, hash_value);
-            bucket_updated_flags[buck] = true;
+            updated_buckets[buck] = true;
         }
     }
 
@@ -90,7 +90,7 @@ public:
         if (sz == 0)
         {
             if constexpr (std::is_same_v<Func, typename Impl::EmplaceCallable>)
-                self.bucket_updated_flags[0] = true;
+                self.updated_buckets[0] = true;
 
             keyHolderDiscardKey(key_holder);
             return func(self.impls[0].m0, VoidKey{}, 0);
@@ -103,7 +103,7 @@ public:
             auto res = hash(x);
             auto buck = getBucketFromHash(res);
             if constexpr (std::is_same_v<Func, typename Impl::EmplaceCallable>)
-                self.bucket_updated_flags[buck] = true;
+                self.updated_buckets[buck] = true;
 
             return func(self.impls[buck].ms, std::forward<KeyHolder>(key_holder),
                 res);
@@ -138,7 +138,7 @@ public:
                 auto res = hash(k8);
                 auto buck = getBucketFromHash(res);
                 if constexpr (std::is_same_v<Func, typename Impl::EmplaceCallable>)
-                    self.bucket_updated_flags[buck] = true;
+                    self.updated_buckets[buck] = true;
 
                 keyHolderDiscardKey(key_holder);
                 return func(self.impls[buck].m1, k8, res);
@@ -152,7 +152,7 @@ public:
                 auto res = hash(k16);
                 auto buck = getBucketFromHash(res);
                 if constexpr (std::is_same_v<Func, typename Impl::EmplaceCallable>)
-                    self.bucket_updated_flags[buck] = true;
+                    self.updated_buckets[buck] = true;
 
                 keyHolderDiscardKey(key_holder);
                 return func(self.impls[buck].m2, k16, res);
@@ -166,7 +166,7 @@ public:
                 auto res = hash(k24);
                 auto buck = getBucketFromHash(res);
                 if constexpr (std::is_same_v<Func, typename Impl::EmplaceCallable>)
-                    self.bucket_updated_flags[buck] = true;
+                    self.updated_buckets[buck] = true;
 
                 keyHolderDiscardKey(key_holder);
                 return func(self.impls[buck].m3, k24, res);
@@ -176,7 +176,7 @@ public:
                 auto res = hash(x);
                 auto buck = getBucketFromHash(res);
                 if constexpr (std::is_same_v<Func, typename Impl::EmplaceCallable>)
-                    self.bucket_updated_flags[buck] = true;
+                    self.updated_buckets[buck] = true;
 
                 return func(self.impls[buck].ms, std::forward<KeyHolder>(key_holder), res);
             }
@@ -204,7 +204,7 @@ public:
         for (UInt32 i = 0; i < NUM_BUCKETS; ++i)
         {
             impls[i].write(wb);
-            DB::writeBoolText(bucket_updated_flags[i], wb);
+            DB::writeBinary(updated_buckets[i], wb);
         }
     }
 
@@ -218,7 +218,7 @@ public:
             DB::writeChar('<', wb);
             impls[i].writeText(wb);
             DB::writeChar(',', wb);
-            DB::writeBoolText(bucket_updated_flags[i], wb);
+            DB::writeBoolText(updated_buckets[i], wb);
             DB::writeChar('>', wb);
         }
     }
@@ -228,7 +228,7 @@ public:
         for (UInt32 i = 0; i < NUM_BUCKETS; ++i)
         {
             impls[i].read(rb);
-            DB::readBoolText(bucket_updated_flags[i], rb);
+            DB::readBinary(updated_buckets[i], rb);
         }
     }
 
@@ -243,7 +243,7 @@ public:
             DB::assertChar('<', rb);
             impls[i].readText(rb);
             DB::assertChar(',', rb);
-            DB::readBoolText(bucket_updated_flags[i], rb);
+            DB::readBoolText(updated_buckets[i], rb);
             DB::assertChar('>', rb);
         }
     }
@@ -293,29 +293,29 @@ public:
         return bucket_ids;
     }
 
-    bool isUpdatedBucket(Int64 bucket_) const
+    bool isBucketUpdated(Int64 bucket_) const
     {
-        return bucket_updated_flags[bucket_];
+        return updated_buckets[bucket_];
     }
 
-    void resetUpdated(Int64 bucket_)
+    void resetUpdatedBucket(Int64 bucket_)
     {
-        bucket_updated_flags[bucket_] = false;
+        updated_buckets[bucket_] = false;
     }
 
-    void writeBucketUpdatedFlags(DB::WriteBuffer & wb) const
+    void writeUpdatedBuckets(DB::WriteBuffer & wb) const
     {
         DB::writeVarUInt(NUM_BUCKETS, wb);
-        for (const auto & elem : bucket_updated_flags)
-            DB::writeBoolText(elem, wb);
+        for (const auto & elem : updated_buckets)
+            DB::writeBinary(elem, wb);
     }
 
-    void readBucketUpdatedFlags(DB::ReadBuffer & rb)
+    void readUpdatedBuckets(DB::ReadBuffer & rb)
     {
         size_t size = 0;
         DB::readVarUInt(size, rb);
         assert(size == NUM_BUCKETS);
-        for (auto & elem : bucket_updated_flags)
-            DB::readBoolText(elem, rb);
+        for (auto & elem : updated_buckets)
+            DB::readBinary(elem, rb);
     }
 };

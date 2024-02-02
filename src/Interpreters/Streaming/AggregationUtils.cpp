@@ -39,6 +39,12 @@ OutputBlockColumns prepareOutputBlockColumns(
             /// The ColumnAggregateFunction column captures the shared ownership of the arena with the aggregate function states.
             ColumnAggregateFunction & column_aggregate_func = assert_cast<ColumnAggregateFunction &>(*aggregate_columns[i]);
 
+            /// proton: starts
+            column_aggregate_func.setKeepState(params.keep_state);
+            /// proton: ends
+
+            /// Add arenas to ColumnAggregateFunction, which can result in moving ownership to it if reference count
+            /// get dropped in other places
             for (auto & pool : aggregates_pools)
                 column_aggregate_func.addArena(pool);
 
@@ -52,10 +58,10 @@ OutputBlockColumns prepareOutputBlockColumns(
 
             if (aggregate_functions[i]->isState())
             {
-                auto callback = [&](IColumn & subcolumn)
+                auto callback = [&](IColumn & column)
                 {
                     /// The ColumnAggregateFunction column captures the shared ownership of the arena with aggregate function states.
-                    if (auto * column_aggregate_func = typeid_cast<ColumnAggregateFunction *>(&subcolumn))
+                    if (auto * column_aggregate_func = typeid_cast<ColumnAggregateFunction *>(&column))
                         for (auto & pool : aggregates_pools)
                             column_aggregate_func->addArena(pool);
                 };

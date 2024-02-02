@@ -34,11 +34,11 @@ public:
     {
         for (auto i = 0u; i < this->NUM_BUCKETS; ++i)
         {
-            if (this->isUpdatedBucket(i))
+            if (this->isBucketUpdated(i))
             {
                 this->impls[i].forEachValue(func);
                 if (reset_updated)
-                    this->resetUpdated(i);
+                    this->resetUpdatedBucket(i);
             }
         }
     }
