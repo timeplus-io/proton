@@ -16,6 +16,7 @@
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 #include <Storages/ExternalStream/Kafka/Kafka.h>
+#include <Storages/ExternalStream/Pulsar/Pulsar.h>
 
 #include <re2/re2.h>
 #include <string>
@@ -63,6 +64,9 @@ std::unique_ptr<StorageExternalStreamImpl> createExternalStream(
 
     if (settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA)
         return std::make_unique<Kafka>(storage, std::move(settings), engine_args, attach, external_stream_counter, std::move(context_));
+
+    if (settings->type.value == StreamTypes::PULSAR)
+        return std::make_unique<Pulsar>(storage, std::move(settings), engine_args, attach, external_stream_counter, std::move(context_));
 
 #ifdef OS_LINUX
     else if (settings->type.value == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)
