@@ -37,7 +37,7 @@
 #include <Core/Streaming/SubstreamID.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <Interpreters/Aggregator.h>
-#include <Interpreters/Streaming/UpdatesTrackingData.h>
+#include <Interpreters/Streaming/TrackingUpdatesData.h>
 #include <Interpreters/Streaming/WindowCommon.h>
 #include <Parsers/ASTFunction.h>
 #include <Common/HashTable/Hash.h>
@@ -79,7 +79,7 @@ namespace Streaming
 enum class ConvertType : uint8_t
 {
     Normal = 0,
-    OnlyUpdates = 1,
+    Updates = 1,
 };
 
 /// using TimeBucketAggregatedDataWithUInt16Key = TimeBucketHashMap<FixedImplicitZeroHashMap<UInt16, AggregateDataPtr>>;
@@ -376,6 +376,7 @@ SERDE struct AggregatedDataVariants : private boost::noncopyable
     {
         aggregates_pools = Arenas(1, std::make_shared<Arena>());
         aggregates_pool = aggregates_pools.back().get();
+        /// Enable GC for arena by default. For cases like global aggregation, we will disable it further in \init
         aggregates_pool->enableRecycle(true);
     }
 

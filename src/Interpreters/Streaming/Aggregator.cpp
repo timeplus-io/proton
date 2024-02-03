@@ -109,8 +109,9 @@ template <typename BucketConverter>
 BlocksList convertBucketsInParallel(ThreadPool * thread_pool, const std::vector<Int64> & buckets, BucketConverter && bucket_converter)
 {
     std::atomic<UInt32> next_bucket_idx_to_merge = 0;
-    auto converter = [&](Arena * pool, const std::atomic_flag * cancelled) {
+    auto converter = [&](const std::atomic_flag * cancelled) {
         BlocksList blocks;
+        Arena arena;
         while (true)
         {
             if (cancelled && cancelled->test())
@@ -121,7 +122,7 @@ BlocksList convertBucketsInParallel(ThreadPool * thread_pool, const std::vector<
                 break;
 
             auto bucket = buckets[bucket_idx];
-            blocks.splice(blocks.end(), bucket_converter(bucket, pool));
+            blocks.splice(blocks.end(), bucket_converter(bucket, &arena));
         }
         return blocks;
     };
@@ -129,16 +130,10 @@ BlocksList convertBucketsInParallel(ThreadPool * thread_pool, const std::vector<
     size_t num_threads = thread_pool ? std::min(thread_pool->getMaxThreads(), buckets.size()) : 1;
     if (num_threads <= 1)
     {
-        auto arena = std::make_shared<Arena>();
-        return converter(arena.get(), nullptr);
+        return converter(nullptr);
     }
 
     /// Process in parallel
-    Arenas pools;
-    pools.reserve(num_threads);
-    for (size_t i = pools.size(); i < num_threads; ++i)
-        pools.push_back(std::make_shared<Arena>());
-
     auto results = std::make_shared<std::vector<BlocksList>>();
     results->resize(num_threads);
     thread_pool->setMaxThreads(num_threads);
@@ -148,10 +143,10 @@ BlocksList convertBucketsInParallel(ThreadPool * thread_pool, const std::vector<
 
         for (size_t thread_id = 0; thread_id < num_threads; ++thread_id)
         {
-            thread_pool->scheduleOrThrowOnError([&pools, thread_id, group = CurrentThread::getGroup(), results, &converter, &cancelled] {
+            thread_pool->scheduleOrThrowOnError([thread_id, group = CurrentThread::getGroup(), results, &converter, &cancelled] {
                 CurrentThread::attachToIfDetached(group);
                 SCOPE_EXIT_SAFE( CurrentThread::detachQueryIfNotDetached() );
-                (*results)[thread_id] = converter(pools[thread_id].get(), &cancelled);
+                (*results)[thread_id] = converter(&cancelled);
             });
         }
 
@@ -857,7 +852,7 @@ template <typename Method>
                     [&](AggregateDataPtr & aggregate_data)
                     {
                         auto data = aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-                        createAggregateStates(data, /*prefix_with_updates_tracking_state*/ false);
+                        createAggregateStates(data, /*prefix_with_updates_tracking_state=*/ false);
                         aggregate_data = data;
                     },
                     state.getKeyData(),
@@ -1483,7 +1478,7 @@ Block NO_INLINE Aggregator::convertToBlockImplFinal(
     PaddedPODArray<AggregateDataPtr> places;
     places.reserve(rows);
 
-    bool only_updates = (type == ConvertType::OnlyUpdates);
+    bool only_updates = (type == ConvertType::Updates);
 
     data.forEachValue([&](const auto & key, auto & mapped)
     {
@@ -1617,11 +1612,11 @@ Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_va
 
     assert(data_variants.type == AggregatedDataVariants::Type::without_key);
 
-    if (type == ConvertType::OnlyUpdates && !TrackingUpdates::updated(data_variants.without_key))
+    if (type == ConvertType::Updates && !TrackingUpdates::updated(data_variants.without_key))
         return res_header.cloneEmpty();
 
     AggregatedDataWithoutKey & data = [&]() -> AggregateDataPtr & {
-        if (type == ConvertType::OnlyUpdates)
+        if (type == ConvertType::Updates)
         {
             TrackingUpdates::resetUpdated(data_variants.without_key);
             return data_variants.without_key;
@@ -1692,7 +1687,7 @@ BlocksList Aggregator::prepareBlocksAndFillTwoLevelImpl(
 {
     return convertBucketsInParallel(thread_pool, method.data.buckets(), [&](Int64 bucket, Arena * arena) -> BlocksList {
         /// Skip no changed bucket if only updated is requested
-        if (type == ConvertType::OnlyUpdates && !method.data.isBucketUpdated(bucket))
+        if (type == ConvertType::Updates && !method.data.isBucketUpdated(bucket))
             return {};
 
         return {convertOneBucketToBlockImpl(data_variants, method, arena, final, clear_states, bucket, type)};
@@ -2331,8 +2326,7 @@ void Aggregator::checkpoint(const AggregatedDataVariants & data_variants, WriteB
 
     if (version <= 1)
         return const_cast<Aggregator *>(this)->doCheckpointLegacy(data_variants, wb);
-
-    if (version <= 2)
+    else if (version <= 2)
         return doCheckpointV2(data_variants, wb);
     else
         return doCheckpointV3(data_variants, wb);
@@ -2351,8 +2345,7 @@ void Aggregator::recover(AggregatedDataVariants & data_variants, ReadBuffer & rb
     /// FIXME: Legacy layout needs to be cleaned after no use
     if (recovered_version <= 1)
         return const_cast<Aggregator *>(this)->doRecoverLegacy(data_variants, rb);
-
-    if (recovered_version <= 2)
+    else if (recovered_version <= 2)
         return doRecoverV2(data_variants, rb);
     else
         return doRecoverV3(data_variants, rb);
@@ -3220,7 +3213,7 @@ void Aggregator::doCheckpointV3(const AggregatedDataVariants & data_variants, Wr
     /// 1) Without key: [uint8][uint16][aggr-func-state-without-key]
     /// 2) Otherwise: [uint8][uint16][aggr-func-state-for-overflow-row][is_two_level][aggr-func-state-in-hash-map]
     bool inited = !data_variants.empty();
-    writeBoolText(inited, wb);
+    writeBinary(inited, wb);
     if (!inited)
         return; /// No aggregated data yet
 
@@ -3259,7 +3252,7 @@ void Aggregator::doCheckpointV3(const AggregatedDataVariants & data_variants, Wr
 void Aggregator::doRecoverV3(AggregatedDataVariants & data_variants, ReadBuffer & rb) const
 {
     bool inited = !data_variants.empty();
-    readBoolText(inited, rb);
+    readBinary(inited, rb);
     if (!inited)
         return;
 
@@ -3393,11 +3386,11 @@ BlocksList Aggregator::convertUpdatesToBlocks(AggregatedDataVariants & data_vari
     constexpr bool final = true;
     constexpr bool clear_states = false;
     if (data_variants.type == AggregatedDataVariants::Type::without_key)
-        blocks.emplace_back(prepareBlockAndFillWithoutKey(data_variants, final, clear_states, ConvertType::OnlyUpdates));
+        blocks.emplace_back(prepareBlockAndFillWithoutKey(data_variants, final, clear_states, ConvertType::Updates));
     else if (!data_variants.isTwoLevel())
-        blocks.emplace_back(prepareBlockAndFillSingleLevel(data_variants, final, clear_states, ConvertType::OnlyUpdates));
+        blocks.emplace_back(prepareBlockAndFillSingleLevel(data_variants, final, clear_states, ConvertType::Updates));
     else
-        blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, clear_states, /*max_threads*/ 1, ConvertType::OnlyUpdates));
+        blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, clear_states, /*max_threads*/ 1, ConvertType::Updates));
 
     size_t rows = 0;
     size_t bytes = 0;
@@ -3457,7 +3450,7 @@ void NO_INLINE Aggregator::mergeUpdateGroupsImpl(ManyAggregatedDataVariants & no
                 auto & dst = dst_it->getMapped();
                 dst = nullptr; /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
                 auto aggregate_data = arena->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-                createAggregateStates(aggregate_data, /*prefix_with_updates_tracking_state*/ false);
+                createAggregateStates(aggregate_data, /*prefix_with_updates_tracking_state=*/ false);
                 dst = aggregate_data;
             }
         };

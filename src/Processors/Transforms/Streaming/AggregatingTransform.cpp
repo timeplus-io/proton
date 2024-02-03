@@ -487,7 +487,7 @@ void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
         }
 
         /// Serializing no shared data
-        DB::serialize(variants, wb, params->aggregator);
+        variants.serialize(wb, params->aggregator);
 
         DB::writeIntBinary(watermark, wb);
 
@@ -543,7 +543,7 @@ void AggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
         }
 
         /// Serializing local or stable data during checkpointing
-        DB::deserialize(variants, rb, params->aggregator);
+        variants.deserialize(rb, params->aggregator);
 
         DB::readIntBinary(watermark, rb);
 
