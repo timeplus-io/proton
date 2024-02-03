@@ -69,8 +69,6 @@ public:
         UNREACHABLE();
     }
 
-    ALWAYS_INLINE Int64 windowKey(const DB::SerializedKeyHolder & key_holder) { return windowKey(key_holder.key); }
-
 protected:
     typename Impl::iterator beginOfNextNonEmptyBucket(Int64 & bucket)
     {
@@ -263,7 +261,7 @@ public:
     template <typename KeyHolder>
     void ALWAYS_INLINE emplace(KeyHolder && key_holder, LookupResult & it, bool & inserted, size_t hash_value)
     {
-        auto window = windowKey(key_holder);
+        auto window = windowKey(keyHolderGetKey(key_holder));
         impls[window].emplace(key_holder, it, inserted, hash_value);
         updated_buckets[window] = true; /// updated
     }

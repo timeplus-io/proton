@@ -28,6 +28,8 @@ private:
     bool prepareFinalization(Int64 min_watermark) override;
 
     void finalize(const ChunkContextPtr & chunk_ctx) override;
+
+    static constexpr VersionType V2 = 3;
 };
 
 }

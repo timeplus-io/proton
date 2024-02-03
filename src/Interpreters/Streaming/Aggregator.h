@@ -80,6 +80,7 @@ enum class ConvertType : uint8_t
 {
     Normal = 0,
     Updates = 1,
+    Retract = 2,
 };
 
 /// using TimeBucketAggregatedDataWithUInt16Key = TimeBucketHashMap<FixedImplicitZeroHashMap<UInt16, AggregateDataPtr>>;
@@ -128,6 +129,7 @@ SERDE struct AggregatedDataVariants : private boost::noncopyable
     /// Pools for states of aggregate functions. Ownership will be later transferred to ColumnAggregateFunction.
     Arenas aggregates_pools;
     Arena * aggregates_pool{};    /// The pool that is currently used for allocation.
+    std::unique_ptr<Arena> retract_pool;  /// Use separate pool to manage retract data, which will be cleared after each finalization
 
     /** Specialization for the case when there are no keys, and for keys not fitted into max_rows_to_group_by.
       */
@@ -379,6 +381,8 @@ SERDE struct AggregatedDataVariants : private boost::noncopyable
         /// Enable GC for arena by default. For cases like global aggregation, we will disable it further in \init
         aggregates_pool->enableRecycle(true);
     }
+
+    void resetAndCreateRetractPool() { retract_pool = std::make_unique<Arena>(); }
 
     /// Number of rows (different keys).
     size_t size() const
@@ -779,7 +783,6 @@ public:
         size_t row_begin,
         size_t row_end,
         AggregatedDataVariants & result,
-        AggregatedDataVariants & retracted_result,
         ColumnRawPtrs & key_columns,
         AggregateColumns & aggregate_columns /// Passed to not create them anew for each block
     ) const;
@@ -825,13 +828,15 @@ public:
     /// \return: merged updated data if exists, when there is no update data, return nullptr
     AggregatedDataVariantsPtr mergeUpdateGroups(ManyAggregatedDataVariants & data_variants) const;
 
+    /// Only convert the retract states of update groups tracked
+    BlocksList convertRetractToBlocks(AggregatedDataVariants & data_variants) const;
+
+    /// \return: merged retract data if exists, when there is no retract data, return nullptr
+    AggregatedDataVariantsPtr mergeRetractGroups(ManyAggregatedDataVariants & data_variants) const;
+
     /// For some streaming queries with `emit on update` or `emit changelog`, need tracking updates (with retract)
     bool needTrackUpdates() const { return params.tracking_updates_type != TrackingUpdatesType::None; }
     TrackingUpdatesType trackingUpdatesType() const { return params.tracking_updates_type; }
-
-    /// Used for merge changed groups and return the <retracted_state, aggregated_state> of changed groups
-    std::pair<AggregatedDataVariantsPtr, AggregatedDataVariantsPtr>
-    mergeRetractedGroups(ManyAggregatedDataVariants & aggregated_data, ManyAggregatedDataVariants & retracted_data) const;
 
     std::vector<Int64> bucketsBefore(const AggregatedDataVariants & result, Int64 max_bucket) const;
     void removeBucketsBefore(AggregatedDataVariants & result, Int64 max_bucket) const;
@@ -1068,18 +1073,17 @@ private:
     bool executeAndRetractImpl(
         Method & method,
         Arena * aggregates_pool,
-        Method & retracted_method,
-        Arena * retracted_pool,
+        Arena * retract_pool,
         size_t row_begin,
         size_t row_end,
         ColumnRawPtrs & key_columns,
         AggregateFunctionInstruction * aggregate_instructions) const;
 
-    template <typename Method>
-    void mergeRetractedGroupsImpl(ManyAggregatedDataVariants & aggregated_data, ManyAggregatedDataVariants & retracted_data) const;
-
     template <typename Method, bool is_two_level>
     void mergeUpdateGroupsImpl(ManyAggregatedDataVariants & non_empty_data, Arena * arena) const;
+
+    template <typename Method>
+    void mergeRetractGroupsImpl(ManyAggregatedDataVariants & non_empty_data, Arena * arena) const;
     /// proton: ends.
 
     Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool clear_states, ConvertType type = ConvertType::Normal) const;
@@ -1140,7 +1144,7 @@ public:
     ///   STATE V2 - REVISION 1 (Enable revision)
     ///   STATE V3 - REVISION 3 (Add updates tracking state)
     static constexpr UInt64 STATE_V2_MIN_REVISION = 1;
-    // static constexpr UInt64 STATE_V3_MIN_REVISION = 3; /// will enable it later
+    static constexpr UInt64 STATE_V3_MIN_REVISION = 3;
 
     VersionType getVersionFromRevision(UInt64 revision) const;
     VersionType getVersion() const;
