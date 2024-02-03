@@ -339,7 +339,7 @@ SerializationInfoPtr DataTypeTuple::getSerializationInfo(const IColumn & column)
 }
 
 
-static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse = false/* proton: ends */)
+static DataTypePtr create(const ASTPtr & arguments, bool compatible_with_clickhouse = false) /// proton: updated
 {
     if (!arguments || arguments->children.empty())
         throw Exception("The tuple cannot be empty", ErrorCodes::EMPTY_DATA_PASSED);

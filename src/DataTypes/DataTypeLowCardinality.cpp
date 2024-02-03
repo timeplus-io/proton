@@ -150,7 +150,7 @@ SerializationPtr DataTypeLowCardinality::doGetDefaultSerialization() const
 }
 
 
-static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse = false/* proton: ends */)
+static DataTypePtr create(const ASTPtr & arguments, bool compatible_with_clickhouse = false) /// proton: updated
 {
     if (!arguments || arguments->children.size() != 1)
         throw Exception("The low_cardinality data type family must have single argument - type of elements",

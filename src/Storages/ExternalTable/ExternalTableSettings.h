@@ -13,7 +13,8 @@ class ASTStorage;
   M(String, address, "", "The address of the ClickHouse server to connect", 0) \
   M(String, user, "default", "The user to be used to connect to the ClickHouse server", 0) \
   M(String, password, "", "The password to be used to connect to the ClickHouse server", 0) \
-  M(Bool, secure, false, "Indicates if it uses TLS connection", 0) \
+  M(Bool, secure, false, "Indicates if it uses secure connection", 0) \
+  M(Bool, compression, true, "Indicates if compression should be enabled", 0) \
   M(String, database, "default", "The datababse to connect to", 0) \
   M(String, table, "", "The ClickHouse table to which the external table is mapped", 0)
 

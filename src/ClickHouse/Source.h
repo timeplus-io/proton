@@ -1,25 +1,23 @@
 #pragma once
 
-#include <Client/ClickHouseClient.h>
+#include <ClickHouse/Client.h>
 #include <Processors/ISource.h>
 
 namespace DB
 {
 
-namespace ExternalTable
+namespace ClickHouse
 {
 
-class ClickHouseSource final : public ISource
+class Source final : public ISource
 {
 public:
-    ClickHouseSource(
+    Source(
         const String & database,
         const String & table,
         const Block & header,
-        std::unique_ptr<ClickHouseClient> client_,
-        QueryProcessingStage::Enum processed_stage,
-        ContextPtr context_,
-        Poco::Logger * logger_);
+        std::unique_ptr<Client> client_,
+        ContextPtr context_);
 
     String getName() const override { return "ClickHouseSource"; }
 
@@ -29,11 +27,10 @@ protected:
 private:
     bool started {false};
 
-    std::unique_ptr<ClickHouseClient> client;
+    std::unique_ptr<Client> client;
     String query;
 
     ContextPtr context;
-    Poco::Logger * logger;
 };
 
 }

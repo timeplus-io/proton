@@ -1,7 +1,6 @@
 include("${proton_SOURCE_DIR}/cmake/dbms_glob_sources.cmake")
 
 add_headers_and_sources(external_table .)
-add_headers_and_sources(external_table ClickHouse)
 
 add_library(external_table ${external_table_headers} ${external_table_sources})
 

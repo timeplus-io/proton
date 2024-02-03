@@ -40,10 +40,14 @@ public:
         ContextPtr /*context*/) override;
 
 protected:
-    StorageExternalTable(std::unique_ptr<ExternalTableSettings> settings, const StorageFactory::Arguments & args);
+    StorageExternalTable(
+        const StorageID & table_id,
+        std::unique_ptr<ExternalTableSettings> settings,
+        bool is_attach,
+        ContextPtr context_);
 
 private:
-    void setStorageMetadata(const StorageFactory::Arguments & args);
+    void fetchColumnsDescription();
 
     IExternalTablePtr external_table;
     ThreadPool background_jobs {1};

@@ -239,7 +239,7 @@ static void autoAssignNumberForEnum(const ASTPtr & arguments)
 }
 
 template <typename DataTypeEnum>
-static DataTypePtr createExact(const ASTPtr & arguments/* proton: starts */, [[maybe_unused]] bool compatible_with_clickhouse = false/* proton: ends */)
+static DataTypePtr createExact(const ASTPtr & arguments, [[maybe_unused]] bool compatible_with_clickhouse = false) /// proton: updated
 {
     if (!arguments || arguments->children.empty())
         throw Exception("Data type enum cannot be empty", ErrorCodes::EMPTY_DATA_PASSED);
@@ -279,7 +279,7 @@ static DataTypePtr createExact(const ASTPtr & arguments/* proton: starts */, [[m
     return std::make_shared<DataTypeEnum>(values);
 }
 
-static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse = false/* proton: ends */)
+static DataTypePtr create(const ASTPtr & arguments, bool compatible_with_clickhouse = false) /// proton: updated
 {
     if (!arguments || arguments->children.empty())
         throw Exception("Data type enum cannot be empty", ErrorCodes::EMPTY_DATA_PASSED);

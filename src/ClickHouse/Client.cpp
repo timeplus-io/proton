@@ -1,5 +1,5 @@
+#include <ClickHouse/Client.h>
 #include <Common/NetException.h>
-#include <Client/ClickHouseClient.h>
 
 namespace DB
 {
@@ -12,27 +12,11 @@ extern const int UNKNOWN_PACKET_FROM_SERVER;
 extern const int UNEXPECTED_PACKET_FROM_SERVER;
 }
 
+namespace ClickHouse
+{
+
 namespace
 {
-
-std::unique_ptr<Connection> createConnection(const ConnectionParameters & parameters)
-{
-    auto ret = std::make_unique<Connection>(
-        parameters.host,
-        parameters.port,
-        parameters.default_database,
-        parameters.user,
-        parameters.password,
-        parameters.quota_key,
-        "", /* cluster */
-        "", /* cluster_secret */
-        "TimeplusProton",
-        parameters.compression,
-        parameters.security);
-
-    ret->setCompatibleWithClickHouse();
-    return ret;
-}
 
 size_t calculatePollInterval(const ConnectionTimeouts & timeouts)
 {
@@ -44,22 +28,23 @@ size_t calculatePollInterval(const ConnectionTimeouts & timeouts)
 
 }
 
-ClickHouseClient::ClickHouseClient(ConnectionParameters params_, Poco::Logger * logger_)
-    : params(params_)
-    , connection(createConnection(params))
-    , poll_interval(calculatePollInterval(params.timeouts))
+Client::Client(DB::ConnectionPool::Entry connection_, ConnectionTimeouts timeouts_, Poco::Logger * logger_)
+    : connection(std::move(connection_))
+    , timeouts(std::move(timeouts_))
+    , poll_interval(calculatePollInterval(timeouts))
     , logger(logger_)
 {
+    connection->setCompatibleWithClickHouse();
 }
 
-void ClickHouseClient::reset()
+void Client::reset()
 {
     cancelled = false;
     processed_rows = 0;
     server_exception = nullptr;
 }
 
-void ClickHouseClient::executeQuery(const String & query, const String & query_id, bool fail_quick)
+void Client::executeQuery(const String & query, const String & query_id, bool fail_quick)
 {
     assert(!has_running_query);
     has_running_query = true;
@@ -72,7 +57,7 @@ void ClickHouseClient::executeQuery(const String & query, const String & query_i
         try
         {
             connection->sendQuery(
-                params.timeouts,
+                timeouts,
                 query,
                 {} /*query_parameters*/,
                 query_id,
@@ -116,13 +101,13 @@ void ClickHouseClient::executeQuery(const String & query, const String & query_i
     }
 }
 
-void ClickHouseClient::executeInsertQuery(const String & query, const String & query_id)
+void Client::executeInsertQuery(const String & query, const String & query_id)
 {
     executeQuery(query, query_id);
     receiveEndOfQuery();
 }
 
-std::optional<Block> ClickHouseClient::pollData()
+std::optional<Block> Client::pollData()
 {
     if (!has_running_query)
         return std::nullopt;
@@ -136,11 +121,11 @@ std::optional<Block> ClickHouseClient::pollData()
             if (!cancelled)
             {
                 double elapsed = receive_watch.elapsedSeconds();
-                if (elapsed > params.timeouts.receive_timeout.totalSeconds())
+                if (elapsed > timeouts.receive_timeout.totalSeconds())
                 {
                     cancelQuery();
 
-                    throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "Timeout exceeded while receiving data from server. Waited for {} seconds, timeout is {} seconds", static_cast<size_t>(elapsed), params.timeouts.receive_timeout.totalSeconds());
+                    throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "Timeout exceeded while receiving data from server. Waited for {} seconds, timeout is {} seconds", static_cast<size_t>(elapsed), timeouts.receive_timeout.totalSeconds());
 
                 }
             }
@@ -162,7 +147,7 @@ std::optional<Block> ClickHouseClient::pollData()
     }
 }
 
-void ClickHouseClient::cancelQuery()
+void Client::cancelQuery()
 {
     if (!has_running_query)
         return;
@@ -175,7 +160,7 @@ void ClickHouseClient::cancelQuery()
 
 /// Receive a part of the result, or progress info or an exception and process it.
 /// Returns true if one should continue receiving packets.
-bool ClickHouseClient::receiveAndProcessPacket()
+bool Client::receiveAndProcessPacket()
 {
     assert(has_running_query);
 
@@ -230,7 +215,7 @@ bool ClickHouseClient::receiveAndProcessPacket()
 }
 
 /// Process Log packets, exit when receive Exception or EndOfStream
-bool ClickHouseClient::receiveEndOfQuery()
+bool Client::receiveEndOfQuery()
 {
     while (true)
     {
@@ -266,21 +251,23 @@ bool ClickHouseClient::receiveEndOfQuery()
     }
 }
 
-void ClickHouseClient::onEndOfStream()
+void Client::onEndOfStream()
 {
     has_running_query = false;
 }
 
-void ClickHouseClient::onServerException(std::unique_ptr<Exception> && exception)
+void Client::onServerException(std::unique_ptr<Exception> && exception)
 {
     server_exception.swap(exception);
     has_running_query = false;
 }
 
-void ClickHouseClient::throwServerExceptionIfAny()
+void Client::throwServerExceptionIfAny()
 {
     if (server_exception)
         server_exception->rethrow();
+}
+
 }
 
 }

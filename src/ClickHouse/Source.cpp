@@ -1,10 +1,10 @@
+#include <ClickHouse/Source.h>
 #include <Common/quoteString.h>
-#include <Storages/ExternalTable/ClickHouse/ClickHouseSource.h>
 
 namespace DB
 {
 
-namespace ExternalTable
+namespace ClickHouse
 {
 
 namespace
@@ -24,23 +24,20 @@ String constructSelectQuery(const String & database, const String & table, const
 
 }
 
-ClickHouseSource::ClickHouseSource(
+Source::Source(
     const String & database,
     const String & table,
     const Block & header,
-    std::unique_ptr<ClickHouseClient> client_,
-    QueryProcessingStage::Enum /*processed_stage*/,
-    ContextPtr context_,
-    Poco::Logger * logger_)
+    std::unique_ptr<Client> client_,
+    ContextPtr context_)
     : ISource(header, true, ProcessorID::ClickHouseSourceID)
     , client(std::move(client_))
     , query(constructSelectQuery(database, table, header))
     , context(context_)
-    , logger(logger_)
 {
 }
 
-Chunk ClickHouseSource::generate()
+Chunk Source::generate()
 {
     if (isCancelled())
     {
@@ -56,16 +53,11 @@ Chunk ClickHouseSource::generate()
         client->executeQuery(query);
     }
 
-    LOG_INFO(logger, "polling data");
     auto block = client->pollData();
     client->throwServerExceptionIfAny();
     if (!block)
-    {
-        LOG_INFO(logger, "no more data");
         return {};
-    }
 
-    LOG_INFO(logger, "received {} rows", block->rows());
     return {block->getColumns(), block->rows()};
 }
 

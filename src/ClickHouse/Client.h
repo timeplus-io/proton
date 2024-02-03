@@ -1,20 +1,22 @@
 #pragma once
 
-#include <Client/Connection.h>
-#include <Client/ConnectionParameters.h>
+#include <Client/ConnectionPool.h>
 
 namespace DB
 {
 
-/// ClickHouseClient is a client that is compatiable with the ClickHouse protocol and can be used to talk to ClickHouse servers.
+namespace ClickHouse
+{
+
+/// This is a client that is compatiable with the ClickHouse protocol and can be used to talk to ClickHouse servers.
 /// Note:
-///   * This client is designed for the ClickHouse ExternalTable, so it's not 100% compatiable with ClickHouse protocol, it just needs to make sure the ExternalTable is functional.
+///   * This client is designed to be used in the ClickHouse ExternalTable, so it's not 100% compatiable with ClickHouse protocol, it just needs to make sure the ExternalTable is functional.
 ///   * A client object should not be shared with multiple threads.
-class ClickHouseClient final
+class Client final
 {
 public:
 
-    ClickHouseClient(ConnectionParameters params_, Poco::Logger * logger_);
+    Client(DB::ConnectionPool::Entry connection_, ConnectionTimeouts timeouts_, Poco::Logger * logger_);
 
     /// Sends the query to the server to execute. For insert queries, use `executeInsertQuery` instead.
     /// Make sure keep calling the `pollData` method until it returns an empty optional, until which the
@@ -40,17 +42,19 @@ private:
     void onEndOfStream();
     void onServerException(std::unique_ptr<Exception> && exception);
 
-    ConnectionParameters params;
-    std::unique_ptr<Connection> connection;
+    DB::ConnectionPool::Entry connection;
+    ConnectionTimeouts timeouts;
     size_t poll_interval;
 
     bool has_running_query {false};
     bool cancelled {false};
     size_t processed_rows {0};
     Block polled_data;
-    std::unique_ptr<Exception> server_exception {nullptr};
+    std::unique_ptr<Exception> server_exception;
 
     Poco::Logger * logger;
 };
+
+}
 
 }

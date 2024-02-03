@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Client/ConnectionParameters.h>
+#include <Client/ConnectionPool.h>
 #include <Storages/ExternalTable/IExternalTable.h>
 #include <Storages/ExternalTable/ExternalTableSettings.h>
 
@@ -32,7 +33,8 @@ public:
     SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) override;
 
 private:
-    ConnectionParameters connection_params;
+    ConnectionPoolPtr pool;
+    ConnectionTimeouts timeouts;
     String database;
     String table;
 

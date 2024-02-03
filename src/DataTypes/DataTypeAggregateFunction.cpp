@@ -159,7 +159,7 @@ SerializationPtr DataTypeAggregateFunction::doGetDefaultSerialization() const
 }
 
 
-static DataTypePtr create(const ASTPtr & arguments/* proton: starts */, bool compatible_with_clickhouse = false/* proton: ends */)
+static DataTypePtr create(const ASTPtr & arguments, bool compatible_with_clickhouse = false) /// proton: updated
 {
     String function_name;
     AggregateFunctionPtr function;

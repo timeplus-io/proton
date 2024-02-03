@@ -1,23 +1,23 @@
 #pragma once
 
-#include <Client/ClickHouseClient.h>
+#include <ClickHouse/Client.h>
 #include <Formats/FormatFactory.h>
 #include <Processors/Sinks/SinkToStorage.h>
 
 namespace DB
 {
 
-namespace ExternalTable
+namespace ClickHouse
 {
 
-class ClickHouseSink final : public SinkToStorage
+class Sink final : public SinkToStorage
 {
 public:
-    ClickHouseSink(
+    Sink(
         const String & database,
         const String & table,
         const Block & header,
-        const ConnectionParameters & params_,
+        std::unique_ptr<Client> client_,
         ContextPtr context_,
         Poco::Logger * logger_);
 
@@ -28,7 +28,7 @@ public:
 private:
     String insert_into;
 
-    std::unique_ptr<ClickHouseClient> client;
+    std::unique_ptr<Client> client;
 
     std::unique_ptr<WriteBufferFromOwnString> buf;
     OutputFormatPtr output_format;

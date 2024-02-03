@@ -247,6 +247,9 @@ else()
     message(FATAL "rdkafka is not enabled which is required")
 endif()
 
+add_subdirectory(ClickHouse)
+add_object_library(clickhouse_clickhouse ClickHouse)
+
 add_subdirectory(Storages/ExternalStream)
 add_subdirectory(Storages/ExternalTable)
 # proton: end

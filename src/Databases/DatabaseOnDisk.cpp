@@ -23,7 +23,6 @@
 #include <Common/filesystemHelpers.h>
 
 /// proton: starts.
-#include <Parsers/ParserCreateExternalTableQuery.h>
 #include <Storages/Streaming/storageUtil.h>
 /// proton: ends.
 
@@ -696,18 +695,6 @@ ASTPtr DatabaseOnDisk::parseQueryFromMetadata(
     std::string error_message;
     auto ast = tryParseQuery(parser, pos, pos + query.size(), error_message, /* hilite = */ false,
                              "in file " + metadata_file_path, /* allow_multi_statements = */ false, 0, settings.max_parser_depth);
-
-    /// proton: starts
-    if (!ast)
-    {
-        ParserCreateExternalTableQuery ex_table_parser;
-        std::string err_msg;
-        pos = query.data();
-        ast = tryParseQuery(ex_table_parser, pos, pos + query.size(), err_msg, /* hilite = */ false,
-                             "in file " + metadata_file_path, /* allow_multi_statements = */ false, 0, settings.max_parser_depth);
-        LOG_ERROR(logger, "Failed to parse {} with CreateExternalTable parser: {}", metadata_file_path, err_msg);
-    }
-    /// proton: ends
 
     if (!ast && throw_on_error)
         throw Exception(error_message, ErrorCodes::SYNTAX_ERROR);

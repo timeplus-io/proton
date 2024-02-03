@@ -144,7 +144,7 @@ BlockIO InterpreterDropQuery::executeToTableImpl(ContextPtr context_, ASTDropQue
         {
             /// proton: starts
             if (table->isExternalTable())
-                throw Exception("Cannot DETACH external table", ErrorCodes::SYNTAX_ERROR);
+                throw Exception("Cannot DETACH external table", ErrorCodes::NOT_IMPLEMENTED);
             /// proton: ends
 
             context_->checkAccess(drop_storage, table_id);

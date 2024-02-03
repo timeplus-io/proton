@@ -1,7 +1,7 @@
 #include <Common/logger_useful.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
-#include <Storages/ExternalTable/ClickHouse/ClickHouse.h>
+#include <Storages/ExternalTable/ClickHouse.h>
 #include <Storages/ExternalTable/ExternalTableFactory.h>
 #include <Storages/ExternalTable/StorageExternalTable.h>
 
@@ -9,40 +9,49 @@ namespace DB
 {
 
 StorageExternalTable::StorageExternalTable(
-        std::unique_ptr<ExternalTableSettings>  settings,
-        const StorageFactory::Arguments & args)
-: IStorage(args.table_id)
-, WithContext(args.getContext()->getGlobalContext())
+    const StorageID & table_id,
+    std::unique_ptr<ExternalTableSettings>  settings,
+    bool is_attach,
+    ContextPtr context_)
+: IStorage(table_id)
+, WithContext(context_)
 {
-    external_table = ExternalTableFactory::instance().getExternalTable(args.table_id.getTableName(), std::move(settings));
+    external_table = ExternalTableFactory::instance().getExternalTable(table_id.getTableName(), std::move(settings));
 
-    /// First, setStorageMetadata should be allowed to fail (the only failable part is getTableStructure function call), otherwise it will block Proton from starting up.
-    /// Second, when it fails, the exception should be caught, otherwise, Proton will fail to start.
+    /// Two situations:
+    /// * Create a new table. In this case, we want it fails the create query if it fails to fetch the columns description. So that users know that there is something with the connection and they can try again once the issue is resolved.
+    /// * Attach a table (Proton restarts). In this case, even it fails to fetch the columns description, we want to make sure that:
+    ///   - it does not terminate Proton, otherwise Proton will never start again
+    ///   - it does not block Proton from starting, otherwise Proton will get stuck
+    ///   So, we let it keep retrying in the background, and hoping it will eventually succeeded (until the user drops the table).
+    ///
     /// TODO we could use cache to save the table structure, so that when Proton restarts it could read from the cache directly.
     try
     {
-        setStorageMetadata(args);
+        fetchColumnsDescription();
     }
     catch (const Exception & e)
     {
-        LOG_ERROR(&Poco::Logger::get("ExternalTable-ClickHouse" + args.table_id.getFullTableName()),
-                  "Failed to fetch table structure, error: {}. Will keep retrying in background", e.what());
+        if (!is_attach)
+            e.rethrow();
+
+        LOG_ERROR(&Poco::Logger::get("ExternalTable"),
+                  "Failed to fetch table structure for {}, error: {}. Will keep retrying in background",
+                  getStorageID().getFullTableName(),
+                  e.what());
         background_jobs.scheduleOrThrowOnError([this](){
             while (!is_dropped)
             {
                 try
                 {
                     std::this_thread::sleep_for(std::chrono::seconds(5));
-                    auto metadata = getInMemoryMetadata();
-                    metadata.setColumns(external_table->getTableStructure());
-                    setInMemoryMetadata(metadata);
-                    break;
+                    fetchColumnsDescription();
+                    return;
                 }
                 catch (const Exception &) { }
             }
         });
     }
-
 }
 
 Pipe StorageExternalTable::read(
@@ -65,13 +74,12 @@ SinkToStoragePtr StorageExternalTable::write(
     return external_table->write(query, metadata_snapshot, context_);
 }
 
-void StorageExternalTable::setStorageMetadata(const StorageFactory::Arguments & args)
+void StorageExternalTable::fetchColumnsDescription()
 {
-    StorageInMemoryMetadata storage_metadata;
-    storage_metadata.setColumns(external_table->getTableStructure());
-    storage_metadata.setConstraints(args.constraints);
-    storage_metadata.setComment(args.comment);
-    setInMemoryMetadata(storage_metadata);
+        auto desc = external_table->getTableStructure();
+        auto metadata = getInMemoryMetadata();
+        metadata.setColumns(std::move(desc));
+        setInMemoryMetadata(metadata);
 }
 
 void registerStorageExternalTable(StorageFactory & factory)
@@ -84,7 +92,11 @@ void registerStorageExternalTable(StorageFactory & factory)
         auto settings = std::make_unique<ExternalTableSettings>();
         settings->loadFromQuery(*args.storage_def);
 
-        return StorageExternalTable::create(std::move(settings), args);
+        return StorageExternalTable::create(
+                args.table_id,
+                std::move(settings),
+                args.attach,
+                args.getContext()->getGlobalContext());
     };
 
     factory.registerStorage(

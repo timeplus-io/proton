@@ -19,6 +19,7 @@
 #include <Common/typeid_cast.h>
 
 /// proton: starts
+#include <Parsers/ParserCreateExternalTableQuery.h>
 #include <Parsers/Streaming/ParserCreateMaterializedViewQuery.h>
 /// proton: ends.
 
@@ -1147,8 +1148,10 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected,
 
     /// proton: starts. Add to parse MaterializedViewQuery
     ParserCreateMaterializedViewQuery streaming_view_p;
+    ParserCreateExternalTableQuery external_table_p;
 
     return table_p.parse(pos, node, expected)
+        || external_table_p.parse(pos, node, expected)
         || database_p.parse(pos, node, expected)
         || view_p.parse(pos, node, expected)
         || dictionary_p.parse(pos, node, expected)

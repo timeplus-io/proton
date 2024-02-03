@@ -1,14 +1,11 @@
-#include <Client/ClickHouseClient.h>
+#include <ClickHouse/Sink.h>
 #include <Client/ConnectionParameters.h>
-#include <Formats/FormatFactory.h>
-#include <Interpreters/Context.h>
 #include <Processors/Formats/IOutputFormat.h>
-#include <Storages/ExternalTable/ClickHouse/ClickHouseSink.h>
 
 namespace DB
 {
 
-namespace ExternalTable
+namespace ClickHouse
 {
 
 namespace
@@ -29,17 +26,16 @@ String constructInsertQuery(const String & database, const String & table, const
 
 }
 
-ClickHouseSink::ClickHouseSink(
-
-const String & database,
-        const String & table,
-        const Block & header,
-        const ConnectionParameters & params_,
-        ContextPtr context_,
-        Poco::Logger * logger_)
+Sink::Sink(
+    const String & database,
+    const String & table,
+    const Block & header,
+    std::unique_ptr<Client> client_,
+    ContextPtr context_,
+    Poco::Logger * logger_)
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
     , insert_into(constructInsertQuery(database, table, header))
-    , client(std::make_unique<ClickHouseClient>(params_, logger_))
+    , client(std::move(client_))
     , context(context_)
     , logger(logger_)
 {
@@ -67,7 +63,7 @@ private:
 
 }
 
-void ClickHouseSink::consume(Chunk chunk)
+void Sink::consume(Chunk chunk)
 {
     if (!chunk.rows())
         return;

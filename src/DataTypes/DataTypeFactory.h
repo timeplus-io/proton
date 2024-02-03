@@ -35,9 +35,9 @@ public:
     DataTypePtr get(TypeIndex type) const;
     /// proton: ends.
 
-    DataTypePtr get(const String & full_name/* proton: starts */, bool compatible_with_clickhouse = false/* proton: ends */) const;
-    DataTypePtr get(const String & family_name, const ASTPtr & parameters/* proton: starts */, bool compatible_with_clickhouse = false/* proton: ends */) const;
-    DataTypePtr get(const ASTPtr & ast/* proton: starts */, bool compatible_with_clickhouse = false/* proton: ends */) const;
+    DataTypePtr get(const String & full_name, bool compatible_with_clickhouse = false) const; /// proton: updated
+    DataTypePtr get(const String & family_name, const ASTPtr & parameters, bool compatible_with_clickhouse = false) const; /// proton: updated
+    DataTypePtr get(const ASTPtr & ast, bool compatible_with_clickhouse = false) const; /// proton: updated
     DataTypePtr getCustom(DataTypeCustomDescPtr customization) const;
 
     /// Register a type family by its name.
