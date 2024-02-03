@@ -368,12 +368,12 @@ tests:
         wait: 2
         depends_on_stream: changelog_kv_13
         query_id: '13108'
-        query: select count_distinct(val), sum_distinct(val) from changelog_kv_13;
+        query: select count_distinct(val), sum_distinct(val) from changelog_kv_13 emit periodic 1s;
 
       - client: python
         query_type: table
         depends_on: '13108'
-        wait: 3
+        wait: 2
         kill: '13108'
         kill_wait: 2
         query: insert into changelog_kv_13(id, val, _tp_delta) values(2, 1, 1)(2, 1, -1)(3, 2, 1)(3, 2, -1);

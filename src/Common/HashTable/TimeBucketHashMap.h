@@ -33,6 +33,20 @@ public:
             p.second.forEachValue(func);
     }
 
+    template <typename Func>
+    void ALWAYS_INLINE forEachValueOfUpdatedBuckets(Func && func, bool reset_updated = false)
+    {
+        for (auto & p : this->impls)
+        {
+            if (this->isBucketUpdated(p.first))
+            {
+                p.second.forEachValue(func);
+                if (reset_updated)
+                    this->resetUpdatedBucket(p.first);
+            }
+        }
+    }
+
     typename Cell::Mapped & ALWAYS_INLINE operator[](const Key & x)
     {
         LookupResult it;

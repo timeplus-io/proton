@@ -57,7 +57,7 @@ GlobalAggregatingTransform::GlobalAggregatingTransform(
                  const auto & data = std::any_cast<const ManyRetractedDataVariants &>(field);
                  DB::writeIntBinary(data.size(), wb);
                  for (const auto & elem : data)
-                     params->aggregator.checkpoint(*elem, wb);
+                     elem->serialize(wb, params->aggregator);
              },
              /// Field deserializer
              [this](std::any & field, ReadBuffer & rb, VersionType) {
@@ -68,7 +68,7 @@ GlobalAggregatingTransform::GlobalAggregatingTransform(
                  for (auto & elem : data)
                  {
                      elem = std::make_shared<AggregatedDataVariants>();
-                     params->aggregator.recover(*elem, rb);
+                     elem->deserialize(rb, params->aggregator);
                  }
              }});
     }
@@ -102,7 +102,7 @@ std::pair<bool, bool> GlobalAggregatingTransform::executeOrMergeColumns(Chunk & 
 {
     if (params->emit_changelog)
     {
-        assert(!params->only_merge);
+        assert(!params->only_merge && !no_more_keys);
 
         auto & retracted_variants = many_data->getField<ManyRetractedDataVariants>()[current_variant];
         auto & aggregated_variants = many_data->variants[current_variant];
@@ -110,7 +110,7 @@ std::pair<bool, bool> GlobalAggregatingTransform::executeOrMergeColumns(Chunk & 
         /// Blocking finalization during execution on current variant
         std::lock_guard lock(variants_mutex);
         return params->aggregator.executeAndRetractOnBlock(
-            chunk.detachColumns(), 0, num_rows, *aggregated_variants, *retracted_variants, key_columns, aggregate_columns, no_more_keys);
+            chunk.detachColumns(), 0, num_rows, *aggregated_variants, *retracted_variants, key_columns, aggregate_columns);
     }
     else
         return AggregatingTransform::executeOrMergeColumns(chunk, num_rows);

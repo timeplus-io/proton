@@ -32,16 +32,16 @@ SubstreamContextPtr GlobalAggregatingTransformWithSubstream::getOrCreateSubstrea
     {
         substream_ctx->setField(
             {std::make_shared<RetractedDataVariants>(),
-            /// Field serializer
-            [this](const std::any & field, WriteBuffer & wb, VersionType) {
-                const auto & data = std::any_cast<const RetractedDataVariantsPtr &>(field);
-                params->aggregator.checkpoint(*data, wb);
-            },
-            /// Field deserializer
-            [this](std::any & field, ReadBuffer & rb, VersionType) {
-                auto & data = std::any_cast<RetractedDataVariantsPtr &>(field);
-                params->aggregator.recover(*data, rb);
-            }});
+             /// Field serializer
+             [this](const std::any & field, WriteBuffer & wb, VersionType) {
+                 const auto & data = std::any_cast<const RetractedDataVariantsPtr &>(field);
+                 data->serialize(wb, params->aggregator);
+             },
+             /// Field deserializer
+             [this](std::any & field, ReadBuffer & rb, VersionType) {
+                 auto & data = std::any_cast<RetractedDataVariantsPtr &>(field);
+                 data->deserialize(rb, params->aggregator);
+             }});
     }
     return substream_ctx;
 }
@@ -51,14 +51,14 @@ GlobalAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, co
 {
     if (params->emit_changelog)
     {
-        assert(!params->only_merge);
+        assert(!params->only_merge && !no_more_keys);
 
         auto num_rows = chunk.getNumRows();
         auto & retracted_variants = substream_ctx->getField<RetractedDataVariantsPtr>();
         auto & aggregated_variants = substream_ctx->variants;
 
         return params->aggregator.executeAndRetractOnBlock(
-            chunk.detachColumns(), 0, num_rows, aggregated_variants, *retracted_variants, key_columns, aggregate_columns, no_more_keys);
+            chunk.detachColumns(), 0, num_rows, aggregated_variants, *retracted_variants, key_columns, aggregate_columns);
     }
     else
         return AggregatingTransformWithSubstream::executeOrMergeColumns(chunk, substream_ctx);

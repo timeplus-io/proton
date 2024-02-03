@@ -90,6 +90,7 @@ public:
     using ConstLookupResult = typename Impl::ConstLookupResult;
 
     Impl impls[NUM_BUCKETS];
+    bool updated_buckets[NUM_BUCKETS] = {false};
 
 
     TwoLevelHashTable() = default;
@@ -119,6 +120,7 @@ public:
             size_t hash_value = cell->getHash(src);
             size_t buck = getBucketFromHash(hash_value);
             impls[buck].insertUniqueNonZero(cell, hash_value);
+            updated_buckets[buck] = true;
         }
     }
 
@@ -271,6 +273,7 @@ public:
     {
         size_t buck = getBucketFromHash(hash_value);
         impls[buck].emplace(key_holder, it, inserted, hash_value);
+        updated_buckets[buck] = true;
     }
 
     LookupResult ALWAYS_INLINE find(Key x, size_t hash_value)
@@ -292,7 +295,10 @@ public:
     void write(DB::WriteBuffer & wb) const
     {
         for (UInt32 i = 0; i < NUM_BUCKETS; ++i)
+        {
             impls[i].write(wb);
+            DB::writeBinary(updated_buckets[i], wb);
+        }
     }
 
     void writeText(DB::WriteBuffer & wb) const
@@ -301,14 +307,23 @@ public:
         {
             if (i != 0)
                 DB::writeChar(',', wb);
+
+            /// <impl,updated>
+            DB::writeChar('<', wb);
             impls[i].writeText(wb);
+            DB::writeChar(',', wb);
+            DB::writeBoolText(updated_buckets[i], wb);
+            DB::writeChar('>', wb);
         }
     }
 
     void read(DB::ReadBuffer & rb)
     {
         for (UInt32 i = 0; i < NUM_BUCKETS; ++i)
+        {
             impls[i].read(rb);
+            DB::readBinary(updated_buckets[i], rb);
+        }
     }
 
     void readText(DB::ReadBuffer & rb)
@@ -317,7 +332,13 @@ public:
         {
             if (i != 0)
                 DB::assertChar(',', rb);
+
+            /// <impl,updated>
+            DB::assertChar('<', rb);
             impls[i].readText(rb);
+            DB::assertChar(',', rb);
+            DB::readBoolText(updated_buckets[i], rb);
+            DB::assertChar('>', rb);
         }
     }
 
@@ -364,6 +385,32 @@ public:
         std::vector<Int64> bucket_ids(NUM_BUCKETS);
         std::iota(bucket_ids.begin(), bucket_ids.end(), 0);
         return bucket_ids;
+    }
+
+    bool isBucketUpdated(Int64 bucket_) const
+    {
+        return updated_buckets[bucket_];
+    }
+
+    void resetUpdatedBucket(Int64 bucket_)
+    {
+        updated_buckets[bucket_] = false;
+    }
+
+    void writeUpdatedBuckets(DB::WriteBuffer & wb) const
+    {
+        DB::writeVarUInt(NUM_BUCKETS, wb);
+        for (const auto & elem : updated_buckets)
+            DB::writeBinary(elem, wb);
+    }
+
+    void readUpdatedBuckets(DB::ReadBuffer & rb)
+    {
+        size_t size = 0;
+        DB::readVarUInt(size, rb);
+        assert(size == NUM_BUCKETS);
+        for (auto & elem : updated_buckets)
+            DB::readBinary(elem, rb);
     }
     /// proton : ends
 };

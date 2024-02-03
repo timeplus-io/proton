@@ -226,10 +226,10 @@ std::pair<bool, bool> AggregatingTransformWithSubstream::executeOrMergeColumns(C
     /// according to partition keys
     auto num_rows = chunk.getNumRows();
 
-    assert(!params->only_merge);
+    assert(!params->only_merge && !no_more_keys);
 
     return params->aggregator.executeOnBlock(
-        chunk.detachColumns(), 0, num_rows, substream_ctx->variants, key_columns, aggregate_columns, no_more_keys);
+        chunk.detachColumns(), 0, num_rows, substream_ctx->variants, key_columns, aggregate_columns);
 }
 
 SubstreamContextPtr AggregatingTransformWithSubstream::getOrCreateSubstreamContext(const SubstreamID & id)
@@ -294,7 +294,7 @@ void SubstreamContext::serialize(WriteBuffer & wb, VersionType version) const
 {
     DB::Streaming::serialize(id, wb);
 
-    aggregating_transform->params->aggregator.checkpoint(variants, wb);
+    variants.serialize(wb, aggregating_transform->params->aggregator);
 
     DB::writeIntBinary(finalized_watermark, wb);
 
@@ -312,7 +312,7 @@ void SubstreamContext::deserialize(ReadBuffer & rb, VersionType version)
 {
     DB::Streaming::deserialize(id, rb);
 
-    aggregating_transform->params->aggregator.recover(variants, rb);
+    variants.deserialize(rb, aggregating_transform->params->aggregator);
 
     DB::readIntBinary(finalized_watermark, rb);
 
