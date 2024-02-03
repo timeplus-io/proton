@@ -150,18 +150,22 @@ SerializationPtr DataTypeLowCardinality::doGetDefaultSerialization() const
 }
 
 
-static DataTypePtr create(const ASTPtr & arguments)
+static DataTypePtr create(const ASTPtr & arguments, bool compatible_with_clickhouse = false) /// proton: updated
 {
     if (!arguments || arguments->children.size() != 1)
         throw Exception("The low_cardinality data type family must have single argument - type of elements",
                         ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    return std::make_shared<DataTypeLowCardinality>(DataTypeFactory::instance().get(arguments->children[0]));
+    return std::make_shared<DataTypeLowCardinality>(DataTypeFactory::instance().get(arguments->children[0]/* proton: starts */, compatible_with_clickhouse/* proton: ends */));
 }
 
 void registerDataTypeLowCardinality(DataTypeFactory & factory)
 {
     factory.registerDataType("low_cardinality", create);
+
+    /// proton: starts
+    factory.registerClickHouseAlias("LowCardinality", "low_cardinality");
+    /// proton: ends
 }
 
 
