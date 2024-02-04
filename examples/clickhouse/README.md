@@ -2,7 +2,7 @@
 
 This docker compose file demonstrates how to read from ClickHouse or write to ClickHouse with the new [External Table](https://docs.timeplus.com/proton-clickhouse-external-table) feature.
 
-A YouTube video tutorial is available for visual learners: TBD
+A YouTube video tutorial is available for visual learners: https://youtu.be/ga_DmCujEpw
 
 ## Start the example
 
