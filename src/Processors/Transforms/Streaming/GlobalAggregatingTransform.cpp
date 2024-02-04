@@ -99,8 +99,7 @@ std::pair<bool, bool> GlobalAggregatingTransform::executeOrMergeColumns(Chunk & 
         std::lock_guard lock(variants_mutex);
 
         /// Enable retract after first finalization
-        auto retract_enabled = many_data->getField<bool>();
-        if (retract_enabled) [[likely]]
+        if (retractEnabled()) [[likely]]
             return params->aggregator.executeAndRetractOnBlock(
                 chunk.detachColumns(), 0, num_rows, variants, key_columns, aggregate_columns);
         else
@@ -123,7 +122,7 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
     {
         auto [retracted_chunk, chunk] = AggregatingHelper::mergeAndConvertToChangelogChunk(many_data->variants, *params);
         /// Enable retract after first finalization
-        many_data->getField<bool &>() |= chunk.rows();
+        retractEnabled() |= chunk.rows();
 
         chunk.setChunkContext(chunk_ctx);
         setCurrentChunk(std::move(chunk), std::move(retracted_chunk));
@@ -137,6 +136,11 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
         chunk.setChunkContext(chunk_ctx);
         setCurrentChunk(std::move(chunk));
     }
+}
+
+bool & GlobalAggregatingTransform::retractEnabled() const noexcept
+{
+    return many_data->getField<bool &>();
 }
 
 }

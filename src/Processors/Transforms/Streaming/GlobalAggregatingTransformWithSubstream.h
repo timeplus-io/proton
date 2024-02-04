@@ -22,7 +22,11 @@ protected:
 private:
     void finalize(const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx) override;
 
+    /// V1 - Save retract states through additional AggregatedDataVariants (hash table).
+    /// V2 - Enable tracking updates with retract, which allows retract states and aggregated states to share the same hash table
     static constexpr VersionType V2 = 3;
+
+    bool & retractEnabled(const SubstreamContextPtr & substream_ctx) const noexcept;
 };
 
 }

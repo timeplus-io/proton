@@ -36,12 +36,24 @@ Chunk convertToChunkImpl(AggregatedDataVariants & data, const AggregatingTransfo
         return {};
 
     BlocksList blocks;
-    if (type == ConvertType::Updates)
-        blocks = params.aggregator.convertUpdatesToBlocks(data);
-    else if (type == ConvertType::Retract)
-        blocks = params.aggregator.convertRetractToBlocks(data);
-    else
-        blocks = params.aggregator.convertToBlocks(data, params.final, params.params.max_threads);
+    switch (type)
+    {
+        case ConvertType::Updates:
+        {
+            blocks = params.aggregator.convertUpdatesToBlocks(data);
+            break;
+        }
+        case ConvertType::Retract:
+        {
+            blocks = params.aggregator.convertRetractToBlocks(data);
+            break;
+        }
+        case ConvertType::Normal:
+        {
+            blocks = params.aggregator.convertToBlocks(data, params.final, params.params.max_threads);
+            break;
+        }
+    }
 
     /// FIXME: When global aggr states was converted two level hash table, the merged chunk may be too large
     return mergeBlocksToChunk(std::move(blocks));

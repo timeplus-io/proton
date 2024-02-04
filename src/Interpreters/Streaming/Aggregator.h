@@ -1141,7 +1141,7 @@ private:
 public:
     /// Existed versions:
     ///   STATE V1 - Legacy version (REVISION 1)
-    ///   STATE V2 - REVISION 1 (Enable revision)
+    ///   STATE V2 - REVISION 1 (Enable revision increment)
     ///   STATE V3 - REVISION 3 (Add updates tracking state)
     static constexpr UInt64 STATE_V2_MIN_REVISION = 1;
     static constexpr UInt64 STATE_V3_MIN_REVISION = 3;

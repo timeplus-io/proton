@@ -62,8 +62,7 @@ GlobalAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, co
         assert(!params->only_merge && !no_more_keys);
 
         auto num_rows = chunk.getNumRows();
-        auto retract_enabled = substream_ctx->getField<bool>();
-        if (retract_enabled) [[likely]]
+        if (retractEnabled(substream_ctx)) [[likely]]
             return params->aggregator.executeAndRetractOnBlock(
                 chunk.detachColumns(), 0, num_rows, substream_ctx->variants, key_columns, aggregate_columns);
         else
@@ -99,7 +98,7 @@ void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
     {
         auto [retracted_chunk, chunk] = AggregatingHelper::convertToChangelogChunk(variants, *params);
         /// Enable retract after first finalization
-        substream_ctx->getField<bool &>() |= chunk.rows();
+        retractEnabled(substream_ctx) |= chunk.rows();
 
         chunk.setChunkContext(chunk_ctx);
         setCurrentChunk(std::move(chunk), std::move(retracted_chunk));
@@ -116,6 +115,11 @@ void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
     auto end = MonotonicMilliseconds::now();
 
     LOG_INFO(log, "Took {} milliseconds to finalize aggregation", end - start);
+}
+
+bool & GlobalAggregatingTransformWithSubstream::retractEnabled(const SubstreamContextPtr & substream_ctx) const noexcept
+{
+    return substream_ctx->getField<bool &>();
 }
 
 }
