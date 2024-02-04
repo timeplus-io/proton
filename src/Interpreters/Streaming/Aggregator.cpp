@@ -394,7 +394,7 @@ Aggregator::Aggregator(const Params & params_) : params(params_),  log(&Poco::Lo
             align_aggregate_states = alignof(TrackingUpdates);
             break;
         }
-        default:
+        case TrackingUpdatesType::None:
             break;
     }
 
@@ -785,7 +785,7 @@ void Aggregator::createAggregateStates(AggregateDataPtr & aggregate_data, bool p
                 new (aggregate_data) TrackingUpdates();
                 break;
             }
-            default:
+            case TrackingUpdatesType::None:
                 break;
         }
     }
