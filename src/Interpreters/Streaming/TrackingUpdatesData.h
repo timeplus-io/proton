@@ -14,7 +14,10 @@ namespace Streaming
 SERDE struct TrackingUpdates
 {
     static ALWAYS_INLINE TrackingUpdates & data(AggregateDataPtr __restrict place) { return *reinterpret_cast<TrackingUpdates *>(place); }
-    static ALWAYS_INLINE const TrackingUpdates & data(ConstAggregateDataPtr __restrict place) { return *reinterpret_cast<const TrackingUpdates *>(place); }
+    static ALWAYS_INLINE const TrackingUpdates & data(ConstAggregateDataPtr __restrict place)
+    {
+        return *reinterpret_cast<const TrackingUpdates *>(place);
+    }
 
     static ALWAYS_INLINE bool empty(ConstAggregateDataPtr __restrict place) { return data(place).updates == 0; }
     static ALWAYS_INLINE bool updated(ConstAggregateDataPtr __restrict place) { return data(place).updated_since_last_finalization; }
@@ -91,14 +94,24 @@ SERDE struct TrackingUpdates
     /// Used to track if the target to be tracked has zero sum changes
     UInt64 updates = 0;
 
-    /// Used to track if the target group tracked has updates since last finalization 
+    /// Used to track if the target group tracked has updates since last finalization
     bool updated_since_last_finalization = true;
+};
+
+SERDE struct TrackingUpdatesWithRetract : TrackingUpdates
+{
+    static ALWAYS_INLINE AggregateDataPtr & getRetract(AggregateDataPtr & place) { return reinterpret_cast<TrackingUpdatesWithRetract *>(place)->retract_data; }
+    static ALWAYS_INLINE bool hasRetract(ConstAggregateDataPtr __restrict place) { return reinterpret_cast<const TrackingUpdatesWithRetract *>(place)->retract_data; }
+
+    /// Used to track changes for the target to be tracked
+    AggregateDataPtr retract_data = nullptr;
 };
 
 enum class TrackingUpdatesType : uint8_t
 {
     None = 0,
     Updates = 1,
+    UpdatesWithRetract = 2,
 };
 
 }

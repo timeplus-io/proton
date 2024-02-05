@@ -40,34 +40,34 @@ tests:
         wait: 2
         depends_on_stream: test_changelog_14
         query_id: '15109'
-        query: select group_uniq_array(val) from test_changelog_14;
+        query: select group_uniq_array(val) from test_changelog_14 emit periodic 1s;
 
       - client: python
         query_type: table
         depends_on: '15109'
-        wait: 3
+        wait: 1
         query: insert into test_changelog_14(id, val) values(1, 1);
 
       - client: python
         query_type: table
-        wait: 2
+        wait: 1
         query: insert into test_changelog_14(id, val) values(1, 2);
 
       - client: python
         query_type: table
-        wait: 2
+        wait: 1
         query: insert into test_changelog_14(id, val) values(2, 3);
 
       - client: python
         query_type: table
-        wait: 2
+        wait: 1
         query: insert into test_changelog_14(id, val) values(3, 3);
 
       - client: python
         query_type: table
         kill : '15109'
         kill_wait: 2
-        wait: 2
+        wait: 1
         query: insert into test_changelog_14(id, val) values(3, 4);
 
     expected_results:

@@ -80,6 +80,9 @@ inline void initDataVariants(
     result.keys_size = params.keys_size;
     result.key_sizes = key_sizes;
     result.init(method_chosen);
+
+    if (params.tracking_updates_type == TrackingUpdatesType::UpdatesWithRetract)
+        result.resetAndCreateRetractPool();
 }
 
 Columns materializeKeyColumns(Columns & columns, ColumnRawPtrs & key_columns, const Aggregator::Params & params, bool is_low_cardinality)
@@ -198,6 +201,7 @@ void AggregatedDataVariants::reset()
 
     /// Reset pool
     resetAndCreateAggregatesPools();
+    retract_pool.reset();
 }
 
 void AggregatedDataVariants::convertToTwoLevel()
@@ -376,10 +380,22 @@ Aggregator::Aggregator(const Params & params_) : params(params_),  log(&Poco::Lo
     total_size_of_aggregate_states = 0;
     all_aggregates_has_trivial_destructor = true;
 
-    if (trackingUpdatesType() == TrackingUpdatesType::Updates)
+    switch (trackingUpdatesType())
     {
-        total_size_of_aggregate_states = sizeof(TrackingUpdates);
-        align_aggregate_states = alignof(TrackingUpdates);
+        case TrackingUpdatesType::UpdatesWithRetract:
+        {
+            total_size_of_aggregate_states = sizeof(TrackingUpdatesWithRetract);
+            align_aggregate_states = alignof(TrackingUpdatesWithRetract);
+            break;
+        }
+        case TrackingUpdatesType::Updates:
+        {
+            total_size_of_aggregate_states = sizeof(TrackingUpdates);
+            align_aggregate_states = alignof(TrackingUpdates);
+            break;
+        }
+        case TrackingUpdatesType::None:
+            break;
     }
 
     // aggregate_states will be aligned as below:
@@ -757,8 +773,21 @@ void Aggregator::createAggregateStates(AggregateDataPtr & aggregate_data, bool p
     assert(aggregate_data);
     if (prefix_with_updates_tracking_state)
     {
-        if (trackingUpdatesType() == TrackingUpdatesType::Updates)
-            new (aggregate_data) TrackingUpdates();
+        switch (trackingUpdatesType())
+        {
+            case TrackingUpdatesType::UpdatesWithRetract:
+            {
+                new (aggregate_data) TrackingUpdatesWithRetract();
+                break;
+            }
+            case TrackingUpdatesType::Updates:
+            {
+                new (aggregate_data) TrackingUpdates();
+                break;
+            }
+            case TrackingUpdatesType::None:
+                break;
+        }
     }
 
     for (size_t j = 0; j < params.aggregates_size; ++j)
@@ -1077,6 +1106,7 @@ std::pair<bool, bool> Aggregator::executeOnBlock(
         /// proton: starts. First init the key_sizes, and then the method since method init
         /// may depend on the key_sizes
         initDataVariants(result, method_chosen, key_sizes, params);
+        initStatesForWithoutKey(result);
         /// proton: ends
         LOG_TRACE(log, "Aggregation method: {}", result.getMethodName());
     }
@@ -1094,8 +1124,6 @@ std::pair<bool, bool> Aggregator::executeOnBlock(
     NestedColumnsHolder nested_columns_holder;
     AggregateFunctionInstructions aggregate_functions_instructions;
     prepareAggregateInstructions(columns, aggregate_columns, materialized_columns, aggregate_functions_instructions, nested_columns_holder);
-
-    initStatesForWithoutKey(result);
 
     /// We select one of the aggregation methods and call it.
 
@@ -1282,12 +1310,6 @@ Block Aggregator::convertToBlockImpl(
         res = convertToBlockImplNotFinal(method, data, aggregates_pools, rows);
     }
 
-    /// In order to release memory early.
-    /// proton: starts. For streaming aggr, we hold on to the states
-    if (clear_states)
-        data.clearAndShrink();
-    /// proton: ends
-
     return res;
 }
 
@@ -1452,7 +1474,7 @@ Block Aggregator::insertResultsIntoColumns(PaddedPODArray<AggregateDataPtr> & pl
     if (exception)
         std::rethrow_exception(exception);
 
-    return finalizeBlock(params, getHeader(/* final */ true), std::move(out_cols), /* final */ true, places.size());
+    return finalizeBlock(params, getHeader(/*final=*/ true), std::move(out_cols), /*final=*/ true, places.size());
 }
 
 template <typename Method, typename Table>
@@ -1479,15 +1501,10 @@ Block NO_INLINE Aggregator::convertToBlockImplFinal(
     places.reserve(rows);
 
     bool only_updates = (type == ConvertType::Updates);
+    bool only_retract = (type == ConvertType::Retract);
 
     data.forEachValue([&](const auto & key, auto & mapped)
     {
-        /// Ingore invalid mapped, there are two cases:
-        /// 1) mapped was destroyed (it's a bug)
-        /// 2) no mapped states for retracted data (means it's an new group key, but no retracted data)
-        if (!mapped)
-            return;
-
         if (only_updates)
         {
             if (!TrackingUpdates::updated(mapped))
@@ -1496,6 +1513,13 @@ Block NO_INLINE Aggregator::convertToBlockImplFinal(
             /// Finalized it for current coverting
             TrackingUpdates::resetUpdated(mapped);
         }
+        else if (only_retract)
+        {
+            if (!TrackingUpdatesWithRetract::hasRetract(mapped))
+                return;
+        }
+
+        auto & place = only_retract ? TrackingUpdatesWithRetract::getRetract(mapped) : mapped;
 
         /// For UDA with own emit strategy, there are two special cases to be handled:
         /// 1. not all groups need to  be emitted. therefore proton needs to pick groups
@@ -1509,7 +1533,7 @@ Block NO_INLINE Aggregator::convertToBlockImplFinal(
         if (params.group_by == Params::GroupBy::USER_DEFINED)
         {
             assert(aggregate_functions.size() == 1);
-            emit_times = aggregate_functions[0]->getEmitTimes(mapped + offsets_of_aggregate_states[0]);
+            emit_times = aggregate_functions[0]->getEmitTimes(place + offsets_of_aggregate_states[0]);
         }
 
         if (emit_times > 0)
@@ -1518,13 +1542,13 @@ Block NO_INLINE Aggregator::convertToBlockImplFinal(
             for (size_t i = 0; i < emit_times; i++)
                 method.insertKeyIntoColumns(key, out_cols.raw_key_columns, key_sizes_ref);
 
-            places.emplace_back(mapped);
+            places.emplace_back(place);
 
             /// Mark the cell as destroyed so it will not be destroyed in destructor.
             /// proton: starts. Here we push the `place` to `places`, for streaming
             /// case, we don't want aggregate function to destroy the places
             if (clear_states)
-                mapped = nullptr;
+                place = nullptr;
         }
     });
 
@@ -1597,14 +1621,6 @@ void Aggregator::addArenasToAggregateColumns(
 
 Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool clear_states, ConvertType type) const
 {
-    /// proton: starts.
-    if (!data_variants.without_key)
-    {
-        data_variants.invalidate();
-        return {};
-    }
-    /// proton: ends.
-
     auto res_header = getHeader(final);
     size_t rows = 1;
     auto && out_cols = prepareOutputBlockColumns(params, aggregate_functions, res_header, data_variants.aggregates_pools, final, rows);
@@ -1612,17 +1628,23 @@ Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_va
 
     assert(data_variants.type == AggregatedDataVariants::Type::without_key);
 
-    if (type == ConvertType::Updates && !TrackingUpdates::updated(data_variants.without_key))
+    if ((type == ConvertType::Updates && !TrackingUpdates::updated(data_variants.without_key))
+        || (type == ConvertType::Retract && !TrackingUpdatesWithRetract::hasRetract(data_variants.without_key)))
         return res_header.cloneEmpty();
 
     AggregatedDataWithoutKey & data = [&]() -> AggregateDataPtr & {
-        if (type == ConvertType::Updates)
+        switch (type)
         {
-            TrackingUpdates::resetUpdated(data_variants.without_key);
-            return data_variants.without_key;
+            case ConvertType::Updates:
+            {
+                TrackingUpdates::resetUpdated(data_variants.without_key);
+                return data_variants.without_key;
+            }
+            case ConvertType::Retract:
+                return TrackingUpdatesWithRetract::getRetract(data_variants.without_key);
+            case ConvertType::Normal:
+                return data_variants.without_key;
         }
-        else
-            return data_variants.without_key;
     }();
 
     if (!data)
@@ -2703,7 +2725,9 @@ void Aggregator::doRecoverV2(AggregatedDataVariants & data_variants, ReadBuffer 
 
 VersionType Aggregator::getVersionFromRevision(UInt64 revision) const
 {
-    if (revision >= STATE_V2_MIN_REVISION)
+    if (revision >= STATE_V3_MIN_REVISION)
+        return static_cast<VersionType>(3);
+    else if (revision >= STATE_V2_MIN_REVISION)
         return static_cast<VersionType>(2);
     else
         throw Exception(
@@ -2772,12 +2796,11 @@ Block Aggregator::spliceAndConvertBucketsToBlock(AggregatedDataVariants & varian
             AggregatedDataVariants result_variants; \
             result_variants.aggregator = this; \
             initDataVariants(result_variants, method_chosen, key_sizes, params); \
-            initStatesForWithoutKey(result_variants); \
-            spliceBucketsImpl<decltype(result_variants.NAME)::element_type>(result_variants, variants, gcd_buckets, result_variants.aggregates_pool, /*clear_states*/ false); \
-            return convertOneBucketToBlockImpl(result_variants, *result_variants.NAME, result_variants.aggregates_pool, final, /*clear_states*/ true, 0); \
+            spliceBucketsImpl<decltype(result_variants.NAME)::element_type>(result_variants, variants, gcd_buckets, result_variants.aggregates_pool, /*clear_states=*/ false); \
+            return convertOneBucketToBlockImpl(result_variants, *result_variants.NAME, result_variants.aggregates_pool, final, /*clear_states=*/ true, 0); \
         } \
         else \
-            return convertOneBucketToBlockImpl(variants, *variants.NAME, variants.aggregates_pool, final, /*clear_states*/ false, gcd_buckets[0]); \
+            return convertOneBucketToBlockImpl(variants, *variants.NAME, variants.aggregates_pool, final, /*clear_states=*/ false, gcd_buckets[0]); \
     }
 
     APPLY_FOR_VARIANTS_TIME_BUCKET_TWO_LEVEL(M)
@@ -2805,14 +2828,14 @@ Block Aggregator::mergeAndSpliceAndConvertBucketsToBlock(ManyAggregatedDataVaria
     { \
         using Method = decltype(first.NAME)::element_type; \
         for (auto bucket : gcd_buckets) \
-            mergeBucketImpl<Method>(*prepared_data, bucket, arena, /*clear_states*/ false); \
+            mergeBucketImpl<Method>(*prepared_data, bucket, arena, /*clear_states=*/ false); \
         if (need_splice) \
         { \
-            spliceBucketsImpl<Method>(first, first, gcd_buckets, arena, /*clear_states*/ true); \
-            return convertOneBucketToBlockImpl(first, *first.NAME, arena, final, /*clear_states*/ true, 0); \
+            spliceBucketsImpl<Method>(first, first, gcd_buckets, arena, /*clear_states=*/ true); \
+            return convertOneBucketToBlockImpl(first, *first.NAME, arena, final, /*clear_states=*/ true, 0); \
         } \
         else \
-            return convertOneBucketToBlockImpl(first, *first.NAME, arena, final, /*clear_states*/ false, gcd_buckets[0]); \
+            return convertOneBucketToBlockImpl(first, *first.NAME, arena, final, /*clear_states=*/ false, gcd_buckets[0]); \
     }
 
     APPLY_FOR_VARIANTS_TIME_BUCKET_TWO_LEVEL(M)
@@ -2827,37 +2850,13 @@ template <typename Method>
 bool Aggregator::executeAndRetractImpl(
     Method & method,
     Arena * aggregates_pool,
-    Method & retracted_method,
-    Arena * retracted_pool,
+    Arena * retract_pool,
     size_t row_begin,
     size_t row_end,
     ColumnRawPtrs & key_columns,
     AggregateFunctionInstruction * aggregate_instructions) const
 {
     typename Method::State state(key_columns, key_sizes, aggregation_state_cache);
-    typename Method::State retracted_state(key_columns, key_sizes, nullptr);
-
-    /// Optimization for special case when there are no aggregate functions.
-    if (params.aggregates_size == 0)
-    {
-        if (params.delta_col_pos >= 0)
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Changelog aggregating must have aggregate functions");
-
-        /// For all rows.
-        AggregateDataPtr place = aggregates_pool->alloc(0);
-        for (size_t i = row_begin; i < row_end; ++i)
-        {
-            auto emplace_result = state.emplaceKey(method.data, i, *aggregates_pool);
-            if (emplace_result.isInserted())
-            {
-                emplace_result.setMapped(place);
-                /// Only add new key
-                retracted_state.emplaceKey(retracted_method.data, i, *retracted_pool).setMapped(place);
-            }
-        }
-        return false;
-    }
-
     bool need_finalization = false;
 
     /// NOTE: only row_end-row_start is required, but:
@@ -2883,27 +2882,20 @@ bool Aggregator::executeAndRetractImpl(
             /// TODO: support use_compiled_functions
             createAggregateStates(aggregate_data);
             emplace_result.setMapped(aggregate_data);
-
-            /// Save new group without retracted state (used for emit new key group)
-            /// FIXME: There is a bug when use hash table (key8 or key16), it use a optimzed FixedImplicitZeroHashMap that the empty mapped directly means zero (i.e. invalid insertion).
-            /// But in retract group scenario, we need to use an empty mapped to represent no ratracted value for new group
-            /// Use a non-optimized FixedHashMap ? or revisit retract implementation ?
-            retracted_state.emplaceKey(retracted_method.data, i, *retracted_pool).setMapped(nullptr);
         }
         else
         {
             aggregate_data = emplace_result.getMapped();
 
             /// Save changed group with retracted state (used for emit changed group)
-            auto retracted_result = retracted_state.emplaceKey(retracted_method.data, i, *retracted_pool);
-            if (retracted_result.isInserted())
+            /// If there are aggregate data and no retracted data, copy aggregate data to retracted data before changed
+            if (!TrackingUpdates::empty(aggregate_data) && !TrackingUpdatesWithRetract::hasRetract(aggregate_data))
             {
-                retracted_result.setMapped(nullptr);
-                auto retracted_data = retracted_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-                createAggregateStates(retracted_data);
-                /// Copy aggregate data to retracted data before changed
-                mergeAggregateStates(retracted_data, aggregate_data, retracted_pool, /*clear_states*/ false);
-                retracted_result.setMapped(retracted_data);
+                auto & retract_data = TrackingUpdatesWithRetract::getRetract(aggregate_data);
+                auto tmp_retract = retract_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+                createAggregateStates(tmp_retract, /*prefix_with_updates_tracking_state=*/ false);
+                retract_data = tmp_retract;
+                mergeAggregateStates(retract_data, aggregate_data, retract_pool, /*clear_states=*/ false);
             }
         }
 
@@ -2937,6 +2929,9 @@ bool Aggregator::executeAndRetractImpl(
         }
     }
 
+    if (needTrackUpdates())
+        TrackingUpdates::addBatch(row_begin, row_end, places.get(), aggregate_instructions ? aggregate_instructions->delta_column : nullptr);
+
     return need_finalization;
 }
 
@@ -2945,7 +2940,6 @@ std::pair<bool, bool> Aggregator::executeAndRetractOnBlock(
     size_t row_begin,
     size_t row_end,
     AggregatedDataVariants & result,
-    AggregatedDataVariants & retracted_result,
     ColumnRawPtrs & key_columns,
     AggregateColumns & aggregate_columns) const
 {
@@ -2960,6 +2954,7 @@ std::pair<bool, bool> Aggregator::executeAndRetractOnBlock(
     if (result.empty())
     {
         initDataVariants(result, method_chosen, key_sizes, params);
+        initStatesForWithoutKey(result);
         LOG_TRACE(log, "Aggregation method: {}", result.getMethodName());
     }
 
@@ -2971,193 +2966,45 @@ std::pair<bool, bool> Aggregator::executeAndRetractOnBlock(
     AggregateFunctionInstructions aggregate_functions_instructions;
     prepareAggregateInstructions(columns, aggregate_columns, materialized_columns, aggregate_functions_instructions, nested_columns_holder);
 
-    retracted_result.aggregator = this;
+    assert(trackingUpdatesType() == TrackingUpdatesType::UpdatesWithRetract);
     if (result.type == AggregatedDataVariants::Type::without_key)
     {
         /// Save last finalization state into `retracted_result` before processing new data.
         /// We shall clear and reset it after finalization
-        if (retracted_result.empty())
+        if (!TrackingUpdates::empty(result.without_key) && !TrackingUpdatesWithRetract::hasRetract(result.without_key))
         {
-            initDataVariants(retracted_result, method_chosen, key_sizes, params);
-
-            if (result.without_key)
-            {
-                initStatesForWithoutKey(retracted_result);
-                mergeAggregateStates(retracted_result.without_key, result.without_key, retracted_result.aggregates_pool, false);
-            }
+            auto & retract_data = TrackingUpdatesWithRetract::getRetract(result.without_key);
+            auto aggregate_data = result.retract_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+            createAggregateStates(aggregate_data, /*prefix_with_updates_tracking_state=*/ false);
+            retract_data = aggregate_data;
+            mergeAggregateStates(retract_data, result.without_key, result.retract_pool.get(), /*clear_states=*/ false);
         }
 
-        initStatesForWithoutKey(result);
-        need_finalization = executeWithoutKeyImpl(result.without_key, row_begin, row_end, aggregate_functions_instructions.data(), result.aggregates_pool);
+        need_finalization = executeWithoutKeyImpl(
+            result.without_key, row_begin, row_end, aggregate_functions_instructions.data(), result.aggregates_pool);
     }
-    else
-    {
-        if (retracted_result.empty())
-            initDataVariants(retracted_result, method_chosen, key_sizes, params);
 
-        if (result.isTwoLevel() && !retracted_result.isTwoLevel())
-            retracted_result.convertToTwoLevel();
+#define M(NAME, IS_TWO_LEVEL) \
+    else if (result.type == AggregatedDataVariants::Type::NAME) need_finalization = executeAndRetractImpl( \
+        *result.NAME, \
+        result.aggregates_pool, \
+        result.retract_pool.get(), \
+        row_begin, \
+        row_end, \
+        key_columns, \
+        aggregate_functions_instructions.data());
 
-        #define M(NAME, IS_TWO_LEVEL) \
-            else if (result.type == AggregatedDataVariants::Type::NAME) \
-                need_finalization = executeAndRetractImpl(*result.NAME, result.aggregates_pool, *retracted_result.NAME, retracted_result.aggregates_pool, row_begin, row_end, key_columns, aggregate_functions_instructions.data());
-
-        if (false) {} // NOLINT
-        APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
-        #undef M
-    }
+    APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
+#undef M
 
     need_abort = checkAndProcessResult(result);
-    /// it's possible for gloabl single level hash table was converted to two level table after `checkAndProcessResult`,
-    /// so we also convert retarcted data to two level.
-    if (result.isTwoLevel() && !retracted_result.isTwoLevel())
-        retracted_result.convertToTwoLevel();
-
     return return_result;
-}
-
-std::pair<AggregatedDataVariantsPtr, AggregatedDataVariantsPtr>
-Aggregator::mergeRetractedGroups(ManyAggregatedDataVariants & aggregated_data, ManyAggregatedDataVariants & retracted_data) const
-{
-    auto prepared_data = prepareVariantsToMerge(aggregated_data, /*always_merge_into_empty*/ true);
-    if (prepared_data->empty())
-        return {};
-
-    auto first = prepared_data->at(0);
-
-    auto prepared_retracted_data = prepareVariantsToMerge(retracted_data, first->type != AggregatedDataVariants::Type::without_key);
-    assert(!prepared_retracted_data->empty());
-
-    /// So far, only global aggregation support emit changelog, so time bucket two level is not possible
-
-#define M(NAME, ...) \
-    else if (first->type == AggregatedDataVariants::Type::NAME) \
-        mergeRetractedGroupsImpl<decltype(first->NAME)::element_type>(*prepared_data, *prepared_retracted_data);
-
-    if (first->type == AggregatedDataVariants::Type::without_key)
-    {
-        mergeWithoutKeyDataImpl(*prepared_retracted_data, true);
-        mergeWithoutKeyDataImpl(*prepared_data, false);
-    }
-    APPLY_FOR_VARIANTS_SINGLE_LEVEL_STREAMING(M)
-    APPLY_FOR_VARIANTS_STATIC_BUCKET_TWO_LEVEL(M)
-#undef M
-    else
-        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
-
-    return {prepared_data->at(0), prepared_retracted_data->at(0)};
-}
-
-template <typename Method>
-void Aggregator::mergeRetractedGroupsImpl(
-    ManyAggregatedDataVariants & aggregated_data, ManyAggregatedDataVariants & retracted_data) const
-{
-    AggregatedDataVariantsPtr & res = aggregated_data[0];
-    AggregatedDataVariantsPtr & retracted_res = retracted_data[0];
-
-    using Table = typename Method::Data;
-    Table & dst_table = getDataVariant<Method>(*res).data;
-    Table & dst_retracted_table = getDataVariant<Method>(*retracted_res).data;
-
-    /// First data variants always is empty.
-    assert(dst_table.empty() && dst_retracted_table.empty());
-
-    /// For example:
-    ///                 thread-1        thread-2
-    ///     group-1      changed        non-changed
-    ///     group-2     non-changed     changed
-    ///     group-3     non-changed     non-changed
-
-    /// Collect all changed groups, then merge retracted/updated data
-    /// 1) Collect changed groups:
-    /// `dst_retracted` <= (thread-1: group-1) + (thread-2: group-2)
-    for (size_t result_num = 1, size = retracted_data.size(); result_num < size; ++result_num)
-    {
-        if (!checkLimits(retracted_res->sizeWithoutOverflowRow()))
-            break;
-
-        auto & src_retracted_table = getDataVariant<Method>(*retracted_data[result_num]).data;
-        src_retracted_table.mergeToViaEmplace(dst_retracted_table, [&](AggregateDataPtr & __restrict dst, AggregateDataPtr & __restrict src, bool inserted) {
-            if (inserted)
-                dst = nullptr;
-
-            mergeAggregateStates(dst, src, retracted_res->aggregates_pool, true);
-        });
-    }
-
-    /// 2) Merge retracted groups non-changed thread parts (based on all changed groups)
-    /// `dst_retracted` <= (thread-1: group-2) + (thread-2: group-1)
-    for (size_t result_num = 1, size = retracted_data.size(); result_num < size; ++result_num)
-    {
-        if (!checkLimits(retracted_res->sizeWithoutOverflowRow()))
-            break;
-
-        auto & current_retracted = *retracted_data[result_num];
-        Table & src_retracted_table = getDataVariant<Method>(current_retracted).data;
-        Table & src_aggregated_table = getDataVariant<Method>(*aggregated_data[result_num]).data;
-        dst_retracted_table.forEachValue([&](const auto & key, auto & mapped) {
-            /// Merge retracted groups non-changed thread parts
-            if (!src_retracted_table.find(key))
-            {
-                auto find_it = src_aggregated_table.find(key);
-                if (find_it)
-                    mergeAggregateStates(
-                        mapped,
-                        find_it->getMapped(),
-                        retracted_res->aggregates_pool,
-                        /*clear_states*/ false);
-            }});
-
-        /// Reset retracted data after finalization
-        current_retracted.reset();
-    }
-
-    /// 3) Merge new/updated groups (based on all changed groups)
-    /// `dst` <= (thread-1: group-1 group-2) + (thread-2: group-1 group-2)
-    for (size_t result_num = 1, size = aggregated_data.size(); result_num < size; ++result_num)
-    {
-        if (!checkLimits(res->sizeWithoutOverflowRow()))
-            break;
-
-        Table & src_aggregated_table = getDataVariant<Method>(*aggregated_data[result_num]).data;
-        dst_retracted_table.forEachValue([&](const auto & key, auto & mapped) {
-            /// Merge new/updated groups
-            typename Table::LookupResult dst_it;
-            bool inserted;
-
-            /// NOTE: For StringRef `key`, its memory was allocated in `retracted_res->aggregates_pool`,
-            /// we shall save this key in itself pool (i.e. res->aggregates_pool) if inserted
-            using KeyType = std::decay_t<decltype(key)>;
-            if constexpr (std::is_same_v<KeyType, StringRef>)
-                dst_table.emplace(ArenaKeyHolder{key, *res->aggregates_pool}, dst_it, inserted);
-            else
-                dst_table.emplace(key, dst_it, inserted);
-
-            if (inserted)
-                dst_it->getMapped() = nullptr;
-
-            auto find_it = src_aggregated_table.find(key);
-            if (find_it)
-                mergeAggregateStates(
-                    dst_it->getMapped(),
-                    find_it->getMapped(),
-                    res->aggregates_pool,
-                    /*clear_states*/ false);
-        });
-    }
 }
 
 void Aggregator::mergeAggregateStates(AggregateDataPtr & dst, AggregateDataPtr & src, Arena * arena, bool clear_states) const
 {
-    if (!src)
-        return;
-
-    if (!dst)
-    {
-        auto aggregate_data = arena->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-        createAggregateStates(aggregate_data);
-        dst = aggregate_data;
-    }
+    assert(src);
+    assert(dst);
 
     for (size_t i = 0; i < params.aggregates_size; ++i)
         aggregate_functions[i]->merge(dst + offsets_of_aggregate_states[i], src + offsets_of_aggregate_states[i], arena);
@@ -3223,7 +3070,18 @@ void Aggregator::doCheckpointV3(const AggregatedDataVariants & data_variants, Wr
 
     auto state_serializer = [this](auto place, auto & wb_) {
         assert(place);
-        if (trackingUpdatesType() == TrackingUpdatesType::Updates)
+        if (trackingUpdatesType() == TrackingUpdatesType::UpdatesWithRetract)
+        {
+            TrackingUpdates::serialize(place, wb_);
+
+             auto retract_place = TrackingUpdatesWithRetract::getRetract(place);
+             bool has_retract = retract_place != nullptr;
+             writeBinary(has_retract, wb_);
+             if (has_retract)
+                 for (size_t i = 0; i < params.aggregates_size; ++i)
+                     aggregate_functions[i]->serialize(retract_place + offsets_of_aggregate_states[i], wb_);
+        }
+        else if (trackingUpdatesType() == TrackingUpdatesType::Updates)
             TrackingUpdates::serialize(place, wb_);
 
         for (size_t i = 0; i < params.aggregates_size; ++i)
@@ -3285,17 +3143,33 @@ void Aggregator::doRecoverV3(AggregatedDataVariants & data_variants, ReadBuffer 
             magic_enum::enum_name(recovered_expanded_data_type),
             magic_enum::enum_name(trackingUpdatesType()));
 
-    auto state_deserializer = [this](auto & place, auto & rb_, Arena * arena) {
+    auto state_deserializer = [this, &data_variants](auto & place, auto & rb_, Arena *) {
         place = nullptr; /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
-        auto aggregate_data = arena->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+        auto aggregate_data = data_variants.aggregates_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
         createAggregateStates(aggregate_data);
         place = aggregate_data;
 
-        if (trackingUpdatesType() == TrackingUpdatesType::Updates)
+        if (trackingUpdatesType() == TrackingUpdatesType::UpdatesWithRetract)
+        {
+            TrackingUpdates::deserialize(place, rb_);
+
+            auto & retract_place = TrackingUpdatesWithRetract::getRetract(place);
+            bool has_retract = false;
+            readBinary(has_retract, rb_);
+            if (has_retract)
+            {
+                auto tmp_retract = data_variants.retract_pool->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+                createAggregateStates(tmp_retract, /*prefix_with_updates_tracking_state=*/ false);
+                retract_place = tmp_retract;
+                for (size_t i = 0; i < params.aggregates_size; ++i)
+                    aggregate_functions[i]->deserialize(retract_place + offsets_of_aggregate_states[i], rb_, std::nullopt, data_variants.retract_pool.get());
+            }
+        }
+        else if (trackingUpdatesType() == TrackingUpdatesType::Updates)
             TrackingUpdates::deserialize(place, rb_);
 
         for (size_t i = 0; i < params.aggregates_size; ++i)
-            aggregate_functions[i]->deserialize(place + offsets_of_aggregate_states[i], rb_, std::nullopt, arena);
+            aggregate_functions[i]->deserialize(place + offsets_of_aggregate_states[i], rb_, std::nullopt, data_variants.aggregates_pool);
     };
 
     /// [aggr-func-state-without-key]
@@ -3390,7 +3264,7 @@ BlocksList Aggregator::convertUpdatesToBlocks(AggregatedDataVariants & data_vari
     else if (!data_variants.isTwoLevel())
         blocks.emplace_back(prepareBlockAndFillSingleLevel(data_variants, final, clear_states, ConvertType::Updates));
     else
-        blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, clear_states, /*max_threads*/ 1, ConvertType::Updates));
+        blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, clear_states, /*max_threads=*/ 1, ConvertType::Updates));
 
     size_t rows = 0;
     size_t bytes = 0;
@@ -3456,7 +3330,7 @@ void NO_INLINE Aggregator::mergeUpdateGroupsImpl(ManyAggregatedDataVariants & no
         };
 
         if constexpr (is_two_level)
-            src_table.forEachValueOfUpdatedBuckets(std::move(merge_updated_func), /*reset_updated*/ true);
+            src_table.forEachValueOfUpdatedBuckets(std::move(merge_updated_func), /*reset_updated=*/ true);
         else
             src_table.forEachValue(std::move(merge_updated_func));
     }
@@ -3469,7 +3343,7 @@ void NO_INLINE Aggregator::mergeUpdateGroupsImpl(ManyAggregatedDataVariants & no
         dst_table.forEachValue([&](const auto & key, auto & mapped) {
             if (auto find_it = src_table.find(key))
             {
-                mergeAggregateStates(mapped, find_it->getMapped(), arena, /*clear_states*/ false);
+                mergeAggregateStates(mapped, find_it->getMapped(), arena, /*clear_states=*/ false);
                 /// NOTE: We always reset the updated flag after merged
                 TrackingUpdates::resetUpdated(find_it->getMapped());
             }
@@ -3479,7 +3353,7 @@ void NO_INLINE Aggregator::mergeUpdateGroupsImpl(ManyAggregatedDataVariants & no
 
 AggregatedDataVariantsPtr Aggregator::mergeUpdateGroups(ManyAggregatedDataVariants & data_variants) const
 {
-    auto prepared_data_ptr = prepareVariantsToMerge(data_variants, /*always_merge_into_empty*/ true);
+    auto prepared_data_ptr = prepareVariantsToMerge(data_variants, /*always_merge_into_empty=*/ true);
     if (prepared_data_ptr->empty())
         return {};
 
@@ -3492,12 +3366,157 @@ AggregatedDataVariantsPtr Aggregator::mergeUpdateGroups(ManyAggregatedDataVarian
             }))
             return {};
 
-        mergeWithoutKeyDataImpl(*prepared_data_ptr, /*clear_states*/ false);
+        mergeWithoutKeyDataImpl(*prepared_data_ptr, /*clear_states=*/ false);
     }
 
 #define M(NAME, IS_TWO_LEVEL) \
     else if (first.type == AggregatedDataVariants::Type::NAME) \
         mergeUpdateGroupsImpl<decltype(first.NAME)::element_type, IS_TWO_LEVEL>(*prepared_data_ptr, first.aggregates_pool);
+
+    APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
+#undef M
+    else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+
+    return prepared_data_ptr->at(0);
+}
+
+BlocksList Aggregator::convertRetractToBlocks(AggregatedDataVariants & data_variants) const
+{
+    LOG_DEBUG(log, "Converting retract aggregated data to blocks");
+
+    Stopwatch watch;
+
+    BlocksList blocks;
+
+    if (data_variants.empty())
+        return blocks;
+
+    constexpr bool final = true;
+    constexpr bool clear_states = true;
+    if (data_variants.type == AggregatedDataVariants::Type::without_key)
+        blocks.emplace_back(prepareBlockAndFillWithoutKey(data_variants, final, clear_states, ConvertType::Retract));
+    else if (!data_variants.isTwoLevel())
+        blocks.emplace_back(prepareBlockAndFillSingleLevel(data_variants, final, clear_states, ConvertType::Retract));
+    else
+        blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, clear_states, /*max_threads=*/ 1, ConvertType::Retract));
+
+    size_t rows = 0;
+    size_t bytes = 0;
+
+    for (const auto & block : blocks)
+    {
+        rows += block.rows();
+        bytes += block.bytes();
+    }
+
+    double elapsed_seconds = watch.elapsedSeconds();
+    LOG_DEBUG(log,
+        "Converted retract aggregated data to blocks. {} rows, {} in {} sec. ({:.3f} rows/sec., {}/sec.)",
+        rows, ReadableSize(bytes),
+        elapsed_seconds, rows / elapsed_seconds,
+        ReadableSize(bytes / elapsed_seconds));
+
+    return blocks;
+}
+
+template <typename Method>
+void Aggregator::mergeRetractGroupsImpl(ManyAggregatedDataVariants & non_empty_data, Arena * arena) const
+{
+    AggregatedDataVariantsPtr & res = non_empty_data[0];
+    auto & dst_table = getDataVariant<Method>(*res).data;
+    /// Always merge retract data into empty first.
+    assert(dst_table.empty());
+
+    /// For example:
+    ///                 thread-1        thread-2
+    ///     group-1     retract       non-retract
+    ///     group-2     non-retract   retract
+    ///     group-3     non-retract   non-retract
+    ///
+    /// 1) Collect all retract groups
+    /// `dst` <= (group-1, group-2)
+    using Table = typename Method::Data;
+    for (size_t result_num = 1, size = non_empty_data.size(); result_num < size; ++result_num)
+    {
+        if (!checkLimits(res->sizeWithoutOverflowRow()))
+            break;
+
+        auto & src_table = getDataVariant<Method>(*non_empty_data[result_num]).data;
+        src_table.forEachValue([&](const auto & key, auto & mapped) {
+            /// Skip no retract group
+            if (!TrackingUpdatesWithRetract::hasRetract(mapped))
+                return;
+
+            typename Table::LookupResult dst_it;
+            bool inserted;
+            /// For StringRef `key`, it is safe to store to `dst_table`
+            /// since the `dst_table` is temporary and the `src_table` will not be cleaned in the meantime
+            dst_table.emplace(key, dst_it, inserted);
+            if (inserted)
+            {
+                auto & dst = dst_it->getMapped();
+                dst = nullptr; /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
+                auto aggregate_data = arena->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+                createAggregateStates(aggregate_data, /*prefix_with_updates_tracking_state=*/ false);
+                dst = aggregate_data;
+            }
+        });
+    }
+
+    /// 2) Merge all retract groups parts for each thread (based on `1)` )
+    /// `dst` <= (thread-1: group-1  group-2) + (thread-2: group-1 group-2)
+    for (size_t result_num = 1, size = non_empty_data.size(); result_num < size; ++result_num)
+    {
+        auto & current = *non_empty_data[result_num];
+        auto & src_table = getDataVariant<Method>(current).data;
+        dst_table.forEachValue([&](const auto & key, auto & mapped) {
+            if (auto find_it = src_table.find(key))
+            {
+                auto & src_mapped = find_it->getMapped();
+                if (TrackingUpdatesWithRetract::hasRetract(src_mapped))
+                    mergeAggregateStates(mapped, TrackingUpdatesWithRetract::getRetract(src_mapped), arena, /*clear_states=*/ true);
+                else
+                    /// If retract data not exist, assume it does't be changed, we should use original data
+                    mergeAggregateStates(mapped, src_mapped, arena, /*clear_states=*/ false);
+            }
+        });
+
+        current.resetAndCreateRetractPool();
+    }
+}
+
+AggregatedDataVariantsPtr Aggregator::mergeRetractGroups(ManyAggregatedDataVariants & data_variants) const
+{
+    auto prepared_data_ptr = prepareVariantsToMerge(data_variants, /*always_merge_into_empty=*/ true);
+    if (prepared_data_ptr->empty())
+        return {};
+
+    if (unlikely(params.overflow_row))
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Overflow row processing is not implemented in streaming aggregation");
+
+    auto & first = *prepared_data_ptr->at(0);
+    if (first.type == AggregatedDataVariants::Type::without_key)
+    {
+        if (std::ranges::none_of(*prepared_data_ptr, [](auto & variants) { return TrackingUpdatesWithRetract::hasRetract(variants->without_key); }))
+            return {}; /// Skip if no retracted
+
+        for (size_t result_num = 1, size = prepared_data_ptr->size(); result_num < size; ++result_num)
+        {
+            auto & current = *(*prepared_data_ptr)[result_num];
+            if (TrackingUpdatesWithRetract::hasRetract(current.without_key))
+                mergeAggregateStates(
+                    first.without_key, TrackingUpdatesWithRetract::getRetract(current.without_key), first.aggregates_pool, /*clear_states=*/ true);
+            else
+                /// If retract data not exist, assume it does't be changed, we should use original data
+                mergeAggregateStates(first.without_key, current.without_key, first.aggregates_pool, /*clear_states=*/ false);
+
+            current.resetAndCreateRetractPool();
+        }
+    }
+
+#define M(NAME, IS_TWO_LEVEL) \
+    else if (first.type == AggregatedDataVariants::Type::NAME) \
+        mergeRetractGroupsImpl<decltype(first.NAME)::element_type>(*prepared_data_ptr, first.aggregates_pool);
 
     APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
 #undef M
