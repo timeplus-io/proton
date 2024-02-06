@@ -2926,7 +2926,7 @@ class QueryExecuter(object):
                                 if process.exitcode != None:
                                     i += 1
                                 # else:
-                                elif terminate == "auto":
+                                elif terminate in ("auto", "manual"):
                                     kill_query_exists_res = self.query_exists_cluster(
                                         self.config, proc, client
                                     )
