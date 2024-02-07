@@ -53,7 +53,7 @@ https://github.com/timeplus-io/proton/assets/5076438/8ceca355-d992-4798-b861-1e0
 ### A single binary:
 
 ```shell
-curl -sSf https://raw.githubusercontent.com/timeplus-io/proton/develop/install.sh | sh
+curl https://install.timeplus.com | sh
 ```
 
 ### Docker:
@@ -61,6 +61,7 @@ curl -sSf https://raw.githubusercontent.com/timeplus-io/proton/develop/install.s
 ```bash
 docker run -d --pull always --name proton ghcr.io/timeplus-io/proton:latest
 ```
+In case you cannot access ghcr, you can pull the image from `public.ecr.aws/timeplus/proton`
 
 ### Docker Compose:
 
@@ -113,6 +114,7 @@ The following drivers are available:
 
 Integrations with other systems:
 
+* ClickHouse https://docs.timeplus.com/proton-clickhouse-external-table
 * Grafana https://github.com/timeplus-io/proton-grafana-source
 * Metabase  https://github.com/timeplus-io/metabase-proton-driver
 * Pulse UI https://github.com/timeplus-io/pulseui/tree/proton
