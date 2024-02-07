@@ -3237,6 +3237,10 @@ void InterpreterSelectQuery::executeStreamingAggregation(
             "Streaming aggregatation group by overflow mode '{}' is not implemented",
             magic_enum::enum_name(settings.group_by_overflow_mode.value));
 
+    auto tracking_updates_type = Streaming::TrackingUpdatesType::None;
+    if (data_stream_semantic_pair.isChangelogOutput())
+        tracking_updates_type = Streaming::TrackingUpdatesType::UpdatesWithRetract;
+
     Streaming::Aggregator::Params params(
         header_before_aggregation,
         keys,
@@ -3261,7 +3265,8 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         streaming_group_by,
         delta_col_pos,
         window_keys_num,
-        query_info.streaming_window_params);
+        query_info.streaming_window_params,
+        tracking_updates_type);
 
     auto merge_threads = max_streams;
     auto temporary_data_merge_threads = settings.aggregation_memory_efficient_merge_threads

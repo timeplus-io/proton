@@ -2546,9 +2546,9 @@ void HashJoin::serialize(WriteBuffer & wb, VersionType version) const
 
     /// Part-4: Buffered data of left/right join stream
     if (bidirectional_hash_join)
-        DB::serialize(left_data, wb, version);
+        left_data.serialize(wb, version);
 
-    DB::serialize(right_data, wb, version);
+    right_data.serialize(wb, version);
 
     /// Part-5: Asof type (Optional)
     bool need_asof = streaming_strictness == Strictness::Range || streaming_strictness == Strictness::Asof;
@@ -2564,12 +2564,12 @@ void HashJoin::serialize(WriteBuffer & wb, VersionType version) const
     if (join_results.has_value())
     {
         assert(retract_push_down && emit_changelog);
-        DB::serialize(*join_results, wb, version, *this);
+        join_results->serialize(wb, version, *this);
     }
 
     /// Part-7: Others
     DB::writeIntBinary(combined_watermark.load(), wb);
-    DB::serialize(join_metrics, wb, version);
+    join_metrics.serialize(wb, version);
 }
 
 void HashJoin::deserialize(ReadBuffer & rb, VersionType version)
@@ -2664,9 +2664,9 @@ void HashJoin::deserialize(ReadBuffer & rb, VersionType version)
 
     /// Part-4: Buffered data of left/right join stream
     if (bidirectional_hash_join)
-        DB::deserialize(left_data, rb, version);
+        left_data.deserialize(rb, version);
 
-    DB::deserialize(right_data, rb, version);
+    right_data.deserialize(rb, version);
 
     /// Part-5: Asof type (Optional)
     bool need_asof = streaming_strictness == Strictness::Range || streaming_strictness == Strictness::Asof;
@@ -2705,7 +2705,7 @@ void HashJoin::deserialize(ReadBuffer & rb, VersionType version)
                 join_results.has_value());
 
         assert(retract_push_down && emit_changelog);
-        DB::deserialize(*join_results, rb, version, *this);
+        join_results->deserialize(rb, version, *this);
     }
 
     /// Part-7: Others
@@ -2713,7 +2713,7 @@ void HashJoin::deserialize(ReadBuffer & rb, VersionType version)
     DB::readIntBinary(recovered_combined_watermark, rb);
     combined_watermark = recovered_combined_watermark;
 
-    DB::deserialize(join_metrics, rb, version);
+    join_metrics.deserialize(rb, version);
 }
 
 void HashJoin::JoinResults::serialize(WriteBuffer & wb, VersionType version, const HashJoin & join) const
@@ -2723,7 +2723,7 @@ void HashJoin::JoinResults::serialize(WriteBuffer & wb, VersionType version, con
     serializeHashJoinMapsVariants(blocks, *maps, wb, version, sample_block, join);
 
     if (version <= CachedBlockMetrics::SERDE_REQUIRED_MAX_VERSION)
-        DB::serialize(metrics, wb, version);
+        metrics.serialize(wb, version);
 }
 
 void HashJoin::JoinResults::deserialize(ReadBuffer & rb, VersionType version, const HashJoin & join)
@@ -2733,7 +2733,7 @@ void HashJoin::JoinResults::deserialize(ReadBuffer & rb, VersionType version, co
     deserializeHashJoinMapsVariants(blocks, *maps, rb, version, pool, sample_block, join);
 
     if (version <= CachedBlockMetrics::SERDE_REQUIRED_MAX_VERSION)
-        DB::deserialize(metrics, rb, version);
+        metrics.deserialize(rb, version);
 }
 
 void HashJoin::JoinData::serialize(WriteBuffer & wb, VersionType version) const
@@ -2748,7 +2748,7 @@ void HashJoin::JoinData::serialize(WriteBuffer & wb, VersionType version) const
     if (has_primary_key_hash_table)
     {
         SerializedRowRefListMultipleToIndices serialized_row_ref_list_multiple_to_indices;
-        DB::serialize(*buffered_data, wb, version, &serialized_row_ref_list_multiple_to_indices);
+        buffered_data->serialize(wb, version, &serialized_row_ref_list_multiple_to_indices);
 
         primary_key_hash_table->map.serialize(
             /*MappedSerializer*/
@@ -2758,7 +2758,7 @@ void HashJoin::JoinData::serialize(WriteBuffer & wb, VersionType version) const
             wb);
     }
     else
-        DB::serialize(*buffered_data, wb, version, nullptr);
+        buffered_data->serialize(wb, version, nullptr);
 }
 
 void HashJoin::JoinData::deserialize(ReadBuffer & rb, VersionType version)
@@ -2789,7 +2789,7 @@ void HashJoin::JoinData::deserialize(ReadBuffer & rb, VersionType version)
     if (has_primary_key_hash_table)
     {
         DeserializedIndicesToRowRefListMultiple<JoinDataBlock> deserialized_indices_to_multiple_ref;
-        DB::deserialize(*buffered_data, rb, version, &deserialized_indices_to_multiple_ref);
+        buffered_data->deserialize(rb, version, &deserialized_indices_to_multiple_ref);
 
         primary_key_hash_table->map.deserialize(
             /*MappedDeserializer*/
@@ -2801,7 +2801,7 @@ void HashJoin::JoinData::deserialize(ReadBuffer & rb, VersionType version)
             rb);
     }
     else
-        DB::deserialize(*buffered_data, rb, version, nullptr);
+        buffered_data->deserialize(rb, version, nullptr);
 }
 
 void HashJoin::JoinGlobalMetrics::serialize(WriteBuffer & wb, VersionType) const
@@ -2828,7 +2828,7 @@ void serializeHashJoinMapsVariants(
     SerializedRowRefListMultipleToIndices * serialized_row_ref_list_multiple_to_indices)
 {
     SerializedBlocksToIndices serialized_blocks_to_indices;
-    DB::serialize(blocks, wb, version, header, &serialized_blocks_to_indices);
+    blocks.serialize(wb, version, header, &serialized_blocks_to_indices);
 
     assert(maps.map_variants.size() >= 1);
     DB::writeIntBinary<UInt16>(static_cast<UInt16>(maps.map_variants.size()), wb);
@@ -2883,7 +2883,7 @@ void deserializeHashJoinMapsVariants(
     DeserializedIndicesToRowRefListMultiple<JoinDataBlock> * deserialized_indices_to_multiple_ref)
 {
     DeserializedIndicesToBlocks<JoinDataBlock> deserialized_indices_to_blocks;
-    DB::deserialize(blocks, rb, version, header, &deserialized_indices_to_blocks);
+    blocks.deserialize(rb, version, header, &deserialized_indices_to_blocks);
 
     UInt16 maps_size;
     DB::readIntBinary<UInt16>(maps_size, rb);

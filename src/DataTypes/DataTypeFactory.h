@@ -20,12 +20,12 @@ using DataTypePtr = std::shared_ptr<const IDataType>;
 
 /** Creates a data type by name of data type family and parameters.
   */
-class DataTypeFactory final : private boost::noncopyable, public IFactoryWithAliases<std::function<DataTypePtr(const ASTPtr & parameters)>>
+class DataTypeFactory final : private boost::noncopyable, public IFactoryWithAliases<std::function<DataTypePtr(const ASTPtr & parameters, bool compatible_with_clickhouse [[maybe_unused]])>>
 {
 private:
     using SimpleCreator = std::function<DataTypePtr()>;
     using DataTypesDictionary = std::unordered_map<String, Value>;
-    using CreatorWithCustom = std::function<std::pair<DataTypePtr, DataTypeCustomDescPtr>(const ASTPtr & parameters)>;
+    using CreatorWithCustom = std::function<std::pair<DataTypePtr, DataTypeCustomDescPtr>(const ASTPtr & parameters, bool compatible_with_clickhouse [[maybe_unused]])>;
     using SimpleCreatorWithCustom = std::function<std::pair<DataTypePtr,DataTypeCustomDescPtr>()>;
 
 public:
@@ -35,9 +35,9 @@ public:
     DataTypePtr get(TypeIndex type) const;
     /// proton: ends.
 
-    DataTypePtr get(const String & full_name) const;
-    DataTypePtr get(const String & family_name, const ASTPtr & parameters) const;
-    DataTypePtr get(const ASTPtr & ast) const;
+    DataTypePtr get(const String & full_name, bool compatible_with_clickhouse = false) const; /// proton: updated
+    DataTypePtr get(const String & family_name, const ASTPtr & parameters, bool compatible_with_clickhouse = false) const; /// proton: updated
+    DataTypePtr get(const ASTPtr & ast, bool compatible_with_clickhouse = false) const; /// proton: updated
     DataTypePtr getCustom(DataTypeCustomDescPtr customization) const;
 
     /// Register a type family by its name.

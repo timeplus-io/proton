@@ -39,6 +39,10 @@ public:
 
     Block read();
 
+    /// proton: starts
+    void setCompatibleWithClickHouse() { compatible_with_clickhouse = true; }
+    /// proton: ends
+
 private:
     ReadBuffer & istr;
     Block header;
@@ -55,6 +59,10 @@ private:
     PODArray<double> avg_value_size_hints;
 
     void updateAvgValueSizeHints(const Block & block);
+
+    /// proton: starts
+    bool compatible_with_clickhouse {false};
+    /// proton: ends
 };
 
 }

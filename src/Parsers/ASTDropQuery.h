@@ -33,6 +33,10 @@ public:
 
     bool no_delay{false};
 
+    /// proton: starts
+    bool is_external_table{false};
+    /// proton: ends
+
     // We detach the object permanently, so it will not be reattached back during server restart.
     bool permanently{false};
 

@@ -258,14 +258,14 @@ std::shared_ptr<Streaming::HashJoin> initHashJoin(
 void serdeAndCheck(const Streaming::HashJoin & join, Streaming::HashJoin & recovered_join, std::string_view msg)
 {
     WriteBufferFromOwnString wb;
-    DB::serialize(join, wb, ProtonRevision::getVersionRevision());
+    join.serialize(wb, ProtonRevision::getVersionRevision());
     auto original_string = wb.str();
 
     ReadBufferFromOwnString rb(original_string);
-    DB::deserialize(recovered_join, rb, ProtonRevision::getVersionRevision());
+    recovered_join.deserialize(rb, ProtonRevision::getVersionRevision());
 
     WriteBufferFromOwnString wb2;
-    DB::serialize(recovered_join, wb2, ProtonRevision::getVersionRevision());
+    recovered_join.serialize(wb2, ProtonRevision::getVersionRevision());
     auto recovered_string = wb2.str();
 
     ASSERT_EQ(original_string, recovered_string) << msg << ": (FAILED)\n";

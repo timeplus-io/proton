@@ -140,7 +140,7 @@ Block NativeReader::read()
         /// Type
         String type_name;
         readStringBinary(type_name, istr);
-        column.type = data_type_factory.get(type_name);
+        column.type = data_type_factory.get(type_name/* proton: starts */, compatible_with_clickhouse/* proton: ends */);
 
         setVersionToAggregateFunctions(column.type, true, server_revision);
 

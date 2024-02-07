@@ -407,7 +407,7 @@ void ChangelogConvertTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx, [this](WriteBuffer & wb) {
         SerializedBlocksToIndices serialized_blocks_to_indices;
-        DB::serialize(source_chunks, wb, getVersion(), getInputs().front().getHeader(), &serialized_blocks_to_indices);
+        source_chunks.serialize(wb, getVersion(), getInputs().front().getHeader(), &serialized_blocks_to_indices);
 
         index.serialize(
             /*MappedSerializer*/
@@ -420,7 +420,7 @@ void ChangelogConvertTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
         DB::writeIntBinary(late_rows, wb);
 
         if (version <= CachedBlockMetrics::SERDE_REQUIRED_MAX_VERSION)
-            DB::serialize(cached_block_metrics, wb, getVersion());
+            cached_block_metrics.serialize(wb, getVersion());
     });
 }
 
@@ -428,7 +428,7 @@ void ChangelogConvertTransform::recover(CheckpointContextPtr ckpt_ctx)
 {
     ckpt_ctx->coordinator->recover(getLogicID(), ckpt_ctx, [this](VersionType version_, ReadBuffer & rb) {
         DeserializedIndicesToBlocks<LightChunk> deserialized_indices_to_blocks;
-        DB::deserialize(source_chunks, rb, version_, getInputs().front().getHeader(), &deserialized_indices_to_blocks);
+        source_chunks.deserialize(rb, version_, getInputs().front().getHeader(), &deserialized_indices_to_blocks);
 
         index.deserialize(
             /*MappedDeserializer*/
@@ -442,7 +442,7 @@ void ChangelogConvertTransform::recover(CheckpointContextPtr ckpt_ctx)
         DB::readIntBinary(late_rows, rb);
 
         if (version_ <= CachedBlockMetrics::SERDE_REQUIRED_MAX_VERSION)
-            DB::deserialize(cached_block_metrics, rb, version_);
+            cached_block_metrics.deserialize(rb, version_);
     });
 }
 }

@@ -131,7 +131,7 @@ tests:
           query_id: 3100
           depends_on_stream: test_31_multishards_stream
           query: |
-            subscribe to with cte as (select i as key, count() from test_31_multishards_stream where _tp_time > earliest_ts() group by key settings group_by_two_level_threshold=50) select count() from cte settings checkpoint_interval=2, emit_during_backfill=false;
+            subscribe to with cte as (select i as key, count() from test_31_multishards_stream where _tp_time > earliest_ts() group by key settings group_by_two_level_threshold=50) select count() from cte settings checkpoint_interval=2;
 
         - client: python
           query_type: table
@@ -207,7 +207,7 @@ tests:
           depends_on_stream: test_31_multishards_stream
           wait: 1
           query: |
-            subscribe to with cte as (select i as key, count() from changelog(test_31_multishards_stream, i) where _tp_time > earliest_ts() group by key emit changelog settings group_by_two_level_threshold=50) select count() from cte settings checkpoint_interval=2, emit_during_backfill=false;
+            subscribe to with cte as (select i as key, count() from changelog(test_31_multishards_stream, i) where _tp_time > earliest_ts() group by key emit changelog settings group_by_two_level_threshold=50) select count() from cte settings checkpoint_interval=2;
 
         - client: python
           query_type: table

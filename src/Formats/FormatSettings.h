@@ -230,6 +230,9 @@ struct FormatSettings
         bool interpret_expressions = true;
         bool deduce_templates_of_expressions = true;
         bool accurate_types_of_literals = true;
+        /// proton: starts
+        bool no_commas_between_rows = false;
+        /// proton: ends
     } values;
 
     struct

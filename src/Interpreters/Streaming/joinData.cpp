@@ -326,18 +326,18 @@ void BufferedStreamData::serialize(
     DB::writeIntBinary(block_id, wb);
 
     assert(current_hash_blocks);
-    DB::serialize(*current_hash_blocks, wb, version, sample_block, *join, serialized_row_ref_list_multiple_to_indices);
+    current_hash_blocks->serialize(wb, version, sample_block, *join, serialized_row_ref_list_multiple_to_indices);
 
     DB::writeIntBinary<UInt32>(static_cast<UInt32>(range_bucket_hash_blocks.size()), wb);
     for (const auto & [bucket, hash_blocks] : range_bucket_hash_blocks)
     {
         DB::writeIntBinary(bucket, wb);
         assert(hash_blocks);
-        DB::serialize(*hash_blocks, wb, version, sample_block, *join, serialized_row_ref_list_multiple_to_indices);
+        hash_blocks->serialize(wb, version, sample_block, *join, serialized_row_ref_list_multiple_to_indices);
     }
 
     if (version <= CachedBlockMetrics::SERDE_REQUIRED_MAX_VERSION)
-        DB::serialize(metrics, wb, version);
+        metrics.serialize(wb, version);
 }
 
 void BufferedStreamData::deserialize(
@@ -358,7 +358,7 @@ void BufferedStreamData::deserialize(
     DB::readIntBinary(block_id, rb);
 
     assert(current_hash_blocks);
-    DB::deserialize(*current_hash_blocks, rb, version, sample_block, *join, deserialized_indices_to_row_ref_list_multiple);
+    current_hash_blocks->deserialize(rb, version, sample_block, *join, deserialized_indices_to_row_ref_list_multiple);
 
     UInt32 size;
     Int64 bucket;
@@ -370,11 +370,11 @@ void BufferedStreamData::deserialize(
         assert(inserted);
         /// Init hash table
         join->initHashMaps(iter->second->maps->map_variants);
-        DB::deserialize(*iter->second, rb, version, sample_block, *join, deserialized_indices_to_row_ref_list_multiple);
+        iter->second->deserialize(rb, version, sample_block, *join, deserialized_indices_to_row_ref_list_multiple);
     }
 
     if (version <= CachedBlockMetrics::SERDE_REQUIRED_MAX_VERSION)
-        DB::deserialize(metrics, rb, version);
+        metrics.deserialize(rb, version);
 }
 
 HashBlocksPtr BufferedStreamData::newHashBlocks()

@@ -12,7 +12,12 @@ namespace DB
 class StorageExternalStreamImpl : public std::enable_shared_from_this<StorageExternalStreamImpl>
 {
 public:
-    explicit StorageExternalStreamImpl(std::unique_ptr<ExternalStreamSettings> settings_): settings(std::move(settings_)) {}
+    explicit StorageExternalStreamImpl(std::unique_ptr<ExternalStreamSettings> settings_): settings(std::move(settings_)) {
+        /// Make it easier for people to ingest data from external streams. A lot of times people didn't see data coming
+        /// only because the external stream does not have all the fields.
+        if (!settings->input_format_skip_unknown_fields.changed)
+            settings->input_format_skip_unknown_fields = true;
+    }
     virtual ~StorageExternalStreamImpl() = default;
 
     virtual void startup() = 0;
@@ -41,10 +46,7 @@ public:
 
     FormatSettings getFormatSettings(const ContextPtr & context) const
     {
-        auto format_settings = DB::getFormatSettings(context);
-        if (format_settings.schema.format_schema.empty())
-            format_settings.schema.format_schema = formatSchema();
-        return format_settings;
+        return settings->getFormatSettings(context);
     }
 
 protected:

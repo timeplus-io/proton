@@ -145,7 +145,10 @@ max_connections: 4096
 keep_alive_timeout: 3
 
 # Enable telemetry. This is used to collect the version and runtime environment information to Timeplus, Inc.
-telemetry_enabled: true
+telemetry_enabled:
+    "@from_env": TELEMETRY_ENABLED
+    "@replace": true
+    "#text": true
 
 # gRPC protocol (see src/Server/grpc_protos/proton_grpc.proto for the API)
 # grpc_port: 9100
