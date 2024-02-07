@@ -82,6 +82,26 @@ AsynchronousMetrics::AsynchronousMetrics(
     openFileIfExists("/proc/uptime", uptime);
     openFileIfExists("/proc/net/dev", net_dev);
 
+    /// CGroups v2
+    openFileIfExists("/sys/fs/cgroup/memory.max", cgroupmem_limit_in_bytes);
+    if (cgroupmem_limit_in_bytes)
+    {
+        openFileIfExists("/sys/fs/cgroup/memory.current", cgroupmem_usage_in_bytes);
+    }
+    openFileIfExists("/sys/fs/cgroup/cpu.max", cgroupcpu_max);
+
+    /// CGroups v1
+    if (!cgroupmem_limit_in_bytes)
+    {
+        openFileIfExists("/sys/fs/cgroup/memory/memory.limit_in_bytes", cgroupmem_limit_in_bytes);
+        openFileIfExists("/sys/fs/cgroup/memory/memory.usage_in_bytes", cgroupmem_usage_in_bytes);
+    }
+    if (!cgroupcpu_max)
+    {
+        openFileIfExists("/sys/fs/cgroup/cpu/cpu.cfs_period_us", cgroupcpu_cfs_period);
+        openFileIfExists("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", cgroupcpu_cfs_quota);
+    }
+
     openSensors();
     openBlockDevices();
     openEDAC();
@@ -911,6 +931,84 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
             }
 
             proc_stat_values_other = current_other_values;
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+    }
+
+    if (cgroupmem_limit_in_bytes && cgroupmem_usage_in_bytes)
+    {
+        try
+        {
+            cgroupmem_limit_in_bytes->rewind();
+            cgroupmem_usage_in_bytes->rewind();
+
+            uint64_t limit = 0;
+            uint64_t usage = 0;
+
+            tryReadText(limit, *cgroupmem_limit_in_bytes);
+            tryReadText(usage, *cgroupmem_usage_in_bytes);
+
+            new_values["CGroupMemoryTotal"] = limit;
+            new_values["CGroupMemoryUsed"] = usage;
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+    }
+
+    if (cgroupcpu_max)
+    {
+        try
+        {
+            cgroupcpu_max->rewind();
+
+            uint64_t quota = 0;
+            uint64_t period = 0;
+
+            std::string line;
+            readText(line, *cgroupcpu_max);
+
+            auto space = line.find(' ');
+
+            if (line.rfind("max", space) == std::string::npos)
+            {
+                auto field1 = line.substr(0, space);
+                quota = std::stoull(field1);
+            }
+
+            if (space != std::string::npos)
+            {
+                auto field2 = line.substr(space + 1);
+                period = std::stoull(field2);
+            }
+
+            new_values["CGroupCpuCfsPeriod"] = period;
+            new_values["CGroupCpuCfsQuota"] = quota;
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+    }
+    else if (cgroupcpu_cfs_quota && cgroupcpu_cfs_period)
+    {
+        try
+        {
+            cgroupcpu_cfs_quota->rewind();
+            cgroupcpu_cfs_period->rewind();
+
+            uint64_t quota = 0;
+            uint64_t period = 0;
+
+            tryReadText(quota, *cgroupcpu_cfs_quota);
+            tryReadText(period, *cgroupcpu_cfs_period);
+
+            new_values["CGroupCpuCfsPeriod"] = period;
+            new_values["CGroupCpuCfsQuota"] = quota;
         }
         catch (...)
         {
