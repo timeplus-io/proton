@@ -1,7 +1,10 @@
-docker-compose -f test_compatibility/docker-compose.yaml up -d
+set -e
+CUR_DIR="$GITHUB_WORKSPACE/tests/stream/test_compatibility"
+docker-compose -f "$CUR_DIR/configs/docker-compose.yaml" up -d
+docker ps
 sleep 5
-docker exec proton-server proton client -nm -q "insert into example (x) values (4)(5)(6);"
-docker exec proton-server proton client -nm -q "select x from example where _tp_time > earliest_ts() limit 6;"
-docker exec proton-server proton client -nm -q "insert into example_external (x) values (8)(10)(12);"
-docker exec proton-server proton client -nm -q "select x from example_external limit 6 settings seek_to='earliest';"
-docker-compose -f test_compatibility/docker-compose.yaml down
+export TEST_DIR="$CUR_DIR/extra_tests"
+python $CUR_DIR/run_compatibility_tests.py
+docker exec proton-server pkill proton-server
+sleep 10
+docker-compose -f "$CUR_DIR/configs/docker-compose.yaml" down -v

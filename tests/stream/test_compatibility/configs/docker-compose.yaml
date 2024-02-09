@@ -8,11 +8,11 @@ services:
       - $GITHUB_WORKSPACE/data/proton-redp/datas:/var/lib/proton
       - $GITHUB_WORKSPACE/data/proton-redp/log:/var/log/proton-server
     ports:
-      - "13218:3218" # HTTP Streaming
-      - "18123:8123" # HTTP Snapshot
-      - "18463:8463" # TCP Streaming
-      - "15432:5432" # Postgres Snapshot
-      - "17587:7587" # TCP Snapshot
+      - "3218:3218" # HTTP Streaming
+      - "8123:8123" # HTTP Snapshot
+      - "8463:8463" # TCP Streaming
+      - "5432:5432" # Postgres Snapshot
+      - "7587:7587" # TCP Snapshot
     deploy:
       replicas: 1
       restart_policy:

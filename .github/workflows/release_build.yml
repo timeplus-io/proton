@@ -169,6 +169,22 @@ jobs:
           -H "X-GitHub-Api-Version: 2022-11-28" \
           https://api.github.com/repos/timeplus-io/proton/actions/workflows/manual_trigger_test.yml/dispatches \
           -d "{\"ref\":\"develop\",\"inputs\":{\"arch\": \"arm\", \"tag\":\"$PROTON_TAG-rc\"}}\""
+
+        # trigger compatibility test
+        export PROTON_VERSION=$PROTON_TAG
+        cd $GITHUB_WORKSPACE/tests/proton_ci
+
+        # make virtualenv
+        ln -s /usr/bin/python3 /usr/bin/python
+        apt-get update
+        systemctl stop unattended-upgrades
+        apt install python3-venv -y
+        python -m venv env
+        source env/bin/activate
+        pip install --upgrade pip
+
+        pip install -r requirements.txt
+        python run_compatibility_tests.py
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
