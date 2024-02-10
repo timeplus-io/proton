@@ -19,7 +19,7 @@ on: # yamllint disable-line rule:truthy
 jobs:
   prepare_sanitizer_build:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '00 23 * * 5' 
+    if: github.event.schedule == '00 23 * * 5' && github.repository == 'timeplus-io/proton'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE
@@ -63,6 +63,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_sanitizer_unit_test:
     runs-on: ubuntu-latest
+    if: github.repository == 'timeplus-io/proton'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci
@@ -84,6 +85,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_sanitizer_smoke_test:
     runs-on: ubuntu-latest
+    if: github.repository == 'timeplus-io/proton'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/stream
@@ -117,6 +119,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_sanitizer_stateless_test:
     runs-on: ubuntu-latest
+    if: github.repository == 'timeplus-io/proton'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci
@@ -138,6 +141,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_sanitizer_stateful_test:
     runs-on: ubuntu-latest
+    if: github.repository == 'timeplus-io/proton'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci
@@ -159,7 +163,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_release_build:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '00 23 * * 5'
+    if: github.event.schedule == '00 23 * * 5' && github.repository == 'timeplus-io/proton'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE
@@ -197,7 +201,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_release_smoke_test:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '00 23 * * 5'
+    if: github.event.schedule == '00 23 * * 5' && github.repository == 'timeplus-io/proton'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/stream
@@ -231,7 +235,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_release_stateless_test:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '00 23 * * 5'
+    if: github.event.schedule == '00 23 * * 5' && github.repository == 'timeplus-io/proton'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci
@@ -253,7 +257,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_release_stateful_test:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '00 23 * * 5'
+    if: github.event.schedule == '00 23 * * 5' && github.repository == 'timeplus-io/proton'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE/tests/proton_ci
@@ -275,6 +279,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_address_build:
     runs-on: ubuntu-latest
+    if: github.repository == 'timeplus-io/proton'
     outputs:
       command: |
             cd $GITHUB_WORKSPACE
@@ -317,6 +322,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_sanitizer_clean_up:
     runs-on: ubuntu-latest
+    if: github.repository == 'timeplus-io/proton'
     outputs:
       command: |
           bash tests/ci/worker/sanitizer_clean_up.sh
@@ -326,6 +332,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_release_clean_up:
     runs-on: ubuntu-latest
+    if: github.repository == 'timeplus-io/proton'
     outputs:
       command: |
           bash tests/ci/worker/release_clean_up.sh
