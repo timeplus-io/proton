@@ -4,12 +4,6 @@
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int UNSUPPORTED_WATERMARK_STRATEGY;
-extern const int UNSUPPORTED_WATERMARK_EMIT_MODE;
-}
-
 namespace Streaming::TumbleHelper
 {
 /// @brief Get max window can be finalized by the @param watermark
@@ -83,29 +77,6 @@ WindowsWithBuckets getWindowsWithBuckets(const TumbleWindowParams & params, bool
     }
 
     return windows_with_buckets;
-}
-
-void validateWatermarkStrategyAndEmitMode(WatermarkStrategy & strategy, WatermarkEmitMode & mode, TumbleWindowParams & params)
-{
-    /// FIXME: Set default strategy, configurable in the future ?
-    if (strategy == WatermarkStrategy::Unknown)
-        strategy = WatermarkStrategy::OutOfOrdernessInWindowAndBatch;
-
-    if (mode == WatermarkEmitMode::Unknown)
-        mode = WatermarkEmitMode::OnWindow;
-
-    /// Supported checking
-    if (strategy == WatermarkStrategy::None)
-        throw Exception(
-            ErrorCodes::UNSUPPORTED_WATERMARK_STRATEGY,
-            "Unsupported watermark strategy '{} for TUMBLE window",
-            magic_enum::enum_name(strategy));
-
-    if (mode != WatermarkEmitMode::OnWindow && mode != WatermarkEmitMode::OnUpdate && mode != WatermarkEmitMode::Periodic && mode != WatermarkEmitMode::PeriodicOnUpdate)
-        throw Exception(
-            ErrorCodes::UNSUPPORTED_WATERMARK_EMIT_MODE,
-            "Unsupported watermark emit mode '{}' for TUMBLE window",
-            magic_enum::enum_name(mode));
 }
 }
 }

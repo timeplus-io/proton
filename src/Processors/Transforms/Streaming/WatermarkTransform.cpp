@@ -2,6 +2,9 @@
 
 #include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
+#include <Processors/Transforms/Streaming/HopWatermarkStamper.h>
+#include <Processors/Transforms/Streaming/SessionWatermarkStamper.h>
+#include <Processors/Transforms/Streaming/TumbleWatermarkStamper.h>
 #include <Common/ProtonCommon.h>
 
 namespace DB
@@ -13,19 +16,38 @@ extern const int INVALID_EMIT_MODE;
 
 namespace Streaming
 {
+namespace
+{
+WatermarkStamperPtr initWatermark(const WatermarkStamperParams & params, Poco::Logger * logger)
+{
+    assert(params.mode != EmitMode::None);
+    if (params.window_params)
+    {
+        switch (params.window_params->type)
+        {
+            case WindowType::TUMBLE:
+                return std::make_unique<TumbleWatermarkStamper>(params, logger);
+            case WindowType::HOP:
+                return std::make_unique<HopWatermarkStamper>(params, logger);
+            case WindowType::SESSION:
+                return std::make_unique<SessionWatermarkStamper>(params, logger);
+            default:
+                break;
+        }
+    }
+    return std::make_unique<WatermarkStamper>(params, logger);
+}
+}
+
 WatermarkTransform::WatermarkTransform(
-    const Block & header, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * log)
+    const Block & header, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * logger)
     : ISimpleTransform(header, header, false, ProcessorID::WatermarkTransformID)
     , params(std::move(params_))
     , skip_stamping_for_backfill_data(skip_stamping_for_backfill_data_)
 {
-    watermark = std::make_unique<WatermarkStamper>(*params, log);
+    watermark = initWatermark(*params, logger);
+    assert(watermark);
     watermark->preProcess(header);
-}
-
-String WatermarkTransform::getName() const
-{
-    return fmt::format("WatermarkTransform({})", watermark->getDescription());
 }
 
 void WatermarkTransform::transform(Chunk & chunk)

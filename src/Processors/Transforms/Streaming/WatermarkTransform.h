@@ -16,11 +16,11 @@ namespace Streaming
 class WatermarkTransform final : public ISimpleTransform
 {
 public:
-    WatermarkTransform(const Block & header, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * log);
+    WatermarkTransform(const Block & header, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * logger);
 
     ~WatermarkTransform() override = default;
 
-    String getName() const override;
+    String getName() const override { return watermark->getName() + "Transform"; }
 
     void checkpoint(CheckpointContextPtr ckpt_ctx) override;
     void recover(CheckpointContextPtr ckpt_ctx) override;

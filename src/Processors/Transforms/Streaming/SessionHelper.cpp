@@ -12,8 +12,6 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
-extern const int UNSUPPORTED_WATERMARK_STRATEGY;
-extern const int UNSUPPORTED_WATERMARK_EMIT_MODE;
 }
 
 namespace Streaming
@@ -265,32 +263,6 @@ WindowsWithBuckets getWindowsWithBuckets(const SessionInfoQueue & sessions)
         windows_with_buckets.emplace_back(WindowWithBuckets{{session->win_start, session->win_end}, {session->id}});
 
     return windows_with_buckets;
-}
-
-void validateWatermarkStrategyAndEmitMode(WatermarkStrategy & strategy, WatermarkEmitMode & mode, SessionWindowParams & params)
-{
-    /// TODO: So far, we always push down assign session window logic for session window aggregating
-    assert(params.pushdown_window_assignment);
-
-    /// FIXME: Set default strategy, configurable in the future ?
-    if (strategy == WatermarkStrategy::Unknown)
-        strategy = WatermarkStrategy::Ascending;
-
-    if (mode == WatermarkEmitMode::Unknown)
-        mode = WatermarkEmitMode::None;
-
-    /// Supported checking
-    if (strategy != WatermarkStrategy::Ascending)
-        throw Exception(
-            ErrorCodes::UNSUPPORTED_WATERMARK_STRATEGY,
-            "Unsupported watermark strategy '{} for SESSION window",
-            magic_enum::enum_name(strategy));
-
-    if (mode != WatermarkEmitMode::None && mode != WatermarkEmitMode::OnUpdate && mode != WatermarkEmitMode::Periodic && mode != WatermarkEmitMode::PeriodicOnUpdate)
-        throw Exception(
-            ErrorCodes::UNSUPPORTED_WATERMARK_EMIT_MODE,
-            "Unsupported watermark emit mode '{}' for SESSION window",
-            magic_enum::enum_name(mode));
 }
 }
 }

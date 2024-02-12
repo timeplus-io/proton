@@ -9,14 +9,10 @@ void ASTEmitQuery::formatImpl(const FormatSettings & format, FormatState &, Form
     format.ostr << (format.hilite ? hilite_keyword : "") << magic_enum::enum_name(stream_mode) << " " << (format.hilite ? hilite_none : "");
 
     int elems = 0;
-    if (watermark_strategy != Streaming::WatermarkStrategy::Unknown)
+    if (after_watermark)
     {
         format.ostr << (format.hilite ? hilite_keyword : "") << "AFTER WATERMARK" << (format.hilite ? hilite_none : "");
-        if (watermark_strategy == Streaming::WatermarkStrategy::Ascending)
-        {
-            format.ostr << (format.hilite ? hilite_keyword : "") << " WITHOUT DELAY" << (format.hilite ? hilite_none : "");
-        }
-        else if (watermark_strategy == Streaming::WatermarkStrategy::BoundedOutOfOrderness)
+        if (delay_interval)
         {
             format.ostr << (format.hilite ? hilite_keyword : "") << " WITH DELAY " << (format.hilite ? hilite_none : "");
             delay_interval->format(format);
@@ -59,8 +55,7 @@ void ASTEmitQuery::formatImpl(const FormatSettings & format, FormatState &, Form
 void ASTEmitQuery::updateTreeHashImpl(SipHash & hash_state) const
 {
     hash_state.update(stream_mode);
-
-    hash_state.update(watermark_strategy);
+    hash_state.update(after_watermark);
 
     if (delay_interval)
         delay_interval->updateTreeHashImpl(hash_state);

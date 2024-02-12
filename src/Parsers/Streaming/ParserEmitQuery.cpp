@@ -16,7 +16,7 @@ extern const int SYNTAX_ERROR;
 bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[maybe_unused]] bool hint)
 {
     /// EMIT [STREAM|CHANGELOG]
-    ///     [AFTER WATERMARK [WITH DELAY <interval>]|[WITHOUT DELAY]]
+    ///     [AFTER WATERMARK WITH DELAY <interval>]
     ///     [PERIODIC <interval>]
     ///     [ON UPDATE]
     ///     - [[ AND ]TIMEOUT <interval>]
@@ -44,17 +44,16 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [
     else if (ParserKeyword("CHANGELOG").ignore(pos, expected))
         stream_mode = ASTEmitQuery::StreamMode::CHANGELOG;
 
-    Streaming::WatermarkStrategy watermark_strategy = Streaming::WatermarkStrategy::Unknown;
+    bool after_watermark = false;
+    ASTPtr delay_interval;
 
     ParserIntervalOperatorExpression interval_alias_p;
-    ASTPtr delay_interval;
     if (ParserKeyword("AFTER").ignore(pos, expected))
     {
         if (!ParserKeyword("WATERMARK").ignore(pos, expected))
             return false;
 
-        if (watermark_strategy != Streaming::WatermarkStrategy::Unknown)
-            throw Exception("Can not use repeat 'AFTER WATERMARK' in EMIT clause", ErrorCodes::SYNTAX_ERROR);
+        after_watermark = true;
 
         /// [WITH DELAY INTERVAL '3' SECONDS]
         if (ParserKeyword("WITH").ignore(pos, expected))
@@ -64,16 +63,6 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [
 
             if (!interval_alias_p.parse(pos, delay_interval, expected))
                 return false;
-
-            watermark_strategy = Streaming::WatermarkStrategy::BoundedOutOfOrderness;
-        }
-        /// [WITHOUT DELAY]
-        else if (ParserKeyword("WITHOUT").ignore(pos, expected))
-        {
-            if (!ParserKeyword("DELAY").ignore(pos, expected))
-                throw Exception("Expect 'DELAY' after 'WITHOUT' in EMIT clause", ErrorCodes::SYNTAX_ERROR);
-
-            watermark_strategy = Streaming::WatermarkStrategy::Ascending;
         }
     }
 
@@ -138,7 +127,7 @@ bool ParserEmitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [
 
     auto query = std::make_shared<ASTEmitQuery>();
     query->stream_mode = stream_mode;
-    query->watermark_strategy = watermark_strategy;
+    query->after_watermark = after_watermark;
     query->delay_interval = delay_interval;
     query->periodic_interval = periodic_interval;
     query->on_update = on_update;

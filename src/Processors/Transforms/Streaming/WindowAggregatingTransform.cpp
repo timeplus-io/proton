@@ -40,12 +40,8 @@ WindowAggregatingTransform::WindowAggregatingTransform(
     if (output_header.has(ProtonConsts::STREAMING_WINDOW_END))
         window_end_col_pos = output_header.getPositionByName(ProtonConsts::STREAMING_WINDOW_END);
 
-    only_emit_finalized_windows
-        = !(params->watermark_emit_mode == WatermarkEmitMode::Periodic || params->watermark_emit_mode == WatermarkEmitMode::OnUpdate
-            || params->watermark_emit_mode == WatermarkEmitMode::PeriodicOnUpdate);
-
-    only_convert_updates
-        = params->watermark_emit_mode == WatermarkEmitMode::OnUpdate || params->watermark_emit_mode == WatermarkEmitMode::PeriodicOnUpdate;
+    only_emit_finalized_windows = AggregatingHelper::onlyEmitFinalizedWindows(params->emit_mode);
+    only_emit_updates = AggregatingHelper::onlyEmitUpdates(params->emit_mode);
 }
 
 bool WindowAggregatingTransform::needFinalization(Int64 min_watermark) const
@@ -81,7 +77,7 @@ bool WindowAggregatingTransform::prepareFinalization(Int64 min_watermark)
 
     /// FIXME: For multiple WindowAggregatingTransform, will emit multiple times in a periodic interval,
     /// we can do periodic emit in AggregatingTransform, not in WatermarkTransform.
-    if (params->watermark_emit_mode == WatermarkEmitMode::Periodic && !many_data->hasNewData())
+    if ((params->emit_mode == EmitMode::PeriodicWatermark || params->emit_mode == Streaming::EmitMode::PeriodicWatermarkOnUpdate) && !many_data->hasNewData())
         return false;
 
     /// After acquired finalizing lock
@@ -152,7 +148,7 @@ void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
     assert(!prepared_windows_with_buckets.empty());
     for (const auto & window_with_buckets : prepared_windows_with_buckets)
     {
-        if (only_convert_updates)
+        if (only_emit_updates)
             chunk = AggregatingHelper::mergeAndSpliceAndConvertUpdatesToChunk(many_data->variants, *params, window_with_buckets.buckets);
         else
             chunk = AggregatingHelper::mergeAndSpliceAndConvertToChunk(many_data->variants, *params, window_with_buckets.buckets);
@@ -176,7 +172,7 @@ void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 
     /// `mergeAndSpliceAndConvertUpdatesToChunk` only converts updates but doesn't reset updated flags,
     /// we need to manually reset them after all windows conversions.
-    if (only_convert_updates)
+    if (only_emit_updates)
     {
         for (const auto & window_with_buckets : prepared_windows_with_buckets)
             for (auto & variants : many_data->variants)

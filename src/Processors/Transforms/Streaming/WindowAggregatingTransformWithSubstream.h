@@ -30,7 +30,7 @@ private:
     std::optional<size_t> window_end_col_pos;
 
     bool only_emit_finalized_windows = true;
-    bool only_convert_updates = false;
+    bool only_emit_updates = false;
 };
 
 }

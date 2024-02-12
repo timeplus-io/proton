@@ -4,12 +4,6 @@
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int UNSUPPORTED_WATERMARK_STRATEGY;
-extern const int UNSUPPORTED_WATERMARK_EMIT_MODE;
-}
-
 namespace Streaming::HopHelper
 {
 WindowInterval gcdWindowInterval(const ColumnWithTypeAndName & interval_col1, const ColumnWithTypeAndName & interval_col2)
@@ -157,29 +151,6 @@ WindowsWithBuckets getWindowsWithBuckets(const HopWindowParams & params, bool is
     }
 
     return windows_with_buckets;
-}
-
-void validateWatermarkStrategyAndEmitMode(WatermarkStrategy & strategy, WatermarkEmitMode & mode, HopWindowParams & params)
-{
-    /// FIXME: Set default strategy, configurable in the future ?
-    if (strategy == WatermarkStrategy::Unknown)
-        strategy = WatermarkStrategy::OutOfOrdernessInWindowAndBatch;
-
-    if (mode == WatermarkEmitMode::Unknown)
-        mode = WatermarkEmitMode::OnWindow;
-
-    /// Supported checking
-    if (strategy == WatermarkStrategy::None)
-        throw Exception(
-            ErrorCodes::UNSUPPORTED_WATERMARK_STRATEGY,
-            "Unsupported watermark strategy '{} for HOP window",
-            magic_enum::enum_name(strategy));
-
-    if (mode != WatermarkEmitMode::OnWindow && mode != WatermarkEmitMode::OnUpdate && mode != WatermarkEmitMode::Periodic && mode != WatermarkEmitMode::PeriodicOnUpdate)
-        throw Exception(
-            ErrorCodes::UNSUPPORTED_WATERMARK_EMIT_MODE,
-            "Unsupported watermark emit mode '{}' for HOP window",
-            magic_enum::enum_name(mode));
 }
 }
 }

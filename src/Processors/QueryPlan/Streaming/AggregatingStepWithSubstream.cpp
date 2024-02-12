@@ -37,14 +37,14 @@ ITransformingStep::Traits getTraits()
 }
 
 AggregatingStepWithSubstream::AggregatingStepWithSubstream(
-    const DataStream & input_stream_, Aggregator::Params params_, bool final_, bool emit_version_, bool emit_changelog_, WatermarkEmitMode watermark_emit_mode_)
+    const DataStream & input_stream_, Aggregator::Params params_, bool final_, bool emit_version_, bool emit_changelog_, EmitMode emit_mode_)
     : ITransformingStep(
         input_stream_, AggregatingTransformParams::getHeader(params_, final_, emit_version_, emit_changelog_), getTraits(), false)
     , params(std::move(params_))
     , final(std::move(final_))
     , emit_version(emit_version_)
     , emit_changelog(emit_changelog_)
-    , watermark_emit_mode(watermark_emit_mode_)
+    , emit_mode(emit_mode_)
 {
 }
 
@@ -65,7 +65,7 @@ void AggregatingStepWithSubstream::transformPipeline(QueryPipelineBuilder & pipe
         params.group_by_two_level_threshold_bytes = 0;
     }
 
-    auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), final, emit_version, emit_changelog, watermark_emit_mode);
+    auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), final, emit_version, emit_changelog, emit_mode);
 
     /// If there are several sources, we perform aggregation separately (Assume it's shuffled data by substream keys)
     pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {

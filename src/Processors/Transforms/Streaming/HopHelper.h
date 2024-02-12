@@ -6,9 +6,6 @@ namespace DB
 {
 namespace Streaming
 {
-enum class WatermarkStrategy;
-enum class WatermarkEmitMode;
-
 namespace HopHelper
 {
 WindowInterval gcdWindowInterval(const ColumnWithTypeAndName & interval_col1, const ColumnWithTypeAndName & interval_col2);
@@ -23,9 +20,6 @@ Int64 getLastExpiredTimeBucket(Int64 watermark, const HopWindowParams & params, 
 /// @brief Get windows with buckets
 using BucketsGetter = std::function<std::vector<Int64>()>;
 WindowsWithBuckets getWindowsWithBuckets(const HopWindowParams & params, bool is_start_time_bucket, BucketsGetter buckets_getter);
-
-/// @brief Validate watermark strategy and emit mode for hop window
-void validateWatermarkStrategyAndEmitMode(WatermarkStrategy & strategy, WatermarkEmitMode & mode, HopWindowParams & params);
 }
 }
 }

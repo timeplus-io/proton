@@ -22,15 +22,15 @@ struct AggregatingTransformParams
     bool emit_version;
     bool emit_changelog;
     DataTypePtr version_type;
-    WatermarkEmitMode watermark_emit_mode;
+    Streaming::EmitMode emit_mode;
 
-    AggregatingTransformParams(const Aggregator::Params & params_, bool final_, bool emit_version_, bool emit_changelog_, WatermarkEmitMode watermark_emit_mode_)
+    AggregatingTransformParams(const Aggregator::Params & params_, bool final_, bool emit_version_, bool emit_changelog_, Streaming::EmitMode watermark_emit_mode_)
         : aggregator(params_)
         , params(aggregator.getParams())
         , final(final_)
         , emit_version(emit_version_)
         , emit_changelog(emit_changelog_)
-        , watermark_emit_mode(watermark_emit_mode_)
+        , emit_mode(watermark_emit_mode_)
     {
         if (emit_version)
             version_type = DataTypeFactory::instance().get("int64");

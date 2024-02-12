@@ -23,12 +23,8 @@ WindowAggregatingTransformWithSubstream::WindowAggregatingTransformWithSubstream
     if (output_header.has(ProtonConsts::STREAMING_WINDOW_END))
         window_end_col_pos = output_header.getPositionByName(ProtonConsts::STREAMING_WINDOW_END);
 
-    only_emit_finalized_windows
-        = !(params->watermark_emit_mode == WatermarkEmitMode::Periodic || params->watermark_emit_mode == WatermarkEmitMode::OnUpdate
-            || params->watermark_emit_mode == WatermarkEmitMode::PeriodicOnUpdate);
-
-    only_convert_updates
-        = params->watermark_emit_mode == WatermarkEmitMode::OnUpdate || params->watermark_emit_mode == WatermarkEmitMode::PeriodicOnUpdate;
+    only_emit_finalized_windows = AggregatingHelper::onlyEmitFinalizedWindows(params->emit_mode);
+    only_emit_updates = AggregatingHelper::onlyEmitUpdates(params->emit_mode);
 }
 
 /// Finalize what we have in memory and produce a finalized Block
@@ -43,7 +39,7 @@ void WindowAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
         substream_ctx->finalized_watermark = finalized_watermark;
     });
 
-    if (params->watermark_emit_mode == WatermarkEmitMode::Periodic && !substream_ctx->hasNewData())
+    if ((params->emit_mode == Streaming::EmitMode::PeriodicWatermark || params->emit_mode == Streaming::EmitMode::PeriodicWatermarkOnUpdate) && !substream_ctx->hasNewData())
         return;
 
     /// Finalize current watermark
@@ -84,7 +80,7 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
         if (only_emit_finalized_windows && window_with_buckets.window.end > watermark)
             continue;
 
-        if (only_convert_updates)
+        if (only_emit_updates)
             chunk = AggregatingHelper::spliceAndConvertUpdatesToChunk(data_variant, *params, window_with_buckets.buckets);
         else
             chunk = AggregatingHelper::spliceAndConvertToChunk(data_variant, *params, window_with_buckets.buckets);
@@ -108,7 +104,7 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
 
     /// `spliceAndConvertUpdatesToChunk` only converts updates but doesn't reset updated flags,
     /// we need to manually reset them after all windows conversions.
-    if (only_convert_updates)
+    if (only_emit_updates)
     {
         for (const auto & window_with_buckets : windows_with_buckets)
             params->aggregator.resetUpdatedForBuckets(data_variant, window_with_buckets.buckets);

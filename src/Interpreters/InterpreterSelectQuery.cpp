@@ -111,6 +111,7 @@
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStepWithSubstream.h>
 #include <Processors/QueryPlan/Streaming/WindowStep.h>
+#include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/Streaming/WatermarkStamper.h>
 #include <Storages/Streaming/ProxyStream.h>
 #include <Storages/Streaming/StorageStream.h>
@@ -3241,7 +3242,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     if (data_stream_semantic_pair.isChangelogOutput())
         tracking_updates_type = Streaming::TrackingUpdatesType::UpdatesWithRetract;
     /// TODO: A optimization for `emit on update`, we don't need to track updates and just directly convert each input (fast in and fast out)
-    else if (watermark_emit_mode == Streaming::WatermarkEmitMode::OnUpdate || watermark_emit_mode == Streaming::WatermarkEmitMode::PeriodicOnUpdate)
+    else if (Streaming::AggregatingHelper::onlyEmitUpdates(emit_mode))
         tracking_updates_type = Streaming::TrackingUpdatesType::Updates;
 
     Streaming::Aggregator::Params params(
@@ -3281,10 +3282,10 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     /// 2) `shuffle by`: calculating light substream without substream ID (The data have been shuffled by `LightShufflingTransform`)
     if (query_info.hasPartitionByKeys() || light_shuffled)
         query_plan.addStep(std::make_unique<Streaming::AggregatingStepWithSubstream>(
-            query_plan.getCurrentDataStream(), std::move(params), final, emit_version, data_stream_semantic_pair.isChangelogOutput(), watermark_emit_mode));
+            query_plan.getCurrentDataStream(), std::move(params), final, emit_version, data_stream_semantic_pair.isChangelogOutput(), emit_mode));
     else
         query_plan.addStep(std::make_unique<Streaming::AggregatingStep>(
-            query_plan.getCurrentDataStream(), std::move(params), final, merge_threads, temporary_data_merge_threads, emit_version, data_stream_semantic_pair.isChangelogOutput(), watermark_emit_mode));
+            query_plan.getCurrentDataStream(), std::move(params), final, merge_threads, temporary_data_merge_threads, emit_version, data_stream_semantic_pair.isChangelogOutput(), emit_mode));
 }
 
 /// Resolve input / output data stream semantic.
@@ -3507,7 +3508,7 @@ void InterpreterSelectQuery::buildWatermarkQueryPlan(QueryPlan & query_plan)
     auto params = std::make_shared<Streaming::WatermarkStamperParams>(
         query_info.query, query_info.syntax_analyzer_result, query_info.streaming_window_params);
 
-    watermark_emit_mode = params->mode; /// saved it to be used for streaming aggregating step
+    emit_mode = params->mode; /// saved it to be used for streaming aggregating step
 
     bool skip_stamping_for_backfill_data = !context->getSettingsRef().emit_during_backfill.value;
 

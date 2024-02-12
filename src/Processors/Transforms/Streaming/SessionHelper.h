@@ -9,9 +9,6 @@ class ColumnTuple;
 
 namespace Streaming
 {
-enum class WatermarkStrategy;
-enum class WatermarkEmitMode;
-
 namespace SessionHelper
 {
 void assignWindow(
@@ -34,9 +31,6 @@ SessionID removeExpiredSessions(SessionInfoQueue & sessions);
 
 /// @brief Get windows with buckets
 WindowsWithBuckets getWindowsWithBuckets(const SessionInfoQueue & sessions);
-
-/// @brief Validate watermark strategy and emit mode for session window
-void validateWatermarkStrategyAndEmitMode(WatermarkStrategy & strategy, WatermarkEmitMode & mode, SessionWindowParams & params);
 }
 }
 }

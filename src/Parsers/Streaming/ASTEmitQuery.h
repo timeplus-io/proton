@@ -14,8 +14,8 @@ public:
     };
     StreamMode stream_mode = StreamMode::STREAM;
 
-    /// [AFTER WATERMARK WITH DELAY <interval> | WITHOUT DELAY]
-    Streaming::WatermarkStrategy watermark_strategy = Streaming::WatermarkStrategy::Unknown;
+    /// [AFTER WATERMARK]
+    bool after_watermark = false;
 
     /// [WITH DELAY INTERVAL 1 SECOND].
     ASTPtr delay_interval;

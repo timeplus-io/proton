@@ -1,5 +1,7 @@
 #pragma once
 
+#include <base/types.h>
+
 namespace DB
 {
 namespace Streaming
@@ -10,46 +12,27 @@ namespace Streaming
 constexpr Int64 INVALID_WATERMARK = std::numeric_limits<Int64>::min();
 constexpr Int64 TIMEOUT_WATERMARK = std::numeric_limits<Int64>::max();
 
-/// WatermarkStrategy defines how proton observes events' timestamps and stamps / generates watermark
-/// for them when they flow from the source through the whole processing pipeline.
-/// Not every event will be associated with a watermark in general since sometimes events are batched or 
-/// sometimes we just don't want to do that because it is not necessary or inefficient. 
-enum class WatermarkStrategy
+/// NOTE: requires highest bit to be 1
+constexpr uint8_t EMIT_UPDATES_MASK = 1u << 7;
+
+/// TODO: Separate EmitMode into two parts:
+/// 1) EmitStrategy         - how to do finalization (what to emit) for all aggregates processing
+/// 2) WatermarkStragegy    - how / when to stamp watermark
+enum class EmitMode : uint8_t
 {
-    Unknown,
+    None = 0,
+    Tail,
 
-    /// No watermark
-    None,
+    Periodic,  /// Emit a processing time watermark at periodic interval
 
-    /// Watermark is generated based on each event, this is used for `EMIT AFTER WATERMARK WITHOUT DELAY`
-    /// - Not allow time skew
-    Ascending,
+    Watermark, /// Allow time skew in same window, emit the watermark when a window closed
+    PeriodicWatermark, /// Same as WATERMARK, but emit the watermark at periodic interval
 
-    /// Watermark is generated based on last event with a delay interval, this is used for `EMIT AFTER WATERMARK WITH DELAY <delay_interval>`:
-    /// - Allow time skew in a certain range `[<max_event_ts - delay_interval>, <max_event_ts>]`)
-    BoundedOutOfOrderness,
-
-    /// (Built-in): Watermark is generated based on new window of a batch events:
-    /// - Allow time skew in same window and one batch
-    OutOfOrdernessInWindowAndBatch,
-
-    /// TODO: more strategies ...
+    /* emit only keyed and changed states for aggregating */
+    OnUpdate = EMIT_UPDATES_MASK, /// Emit a processing time watermark per batch of events
+    PeriodicOnUpdate, /// Same as Periodic
+    WatermarkOnUpdate, /// Same as Watermark, but emit the watermark per batch of events
+    PeriodicWatermarkOnUpdate, /// Same as PeriodicWatermark
 };
-
-enum class WatermarkEmitMode
-{
-    Unknown,
-
-    None,                               /// Not emit any watermark
-
-    /* Based on processing time */
-    Periodic,                           /// Watermark is emitted at periodic interval
-    PeriodicOnUpdate,                   /// Watermark is emitted at periodic interval (only emit aggregated result of groups with updates)
-
-    /* Based on event time */
-    OnWindow,                           /// Watermark is emitted when a window close
-    OnUpdate,                           /// Watermark is emitted for every batch of events (only emit aggregated result of groups with updates)
-};
-
 }
 }

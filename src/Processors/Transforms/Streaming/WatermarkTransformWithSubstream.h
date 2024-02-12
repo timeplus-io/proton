@@ -17,11 +17,11 @@ class WatermarkTransformWithSubstream final : public IProcessor
 {
 public:
     WatermarkTransformWithSubstream(
-        const Block & header, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * log);
+        const Block & header, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * logger);
 
     ~WatermarkTransformWithSubstream() override = default;
 
-    String getName() const override;
+    String getName() const override { return watermark_template->getName() + "TransformWithSubstream"; }
     Status prepare() override;
     void work() override;
     void checkpoint(CheckpointContextPtr) override;
@@ -42,8 +42,6 @@ private:
 
     bool skip_stamping_for_backfill_data;
     bool mute_watermark = false;
-
-    Poco::Logger * log;
 };
 }
 }

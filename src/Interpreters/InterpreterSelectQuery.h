@@ -258,7 +258,7 @@ private:
     bool shuffled_before_join = false;
     bool light_shuffled = false;
 
-    Streaming::WatermarkEmitMode watermark_emit_mode;
+    Streaming::EmitMode emit_mode = Streaming::EmitMode::None;
 
     /// Overall data stream semantic defines the output semantic of the current layer of SELECT
     Streaming::DataStreamSemanticPair data_stream_semantic_pair;

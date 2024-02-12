@@ -4,6 +4,9 @@
 #include <Checkpoint/CheckpointCoordinator.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Processors/Transforms/Streaming/HopWatermarkStamper.h>
+#include <Processors/Transforms/Streaming/SessionWatermarkStamper.h>
+#include <Processors/Transforms/Streaming/TumbleWatermarkStamper.h>
 #include <Common/ProtonCommon.h>
 #include <Common/assert_cast.h>
 
@@ -17,20 +20,38 @@ extern const int UNSUPPORTED;
 
 namespace Streaming
 {
+namespace
+{
+WatermarkStamperPtr initWatermark(const WatermarkStamperParams & params, Poco::Logger * logger)
+{
+    assert(params.mode != EmitMode::None);
+    if (params.window_params)
+    {
+        switch (params.window_params->type)
+        {
+            case WindowType::TUMBLE:
+                return std::make_unique<TumbleWatermarkStamper>(params, logger);
+            case WindowType::HOP:
+                return std::make_unique<HopWatermarkStamper>(params, logger);
+            case WindowType::SESSION:
+                return std::make_unique<SessionWatermarkStamper>(params, logger);
+            default:
+                break;
+        }
+    }
+    return std::make_unique<WatermarkStamper>(params, logger);
+}
+}
+
 WatermarkTransformWithSubstream::WatermarkTransformWithSubstream(
-    const Block & header, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * log_)
+    const Block & header, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * logger)
     : IProcessor({header}, {header}, ProcessorID::WatermarkTransformWithSubstreamID)
     , params(std::move(params_))
     , skip_stamping_for_backfill_data(skip_stamping_for_backfill_data_)
-    , log(log_)
 {
-    watermark_template = std::make_unique<WatermarkStamper>(*params, log);
+    watermark_template = initWatermark(*params, logger);
+    assert(watermark_template);
     watermark_template->preProcess(header);
-}
-
-String WatermarkTransformWithSubstream::getName() const
-{
-    return fmt::format("WatermarkTransformWithSubstream({})", watermark_template->getDescription());
 }
 
 IProcessor::Status WatermarkTransformWithSubstream::prepare()
