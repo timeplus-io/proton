@@ -283,11 +283,13 @@ void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
         }
 
         auto new_watermark = chunk_ctx->getWatermark();
-        if (likely(new_watermark > watermark))
+        if (new_watermark > watermark)
             /// Found min watermark to finalize
             try_finalizing_watermark = updateAndAlignWatermark(new_watermark);
-        else if (new_watermark < watermark)
+        else if (new_watermark < watermark) [[unlikely]]
             LOG_ERROR(log, "Found outdated watermark. current watermark={}, but got watermark={}", watermark, new_watermark);
+        else
+            try_finalizing_watermark = new_watermark; /// When received the same watermark (it may be a periodic watermark), so we still try finalize it
     }
 
     if (!try_finalizing_watermark.has_value())

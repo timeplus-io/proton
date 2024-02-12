@@ -69,21 +69,58 @@ Chunk convertToChunk(AggregatedDataVariants & data, const AggregatingTransformPa
 
 Chunk mergeAndConvertToChunk(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params)
 {
-    auto blocks = params.aggregator.mergeAndConvertToBlocks(data, params.final, params.params.max_threads);
+    if (data.size() == 1)
+        return convertToChunk(*data[0], params);
+
+    BlocksList blocks = params.aggregator.mergeAndConvertToBlocks(data, params.final, params.params.max_threads);
+
     /// FIXME: When global aggr states was converted two level hash table, the merged chunk may be too large
     return mergeBlocksToChunk(std::move(blocks));
 }
 
-Chunk spliceAndConvertBucketsToChunk(
-    AggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets)
+Chunk spliceAndConvertToChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets)
 {
-    return convertToChunk(params.aggregator.spliceAndConvertBucketsToBlock(data, params.final, buckets));
+    return DB::convertToChunk(params.aggregator.spliceAndConvertToBlock(data, params.final, buckets));
 }
 
-Chunk mergeAndSpliceAndConvertBucketsToChunk(
+Chunk mergeAndSpliceAndConvertToChunk(
     ManyAggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets)
 {
-    return convertToChunk(params.aggregator.mergeAndSpliceAndConvertBucketsToBlock(data, params.final, buckets));
+    if (data.size() == 1)
+        return spliceAndConvertToChunk(*data[0], params, buckets);
+
+    return DB::convertToChunk(params.aggregator.mergeAndSpliceAndConvertToBlock(data, params.final, buckets));
+}
+
+Chunk convertUpdatesToChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params)
+{
+    return convertToChunkImpl(data, params, ConvertType::Updates);
+}
+
+Chunk mergeAndConvertUpdatesToChunk(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params)
+{
+    if (data.size() == 1)
+        return convertUpdatesToChunk(*data[0], params);
+
+    auto merged_updates_data = params.aggregator.mergeUpdateGroups(data);
+    if (merged_updates_data)
+        return convertToChunkImpl(*merged_updates_data, params, ConvertType::Normal);
+
+    return {};
+}
+
+Chunk spliceAndConvertUpdatesToChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets)
+{
+    return DB::convertToChunk(params.aggregator.spliceAndConvertUpdatesToBlock(data, buckets));
+}
+
+Chunk mergeAndSpliceAndConvertUpdatesToChunk(
+    ManyAggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets)
+{
+    if (data.size() == 1)
+        return spliceAndConvertUpdatesToChunk(*data[0], params, buckets);
+
+    return DB::convertToChunk(params.aggregator.mergeAndSpliceAndConvertUpdatesToBlock(data, buckets));
 }
 
 ChunkPair convertToChangelogChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params)
@@ -119,7 +156,7 @@ ChunkPair mergeAndConvertToChangelogChunk(ManyAggregatedDataVariants & data, con
     auto merged_retracted_data = params.aggregator.mergeRetractGroups(data);
     if (merged_retracted_data)
     {
-        retracted_chunk = convertToChunk(*merged_retracted_data, params);
+        retracted_chunk = convertToChunkImpl(*merged_retracted_data, params, ConvertType::Normal);
         if (retracted_chunk)
         {
             auto retracted_delta_col = ColumnInt8::create(retracted_chunk.rows(), Int8(-1));
@@ -131,7 +168,7 @@ ChunkPair mergeAndConvertToChangelogChunk(ManyAggregatedDataVariants & data, con
     auto merged_updated_data = params.aggregator.mergeUpdateGroups(data);
     if (merged_updated_data)
     {
-        chunk = convertToChunk(*merged_updated_data, params);
+        chunk = convertToChunkImpl(*merged_updated_data, params, ConvertType::Normal);
         if (chunk)
         {
             auto delta_col = ColumnInt8::create(chunk.rows(), Int8(1));

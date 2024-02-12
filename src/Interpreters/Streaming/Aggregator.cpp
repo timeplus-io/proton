@@ -1221,6 +1221,9 @@ Block Aggregator::convertOneBucketToBlockImpl(
     Int64 bucket,
     ConvertType type) const
 {
+    if (type == ConvertType::Updates && !method.data.isBucketUpdated(bucket))
+        return {};
+
     Block block = convertToBlockImpl(method, method.data.impls[bucket], arena, data_variants.aggregates_pools, final, method.data.impls[bucket].size(), clear_states, type);
     block.info.bucket_num = static_cast<int>(bucket);
     method.data.resetUpdatedBucket(bucket); /// finalized
@@ -2335,6 +2338,22 @@ std::vector<Int64> Aggregator::bucketsBefore(const AggregatedDataVariants & resu
     return {};
 }
 
+std::vector<Int64> Aggregator::buckets(const AggregatedDataVariants & result) const
+{
+    switch (result.type)
+    {
+#define M(NAME) \
+            case AggregatedDataVariants::Type::NAME: return result.NAME->data.buckets();
+        APPLY_FOR_VARIANTS_TIME_BUCKET_TWO_LEVEL(M)
+#undef M
+
+        default:
+            break;
+    }
+
+    return {};
+}
+
 /// The complexity of checkpoint the state of Aggregator is a combination of the following 2 cases
 /// 1) The keys can reside in hashmap or in arena
 /// 2) The state can reside in arena or in the aggregation function
@@ -2739,26 +2758,21 @@ VersionType Aggregator::getVersion() const
     return getVersionFromRevision(ProtonRevision::getVersionRevision());
 }
 
-template <typename Method>
-void NO_INLINE Aggregator::spliceBucketsImpl(
-    AggregatedDataVariants & data_dest,
-    AggregatedDataVariants & data_src,
-    const std::vector<Int64> & gcd_buckets,
-    Arena * arena,
-    bool clear_states) const
+auto Aggregator::getZeroOutWindowKeysFunc(Arena * arena) const
 {
+    auto window_keys_size = params.window_keys_num == 2 ? key_sizes[0] + key_sizes[1] : key_sizes[0];
+    bool is_single_key = key_sizes.size() == 1;
     /// In order to merge state with same other keys of different gcd buckets, reset the window group keys to zero
     /// create a new key, where the window key part is 0, and the other key parts are the same as the original value.
     /// For example:
     /// Key :           <window_start> +  <window_end> +  <other_keys...>
     /// New key :                0     +        0      +  <other_keys...>
-    auto zero_out_window_keys_func = [&](const auto & key) {
+    return [window_keys_size, arena, is_single_key](const auto & key) {
         if constexpr (std::is_same_v<std::decay_t<decltype(key)>, StringRef>)
         {
             /// Case-1: Serialized key, the window time keys always are always lower bits
             auto * data = const_cast<char *>(arena->insert(key.data, key.size));
             assert(data != nullptr);
-            auto window_keys_size = params.window_keys_num == 2 ? key_sizes[0] + key_sizes[1] : key_sizes[0];
             std::memset(data, 0, window_keys_size);
 
             return SerializedKeyHolder{StringRef(data, key.size), *arena};
@@ -2766,55 +2780,59 @@ void NO_INLINE Aggregator::spliceBucketsImpl(
         else
         {
             /// Case-2: Only one window time key
-            if (key_sizes.size() == 1)
+            if (is_single_key)
                 return static_cast<std::decay_t<decltype(key)>>(0);
 
             /// Case-3: Fixed key, the fixed window time keys always are always lower bits
-            auto window_keys_size = params.window_keys_num == 2 ? key_sizes[0] + key_sizes[1] : key_sizes[0];
             auto bit_nums = window_keys_size << 3;
             return (key >> bit_nums) << bit_nums; /// reset lower bits to zero
         }
     };
-
-    auto & table_dest = getDataVariant<Method>(data_dest).data.impls;
-    auto & table_src = getDataVariant<Method>(data_src).data.impls;
-
-    for (auto bucket : gcd_buckets)
-        mergeDataImpl<Method>(table_dest[0], table_src[bucket], arena, clear_states, zero_out_window_keys_func);
 }
 
-Block Aggregator::spliceAndConvertBucketsToBlock(AggregatedDataVariants & variants, bool final, const std::vector<Int64> & gcd_buckets) const
+Block Aggregator::spliceAndConvertToBlock(AggregatedDataVariants & variants, bool final, const std::vector<Int64> & gcd_buckets) const
 {
     assert(variants.isTimeBucketTwoLevel());
 
-    if (false) {} // NOLINT
-#define M(NAME) \
-    else if (variants.type == AggregatedDataVariants::Type::NAME) \
-    { \
-        if (gcd_buckets.size() > 1) \
-        { \
-            AggregatedDataVariants result_variants; \
-            result_variants.aggregator = this; \
-            initDataVariants(result_variants, method_chosen, key_sizes, params); \
-            spliceBucketsImpl<decltype(result_variants.NAME)::element_type>(result_variants, variants, gcd_buckets, result_variants.aggregates_pool, /*clear_states=*/ false); \
-            return convertOneBucketToBlockImpl(result_variants, *result_variants.NAME, result_variants.aggregates_pool, final, /*clear_states=*/ true, 0); \
-        } \
-        else \
-            return convertOneBucketToBlockImpl(variants, *variants.NAME, variants.aggregates_pool, final, /*clear_states=*/ false, gcd_buckets[0]); \
+    bool need_splice = gcd_buckets.size() > 1;
+    Arena * arena = variants.aggregates_pool;
+    AggregatedDataVariants res;
+    if (need_splice)
+    {
+        res.aggregator = this;
+        initDataVariants(res, method_chosen, key_sizes, params);
+        arena = res.aggregates_pool;
+        assert(res.type == variants.type);
     }
+
+    switch (variants.type)
+    {
+#define M(NAME) \
+        case AggregatedDataVariants::Type::NAME: \
+        { \
+            if (need_splice) \
+            { \
+                for (auto bucket : gcd_buckets) \
+                    mergeDataImpl<decltype(variants.NAME)::element_type>(res.NAME->data.impls[0], variants.NAME->data.impls[bucket], arena, /*clear_states=*/false, getZeroOutWindowKeysFunc(arena)); \
+                return convertOneBucketToBlockImpl(res, *res.NAME, arena, final, /*clear_states=*/true, /*spliced_bucket=*/0); \
+            } \
+            else \
+                return convertOneBucketToBlockImpl(variants, *variants.NAME, arena, final, /*clear_states=*/false, gcd_buckets[0]); \
+        }
 
     APPLY_FOR_VARIANTS_TIME_BUCKET_TWO_LEVEL(M)
 #undef M
-    else
-        throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+        default:
+            throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+    }
 
     UNREACHABLE();
 }
 
-Block Aggregator::mergeAndSpliceAndConvertBucketsToBlock(ManyAggregatedDataVariants & variants, bool final, const std::vector<Int64> & gcd_buckets) const
+Block Aggregator::mergeAndSpliceAndConvertToBlock(ManyAggregatedDataVariants & variants, bool final, const std::vector<Int64> & gcd_buckets) const
 {
     bool need_splice = gcd_buckets.size() > 1;
-    auto prepared_data = prepareVariantsToMerge(variants, /*always_merge_into_empty*/ need_splice);
+    auto prepared_data = prepareVariantsToMerge(variants, /*always_merge_into_empty=*/ need_splice);
     if (prepared_data->empty())
         return {};
 
@@ -2831,8 +2849,9 @@ Block Aggregator::mergeAndSpliceAndConvertBucketsToBlock(ManyAggregatedDataVaria
             mergeBucketImpl<Method>(*prepared_data, bucket, arena, /*clear_states=*/ false); \
         if (need_splice) \
         { \
-            spliceBucketsImpl<Method>(first, first, gcd_buckets, arena, /*clear_states=*/ true); \
-            return convertOneBucketToBlockImpl(first, *first.NAME, arena, final, /*clear_states=*/ true, 0); \
+            for (auto bucket : gcd_buckets) \
+                mergeDataImpl<Method>(first.NAME->data.impls[0], first.NAME->data.impls[bucket], arena, /*clear_states=*/true, getZeroOutWindowKeysFunc(arena)); \
+            return convertOneBucketToBlockImpl(first, *first.NAME, arena, final, /*clear_states=*/ true, /*spliced_bucket=*/0); \
         } \
         else \
             return convertOneBucketToBlockImpl(first, *first.NAME, arena, final, /*clear_states=*/ false, gcd_buckets[0]); \
@@ -3286,11 +3305,11 @@ BlocksList Aggregator::convertUpdatesToBlocks(AggregatedDataVariants & data_vari
 }
 
 
-template <typename Method, bool is_two_level>
-void NO_INLINE Aggregator::mergeUpdateGroupsImpl(ManyAggregatedDataVariants & non_empty_data, Arena * arena) const
+template <bool is_two_level, typename Table, typename KeyHandler>
+void NO_INLINE Aggregator::mergeUpdatesDataImpl(std::vector<Table *> & tables, Arena * arena, bool reset_updated, KeyHandler && key_handler) const
 {
-    AggregatedDataVariantsPtr & res = non_empty_data[0];
-    auto & dst_table = getDataVariant<Method>(*res).data;
+    assert(!tables.empty());
+    auto & dst_table = *tables.front();
     /// Always merge updated data into empty first.
     assert(dst_table.empty());
 
@@ -3301,14 +3320,10 @@ void NO_INLINE Aggregator::mergeUpdateGroupsImpl(ManyAggregatedDataVariants & no
     ///     group-3     non-updated   non-updated
     ///
     /// 1) Collect all updated groups
-    /// `dst` <= (group-1, group-2)
-    using Table = typename Method::Data;
-    for (size_t result_num = 1, size = non_empty_data.size(); result_num < size; ++result_num)
+    /// `dst_table` <= (group-1, group-2)
+    for (size_t i = 1; i < tables.size(); ++i)
     {
-        if (!checkLimits(res->sizeWithoutOverflowRow()))
-            break;
-
-        auto & src_table = getDataVariant<Method>(*non_empty_data[result_num]).data;
+        auto & src_table = *tables[i];
         auto merge_updated_func = [&](const auto & key, auto & mapped) {
             /// Skip no updated group
             if (!TrackingUpdates::updated(mapped))
@@ -3318,7 +3333,11 @@ void NO_INLINE Aggregator::mergeUpdateGroupsImpl(ManyAggregatedDataVariants & no
             bool inserted;
             /// For StringRef `key`, it is safe to store to `dst_table`
             /// since the `dst_table` is temporary and the `src_table` will not be cleaned in the meantime
-            dst_table.emplace(key, dst_it, inserted);
+            if constexpr (std::is_same_v<KeyHandler, EmptyKeyHandler>)
+                dst_table.emplace(key, dst_it, inserted);
+            else
+                dst_table.emplace(key_handler(key), dst_it, inserted);
+
             if (inserted)
             {
                 auto & dst = dst_it->getMapped();
@@ -3327,28 +3346,174 @@ void NO_INLINE Aggregator::mergeUpdateGroupsImpl(ManyAggregatedDataVariants & no
                 createAggregateStates(aggregate_data, /*prefix_with_updates_tracking_state=*/ false);
                 dst = aggregate_data;
             }
+
+            if (reset_updated)
+                TrackingUpdates::resetUpdated(mapped);
         };
 
         if constexpr (is_two_level)
-            src_table.forEachValueOfUpdatedBuckets(std::move(merge_updated_func), /*reset_updated=*/ true);
+            src_table.forEachValueOfUpdatedBuckets(std::move(merge_updated_func), reset_updated);
         else
             src_table.forEachValue(std::move(merge_updated_func));
     }
 
     /// 2) Merge all updated groups parts for each thread (based on `1)` )
     /// `dst` <= (thread-1: group-1  group-2) + (thread-2: group-1 group-2)
-    for (size_t result_num = 1, size = non_empty_data.size(); result_num < size; ++result_num)
+    for (size_t i = 1; i < tables.size(); ++i)
     {
-        auto & src_table = getDataVariant<Method>(*non_empty_data[result_num]).data;
-        dst_table.forEachValue([&](const auto & key, auto & mapped) {
-            if (auto find_it = src_table.find(key))
-            {
+        auto & src_table = *tables[i];
+
+        if constexpr (std::is_same_v<KeyHandler, EmptyKeyHandler>)
+            /// a. If use original key, we only loop updated groups `dst_table`, then find and merge states from `src_table`
+            dst_table.forEachValue([&](const auto & key, auto & mapped) {
+                auto find_it = src_table.find(key);
+                if (!find_it)
+                    return;
+
                 mergeAggregateStates(mapped, find_it->getMapped(), arena, /*clear_states=*/ false);
-                /// NOTE: We always reset the updated flag after merged
-                TrackingUpdates::resetUpdated(find_it->getMapped());
-            }
-        });
+            });
+        else
+            /// b. If use handled key (e.g. reset window keys to zero), we loop all groups of `src_table`, then find and merge states of update groups from `dst_table` via handled key
+            src_table.forEachValue([&](const auto & key, auto & mapped) {
+                auto key_holder = key_handler(key);
+                auto find_it = dst_table.find(keyHolderGetKey(key_holder));
+                if (!find_it)
+                    return;
+
+                mergeAggregateStates(find_it->getMapped(), mapped, arena, /*clear_states=*/ false);
+            });
     }
+}
+
+Block Aggregator::spliceAndConvertUpdatesToBlock(AggregatedDataVariants & variants, const std::vector<Int64> & gcd_buckets) const
+{
+    assert(variants.isTimeBucketTwoLevel());
+    assert(needTrackUpdates());
+
+    AggregatedDataVariants res;
+    res.aggregator = this;
+    initDataVariants(res, method_chosen, key_sizes, params);
+    assert(res.type == variants.type);
+
+    Arena * arena = res.aggregates_pool;
+    constexpr bool final = true;
+    constexpr bool clear_states = true; /// Always clear tmp spliced states
+    constexpr bool reset_updated = false; /// Don't reset updated, there may be overlapping gcd buckets
+    bool need_splice = gcd_buckets.size() > 1;
+
+    switch (variants.type)
+    {
+#define M(NAME) \
+        case AggregatedDataVariants::Type::NAME: \
+        { \
+            using Table = std::decay_t<decltype(variants.NAME->data.impls[0])>; \
+            std::vector<Table *> tables = {nullptr}; \
+            tables.reserve(gcd_buckets.size() + 1); \
+            for (auto bucket : gcd_buckets) \
+                tables.emplace_back(&variants.NAME->data.impls[bucket]); \
+            if (need_splice) \
+            { \
+                tables[0] = &(res.NAME->data.impls[0]); \
+                mergeUpdatesDataImpl</*is_two_level=*/false>(tables, arena, reset_updated, getZeroOutWindowKeysFunc(arena)); \
+                return convertOneBucketToBlockImpl(res, *res.NAME, arena, final, clear_states, /*splicted_bucket=*/0, ConvertType::Normal); \
+            } \
+            else \
+            { \
+                tables[0] = &(res.NAME->data.impls[gcd_buckets[0]]); \
+                mergeUpdatesDataImpl</*is_two_level=*/false>(tables, arena, reset_updated); \
+                return convertOneBucketToBlockImpl(res, *res.NAME, arena, final, clear_states, gcd_buckets[0], ConvertType::Normal); \
+            } \
+        }
+
+    APPLY_FOR_VARIANTS_TIME_BUCKET_TWO_LEVEL(M)
+#undef M
+        default:
+            throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+    }
+
+    UNREACHABLE();
+}
+
+Block Aggregator::mergeAndSpliceAndConvertUpdatesToBlock(ManyAggregatedDataVariants & data_variants, const std::vector<Int64> & gcd_buckets) const
+{
+    auto prepared_data_ptr = prepareVariantsToMerge(data_variants, /*always_merge_into_empty=*/ true);
+    if (prepared_data_ptr->empty())
+        return {};
+
+    auto & first = *prepared_data_ptr->at(0);
+    assert(first.isTimeBucketTwoLevel());
+    assert(needTrackUpdates());
+
+    Arena * arena = first.aggregates_pool;
+    constexpr bool final = true;
+    constexpr bool clear_states = true; /// Always clear tmp spliced states
+    constexpr bool reset_updated = false; /// Don't reset updated, there may be overlapping gcd buckets
+    bool need_splice = gcd_buckets.size() > 1;
+    ManyAggregatedDataVariants spliced_variants;
+
+    switch (first.type)
+    {
+#define M(NAME) \
+        case AggregatedDataVariants::Type::NAME: \
+        { \
+            using Table = std::decay_t<decltype(first.NAME->data.impls[0])>; \
+            std::vector<Table *> tables {nullptr}; \
+            tables.reserve(gcd_buckets.size() * (prepared_data_ptr->size() - 1) + 1); \
+            for (auto bucket : gcd_buckets) \
+                for (size_t i = 1; i < prepared_data_ptr->size(); ++i) \
+                    tables.emplace_back(&(prepared_data_ptr->at(i)->NAME->data.impls[bucket])); \
+            if (need_splice) \
+            { \
+                tables[0] = &(first.NAME->data.impls[0]); \
+                mergeUpdatesDataImpl</*is_two_level=*/false>(tables, arena, reset_updated, getZeroOutWindowKeysFunc(arena)); \
+                return convertOneBucketToBlockImpl(first, *first.NAME, arena, final, clear_states, /*bucket=*/0, ConvertType::Normal); \
+            } \
+            else \
+            { \
+                tables[0] = &(first.NAME->data.impls[gcd_buckets[0]]); \
+                mergeUpdatesDataImpl</*is_two_level=*/false>(tables, arena, reset_updated); \
+                return convertOneBucketToBlockImpl(first, *first.NAME, arena, final, clear_states, gcd_buckets[0], ConvertType::Normal); \
+            } \
+        }
+
+    APPLY_FOR_VARIANTS_TIME_BUCKET_TWO_LEVEL(M)
+#undef M
+        default:
+            throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+    }
+
+    UNREACHABLE();
+}
+
+void Aggregator::resetUpdatedForBuckets(AggregatedDataVariants & data_variants, const std::vector<Int64> & gcd_buckets) const
+{
+    if (data_variants.empty())
+        return;
+
+    assert(data_variants.isTimeBucketTwoLevel());
+    switch (data_variants.type)
+    {
+#define M(NAME) \
+        case AggregatedDataVariants::Type::NAME: \
+        { \
+            for (auto bucket : gcd_buckets) \
+            { \
+                if (data_variants.NAME->data.isBucketUpdated(bucket)) \
+                { \
+                    data_variants.NAME->data.impls[bucket].forEachMapped([&](auto & mapped) { TrackingUpdates::resetUpdated(mapped); }); \
+                    data_variants.NAME->data.resetUpdatedBucket(bucket); \
+                } \
+            } \
+            return; \
+        }
+
+    APPLY_FOR_VARIANTS_TIME_BUCKET_TWO_LEVEL(M)
+#undef M
+        default:
+            throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+    }
+
+    UNREACHABLE();
 }
 
 AggregatedDataVariantsPtr Aggregator::mergeUpdateGroups(ManyAggregatedDataVariants & data_variants) const
@@ -3359,23 +3524,36 @@ AggregatedDataVariantsPtr Aggregator::mergeUpdateGroups(ManyAggregatedDataVarian
 
     BlocksList blocks;
     auto & first = *prepared_data_ptr->at(0);
-    if (first.type == AggregatedDataVariants::Type::without_key)
+    switch (first.type)
     {
-        if (std::ranges::none_of(*prepared_data_ptr, [](auto & variants) {
-                return variants->without_key && TrackingUpdates::updated(variants->without_key);
-            }))
-            return {};
+        case AggregatedDataVariants::Type::without_key:
+        {
+            if (std::ranges::none_of(*prepared_data_ptr, [](auto & variants) {
+                    return variants->without_key && TrackingUpdates::updated(variants->without_key);
+                }))
+                return {};
 
-        mergeWithoutKeyDataImpl(*prepared_data_ptr, /*clear_states=*/ false);
-    }
+            mergeWithoutKeyDataImpl(*prepared_data_ptr, /*clear_states=*/ false);
+            break;
+        }
 
 #define M(NAME, IS_TWO_LEVEL) \
-    else if (first.type == AggregatedDataVariants::Type::NAME) \
-        mergeUpdateGroupsImpl<decltype(first.NAME)::element_type, IS_TWO_LEVEL>(*prepared_data_ptr, first.aggregates_pool);
+        case AggregatedDataVariants::Type::NAME: \
+        { \
+            using Table = std::decay_t<decltype(first.NAME->data)>; \
+            std::vector<Table *> tables; \
+            tables.reserve(prepared_data_ptr->size()); \
+            for (auto & variants : *prepared_data_ptr) \
+                tables.emplace_back(&(variants->NAME->data)); \
+            mergeUpdatesDataImpl<IS_TWO_LEVEL>(tables, first.aggregates_pool, /*reset_updated*/ true); \
+            break; \
+        }
 
     APPLY_FOR_AGGREGATED_VARIANTS_STREAMING(M)
 #undef M
-    else throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+        default:
+            throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+    }
 
     return prepared_data_ptr->at(0);
 }
@@ -3438,9 +3616,6 @@ void Aggregator::mergeRetractGroupsImpl(ManyAggregatedDataVariants & non_empty_d
     using Table = typename Method::Data;
     for (size_t result_num = 1, size = non_empty_data.size(); result_num < size; ++result_num)
     {
-        if (!checkLimits(res->sizeWithoutOverflowRow()))
-            break;
-
         auto & src_table = getDataVariant<Method>(*non_empty_data[result_num]).data;
         src_table.forEachValue([&](const auto & key, auto & mapped) {
             /// Skip no retract group

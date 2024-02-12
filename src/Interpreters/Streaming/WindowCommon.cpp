@@ -125,13 +125,13 @@ Columns getWindowStartAndEndFor(const TimeColumnType & time_column, UInt64 num_u
 
 WindowType toWindowType(const String & func_name)
 {
-    WindowType type = WindowType::NONE;
+    WindowType type = WindowType::None;
     if (func_name == ProtonConsts::HOP_FUNC_NAME)
-        type = WindowType::HOP;
+        type = WindowType::Hop;
     else if (func_name == ProtonConsts::TUMBLE_FUNC_NAME)
-        type = WindowType::TUMBLE;
+        type = WindowType::Tumble;
     else if (func_name == ProtonConsts::SESSION_FUNC_NAME)
-        type = WindowType::SESSION;
+        type = WindowType::Session;
 
     return type;
 }
@@ -671,7 +671,7 @@ UInt32 getAutoScaleByInterval(Int64 num_units, IntervalKind kind)
 
 WindowParams::WindowParams(TableFunctionDescriptionPtr window_desc) : desc(std::move(window_desc))
 {
-    assert(desc->type != WindowType::NONE);
+    assert(desc->type != WindowType::None);
     type = desc->type;
     time_col_name = desc->argument_names[0];
     time_col_is_datetime64 = isDateTime64(desc->argument_types[0]);
@@ -699,7 +699,7 @@ WindowParams::WindowParams(TableFunctionDescriptionPtr window_desc) : desc(std::
 
 TumbleWindowParams::TumbleWindowParams(TableFunctionDescriptionPtr window_desc) : WindowParams(std::move(window_desc))
 {
-    assert(desc->type == WindowType::TUMBLE);
+    assert(desc->type == WindowType::Tumble);
 
     /// __tumble(time_expr, win_interval, [timezone])
     auto & args = desc->func_ast->as<ASTFunction &>().arguments->children;
@@ -733,7 +733,7 @@ TumbleWindowParams::TumbleWindowParams(TableFunctionDescriptionPtr window_desc) 
 
 HopWindowParams::HopWindowParams(TableFunctionDescriptionPtr window_desc) : WindowParams(std::move(window_desc))
 {
-    assert(desc->type == WindowType::HOP);
+    assert(desc->type == WindowType::Hop);
 
     /// __hop(time_expr, hop_interval, win_interval, [timezone])
     auto & args = desc->func_ast->as<ASTFunction &>().arguments->children;
@@ -780,7 +780,7 @@ HopWindowParams::HopWindowParams(TableFunctionDescriptionPtr window_desc) : Wind
 
 SessionWindowParams::SessionWindowParams(TableFunctionDescriptionPtr window_desc) : WindowParams(std::move(window_desc))
 {
-    assert(desc->type == WindowType::SESSION);
+    assert(desc->type == WindowType::Session);
 
     /// __session(timestamp_expr, timeout_interval, max_emit_interval, start_cond, start_with_inclusion, end_cond, end_with_inclusion)
     auto & args = desc->func_ast->as<ASTFunction &>().arguments->children;
@@ -808,11 +808,11 @@ WindowParamsPtr WindowParams::create(const TableFunctionDescriptionPtr & desc)
     assert(desc);
     switch (desc->type)
     {
-        case WindowType::TUMBLE:
+        case WindowType::Tumble:
             return std::make_shared<TumbleWindowParams>(desc);
-        case WindowType::HOP:
+        case WindowType::Hop:
             return std::make_shared<HopWindowParams>(desc);
-        case WindowType::SESSION:
+        case WindowType::Session:
             return std::make_shared<SessionWindowParams>(desc);
         default:
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "No support window type: {}", magic_enum::enum_name(desc->type));
@@ -863,6 +863,9 @@ void reassignWindow(Chunk & chunk, const Window & window, bool time_col_is_datet
     };
 
     auto rows = chunk.rows();
+    if (!rows)
+        return;
+
     auto columns = chunk.detachColumns();
     if (start_pos.has_value())
         fill_time(columns.at(*start_pos), window.start);

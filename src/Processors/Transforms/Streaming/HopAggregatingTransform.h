@@ -25,7 +25,7 @@ public:
     String getName() const override { return "HopAggregatingTransform"; }
 
 private:
-    WindowsWithBuckets getLocalFinalizedWindowsWithBucketsImpl(Int64 watermark) const override;
+    WindowsWithBuckets getLocalWindowsWithBucketsImpl() const override;
     void removeBucketsImpl(Int64 watermark) override;
     bool needReassignWindow() const override { return true; }
 

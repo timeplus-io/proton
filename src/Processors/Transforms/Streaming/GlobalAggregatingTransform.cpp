@@ -75,9 +75,6 @@ bool GlobalAggregatingTransform::needFinalization(Int64 min_watermark) const
 
 bool GlobalAggregatingTransform::prepareFinalization(Int64 min_watermark)
 {
-    if (min_watermark == INVALID_WATERMARK)
-        return false;
-
     std::lock_guard lock(many_data->watermarks_mutex);
     if (std::ranges::all_of(many_data->watermarks, [](const auto & wm) { return wm != INVALID_WATERMARK; }))
     {
@@ -129,7 +126,12 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
     }
     else
     {
-        auto chunk = AggregatingHelper::mergeAndConvertToChunk(many_data->variants, *params);
+        Chunk chunk;
+        if (AggregatingHelper::onlyEmitUpdates(params->emit_mode))
+            chunk = AggregatingHelper::mergeAndConvertUpdatesToChunk(many_data->variants, *params);
+        else
+            chunk = AggregatingHelper::mergeAndConvertToChunk(many_data->variants, *params);
+
         if (params->emit_version && params->final)
             emitVersion(chunk);
 

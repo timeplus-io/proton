@@ -16,7 +16,8 @@ public:
     String getName() const override { return "TumbleAggregatingTransformWithSubstream"; }
 
 private:
-    WindowsWithBuckets getFinalizedWindowsWithBuckets(Int64 watermark, const SubstreamContextPtr & substream_ctx) const override;
+    WindowsWithBuckets getWindowsWithBuckets(const SubstreamContextPtr & substream_ctx) const override;
+    Window getLastFinalizedWindow(const SubstreamContextPtr & substream_ctx) const override;
     void removeBucketsImpl(Int64 watermark, const SubstreamContextPtr & substream_ctx) override;
     bool needReassignWindow() const override { return false; }
 

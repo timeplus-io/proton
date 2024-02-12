@@ -19,16 +19,18 @@ struct AggregatingTransformParams
     Aggregator::Params & params;
     bool final;
     bool only_merge = false;
-    bool emit_version = false;
-    bool emit_changelog = false;
+    bool emit_version;
+    bool emit_changelog;
     DataTypePtr version_type;
+    Streaming::EmitMode emit_mode;
 
-    AggregatingTransformParams(const Aggregator::Params & params_, bool final_, bool emit_version_, bool emit_changelog_)
+    AggregatingTransformParams(const Aggregator::Params & params_, bool final_, bool emit_version_, bool emit_changelog_, Streaming::EmitMode watermark_emit_mode_)
         : aggregator(params_)
         , params(aggregator.getParams())
         , final(final_)
         , emit_version(emit_version_)
         , emit_changelog(emit_changelog_)
+        , emit_mode(watermark_emit_mode_)
     {
         if (emit_version)
             version_type = DataTypeFactory::instance().get("int64");
@@ -69,7 +71,7 @@ SERDE struct ManyAggregatedData
 
     std::mutex finalizing_mutex;
 
-    /// `finalized_watermark` is capturing the max watermark we have progressed 
+    /// `finalized_watermark` is capturing the max watermark we have progressed
     SERDE std::atomic<Int64> finalized_watermark = INVALID_WATERMARK;
     SERDE std::atomic<Int64> finalized_window_end = INVALID_WATERMARK;
 

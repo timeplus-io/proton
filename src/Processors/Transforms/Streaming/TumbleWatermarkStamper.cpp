@@ -11,9 +11,6 @@ namespace Streaming
 TumbleWatermarkStamper::TumbleWatermarkStamper(const WatermarkStamperParams & params_, Poco::Logger * log_)
     : WatermarkStamper(params_, log_), window_params(params.window_params->as<TumbleWindowParams &>())
 {
-    if (params.mode != WatermarkStamperParams::EmitMode::WATERMARK && params.mode != WatermarkStamperParams::EmitMode::WATERMARK_PER_ROW
-        && params.mode != WatermarkStamperParams::EmitMode::TAIL)
-        throw Exception(ErrorCodes::INCORRECT_QUERY, "{} doesn't support emit mode '{}'", getName(), magic_enum::enum_name(params.mode));
 }
 
 Int64 TumbleWatermarkStamper::calculateWatermarkImpl(Int64 event_ts) const

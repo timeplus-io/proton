@@ -36,11 +36,11 @@ void WindowAssignmentStep::transformPipeline(QueryPipelineBuilder & pipeline, co
     assert(window_params);
 
     pipeline.addSimpleTransform([&](const Block & header) -> std::shared_ptr<IProcessor> {
-        if (window_params->type == WindowType::TUMBLE)
+        if (window_params->type == WindowType::Tumble)
             return std::make_shared<TumbleWindowAssignmentTransform>(header, getOutputStream().header, window_params);
-        else if (window_params->type == WindowType::HOP)
+        else if (window_params->type == WindowType::Hop)
             return std::make_shared<HopWindowAssignmentTransform>(header, getOutputStream().header, window_params);
-        else if (window_params->type == WindowType::SESSION)
+        else if (window_params->type == WindowType::Session)
             return std::make_shared<SessionWindowAssignmentTransform>(header, getOutputStream().header, window_params);
         else
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "No support window type: {}", magic_enum::enum_name(window_params->type));

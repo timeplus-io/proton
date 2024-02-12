@@ -11,6 +11,8 @@ namespace Streaming
 struct AggregatingTransformParams;
 using AggregatingTransformParamsPtr = std::shared_ptr<AggregatingTransformParams>;
 
+enum class EmittedAggregatedKind;
+
 /// Streaming Aggregation. See StreamingAggregatingTransform.
 class AggregatingStep : public ITransformingStep
 {
@@ -22,7 +24,8 @@ public:
         size_t merge_threads_,
         size_t temporary_data_merge_threads_,
         bool emit_version_,
-        bool emit_changelog_);
+        bool emit_changelog_,
+        Streaming::EmitMode watermark_emit_mode_);
 
     String getName() const override { return "StreamingAggregating"; }
 
@@ -43,6 +46,7 @@ private:
 
     bool emit_version;
     bool emit_changelog;
+    Streaming::EmitMode emit_mode;
 
     Processors aggregating;
 };
