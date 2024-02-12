@@ -10,7 +10,10 @@ namespace Streaming
 constexpr Int64 INVALID_WATERMARK = std::numeric_limits<Int64>::min();
 constexpr Int64 TIMEOUT_WATERMARK = std::numeric_limits<Int64>::max();
 
-
+/// WatermarkStrategy defines how proton observes events' timestamps and stamps / generates watermark
+/// for them when they flow from the source through the whole processing pipeline.
+/// Not every event will be associated with a watermark in general since sometimes events are batched or 
+/// sometimes we just don't want to do that because it is not necessary or inefficient. 
 enum class WatermarkStrategy
 {
     Unknown,
@@ -25,10 +28,6 @@ enum class WatermarkStrategy
     /// Watermark is generated based on last event with a delay interval, this is used for `EMIT AFTER WATERMARK WITH DELAY <delay_interval>`:
     /// - Allow time skew in a certain range `[<max_event_ts - delay_interval>, <max_event_ts>]`)
     BoundedOutOfOrderness,
-
-    /// (Built-in): Watermark is generated based on a batch events:
-    /// - Allow time skew in one batch events
-    OutOfOrdernessInBatch,
 
     /// (Built-in): Watermark is generated based on new window of a batch events:
     /// - Allow time skew in same window and one batch

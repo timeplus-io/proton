@@ -267,14 +267,6 @@ void WatermarkStamper::processWatermark(Chunk & chunk)
             else
                 return processWatermarkImpl<ColumnDateTime, WatermarkStrategy::Ascending>(chunk);
         }
-        case WatermarkStrategy::OutOfOrdernessInBatch:
-        {
-            assert(params.window_params);
-            if (params.window_params->time_col_is_datetime64)
-                return processWatermarkImpl<ColumnDateTime64, WatermarkStrategy::OutOfOrdernessInBatch>(chunk);
-            else
-                return processWatermarkImpl<ColumnDateTime, WatermarkStrategy::OutOfOrdernessInBatch>(chunk);
-        }
         case WatermarkStrategy::OutOfOrdernessInWindowAndBatch:
         {
             assert(params.window_params);
@@ -307,8 +299,6 @@ bool WatermarkStamper::applyWatermark(Int64 event_ts)
             return false;
         case WatermarkStrategy::Ascending:
             return applyWatermarkImpl<WatermarkStrategy::Ascending>(event_ts);
-        case WatermarkStrategy::OutOfOrdernessInBatch:
-            return applyWatermarkImpl<WatermarkStrategy::OutOfOrdernessInBatch>(event_ts);
         case WatermarkStrategy::OutOfOrdernessInWindowAndBatch:
             return applyWatermarkImpl<WatermarkStrategy::OutOfOrdernessInWindowAndBatch>(event_ts);
         case WatermarkStrategy::BoundedOutOfOrderness:
