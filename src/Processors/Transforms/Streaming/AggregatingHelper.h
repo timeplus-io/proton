@@ -64,14 +64,14 @@ Chunk mergeAndSpliceAndConvertUpdatesToChunk(
 ChunkPair convertToChangelogChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params);
 ChunkPair mergeAndConvertToChangelogChunk(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params);
 
-[[maybe_unused]] ALWAYS_INLINE static bool onlyEmitFinalizedWindows(EmitMode mode) noexcept
+inline bool onlyEmitFinalizedWindows(EmitMode mode) noexcept
 {
     return mode == EmitMode::Watermark;
 }
 
-[[maybe_unused]] ALWAYS_INLINE static bool onlyEmitUpdates(EmitMode mode) noexcept
+inline bool onlyEmitUpdates(EmitMode mode) noexcept
 {
-    return static_cast<uint8_t>(mode) & EMIT_UPDATES_MASK;
+    return mode >= EmitMode::OnUpdate;
 }
 }
 

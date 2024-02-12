@@ -12,9 +12,6 @@ namespace Streaming
 constexpr Int64 INVALID_WATERMARK = std::numeric_limits<Int64>::min();
 constexpr Int64 TIMEOUT_WATERMARK = std::numeric_limits<Int64>::max();
 
-/// NOTE: requires highest bit to be 1
-constexpr uint8_t EMIT_UPDATES_MASK = 1u << 7;
-
 /// TODO: Separate EmitMode into two parts:
 /// 1) EmitStrategy         - how to do finalization (what to emit) for all aggregates processing
 /// 2) WatermarkStragegy    - how / when to stamp watermark
@@ -29,7 +26,7 @@ enum class EmitMode : uint8_t
     PeriodicWatermark, /// Same as WATERMARK, but emit the watermark at periodic interval
 
     /* emit only keyed and changed states for aggregating */
-    OnUpdate = EMIT_UPDATES_MASK, /// Emit a processing time watermark per batch of events
+    OnUpdate = 1u << 7, /// Emit a processing time watermark per batch of events
     PeriodicOnUpdate, /// Same as Periodic
     WatermarkOnUpdate, /// Same as Watermark, but emit the watermark per batch of events
     PeriodicWatermarkOnUpdate, /// Same as PeriodicWatermark
