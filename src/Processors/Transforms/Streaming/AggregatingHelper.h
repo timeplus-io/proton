@@ -38,9 +38,9 @@ Chunk mergeAndSpliceAndConvertToChunk(
 
 /* For emit on update */
 /// Convert aggregated state of update groups tracked to chunk
-Chunk convertUpdateToChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params);
+Chunk convertUpdatesToChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params);
 /// Merge many aggregated state and convert them to chunk
-Chunk mergeAndConvertToChunk(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params);
+Chunk mergeAndConvertUpdatesToChunk(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params);
 
 /// Only used for two level
 /// splice aggregatd state of update groups tracked of multiple buckets and convert them to chunk

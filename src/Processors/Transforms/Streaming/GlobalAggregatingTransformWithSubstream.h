@@ -26,6 +26,8 @@ private:
     /// V2 - Enable tracking updates with retract, which allows retract states and aggregated states to share the same hash table
     static constexpr VersionType V2 = 4;
     bool & retractEnabled(const SubstreamContextPtr & substream_ctx) const noexcept;
+
+    bool only_convert_updates = false;
 };
 
 }

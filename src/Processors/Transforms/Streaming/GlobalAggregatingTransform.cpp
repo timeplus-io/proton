@@ -63,6 +63,9 @@ GlobalAggregatingTransform::GlobalAggregatingTransform(
                  DB::readBinary(std::any_cast<bool &>(field), rb);
              }});
     }
+
+    only_convert_updates
+        = params->watermark_emit_mode == WatermarkEmitMode::OnUpdate || params->watermark_emit_mode == WatermarkEmitMode::PeriodicOnUpdate;
 }
 
 bool GlobalAggregatingTransform::needFinalization(Int64 min_watermark) const
@@ -126,7 +129,12 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
     }
     else
     {
-        auto chunk = AggregatingHelper::mergeAndConvertToChunk(many_data->variants, *params);
+        Chunk chunk;
+        if (only_convert_updates)
+            chunk = AggregatingHelper::mergeAndConvertUpdatesToChunk(many_data->variants, *params);
+        else
+            chunk = AggregatingHelper::mergeAndConvertToChunk(many_data->variants, *params);
+
         if (params->emit_version && params->final)
             emitVersion(chunk);
 

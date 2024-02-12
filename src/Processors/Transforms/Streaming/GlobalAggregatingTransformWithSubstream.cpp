@@ -24,6 +24,9 @@ GlobalAggregatingTransformWithSubstream::GlobalAggregatingTransformWithSubstream
     assert(params->params.group_by == Aggregator::Params::GroupBy::OTHER);
     if (params->emit_changelog && params->emit_version)
         throw Exception(ErrorCodes::UNSUPPORTED, "'emit_version()' is not supported in global aggregation emit changelog");
+
+    only_convert_updates
+        = params->watermark_emit_mode == WatermarkEmitMode::OnUpdate || params->watermark_emit_mode == WatermarkEmitMode::PeriodicOnUpdate;
 }
 
 SubstreamContextPtr GlobalAggregatingTransformWithSubstream::getOrCreateSubstreamContext(const SubstreamID & id)
@@ -105,7 +108,12 @@ void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
     }
     else
     {
-        auto chunk = AggregatingHelper::convertToChunk(variants, *params);
+        Chunk chunk;
+        if (only_convert_updates)
+            chunk = AggregatingHelper::convertUpdatesToChunk(variants, *params);
+        else
+            chunk = AggregatingHelper::convertToChunk(variants, *params);
+
         if (params->final && params->emit_version)
             emitVersion(chunk, substream_ctx);
 

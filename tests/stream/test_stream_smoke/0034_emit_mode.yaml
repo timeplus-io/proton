@@ -64,17 +64,24 @@ tests:
             query_type: stream
             depends_on_stream: test_35_stream
             wait: 1
-            query: select window_start, window_end, min(i), max(i), count() from hop(test_35_stream, 10s, 30s) group by window_start, window_end emit on update;
+            query: select window_start, window_end, i, count() from tumble(test_35_stream, 10s) group by window_start, window_end, i emit on update;
 
           - client: python
             query_id: emit-mode-1-5
             query_type: stream
             depends_on_stream: test_35_stream
             wait: 1
+            query: select window_start, window_end, min(i), max(i), count() from hop(test_35_stream, 10s, 30s) group by window_start, window_end emit on update;
+
+          - client: python
+            query_id: emit-mode-1-6
+            query_type: stream
+            depends_on_stream: test_35_stream
+            wait: 1
             query: select window_start, window_end, min(i), max(i), count() from session(test_35_stream, 5m) group by window_start, window_end emit on update;
 
           - client: python
-            depends_on: emit-mode-1-5
+            depends_on: emit-mode-1-6
             query_type: table
             wait: 2
             query: insert into test_35_stream(i, _tp_time) values(1, '2024-01-24 10:00:00');
@@ -98,9 +105,6 @@ tests:
       - query_id: emit-mode-1-2
         expected_results:
           - [1, 1]
-          - [1, 1]
-          - [2, 1]
-          - [1, 1]
           - [2, 1]
           - [3, 1]
       - query_id: emit-mode-1-3
@@ -109,6 +113,11 @@ tests:
           - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:10+00:00', 1, 2, 2]
           - ['2024-01-24 10:00:10+00:00', '2024-01-24 10:00:20+00:00', 3, 3, 1]
       - query_id: emit-mode-1-4
+        expected_results:
+          - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:10+00:00', 1, 1]
+          - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:10+00:00', 2, 1]
+          - ['2024-01-24 10:00:10+00:00', '2024-01-24 10:00:20+00:00', 3, 1]
+      - query_id: emit-mode-1-5
         expected_results:
           - ['2024-01-24 09:59:40+00:00', '2024-01-24 10:00:10+00:00', 1, 1, 1]
           - ['2024-01-24 09:59:50+00:00', '2024-01-24 10:00:20+00:00', 1, 1, 1]
@@ -119,7 +128,7 @@ tests:
           - ['2024-01-24 09:59:50+00:00', '2024-01-24 10:00:20+00:00', 1, 3, 3]
           - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:30+00:00', 1, 3, 3]
           - ['2024-01-24 10:00:10+00:00', '2024-01-24 10:00:40+00:00', 3, 3, 1]
-      - query_id: emit-mode-1-5
+      - query_id: emit-mode-1-6
         expected_results:
           - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:00.001000+00:00', 1, 1, 1]
           - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:05.001000+00:00', 1, 2, 2]
@@ -156,17 +165,24 @@ tests:
             query_type: stream
             depends_on_stream: test_35_stream
             wait: 1
-            query: select window_start, window_end, min(i), max(i), count() from hop(test_35_stream, 10s, 30s) group by window_start, window_end emit periodic 1s;
+            query: select window_start, window_end, i, count() from tumble(test_35_stream, 10s) group by window_start, window_end, i emit periodic 1s;
 
           - client: python
             query_id: emit-mode-2-3
             query_type: stream
             depends_on_stream: test_35_stream
             wait: 1
+            query: select window_start, window_end, min(i), max(i), count() from hop(test_35_stream, 10s, 30s) group by window_start, window_end emit periodic 1s;
+
+          - client: python
+            query_id: emit-mode-2-4
+            query_type: stream
+            depends_on_stream: test_35_stream
+            wait: 1
             query: select window_start, window_end, min(i), max(i), count() from session(test_35_stream, 5m) group by window_start, window_end emit periodic 1s;
 
           - client: python
-            depends_on: emit-mode-2-3
+            depends_on: emit-mode-2-4
             query_type: table
             wait: 2
             query: insert into test_35_stream(i, _tp_time) values(1, '2024-01-24 10:00:00');
@@ -192,6 +208,14 @@ tests:
           - ['2024-01-24 10:00:10+00:00', '2024-01-24 10:00:20+00:00', 3, 3, 1]
       - query_id: emit-mode-2-2
         expected_results:
+          - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:10+00:00', 1, 1]
+          - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:10+00:00', 1, 1]
+          - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:10+00:00', 2, 1]
+          - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:10+00:00', 1, 1]
+          - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:10+00:00', 2, 1]
+          - ['2024-01-24 10:00:10+00:00', '2024-01-24 10:00:20+00:00', 3, 1]
+      - query_id: emit-mode-2-3
+        expected_results:
           - ['2024-01-24 09:59:40+00:00', '2024-01-24 10:00:10+00:00', 1, 1, 1]
           - ['2024-01-24 09:59:50+00:00', '2024-01-24 10:00:20+00:00', 1, 1, 1]
           - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:30+00:00', 1, 1, 1]
@@ -202,7 +226,7 @@ tests:
           - ['2024-01-24 09:59:50+00:00', '2024-01-24 10:00:20+00:00', 1, 3, 3]
           - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:30+00:00', 1, 3, 3]
           - ['2024-01-24 10:00:10+00:00', '2024-01-24 10:00:40+00:00', 3, 3, 1]
-      - query_id: emit-mode-2-3
+      - query_id: emit-mode-2-4
         expected_results:
           - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:00.001000+00:00', 1, 1, 1]
           - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:05.001000+00:00', 1, 2, 2]
@@ -229,42 +253,49 @@ tests:
             query: create stream test_35_stream(i int);
 
           - client: python
-            query_id: emit-mode-1-1
+            query_id: emit-mode-3-1
             query_type: stream
             depends_on_stream: test_35_stream
             wait: 1
             query: select min(i), max(i), count() from test_35_stream emit periodic 1s on update;
 
           - client: python
-            query_id: emit-mode-1-2
+            query_id: emit-mode-3-2
             query_type: stream
             depends_on_stream: test_35_stream
             wait: 1
             query: select i, count() from test_35_stream group by i emit periodic 1s on update;
 
           - client: python
-            query_id: emit-mode-1-3
+            query_id: emit-mode-3-3
             query_type: stream
             depends_on_stream: test_35_stream
             wait: 1
             query: select window_start, window_end, min(i), max(i), count() from tumble(test_35_stream, 10s) group by window_start, window_end emit periodic 1s on update;
 
           - client: python
-            query_id: emit-mode-1-4
+            query_id: emit-mode-3-4
+            query_type: stream
+            depends_on_stream: test_35_stream
+            wait: 1
+            query: select window_start, window_end, i, count() from tumble(test_35_stream, 10s) group by window_start, window_end, i emit periodic 1s on update;
+
+          - client: python
+            query_id: emit-mode-3-5
             query_type: stream
             depends_on_stream: test_35_stream
             wait: 1
             query: select window_start, window_end, min(i), max(i), count() from hop(test_35_stream, 10s, 30s) group by window_start, window_end emit periodic 1s on update;
 
           - client: python
-            query_id: emit-mode-1-5
+            query_id: emit-mode-3-6
             query_type: stream
             depends_on_stream: test_35_stream
             wait: 1
             query: select window_start, window_end, min(i), max(i), count() from session(test_35_stream, 5m) group by window_start, window_end emit periodic 1s on update;
 
           - client: python
-            depends_on: emit-mode-1-5
+            depends_on: emit-mode-3-6
             query_type: table
             wait: 2
             query: insert into test_35_stream(i, _tp_time) values(1, '2024-01-24 10:00:00');
@@ -282,25 +313,27 @@ tests:
             query: insert into test_35_stream(i, _tp_time) values(3, '2024-01-24 10:00:10');
 
     expected_results:
-      - query_id: emit-mode-1-1
+      - query_id: emit-mode-3-1
         expected_results:
           - [1, 1, 1]
           - [1, 2, 2]
           - [1, 3, 3]
-      - query_id: emit-mode-1-2
+      - query_id: emit-mode-3-2
         expected_results:
-          - [1, 1]
-          - [1, 1]
-          - [2, 1]
           - [1, 1]
           - [2, 1]
           - [3, 1]
-      - query_id: emit-mode-1-3
+      - query_id: emit-mode-3-3
         expected_results:
           - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:10+00:00', 1, 1, 1]
           - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:10+00:00', 1, 2, 2]
           - ['2024-01-24 10:00:10+00:00', '2024-01-24 10:00:20+00:00', 3, 3, 1]
-      - query_id: emit-mode-1-4
+      - query_id: emit-mode-3-4
+        expected_results:
+          - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:10+00:00', 1, 1]
+          - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:10+00:00', 2, 1]
+          - ['2024-01-24 10:00:10+00:00', '2024-01-24 10:00:20+00:00', 3, 1]
+      - query_id: emit-mode-3-5
         expected_results:
           - ['2024-01-24 09:59:40+00:00', '2024-01-24 10:00:10+00:00', 1, 1, 1]
           - ['2024-01-24 09:59:50+00:00', '2024-01-24 10:00:20+00:00', 1, 1, 1]
@@ -311,7 +344,7 @@ tests:
           - ['2024-01-24 09:59:50+00:00', '2024-01-24 10:00:20+00:00', 1, 3, 3]
           - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:30+00:00', 1, 3, 3]
           - ['2024-01-24 10:00:10+00:00', '2024-01-24 10:00:40+00:00', 3, 3, 1]
-      - query_id: emit-mode-1-5
+      - query_id: emit-mode-3-6
         expected_results:
           - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:00.001000+00:00', 1, 1, 1]
           - ['2024-01-24 10:00:00+00:00', '2024-01-24 10:00:05.001000+00:00', 1, 2, 2]
