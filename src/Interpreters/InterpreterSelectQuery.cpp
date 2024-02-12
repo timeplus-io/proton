@@ -3220,7 +3220,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(
                 ErrorCodes::NOT_IMPLEMENTED,
                 "User defined aggregation function with emit strategy shouldn't be used together with other aggregation function");
 
-        if (windowType() != Streaming::WindowType::NONE)
+        if (windowType() != Streaming::WindowType::None)
             throw Exception(
                 ErrorCodes::NOT_IMPLEMENTED,
                 "User defined aggregation function with emit strategy shouldn't be used together with streaming window");
@@ -3374,7 +3374,7 @@ Streaming::WindowType InterpreterSelectQuery::windowType() const
         }
     }
 
-    return Streaming::WindowType::NONE;
+    return Streaming::WindowType::None;
 }
 
 bool InterpreterSelectQuery::hasStreamingGlobalAggregation() const

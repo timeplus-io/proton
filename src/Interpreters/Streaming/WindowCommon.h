@@ -72,10 +72,10 @@ namespace Streaming
 
 enum class WindowType
 {
-    NONE,
-    HOP,
-    TUMBLE,
-    SESSION
+    None,
+    Hop,
+    Tumble,
+    Session
 };
 
 const String TUMBLE_HELP_MESSAGE = "Function 'tumble' requires from 2 to 4 parameters: "

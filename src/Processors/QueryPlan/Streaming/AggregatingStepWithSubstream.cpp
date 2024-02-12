@@ -75,11 +75,11 @@ void AggregatingStepWithSubstream::transformPipeline(QueryPipelineBuilder & pipe
             assert(transform_params->params.window_params);
             switch (transform_params->params.window_params->type)
             {
-                case WindowType::TUMBLE:
+                case WindowType::Tumble:
                     return std::make_shared<TumbleAggregatingTransformWithSubstream>(header, transform_params);
-                case WindowType::HOP:
+                case WindowType::Hop:
                     return std::make_shared<HopAggregatingTransformWithSubstream>(header, transform_params);
-                case WindowType::SESSION:
+                case WindowType::Session:
                     return std::make_shared<SessionAggregatingTransformWithSubstream>(header, transform_params);
                 default:
                     throw Exception(

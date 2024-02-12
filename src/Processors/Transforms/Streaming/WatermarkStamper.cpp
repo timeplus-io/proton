@@ -206,7 +206,7 @@ void WatermarkStamper::processAfterUnmuted(Chunk & chunk)
         }
         case EmitMode::Watermark:
         {
-            auto muted_watermark_ts = params.window_params->type == WindowType::SESSION ? calculateWatermarkPerRow(max_event_ts)
+            auto muted_watermark_ts = params.window_params->type == WindowType::Session ? calculateWatermarkPerRow(max_event_ts)
                                                                                         : calculateWatermark(max_event_ts);
             if (muted_watermark_ts != INVALID_WATERMARK) [[likely]]
             {
@@ -218,7 +218,7 @@ void WatermarkStamper::processAfterUnmuted(Chunk & chunk)
         case EmitMode::PeriodicWatermark:
         case EmitMode::PeriodicWatermarkOnUpdate:
         {
-            auto muted_watermark_ts = params.window_params->type == WindowType::SESSION ? calculateWatermarkPerRow(max_event_ts)
+            auto muted_watermark_ts = params.window_params->type == WindowType::Session ? calculateWatermarkPerRow(max_event_ts)
                                                                                         : calculateWatermark(max_event_ts);
             if (muted_watermark_ts != INVALID_WATERMARK) [[likely]]
                 watermark_ts = muted_watermark_ts;
@@ -414,7 +414,7 @@ void WatermarkStamper::processWatermarkImpl(Chunk & chunk)
 void WatermarkStamper::processWatermark(Chunk & chunk)
 {
     assert(params.window_params);
-    if (params.window_params->type == WindowType::SESSION)
+    if (params.window_params->type == WindowType::Session)
     {
         if (params.window_params->time_col_is_datetime64)
             processWatermarkImpl<ColumnDateTime64, true>(chunk);

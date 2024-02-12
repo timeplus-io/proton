@@ -29,11 +29,11 @@ WatermarkStamperPtr initWatermark(const WatermarkStamperParams & params, Poco::L
     {
         switch (params.window_params->type)
         {
-            case WindowType::TUMBLE:
+            case WindowType::Tumble:
                 return std::make_unique<TumbleWatermarkStamper>(params, logger);
-            case WindowType::HOP:
+            case WindowType::Hop:
                 return std::make_unique<HopWatermarkStamper>(params, logger);
-            case WindowType::SESSION:
+            case WindowType::Session:
                 return std::make_unique<SessionWatermarkStamper>(params, logger);
             default:
                 break;
