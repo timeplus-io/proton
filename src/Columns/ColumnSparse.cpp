@@ -739,9 +739,9 @@ ColumnPtr ColumnSparse::compress() const
     size_t byte_size = values_compressed->byteSize() + offsets_compressed->byteSize();
 
     return ColumnCompressed::create(size(), byte_size,
-        [values_compressed = std::move(values_compressed), offsets_compressed = std::move(offsets_compressed), size = size()]
+        [c_values_compressed = std::move(values_compressed), c_offsets_compressed = std::move(offsets_compressed), size = size()]
         {
-            return ColumnSparse::create(values_compressed->decompress(), offsets_compressed->decompress(), size);
+            return ColumnSparse::create(c_values_compressed->decompress(), c_offsets_compressed->decompress(), size);
         });
 }
 

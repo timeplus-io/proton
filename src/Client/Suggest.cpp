@@ -100,14 +100,14 @@ static String getLoadSuggestionQuery(Int32 suggestion_limit, bool basic_suggesti
 template <typename ConnectionType>
 void Suggest::load(ContextPtr context, const ConnectionParameters & connection_parameters, Int32 suggestion_limit)
 {
-    loading_thread = std::thread([context=Context::createCopy(context), connection_parameters, suggestion_limit, this]
+    loading_thread = std::thread([c_context=Context::createCopy(context), connection_parameters, suggestion_limit, this]
     {
         for (size_t retry = 0; retry < 10; ++retry)
         {
             ThreadStatus thread_status;
             try
             {
-                auto connection = ConnectionType::createConnection(connection_parameters, context);
+                auto connection = ConnectionType::createConnection(connection_parameters, c_context);
                 fetch(*connection, connection_parameters.timeouts, getLoadSuggestionQuery(suggestion_limit, std::is_same_v<ConnectionType, LocalConnection>));
             }
             catch (const Exception & e)

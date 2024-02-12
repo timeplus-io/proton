@@ -2771,10 +2771,10 @@ namespace
             bool with_length_delimiter)
         {
             root_serializer_ptr = std::make_shared<ProtobufSerializer *>();
-            get_root_desc_function = [root_serializer_ptr = root_serializer_ptr](size_t indent) -> String
+            get_root_desc_function = [c_root_serializer_ptr = root_serializer_ptr](size_t indent) -> String
             {
                 WriteBufferFromOwnString buf;
-                (*root_serializer_ptr)->describeTree(buf, indent);
+                (*c_root_serializer_ptr)->describeTree(buf, indent);
                 return buf.str();
             };
 

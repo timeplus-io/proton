@@ -627,7 +627,7 @@ size_t Log::deleteLogStartSequenceBreachedSegments()
 {
     auto start_sn = logStartSequence();
     auto should_delete
-        = [start_sn = start_sn](LogSegmentPtr, LogSegmentPtr next_segment) { return next_segment->baseSequence() <= start_sn; };
+        = [c_start_sn = start_sn](LogSegmentPtr, LogSegmentPtr next_segment) { return next_segment->baseSequence() <= c_start_sn; };
 
     return deleteOldSegments(should_delete, "start_sequence_breached");
 }
@@ -643,10 +643,10 @@ size_t Log::deleteRetentionSizeBreachedSegments()
         return 0;
 
     auto diff = total_bytes - retention_size;
-    auto should_delete = [diff = diff](LogSegmentPtr segment, LogSegmentPtr) mutable {
-        if (diff >= segment->size())
+    auto should_delete = [c_diff = diff](LogSegmentPtr segment, LogSegmentPtr) mutable {
+        if (c_diff >= segment->size())
         {
-            diff -= segment->size();
+            c_diff -= segment->size();
             return true;
         }
         return false;
@@ -662,8 +662,8 @@ size_t Log::deleteRetentionTimeBreachedSegments()
         return 0;
 
     auto start_ms = DB::local_now_ms();
-    auto should_delete = [start_ms = start_ms, retention_ms = retention_ms](LogSegmentPtr segment, LogSegmentPtr) {
-        return start_ms - segment->lastModified() > retention_ms;
+    auto should_delete = [c_start_ms = start_ms, c_retention_ms = retention_ms](LogSegmentPtr segment, LogSegmentPtr) {
+        return c_start_ms - segment->lastModified() > c_retention_ms;
     };
 
     return deleteOldSegments(should_delete, "retention_time_breached");

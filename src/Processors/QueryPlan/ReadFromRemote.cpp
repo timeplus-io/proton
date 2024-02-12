@@ -1,3 +1,4 @@
+#include "Interpreters/Context_fwd.h"
 #include <Processors/QueryPlan/ReadFromRemote.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ExpressionStep.h>
@@ -137,28 +138,28 @@ void ReadFromRemote::addLazyPipe(Pipes & pipes, const ClusterProxy::IStreamFacto
     }
 
     auto lazily_create_stream = [
-            replica_info = replica_info,
-            pool = pool ? pool : shard.pool,
-            coordinator = coordinator,
-            shard_num = shard.shard_num, shard_count = shard_count, query = shard.query, header = shard.header,
-            context = context, throttler = throttler,
-            main_table = main_table, table_func_ptr = table_func_ptr,
-            scalars = scalars, external_tables = external_tables,
-            stage = stage, local_delay = shard.local_delay,
+            replica_info,
+            c_pool = pool ? pool : shard.pool,
+            coordinator,
+            shard_num = shard.shard_num, c_shard_count = shard_count, query = shard.query, header = shard.header,
+            c_context = context, c_throttler = throttler,
+            c_main_table = main_table, c_table_func_ptr = table_func_ptr,
+            c_scalars = scalars, c_external_tables = external_tables,
+            c_stage = stage, local_delay = shard.local_delay,
             add_agg_info, add_totals, add_extremes, async_read]() mutable
         -> QueryPipelineBuilder
     {
-        auto current_settings = context->getSettingsRef();
+        auto current_settings = c_context->getSettingsRef();
         auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(
             current_settings).getSaturated(
                 current_settings.max_execution_time);
         std::vector<ConnectionPoolWithFailover::TryResult> try_results;
         try
         {
-            if (table_func_ptr)
-                try_results = pool->getManyForTableFunction(timeouts, &current_settings, PoolMode::GET_MANY);
+            if (c_table_func_ptr)
+                try_results = c_pool->getManyForTableFunction(timeouts, &current_settings, PoolMode::GET_MANY);
             else
-                try_results = pool->getManyChecked(timeouts, &current_settings, PoolMode::GET_MANY, main_table.getQualifiedName());
+                try_results = c_pool->getManyChecked(timeouts, &current_settings, PoolMode::GET_MANY, c_main_table.getQualifiedName());
         }
         catch (const Exception & ex)
         {
@@ -178,13 +179,13 @@ void ReadFromRemote::addLazyPipe(Pipes & pipes, const ClusterProxy::IStreamFacto
 
         /// We disable this branch in case of parallel reading from replicas, because createLocalPlan will call
         /// InterpreterSelectQuery directly and it will be too ugly to pass ParallelReplicasCoordinator or some callback there.
-        if (!context->getClientInfo().collaborate_with_initiator && (try_results.empty() || local_delay < max_remote_delay))
+        if (!c_context->getClientInfo().collaborate_with_initiator && (try_results.empty() || local_delay < max_remote_delay))
         {
-            auto plan = createLocalPlan(query, header, context, stage, static_cast<UInt32>(shard_num), shard_count);
+            auto plan = createLocalPlan(query, header, c_context, c_stage, static_cast<UInt32>(shard_num), c_shard_count);
 
             return std::move(*plan->buildQueryPipeline(
-                QueryPlanOptimizationSettings::fromContext(context),
-                BuildQueryPipelineSettings::fromContext(context), context));
+                QueryPlanOptimizationSettings::fromContext(c_context),
+                BuildQueryPipelineSettings::fromContext(c_context), c_context));
         }
         else
         {
@@ -195,10 +196,10 @@ void ReadFromRemote::addLazyPipe(Pipes & pipes, const ClusterProxy::IStreamFacto
 
             String query_string = formattedAST(query);
 
-            scalars["_shard_num"]
+            c_scalars["_shard_num"]
                 = Block{{DataTypeUInt32().createColumnConst(1, shard_num), std::make_shared<DataTypeUInt32>(), "_shard_num"}};
             auto remote_query_executor = std::make_shared<RemoteQueryExecutor>(
-                pool, std::move(connections), query_string, header, context, throttler, scalars, external_tables, stage,
+                c_pool, std::move(connections), query_string, header, c_context, c_throttler, c_scalars, c_external_tables, c_stage,
                 RemoteQueryExecutor::Extension{.parallel_reading_coordinator = std::move(coordinator), .replica_info = replica_info});
 
             auto pipe = createRemoteSourcePipe(remote_query_executor, add_agg_info, add_totals, add_extremes, async_read);

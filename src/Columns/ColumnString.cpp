@@ -533,8 +533,8 @@ ColumnPtr ColumnString::compress() const
     const size_t offsets_compressed_size = offsets_compressed->size();
     return ColumnCompressed::create(source_offsets_elements, chars_compressed_size + offsets_compressed_size,
         [
-            chars_compressed = std::move(chars_compressed),
-            offsets_compressed = std::move(offsets_compressed),
+            c_chars_compressed = std::move(chars_compressed),
+            c_offsets_compressed = std::move(offsets_compressed),
             source_chars_size,
             source_offsets_elements
         ]
@@ -545,10 +545,10 @@ ColumnPtr ColumnString::compress() const
             res->getOffsets().resize(source_offsets_elements);
 
             ColumnCompressed::decompressBuffer(
-                chars_compressed->data(), res->getChars().data(), chars_compressed->size(), source_chars_size);
+                c_chars_compressed->data(), res->getChars().data(), c_chars_compressed->size(), source_chars_size);
 
             ColumnCompressed::decompressBuffer(
-                offsets_compressed->data(), res->getOffsets().data(), offsets_compressed->size(), source_offsets_elements * sizeof(Offset));
+                c_offsets_compressed->data(), res->getOffsets().data(), c_offsets_compressed->size(), source_offsets_elements * sizeof(Offset));
 
             return res;
         });

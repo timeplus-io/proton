@@ -1069,13 +1069,13 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                  log_queries,
                  log_queries_min_type = settings.log_queries_min_type,
                  log_queries_min_query_duration_ms = settings.log_queries_min_query_duration_ms.totalMilliseconds(),
-                 quota(quota), status_info_to_query_log] () mutable
+                 c_quota(quota), status_info_to_query_log] () mutable
             {
                 if (auto txn = context->getCurrentTransaction())
                     txn->onException();
 
-                if (quota)
-                    quota->used(QuotaType::ERRORS, 1, /* check_exceeded = */ false);
+                if (c_quota)
+                    c_quota->used(QuotaType::ERRORS, 1, /* check_exceeded = */ false);
 
                 elem.type = QueryLogElementType::EXCEPTION_WHILE_PROCESSING;
 

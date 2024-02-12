@@ -17,9 +17,9 @@ using ThreadPoolCallbackRunner = std::function<std::future<Result>(Callback &&, 
 template <typename Result, typename Callback = std::function<Result()>>
 ThreadPoolCallbackRunner<Result, Callback> threadPoolCallbackRunner(ThreadPool & pool, const std::string & thread_name)
 {
-    return [pool = &pool, thread_group = CurrentThread::getGroup(), thread_name](Callback && callback, int64_t priority) mutable -> std::future<Result>
+    return [c_pool = &pool, thread_group = CurrentThread::getGroup(), thread_name](Callback && callback, int64_t priority) mutable -> std::future<Result>
     {
-        auto task = std::make_shared<std::packaged_task<Result()>>([thread_group, thread_name, callback = std::move(callback)]() mutable -> Result
+        auto task = std::make_shared<std::packaged_task<Result()>>([thread_group, thread_name, c_callback = std::move(callback)]() mutable -> Result
         {
             if (thread_group)
                 CurrentThread::attachTo(thread_group);
@@ -31,13 +31,13 @@ ThreadPoolCallbackRunner<Result, Callback> threadPoolCallbackRunner(ThreadPool &
 
             setThreadName(thread_name.data());
 
-            return callback();
+            return c_callback();
         });
 
         auto future = task->get_future();
 
         /// ThreadPool is using "bigger is higher priority" instead of "smaller is more priority".
-        pool->scheduleOrThrow([task = std::move(task)]{ (*task)(); }, -priority);
+        c_pool->scheduleOrThrow([c_task = std::move(task)]{ (*c_task)(); }, -priority);
 
         return future;
     };

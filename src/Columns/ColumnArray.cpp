@@ -918,9 +918,9 @@ ColumnPtr ColumnArray::compress() const
     size_t byte_size = data_compressed->byteSize() + offsets_compressed->byteSize();
 
     return ColumnCompressed::create(size(), byte_size,
-        [data_compressed = std::move(data_compressed), offsets_compressed = std::move(offsets_compressed)]
+        [c_data_compressed = std::move(data_compressed), c_offsets_compressed = std::move(offsets_compressed)]
         {
-            return ColumnArray::create(data_compressed->decompress(), offsets_compressed->decompress());
+            return ColumnArray::create(c_data_compressed->decompress(), c_offsets_compressed->decompress());
         });
 }
 

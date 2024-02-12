@@ -63,7 +63,7 @@ bool ParallelReadBuffer::addReaderToPool()
     auto worker = read_workers.emplace_back(std::make_shared<ReadWorker>(std::move(reader)));
 
     ++active_working_reader;
-    schedule([this, worker = std::move(worker)]() mutable { readerThreadFunction(std::move(worker)); }, 0);
+    schedule([this, c_worker = std::move(worker)]() mutable { readerThreadFunction(std::move(c_worker)); }, 0);
 
     return true;
 }

@@ -896,11 +896,11 @@ ColumnPtr ColumnVector<T>::compress() const
 
     const size_t compressed_size = compressed->size();
     return ColumnCompressed::create(data_size, compressed_size,
-        [compressed = std::move(compressed), column_size = data_size]
+        [c_compressed = std::move(compressed), column_size = data_size]
         {
             auto res = ColumnVector<T>::create(column_size);
             ColumnCompressed::decompressBuffer(
-                compressed->data(), res->getData().data(), compressed->size(), column_size * sizeof(T));
+                c_compressed->data(), res->getData().data(), c_compressed->size(), column_size * sizeof(T));
             return res;
         });
 }
