@@ -1,7 +1,7 @@
 #include <Processors/Transforms/Streaming/SessionAggregatingTransformWithSubstream.h>
 
 #include <Interpreters/Streaming/TableFunctionDescription.h>
-#include <Processors/Transforms/Streaming/SessionHelper.h>
+#include <Processors/Transforms/Streaming/SessionWindowHelper.h>
 
 namespace DB
 {
@@ -46,7 +46,7 @@ SessionAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, c
     auto columns = chunk.detachColumns();
     auto & sessions = substream_ctx->getField<SessionInfoQueue>();
     /// window start/end column are replaced with session id
-    SessionHelper::assignWindow(
+    SessionWindowHelper::assignWindow(
         sessions, window_params, columns, wstart_col_pos, wend_col_pos, time_col_pos, session_start_col_pos, session_end_col_pos);
 
     auto num_rows = columns.at(0)->size();
@@ -58,7 +58,7 @@ SessionAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, c
         if (chunk.hasTimeoutWatermark())
             sessions.back()->active = false; /// force to finalize current session
 
-        auto last_finalized_session = SessionHelper::getLastFinalizedSession(sessions);
+        auto last_finalized_session = SessionWindowHelper::getLastFinalizedSession(sessions);
         if (last_finalized_session)
         {
             chunk.setWatermark(last_finalized_session->win_end);
@@ -84,7 +84,7 @@ SessionAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, c
 
 WindowsWithBuckets SessionAggregatingTransformWithSubstream::getWindowsWithBuckets(const SubstreamContextPtr & substream_ctx) const
 {
-    return SessionHelper::getWindowsWithBuckets(substream_ctx->getField<SessionInfoQueue>());
+    return SessionWindowHelper::getWindowsWithBuckets(substream_ctx->getField<SessionInfoQueue>());
 }
 
 Window SessionAggregatingTransformWithSubstream::getLastFinalizedWindow(const SubstreamContextPtr & substream_ctx) const
@@ -96,7 +96,7 @@ Window SessionAggregatingTransformWithSubstream::getLastFinalizedWindow(const Su
 void SessionAggregatingTransformWithSubstream::removeBucketsImpl(Int64 watermark, const SubstreamContextPtr & substream_ctx)
 {
     auto & sessions = substream_ctx->getField<SessionInfoQueue>();
-    Int64 last_expired_time_bucket = SessionHelper::removeExpiredSessions(sessions);
+    Int64 last_expired_time_bucket = SessionWindowHelper::removeExpiredSessions(sessions);
     params->aggregator.removeBucketsBefore(substream_ctx->variants, last_expired_time_bucket);
 }
 

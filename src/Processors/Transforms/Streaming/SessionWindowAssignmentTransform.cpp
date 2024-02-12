@@ -4,7 +4,7 @@
 #include <Columns/ColumnTuple.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Processors/Transforms/Streaming/SessionHelper.h>
+#include <Processors/Transforms/Streaming/SessionWindowHelper.h>
 
 namespace DB
 {

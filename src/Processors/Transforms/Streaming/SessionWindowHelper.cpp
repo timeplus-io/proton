@@ -1,4 +1,4 @@
-#include <Processors/Transforms/Streaming/SessionHelper.h>
+#include <Processors/Transforms/Streaming/SessionWindowHelper.h>
 
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnTuple.h>
@@ -16,7 +16,7 @@ extern const int LOGICAL_ERROR;
 
 namespace Streaming
 {
-namespace SessionHelper
+namespace SessionWindowHelper
 {
 namespace
 {

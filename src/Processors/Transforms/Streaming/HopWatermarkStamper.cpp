@@ -1,4 +1,4 @@
-#include <Processors/Transforms/Streaming/HopHelper.h>
+#include <Processors/Transforms/Streaming/HopWindowHelper.h>
 #include <Processors/Transforms/Streaming/HopWatermarkStamper.h>
 
 namespace DB
@@ -17,7 +17,7 @@ HopWatermarkStamper::HopWatermarkStamper(const WatermarkStamperParams & params_,
 
 Int64 HopWatermarkStamper::calculateWatermarkImpl(Int64 event_ts) const
 {
-    auto last_finalized_window = HopHelper::getLastFinalizedWindow(event_ts, window_params);
+    auto last_finalized_window = HopWindowHelper::getLastFinalizedWindow(event_ts, window_params);
     if (likely(last_finalized_window.isValid()))
         return last_finalized_window.end;
     else

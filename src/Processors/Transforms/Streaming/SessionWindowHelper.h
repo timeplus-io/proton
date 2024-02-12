@@ -9,7 +9,7 @@ class ColumnTuple;
 
 namespace Streaming
 {
-namespace SessionHelper
+namespace SessionWindowHelper
 {
 void assignWindow(
     SessionInfoQueue & sessions,

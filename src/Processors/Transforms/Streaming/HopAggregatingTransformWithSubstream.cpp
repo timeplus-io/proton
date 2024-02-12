@@ -1,5 +1,5 @@
 #include <Processors/Transforms/Streaming/HopAggregatingTransformWithSubstream.h>
-#include <Processors/Transforms/Streaming/HopHelper.h>
+#include <Processors/Transforms/Streaming/HopWindowHelper.h>
 
 namespace DB
 {
@@ -14,7 +14,7 @@ HopAggregatingTransformWithSubstream::HopAggregatingTransformWithSubstream(Block
 
 WindowsWithBuckets HopAggregatingTransformWithSubstream::getWindowsWithBuckets(const SubstreamContextPtr & substream_ctx) const
 {
-    return HopHelper::getWindowsWithBuckets(
+    return HopWindowHelper::getWindowsWithBuckets(
         window_params, params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START, [&, this]() {
             return params->aggregator.buckets(substream_ctx->variants);
         });
@@ -22,12 +22,12 @@ WindowsWithBuckets HopAggregatingTransformWithSubstream::getWindowsWithBuckets(c
 
 Window HopAggregatingTransformWithSubstream::getLastFinalizedWindow(const SubstreamContextPtr & substream_ctx) const
 {
-    return HopHelper::getLastFinalizedWindow(substream_ctx->finalized_watermark, window_params);
+    return HopWindowHelper::getLastFinalizedWindow(substream_ctx->finalized_watermark, window_params);
 }
 
 void HopAggregatingTransformWithSubstream::removeBucketsImpl(Int64 watermark, const SubstreamContextPtr & substream_ctx)
 {
-    auto last_expired_time_bucket = HopHelper::getLastExpiredTimeBucket(
+    auto last_expired_time_bucket = HopWindowHelper::getLastExpiredTimeBucket(
         watermark, window_params, params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START);
     params->aggregator.removeBucketsBefore(substream_ctx->variants, last_expired_time_bucket);
 }

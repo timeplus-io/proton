@@ -1,10 +1,10 @@
-#include <Processors/Transforms/Streaming/TumbleHelper.h>
+#include <Processors/Transforms/Streaming/TumbleWindowHelper.h>
 
 #include <Core/Streaming/Watermark.h>
 
 namespace DB
 {
-namespace Streaming::TumbleHelper
+namespace Streaming::TumbleWindowHelper
 {
 /// @brief Get max window can be finalized by the @param watermark
 /// For example: tumble(<stream>, 3s), assume current watermark is `5s` so

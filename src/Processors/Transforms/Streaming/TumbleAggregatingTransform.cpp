@@ -1,5 +1,5 @@
 #include <Processors/Transforms/Streaming/TumbleAggregatingTransform.h>
-#include <Processors/Transforms/Streaming/TumbleHelper.h>
+#include <Processors/Transforms/Streaming/TumbleWindowHelper.h>
 
 namespace DB
 {
@@ -32,13 +32,13 @@ TumbleAggregatingTransform::TumbleAggregatingTransform(
 
 WindowsWithBuckets TumbleAggregatingTransform::getLocalWindowsWithBucketsImpl() const
 {
-    return TumbleHelper::getWindowsWithBuckets(
+    return TumbleWindowHelper::getWindowsWithBuckets(
         window_params, params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START, [this]() { return getBuckets(); });
 }
 
 void TumbleAggregatingTransform::removeBucketsImpl(Int64 watermark_)
 {
-    auto last_expired_time_bucket = TumbleHelper::getLastExpiredTimeBucket(
+    auto last_expired_time_bucket = TumbleWindowHelper::getLastExpiredTimeBucket(
         watermark_, window_params, params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START);
 
     params->aggregator.removeBucketsBefore(variants, last_expired_time_bucket);

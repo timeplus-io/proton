@@ -1,10 +1,10 @@
-#include <Processors/Transforms/Streaming/HopHelper.h>
+#include <Processors/Transforms/Streaming/HopWindowHelper.h>
 
 #include <Core/Streaming/Watermark.h>
 
 namespace DB
 {
-namespace Streaming::HopHelper
+namespace Streaming::HopWindowHelper
 {
 WindowInterval gcdWindowInterval(const ColumnWithTypeAndName & interval_col1, const ColumnWithTypeAndName & interval_col2)
 {

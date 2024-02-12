@@ -1,5 +1,5 @@
 #include <Processors/Transforms/Streaming/TumbleAggregatingTransformWithSubstream.h>
-#include <Processors/Transforms/Streaming/TumbleHelper.h>
+#include <Processors/Transforms/Streaming/TumbleWindowHelper.h>
 
 namespace DB
 {
@@ -17,7 +17,7 @@ TumbleAggregatingTransformWithSubstream::TumbleAggregatingTransformWithSubstream
 
 WindowsWithBuckets TumbleAggregatingTransformWithSubstream::getWindowsWithBuckets(const SubstreamContextPtr & substream_ctx) const
 {
-    return TumbleHelper::getWindowsWithBuckets(
+    return TumbleWindowHelper::getWindowsWithBuckets(
         window_params, params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START, [&, this]() {
             return params->aggregator.buckets(substream_ctx->variants);
         });
@@ -25,12 +25,12 @@ WindowsWithBuckets TumbleAggregatingTransformWithSubstream::getWindowsWithBucket
 
 Window TumbleAggregatingTransformWithSubstream::getLastFinalizedWindow(const SubstreamContextPtr & substream_ctx) const
 {
-    return TumbleHelper::getLastFinalizedWindow(substream_ctx->finalized_watermark, window_params);
+    return TumbleWindowHelper::getLastFinalizedWindow(substream_ctx->finalized_watermark, window_params);
 }
 
 void TumbleAggregatingTransformWithSubstream::removeBucketsImpl(Int64 watermark, const SubstreamContextPtr & substream_ctx)
 {
-    auto last_expired_time_bucket = TumbleHelper::getLastExpiredTimeBucket(
+    auto last_expired_time_bucket = TumbleWindowHelper::getLastExpiredTimeBucket(
         watermark, window_params, params->params.group_by == Aggregator::Params::GroupBy::WINDOW_START);
 
     params->aggregator.removeBucketsBefore(substream_ctx->variants, last_expired_time_bucket);

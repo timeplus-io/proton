@@ -6,7 +6,7 @@ namespace DB
 {
 namespace Streaming
 {
-namespace HopHelper
+namespace HopWindowHelper
 {
 WindowInterval gcdWindowInterval(const ColumnWithTypeAndName & interval_col1, const ColumnWithTypeAndName & interval_col2);
 

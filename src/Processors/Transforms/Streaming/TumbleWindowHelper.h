@@ -6,7 +6,7 @@ namespace DB
 {
 namespace Streaming
 {
-namespace TumbleHelper
+namespace TumbleWindowHelper
 {
 /// @brief Get max window can be finalized by the @param watermark
 Window getLastFinalizedWindow(Int64 watermark, const TumbleWindowParams & params);

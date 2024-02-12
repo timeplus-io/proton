@@ -1,7 +1,7 @@
 #include <Processors/Transforms/Streaming/SessionAggregatingTransform.h>
 
 #include <Interpreters/Streaming/TableFunctionDescription.h>
-#include <Processors/Transforms/Streaming/SessionHelper.h>
+#include <Processors/Transforms/Streaming/SessionWindowHelper.h>
 
 #include <ranges>
 
@@ -45,7 +45,7 @@ std::pair<bool, bool> SessionAggregatingTransform::executeOrMergeColumns(Chunk &
 {
     auto & sessions = many_data->getField<SessionInfoQueue>();
     auto columns = chunk.detachColumns();
-    SessionHelper::assignWindow(
+    SessionWindowHelper::assignWindow(
         sessions, window_params, columns, wstart_col_pos, wend_col_pos, time_col_pos, session_start_col_pos, session_end_col_pos);
     num_rows = columns.at(0)->size();
     chunk.setColumns(std::move(columns), num_rows);
@@ -56,7 +56,7 @@ std::pair<bool, bool> SessionAggregatingTransform::executeOrMergeColumns(Chunk &
         if (chunk.hasTimeoutWatermark())
             sessions.back()->active = false; /// force to finalize current session
 
-        auto last_finalized_session = SessionHelper::getLastFinalizedSession(sessions);
+        auto last_finalized_session = SessionWindowHelper::getLastFinalizedSession(sessions);
         if (last_finalized_session)
         {
             chunk.setWatermark(last_finalized_session->win_end);
@@ -82,13 +82,13 @@ std::pair<bool, bool> SessionAggregatingTransform::executeOrMergeColumns(Chunk &
 
 WindowsWithBuckets SessionAggregatingTransform::getLocalWindowsWithBucketsImpl() const
 {
-    return SessionHelper::getWindowsWithBuckets(many_data->getField<SessionInfoQueue>());
+    return SessionWindowHelper::getWindowsWithBuckets(many_data->getField<SessionInfoQueue>());
 }
 
 void SessionAggregatingTransform::removeBucketsImpl(Int64 /*watermark_*/)
 {
     auto & sessions = many_data->getField<SessionInfoQueue>();
-    Int64 last_expired_time_bucket = SessionHelper::removeExpiredSessions(sessions);
+    Int64 last_expired_time_bucket = SessionWindowHelper::removeExpiredSessions(sessions);
     params->aggregator.removeBucketsBefore(variants, last_expired_time_bucket);
 }
 
