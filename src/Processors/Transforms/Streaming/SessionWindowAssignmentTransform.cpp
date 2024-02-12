@@ -19,7 +19,7 @@ SessionWindowAssignmentTransform::SessionWindowAssignmentTransform(
 
 void SessionWindowAssignmentTransform::assignWindow(Columns & columns) const
 {
-    assert(params.assign_window_pushdown);
+    assert(params.pushdown_window_assignment);
     /// No calculate/cache for streaming session window aggregation optimization
     /// FIXME: Also support origin logic for historical session window here
     /// __session(timestamp_expr, timeout_interval, max_session_size, start_cond, start_with_inclusion, end_cond, end_with_inclusion)

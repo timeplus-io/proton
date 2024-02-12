@@ -273,8 +273,9 @@ struct SessionWindowParams : WindowParams
     bool start_with_inclusion;
     bool end_with_inclusion;
 
-    /// TODO: So far, always assign session window in aggr
-    bool assign_window_pushdown = true;
+    /// So far, only for session window, we evaluate the watermark and window for the events in Aggregate Transform
+    /// For other windows, we assigned the watermark in window assignment step.
+    bool pushdown_window_assignment = true;
 
     SessionWindowParams(TableFunctionDescriptionPtr window_desc);
 };

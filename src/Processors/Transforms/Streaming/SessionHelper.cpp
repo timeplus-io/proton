@@ -270,7 +270,7 @@ WindowsWithBuckets getWindowsWithBuckets(const SessionInfoQueue & sessions)
 void validateWatermarkStrategyAndEmitMode(WatermarkStrategy & strategy, WatermarkEmitMode & mode, SessionWindowParams & params)
 {
     /// TODO: So far, we always push down assign session window logic for session window aggregating
-    assert(params.assign_window_pushdown);
+    assert(params.pushdown_window_assignment);
 
     /// FIXME: Set default strategy, configurable in the future ?
     if (strategy == WatermarkStrategy::Unknown)

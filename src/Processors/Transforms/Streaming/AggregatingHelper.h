@@ -36,7 +36,7 @@ Chunk spliceAndConvertToChunk(AggregatedDataVariants & data, const AggregatingTr
 Chunk mergeAndSpliceAndConvertToChunk(
     ManyAggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets);
 
-/* For emit on update */
+/* for EMIT ON UPDATE */
 /// Convert aggregated state of update groups tracked to chunk
 Chunk convertUpdatesToChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params);
 /// Merge many aggregated state and convert them to chunk
@@ -50,7 +50,7 @@ Chunk spliceAndConvertUpdatesToChunk(
 Chunk mergeAndSpliceAndConvertUpdatesToChunk(
     ManyAggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets);
 
-/* For emit changelog */
+/* for EMIT CHANGELOG */
 /// Changelog chunk converters are used for changelog emit. They can return a pair of chunks : one
 /// for retraction and one for updates. And those 2 chunks are expected to be passed to downstream
 /// consecutively otherwise the down stream aggregation result may not be correct or emit incorrect
