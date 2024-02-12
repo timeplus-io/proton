@@ -40,34 +40,34 @@ tests:
         wait: 2
         depends_on_stream: test_changelog_14
         query_id: '15109'
-        query: select group_uniq_array(val) from test_changelog_14;
+        query: select group_uniq_array(val) from test_changelog_14 emit periodic 1s;
 
       - client: python
         query_type: table
         depends_on: '15109'
-        wait: 3
+        wait: 1
         query: insert into test_changelog_14(id, val) values(1, 1);
 
       - client: python
         query_type: table
-        wait: 2
+        wait: 1
         query: insert into test_changelog_14(id, val) values(1, 2);
 
       - client: python
         query_type: table
-        wait: 2
+        wait: 1
         query: insert into test_changelog_14(id, val) values(2, 3);
 
       - client: python
         query_type: table
-        wait: 2
+        wait: 1
         query: insert into test_changelog_14(id, val) values(3, 3);
 
       - client: python
         query_type: table
         kill : '15109'
         kill_wait: 2
-        wait: 2
+        wait: 1
         query: insert into test_changelog_14(id, val) values(3, 4);
 
     expected_results:
@@ -207,34 +207,34 @@ tests:
         wait: 2
         depends_on_stream: test_changelog_14
         query_id: '15112'
-        query: select group_uniq_array(val), _tp_delta from test_changelog_14 emit changelog;
+        query: select group_uniq_array(val), _tp_delta from test_changelog_14 emit changelog periodic 1s;
 
       - client: python
         query_type: table
         depends_on: '15112'
-        wait: 3
+        wait: 2
         query: insert into test_changelog_14(id, val) values(1, 1);
 
       - client: python
         query_type: table
-        wait: 2
+        wait: 1
         query: insert into test_changelog_14(id, val) values(1, 2);
 
       - client: python
         query_type: table
-        wait: 2
+        wait: 1
         query: insert into test_changelog_14(id, val) values(2, 3);
 
       - client: python
         query_type: table
-        wait: 2
+        wait: 1
         query: insert into test_changelog_14(id, val) values(3, 3);
 
       - client: python
         query_type: table
         kill : '15112'
         kill_wait: 2
-        wait: 2
+        wait: 1
         query: insert into test_changelog_14(id, val) values(3, 4);
     expected_results:
       - query_id: '15112'
@@ -278,27 +278,27 @@ tests:
       - client: python
         query_type: table
         depends_on: '15113'
-        wait: 3
+        wait: 2
         query: insert into test_changelog_14(id, val) values(1, 1), (2,2);
 
       - client: python
         query_type: table
         kill: '15113'
-        kill_wait: 2
-        wait: 3
+        kill_wait: 3
+        wait: 2
         query: insert into test_changelog_14(id, val, _tp_delta) values(3, 3, +1), (2, 2, -1);
 
     - statements:
       - client: python
         query_type: stream
         query_id: 15113-1
-        wait: 2
+        wait: 1
         terminate: manual
         query: recover from '15113'
 
       - client: python
         query_type: table
-        depends_on_stream: test_changelog_14
+        depends_on: '15113'
         wait: 2
         query: insert into test_changelog_14(id, val) values(4, 4), (5,5);
 
@@ -314,7 +314,7 @@ tests:
 
       - client: python
         query_type: table
-        wait: 2
+        wait: 3
         query: kill query where query_id='15113-1' sync
 
       - client: python

@@ -132,7 +132,7 @@
             "description": "tumble window aggregate by max and group by id, window_start, window_end",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":"601", "depends_on_stream":"test6_stream_only", "run_mode":"process", "query_type": "stream", "terminate":"manuel", "query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test6_stream_only, timestamp, interval 5 second) group by id, window_start, window_end emit stream"},
+                    {"client":"python", "query_id":"601", "depends_on_stream":"test6_stream_only", "run_mode":"process", "query_type": "stream", "terminate":"manual", "query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test6_stream_only, timestamp, interval 5 second) group by id, window_start, window_end emit stream"},
                     {"client":"python", "query_id":"602", "depends_on_stream":"test6_stream_only", "run_mode":"process", "query_type": "stream", "terminate":"auto","query_end_timer": 1, "query":"select id, max(value), window_start, window_end from tumble(test6_stream_only, timestamp, interval 5 second) group by id, window_start, window_end emit stream"}
                 ]},
 

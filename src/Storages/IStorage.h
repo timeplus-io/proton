@@ -234,6 +234,8 @@ public:
     virtual bool supportsAccurateSeekTo() const noexcept { return false; }
 
     virtual bool supportsStreamingQuery() const { return false; }
+
+    virtual bool isExternalTable() const { return false; }
     /// proton: ends.
 
     /// Return list of virtual columns (like _part, _table, etc). In the vast

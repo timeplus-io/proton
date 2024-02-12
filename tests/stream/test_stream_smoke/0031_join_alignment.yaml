@@ -203,7 +203,7 @@ tests:
           query: |
             subscribe to with r1 as (select i as id, v, _tp_time from test_32_stream), r2 as (select i as id, v, _tp_time from test_32_stream_vk)
             select r1.v, r2.v from r1 asof join r2 on r1.id = r2.id and r1._tp_time > r2._tp_time and lag_behind(1ms, r1._tp_time, r2._tp_time)
-            settings join_quiesce_threshold_ms=10000,checkpoint_interval=1
+            settings join_quiesce_threshold_ms=20000,checkpoint_interval=1
 
         - client: python
           query_id: 3203
@@ -213,7 +213,7 @@ tests:
           query: |
             subscribe to with r1 as (select i as id, v, _tp_time from test_32_stream), r2 as (select i as id, v, _tp_time from test_32_stream_vk)
             select r1.v, r2.v from r1 left asof join r2 on r1.id = r2.id and r1._tp_time > r2._tp_time and lag_behind(1ms, r1._tp_time, r2._tp_time)
-            settings join_quiesce_threshold_ms=10000,checkpoint_interval=1
+            settings join_quiesce_threshold_ms=20000,checkpoint_interval=1
 
         - client: python
           query_type: table
@@ -329,7 +329,7 @@ tests:
           query: |
             subscribe to with r1 as (select i % 5 as id, v, _tp_time from test_32_stream where i < 50), r2 as (select i % 5 as id, v, _tp_time from test_32_stream where i >= 50)
             select r1.v, r2.v from r1 latest join r2 on r1.id = r2.id and lag_behind(1ms, r1._tp_time, r2._tp_time)
-            settings join_quiesce_threshold_ms=10000,checkpoint_interval=1
+            settings join_quiesce_threshold_ms=20000,checkpoint_interval=1
 
         - client: python
           query_id: 3205
@@ -339,7 +339,7 @@ tests:
           query: |
             subscribe to with r1 as (select i % 5 as id, v, _tp_time from test_32_stream where i < 50), r2 as (select i % 5 as id, v, _tp_time from test_32_stream where i >= 50)
             select r1.v, r2.v from r1 left latest join r2 on r1.id = r2.id and lag_behind(1ms, r1._tp_time, r2._tp_time)
-            settings join_quiesce_threshold_ms=10000,checkpoint_interval=1
+            settings join_quiesce_threshold_ms=20000,checkpoint_interval=1
 
         - client: python
           query_type: table
@@ -455,12 +455,12 @@ tests:
           query: |
             subscribe to with r1 as (select i % 5 as id, v, _tp_time as time from test_32_stream where i < 50), r2 as (select i % 5 as id, v, _tp_time as time from test_32_stream where i >= 50)
             select checked, count() from (select r1.v, r2.v, r1.time >= r2.time as checked from changelog(r1, id) as r1 join changelog(r2, id) as r2 on r1.id = r2.id and lag_behind(1ms, r2.time, r1.time))
-            group by checked settings checkpoint_interval=1,join_quiesce_threshold_ms=10000
+            group by checked emit periodic 3s settings checkpoint_interval=1,join_quiesce_threshold_ms=20000
 
         - client: python
           query_type: table
           depends_on: 3206
-          wait: 2
+          wait: 1
           query: |
             insert into test_32_stream(i, v, _tp_time) values(1, 't1', '2023-1-1 00:00:04');
 
@@ -490,7 +490,8 @@ tests:
 
         - client: python
           query_type: table
-          wait: 2
+          depends_on: 3206
+          wait: 1
           query: |
             insert into test_32_stream(i, v, _tp_time) values(51, 'tt2', '2023-1-1 00:00:07');
 

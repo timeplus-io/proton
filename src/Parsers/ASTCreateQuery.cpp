@@ -36,7 +36,8 @@ ASTPtr ASTStorage::clone() const
 
 void ASTStorage::formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const
 {
-    if (engine)
+    if (engine
+        /*proton: starts*/ && engine->name != "ExternalTable" /*proton: ends*/)
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "ENGINE" << (s.hilite ? hilite_none : "") << " = ";
         engine->formatImpl(s, state, frame);
@@ -277,6 +278,8 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
             what = "MATERIALIZED VIEW";
         else if (is_random)
             what = "RANDOM STREAM";
+        else if (storage && storage->engine && storage->engine->name == "ExternalTable")
+            what = "EXTERNAL TABLE";
         /// proton: ends.
 
         settings.ostr

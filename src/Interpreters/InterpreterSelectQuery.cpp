@@ -3237,6 +3237,10 @@ void InterpreterSelectQuery::executeStreamingAggregation(
             "Streaming aggregatation group by overflow mode '{}' is not implemented",
             magic_enum::enum_name(settings.group_by_overflow_mode.value));
 
+    auto tracking_updates_type = Streaming::TrackingUpdatesType::None;
+    if (data_stream_semantic_pair.isChangelogOutput())
+        tracking_updates_type = Streaming::TrackingUpdatesType::UpdatesWithRetract;
+
     Streaming::Aggregator::Params params(
         header_before_aggregation,
         keys,
@@ -3261,7 +3265,8 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         streaming_group_by,
         delta_col_pos,
         window_keys_num,
-        query_info.streaming_window_params);
+        query_info.streaming_window_params,
+        tracking_updates_type);
 
     auto merge_threads = max_streams;
     auto temporary_data_merge_threads = settings.aggregation_memory_efficient_merge_threads
@@ -3411,15 +3416,6 @@ void InterpreterSelectQuery::finalCheckAndOptimizeForStreamingQuery()
 {
     if (isStreamingQuery())
     {
-        /// Does not allow window func over a global aggregation
-        if (hasStreamingWindowFunc())
-        {
-            /// nested query
-            if (auto * proxy = storage->as<Streaming::ProxyStream>())
-                if (proxy->hasStreamingGlobalAggregation())
-                    throw Exception("Streaming query doesn't support window func over a global aggregation", ErrorCodes::NOT_IMPLEMENTED);
-        }
-
         /// For now, for the following scenarios, we disable backfill from historic data store
         /// 1) User select some virtual columns which is only available in streaming store, like `_tp_sn`, `_tp_index_time`
         /// 2) Seek by streaming store sequence number

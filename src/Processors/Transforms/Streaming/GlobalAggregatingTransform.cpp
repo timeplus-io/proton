@@ -9,6 +9,7 @@ namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
 extern const int UNSUPPORTED;
+extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
 namespace Streaming
@@ -37,39 +38,29 @@ GlobalAggregatingTransform::GlobalAggregatingTransform(
 {
     assert(params->params.group_by == Aggregator::Params::GroupBy::OTHER);
 
-    if (unlikely(params->params.overflow_row))
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Overflow row processing is not implemented in global aggregation");
-
-    /// Need extra retracted data
     if (params->emit_changelog)
     {
         if (params->emit_version)
             throw Exception(ErrorCodes::UNSUPPORTED, "'emit_version()' is not supported in global aggregation emit changelog");
 
-        ManyRetractedDataVariants retracted_data(many_data->variants.size());
-        for (auto & elem : retracted_data)
-            elem = std::make_shared<AggregatedDataVariants>();
-
+        bool retract_enabled = false;
         many_data->setField(
-            {std::move(retracted_data),
+            {retract_enabled,
              /// Field serializer
-             [this](const std::any & field, WriteBuffer & wb, VersionType) {
-                 const auto & data = std::any_cast<const ManyRetractedDataVariants &>(field);
-                 DB::writeIntBinary(data.size(), wb);
-                 for (const auto & elem : data)
-                     params->aggregator.checkpoint(*elem, wb);
+             [](const std::any & field, WriteBuffer & wb, [[maybe_unused]] VersionType version) {
+                 assert(version >= V2);
+                 DB::writeBinary(std::any_cast<bool>(field), wb);
              },
              /// Field deserializer
-             [this](std::any & field, ReadBuffer & rb, VersionType) {
-                 auto & data = std::any_cast<ManyRetractedDataVariants &>(field);
-                 size_t num;
-                 DB::readIntBinary(num, rb);
-                 data.resize(num);
-                 for (auto & elem : data)
-                 {
-                     elem = std::make_shared<AggregatedDataVariants>();
-                     params->aggregator.recover(*elem, rb);
-                 }
+             [](std::any & field, ReadBuffer & rb, VersionType version) {
+                 /// NOTE: Can not convert old impl to new impl V2
+                 if (version < V2)
+                     throw Exception(
+                         ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                         "Failed to recover aggregation checkpoint with retract aggregated states from an incompatible version '{}'",
+                         version);
+
+                 DB::readBinary(std::any_cast<bool &>(field), rb);
              }});
     }
 }
@@ -102,15 +93,17 @@ std::pair<bool, bool> GlobalAggregatingTransform::executeOrMergeColumns(Chunk & 
 {
     if (params->emit_changelog)
     {
-        assert(!params->only_merge);
+        assert(!params->only_merge && !no_more_keys);
 
-        auto & retracted_variants = many_data->getField<ManyRetractedDataVariants>()[current_variant];
-        auto & aggregated_variants = many_data->variants[current_variant];
-
-        /// Blocking finalization during execution on current variant
+        // Blocking finalization during execution on current variant
         std::lock_guard lock(variants_mutex);
-        return params->aggregator.executeAndRetractOnBlock(
-            chunk.detachColumns(), 0, num_rows, *aggregated_variants, *retracted_variants, key_columns, aggregate_columns, no_more_keys);
+
+        /// Enable retract after first finalization
+        if (retractEnabled()) [[likely]]
+            return params->aggregator.executeAndRetractOnBlock(
+                chunk.detachColumns(), 0, num_rows, variants, key_columns, aggregate_columns);
+        else
+            return params->aggregator.executeOnBlock(chunk.detachColumns(), 0, num_rows, variants, key_columns, aggregate_columns);
     }
     else
         return AggregatingTransform::executeOrMergeColumns(chunk, num_rows);
@@ -127,8 +120,9 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 
     if (params->emit_changelog)
     {
-        auto [retracted_chunk, chunk] = AggregatingHelper::mergeAndConvertToChangelogChunk(
-            many_data->variants, many_data->getField<ManyRetractedDataVariants>(), *params);
+        auto [retracted_chunk, chunk] = AggregatingHelper::mergeAndConvertToChangelogChunk(many_data->variants, *params);
+        /// Enable retract after first finalization
+        retractEnabled() |= chunk.rows();
 
         chunk.setChunkContext(chunk_ctx);
         setCurrentChunk(std::move(chunk), std::move(retracted_chunk));
@@ -142,6 +136,11 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
         chunk.setChunkContext(chunk_ctx);
         setCurrentChunk(std::move(chunk));
     }
+}
+
+bool & GlobalAggregatingTransform::retractEnabled() const noexcept
+{
+    return many_data->getField<bool &>();
 }
 
 }

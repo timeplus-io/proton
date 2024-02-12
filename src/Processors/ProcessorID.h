@@ -115,7 +115,7 @@ enum class ProcessorID : UInt32
     ChangelogTransformID = 94,
     ReplayStreamTransformID = 95,
     LightShufflingTransformID = 96,
-    StreamingJoinTransformWithAlignmentID = 44,
+    StreamingJoinTransformWithAlignmentID = 97,
 
     /// Aggregating transform
     AggregatingInOrderTransformID = 1'000,
@@ -247,6 +247,9 @@ enum class ProcessorID : UInt32
     GenerateRandomSourceID = 10'045,
     SourceFromQueryPipelineID = 10'046,
     ConvertingAggregatedToChunksSourceShuffledID = 10'047,
+    /// proton: starts
+    ClickHouseSourceID = 11'000,
+    /// proton: ends
 
     /// Sink Processors
     EmptySinkID = 20'000,

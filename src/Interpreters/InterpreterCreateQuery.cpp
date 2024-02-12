@@ -892,6 +892,11 @@ void InterpreterCreateQuery::handleExternalStreamCreation(ASTCreateQuery & creat
     if (!create.is_external)
         return;
 
+    if (create.storage
+        && create.storage->engine
+        && create.storage->engine->name == "ExternalTable")
+        return;
+
     auto sharding_expr_field = Field("");
     String sharding_expr;
 
@@ -916,10 +921,6 @@ void InterpreterCreateQuery::handleExternalStreamCreation(ASTCreateQuery & creat
 
         create.storage->set(create.storage->engine, makeASTFunction("ExternalStream", sharding_expr_ast));
     }
-
-
-    if (create.storage->engine->name != "ExternalStream")
-        throw Exception(ErrorCodes::INCORRECT_QUERY, "External stream requires ExternalStream engine");
 }
 /// proton: ends
 

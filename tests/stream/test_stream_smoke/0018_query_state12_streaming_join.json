@@ -22,7 +22,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test19_test19_changelog_kv_stream2;"},
                         {"client":"python", "query_type": "table", "exist":"test19_test19_changelog_kv_stream1", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_test19_changelog_kv_stream1(i int, s string) primary key s settings mode='changelog_kv';"},
                         {"client":"python", "query_type": "table", "exist":"test19_test19_changelog_kv_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_test19_changelog_kv_stream2(ii int, ss string) primary key ss settings mode='changelog_kv';"},
-                        {"client":"python", "query_type": "stream", "query_id":"19350", "wait":1, "terminate":"manuel", "query":"subscribe to select i, s, ii, ss, _tp_delta from test19_test19_changelog_kv_stream1 inner join test19_test19_changelog_kv_stream2 on i == ii settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "stream", "query_id":"19350", "wait":1, "terminate":"manual", "query":"subscribe to select i, s, ii, ss, _tp_delta from test19_test19_changelog_kv_stream1 inner join test19_test19_changelog_kv_stream2 on i == ii settings checkpoint_interval=1;"},
                         {"client":"python", "query_type": "table", "depends_on":"19350", "wait":1, "query": "insert into test19_test19_changelog_kv_stream1 (i, s) values (1, 's1');"},
                         {"client":"python", "query_type": "table", "kill":"19350", "kill_wait":3, "wait":1, "query": "insert into test19_test19_changelog_kv_stream2 (ii, ss) values (1, 'ss1');"}
                     ]
@@ -67,7 +67,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test19_changelog_kv_stream;"},
                         {"client":"python", "query_type": "table", "exist":"test19_test19_changelog_kv_stream1", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream3(i int, s string);"},
                         {"client":"python", "query_type": "table", "exist":"test19_test19_changelog_kv_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_changelog_kv_stream(ii int, ss string) primary key ss settings mode='changelog_kv';"},
-                        {"client":"python", "query_type": "stream", "query_id":"19351", "wait":1, "terminate":"manuel", "query":"subscribe to select i, s, ii, ss, _tp_delta from test19_left_stream3 inner join test19_changelog_kv_stream on i == ii settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "stream", "query_id":"19351", "wait":1, "terminate":"manual", "query":"subscribe to select i, s, ii, ss, _tp_delta from test19_left_stream3 inner join test19_changelog_kv_stream on i == ii settings checkpoint_interval=1;"},
                         {"client":"python", "query_type": "table", "depends_on":"19351", "wait":1, "query": "insert into test19_changelog_kv_stream (ii, ss) values (1, 's1');"},
                         {"client":"python", "query_type": "table", "kill":"19351", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream3 (i, s) values (1, 's1');"}
                     ]
@@ -110,7 +110,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream3;"},
                         {"client":"python", "query_type": "table", "exist":"test19_left_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream3 (i int, s string);"},
                         {"client":"python", "query_type": "table", "exist":"test19_right_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream3 (ii int, ss string);"},
-                        {"client":"python", "query_type": "stream", "query_id":"19352", "wait":1, "terminate":"manuel", "query":"subscribe to select i, s, ii, ss from test19_left_stream3 inner latest join test19_right_stream3 on i=ii settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "stream", "query_id":"19352", "wait":1, "terminate":"manual", "query":"subscribe to select i, s, ii, ss from test19_left_stream3 inner latest join test19_right_stream3 on i=ii settings checkpoint_interval=1;"},
                         {"client":"python", "query_type": "table", "depends_on":"19352", "wait":1, "query": "insert into test19_right_stream3(ii, ss) values (1, 'ss1');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_right_stream3(ii, ss) values (1, 'ss2');"},
                         {"client":"python", "query_type": "table", "kill":"19352", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream3(i, s) values (1, 's1');"}
@@ -153,7 +153,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test19_vk_right_stream3;"},
                         {"client":"python", "query_type": "table", "exist":"test19_left_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream3 (i int, s string);"},
                         {"client":"python", "query_type": "table", "exist":"test19_vk_right_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_vk_right_stream3 (ii int, ss string) primary key (ii) settings mode='versioned_kv';"},
-                        {"client":"python", "query_type": "stream", "query_id":"19353", "wait":1, "terminate":"manuel", "query":"subscribe to  select i, s, ii, ss from test19_left_stream3 inner latest join test19_vk_right_stream3 on i=ii settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "stream", "query_id":"19353", "wait":1, "terminate":"manual", "query":"subscribe to  select i, s, ii, ss from test19_left_stream3 inner latest join test19_vk_right_stream3 on i=ii settings checkpoint_interval=1;"},
                         {"client":"python", "query_type": "table", "depends_on":"19353", "wait":1, "query": "insert into test19_vk_right_stream3(ii, ss) values (1, 'ss1');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_right_stream3(ii, ss) values (1, 'ss2');"},
                         {"client":"python", "query_type": "table", "kill":"19353", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream3(i, s) values (1, 's1');"}
@@ -196,7 +196,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test19_vk_right_stream3;"},
                         {"client":"python", "query_type": "table", "exist":"test19_left_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream3 (i int, k string);"},
                         {"client":"python", "query_type": "table", "exist":"test19_vk_right_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_vk_right_stream3 (j int, kk string) primary key (kk) settings mode='versioned_kv';"},
-                        {"client":"python", "query_type": "stream", "query_id":"19354", "wait":1, "terminate":"manuel", "query":"subscribe to select i, k, j, kk from test19_left_stream3 inner all join test19_vk_right_stream3 on i=j settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "stream", "query_id":"19354", "wait":1, "terminate":"manual", "query":"subscribe to select i, k, j, kk from test19_left_stream3 inner all join test19_vk_right_stream3 on i=j settings checkpoint_interval=1;"},
                         {"client":"python", "query_type": "table", "depends_on":"19354", "wait":1, "query": "insert into test19_vk_right_stream3(j, kk) values (1, 'k1');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_right_stream3(j, kk) values (1, 'k2');"},
                         {"client":"python", "query_type": "table", "kill":"19354", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream3(i, k) values (1, 'a');"}
@@ -240,7 +240,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test19_vk_right_stream3;"},
                         {"client":"python", "query_type": "table", "exist":"test19_left_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream3 (i int, k string);"},
                         {"client":"python", "query_type": "table", "exist":"test19_vk_right_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_vk_right_stream3 (j int, kk string) primary key (kk) settings mode='versioned_kv';"},
-                        {"client":"python", "query_type": "stream", "query_id":"19355", "wait":1, "terminate":"manuel", "query":"subscribe to select i, k, j, kk from test19_left_stream3 inner latest join test19_vk_right_stream3 on i=j settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "stream", "query_id":"19355", "wait":1, "terminate":"manual", "query":"subscribe to select i, k, j, kk from test19_left_stream3 inner latest join test19_vk_right_stream3 on i=j settings checkpoint_interval=1;"},
                         {"client":"python", "query_type": "table", "depends_on":"19355", "wait":1, "query": "insert into test19_vk_right_stream3(j, kk) values (1, 'k1');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_vk_right_stream3(j, kk) values (1, 'k2');"},
                         {"client":"python", "query_type": "table", "kill":"19355", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream3(i, k) values (1, 'a');"}
@@ -283,7 +283,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream3;"},
                         {"client":"python", "query_type": "table", "exist":"test19_left_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream3(i int, k string);"},
                         {"client":"python", "query_type": "table", "exist":"test19_right_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream3(j int, kk string);"},
-                        {"client":"python", "query_type": "stream", "query_id":"19356", "wait":1, "terminate":"manuel", "query":"subscribe to select i, k, j, kk from test19_left_stream3 left join test19_right_stream3 on i == j settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "stream", "query_id":"19356", "wait":1, "terminate":"manual", "query":"subscribe to select i, k, j, kk from test19_left_stream3 left join test19_right_stream3 on i == j settings checkpoint_interval=1;"},
                         {"client":"python", "query_type": "table", "depends_on":"19356", "wait":1, "query": "insert into test19_right_stream3 (j, kk) values (1, 'a') (1, 'b');"},
                         {"client":"python", "query_type": "table", "kill":"19356", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream3 (i, k) values (1, 'a');"}
                     ]
@@ -327,7 +327,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test19_vk_right_stream3;"},
                         {"client":"python", "query_type": "table", "exist":"test19_left_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream3(i int, k string);"},
                         {"client":"python", "query_type": "table", "exist":"test19_vk_right_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_vk_right_stream3(j int, k string, kk string) primary key (k, kk) settings mode='versioned_kv';"},
-                        {"client":"python", "query_type": "stream", "query_id":"19357", "wait":1, "terminate":"manuel", "query":"subscribe to select i, test19_left_stream3.k, j, test19_vk_right_stream3.k, kk from test19_left_stream3 left join test19_vk_right_stream3 on test19_left_stream3.k == test19_vk_right_stream3.k settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "stream", "query_id":"19357", "wait":1, "terminate":"manual", "query":"subscribe to select i, test19_left_stream3.k, j, test19_vk_right_stream3.k, kk from test19_left_stream3 left join test19_vk_right_stream3 on test19_left_stream3.k == test19_vk_right_stream3.k settings checkpoint_interval=1;"},
                         {"client":"python", "query_type": "table", "depends_on":"19357", "wait":1, "query": "insert into test19_vk_right_stream3 (j, k, kk) values (1, 'a', 'bb') (1, 'a', 'cc');"},
                         {"client":"python", "query_type": "table", "kill":"19357", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream3 (i, k) values (1, 'a');"}
                     ]
@@ -372,7 +372,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream3;"},
                         {"client":"python", "query_type": "table", "exist":"test19_left_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream3(i int, k string);"},
                         {"client":"python", "query_type": "table", "exist":"test19_right_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream3(j int, kk string);"},
-                        {"client":"python", "query_type": "stream", "query_id":"19358", "wait":1, "terminate":"manuel", "query":"subscribe to select i, k, j, kk FROM test19_left_stream3 left asof join test19_right_stream3 ON k = kk AND i <= j settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "stream", "query_id":"19358", "wait":1, "terminate":"manual", "query":"subscribe to select i, k, j, kk FROM test19_left_stream3 left asof join test19_right_stream3 ON k = kk AND i <= j settings checkpoint_interval=1;"},
                         {"client":"python", "query_type": "table", "depends_on":"19358", "wait":1, "query": "insert into test19_right_stream3(j, kk) VALUES (1, 'a'), (3, 'a');"},
                         {"client":"python", "query_type": "table", "kill":"19358", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream3(i, k) VALUES (2, 'a');"}
                     ]
@@ -415,7 +415,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test19_vk_right_stream3;"},
                         {"client":"python", "query_type": "table", "exist":"test19_left_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream3(i int, k string);"},
                         {"client":"python", "query_type": "table", "exist":"test19_vk_right_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_vk_right_stream3(j int, k string, kk string) PRIMARY KEY (k, kk) settings mode='versioned_kv';"},
-                        {"client":"python", "query_type": "stream", "query_id":"19359", "wait":1, "terminate":"manuel", "query":"subscribe to SELECT i, test19_left_stream3.k, j, test19_vk_right_stream3.k, kk FROM test19_left_stream3 left asof JOIN test19_vk_right_stream3 ON test19_left_stream3.k = test19_vk_right_stream3.k AND i <= j SETTINGS keep_versions = 3 settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "stream", "query_id":"19359", "wait":1, "terminate":"manual", "query":"subscribe to SELECT i, test19_left_stream3.k, j, test19_vk_right_stream3.k, kk FROM test19_left_stream3 left asof JOIN test19_vk_right_stream3 ON test19_left_stream3.k = test19_vk_right_stream3.k AND i <= j SETTINGS keep_versions = 3 settings checkpoint_interval=1;"},
                         {"client":"python", "query_type": "table", "depends_on":"19359", "wait":1, "query": "INSERT INTO test19_vk_right_stream3(j, k, kk) VALUES (100, 'a', 'bb'), (102, 'a', 'cc'), (103, 'a', 'dd'), (104, 'a', 'ee');"},
                         {"client":"python", "query_type": "table", "kill":"19359", "kill_wait":3, "wait":1, "query": "INSERT INTO test19_left_stream3(i, k) VALUES (101, 'a');"}
                     ]
@@ -458,7 +458,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream3;"},
                         {"client":"python", "query_type": "table", "exist":"test19_left_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream3 (i int, s string);"},
                         {"client":"python", "query_type": "table", "exist":"test19_right_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream3 (ii int, ss string);"},
-                        {"client":"python", "query_type": "stream", "query_id":"19360", "wait":1, "terminate":"manuel", "query":"subscribe to select i, s, ii, ss from test19_left_stream3 left latest join test19_right_stream3 on i=ii settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "stream", "query_id":"19360", "wait":1, "terminate":"manual", "query":"subscribe to select i, s, ii, ss from test19_left_stream3 left latest join test19_right_stream3 on i=ii settings checkpoint_interval=1;"},
                         {"client":"python", "query_type": "table", "depends_on":"19360", "wait":1, "query": "insert into test19_right_stream3(ii, ss) values (1, 'ss1');"},
                         {"client":"python", "query_type": "table", "kill":"19360", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream3(i, s) values (1, 's1')"}
                     ]
@@ -501,7 +501,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test19_vk_right_stream3;"},
                         {"client":"python", "query_type": "table", "exist":"test19_left_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream3 (i int, s string);"},
                         {"client":"python", "query_type": "table", "exist":"test19_vk_right_stream3", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_vk_right_stream3 (ii int, ss string) primary key ss settings mode='versioned_kv';"},
-                        {"client":"python", "query_type": "stream", "query_id":"19361", "wait":1, "terminate":"manuel", "query":"subscribe to select i, s, ii, ss from test19_left_stream3 left latest join test19_vk_right_stream3 on i=ii settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "stream", "query_id":"19361", "wait":1, "terminate":"manual", "query":"subscribe to select i, s, ii, ss from test19_left_stream3 left latest join test19_vk_right_stream3 on i=ii settings checkpoint_interval=1;"},
                         {"client":"python", "query_type": "table", "depends_on":"19361", "wait":1, "query": "insert into test19_vk_right_stream3(ii, ss) values (1, 'ss1') (1, 'ss2');"},
                         {"client":"python", "query_type": "table", "kill":"19361", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream3(i, s) values (1, 's1')"}
                     ]

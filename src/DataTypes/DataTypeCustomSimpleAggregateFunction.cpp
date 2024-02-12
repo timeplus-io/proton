@@ -68,7 +68,7 @@ String DataTypeCustomSimpleAggregateFunction::getName() const
 }
 
 
-static std::pair<DataTypePtr, DataTypeCustomDescPtr> create(const ASTPtr & arguments)
+static std::pair<DataTypePtr, DataTypeCustomDescPtr> create(const ASTPtr & arguments, bool compatible_with_clickhouse = false) /// proton: updated
 {
     String function_name;
     AggregateFunctionPtr function;
@@ -119,7 +119,7 @@ static std::pair<DataTypePtr, DataTypeCustomDescPtr> create(const ASTPtr & argum
                         ErrorCodes::BAD_ARGUMENTS);
 
     for (size_t i = 1; i < arguments->children.size(); ++i)
-        argument_types.push_back(DataTypeFactory::instance().get(arguments->children[i]));
+        argument_types.push_back(DataTypeFactory::instance().get(arguments->children[i]/* proton: starts */, compatible_with_clickhouse/* proton: ends */));
 
     if (function_name.empty())
         throw Exception("Logical error: empty name of aggregate function passed", ErrorCodes::LOGICAL_ERROR);
@@ -129,7 +129,7 @@ static std::pair<DataTypePtr, DataTypeCustomDescPtr> create(const ASTPtr & argum
 
     DataTypeCustomSimpleAggregateFunction::checkSupportedFunctions(function);
 
-    DataTypePtr storage_type = DataTypeFactory::instance().get(argument_types[0]->getName());
+    DataTypePtr storage_type = DataTypeFactory::instance().get(argument_types[0]->getName()/* proton: starts */, compatible_with_clickhouse/* proton: ends */);
 
     if (!function->getReturnType()->equals(*removeLowCardinality(storage_type)))
     {
@@ -145,6 +145,10 @@ static std::pair<DataTypePtr, DataTypeCustomDescPtr> create(const ASTPtr & argum
 void registerDataTypeDomainSimpleAggregateFunction(DataTypeFactory & factory)
 {
     factory.registerDataTypeCustom("simple_aggregate_function", create);
+
+    /// proton: starts
+    factory.registerClickHouseAlias("SimpleAggregateFunction", "simple_aggregate_function");
+    /// proton: ends
 }
 
 }

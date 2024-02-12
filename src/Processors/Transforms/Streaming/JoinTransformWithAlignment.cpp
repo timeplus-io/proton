@@ -388,7 +388,7 @@ void JoinTransformWithAlignment::processLeftInputData(LightChunk & chunk)
         {
             /// Don't watermark this block. We can concat retracted / result blocks or use avoid watermarking
             auto chunk_ctx = ChunkContext::create();
-            chunk_ctx->setRetractedDataFlag();
+            chunk_ctx->setConsecutiveDataFlag();
             output_chunks.emplace_back(retracted_block.getColumns(), retracted_block_rows, nullptr, std::move(chunk_ctx));
         }
 
@@ -423,7 +423,7 @@ void JoinTransformWithAlignment::processRightInputData(LightChunk & chunk)
         {
             /// Don't watermark this block. We can concat retracted / result blocks or use avoid watermarking
             auto chunk_ctx = ChunkContext::create();
-            chunk_ctx->setRetractedDataFlag();
+            chunk_ctx->setConsecutiveDataFlag();
             output_chunks.emplace_back(retracted_block.getColumns(), retracted_block_rows, nullptr, std::move(chunk_ctx));
         }
 
@@ -480,7 +480,7 @@ void JoinTransformWithAlignment::InputPortWithData::add(Chunk && chunk)
     /// If the input needs to update data, currently the input is always two consecutive chunks with _tp_delta `-1 and +1`
     /// So we have to process them together before processing another input
     /// NOTE: Assume the first retracted chunk of updated data always set RetractedDataFlag.
-    if (chunk.isRetractedData())
+    if (chunk.isConsecutiveData())
     {
         assert(chunk.hasRows());
         last_data_ts = DB::MonotonicMilliseconds::now();

@@ -67,5 +67,9 @@ void registerDataTypeObject(DataTypeFactory & factory)
     factory.registerSimpleDataType(
         "json", [] { return std::make_shared<DataTypeObject>("json", false); }, DataTypeFactory::CaseInsensitive);
     /// factory.registerSimpleDataType("nullable_json", [] { return std::make_shared<DataTypeObject>("json", true); }, DataTypeFactory::CaseInsensitive);
+
+    /// proton: starts
+    factory.registerClickHouseAlias("JSON", "json");
+    /// proton: ends
 }
 }

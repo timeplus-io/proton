@@ -69,8 +69,6 @@ public:
         UNREACHABLE();
     }
 
-    ALWAYS_INLINE Int64 windowKey(const DB::SerializedKeyHolder & key_holder) { return windowKey(key_holder.key); }
-
 protected:
     typename Impl::iterator beginOfNextNonEmptyBucket(Int64 & bucket)
     {
@@ -108,7 +106,9 @@ public:
     using ConstLookupResult = typename Impl::ConstLookupResult;
 
     /// FIXME, choose a better perf data structure
+    /// Usually we don't have too many time buckets
     std::map<Int64, Impl> impls;
+    std::unordered_map<Int64, bool/*updated*/> updated_buckets;
     Impl sentinel;
 
     TimeBucketHashTable() { }
@@ -261,8 +261,9 @@ public:
     template <typename KeyHolder>
     void ALWAYS_INLINE emplace(KeyHolder && key_holder, LookupResult & it, bool & inserted, size_t hash_value)
     {
-        auto window = windowKey(key_holder);
+        auto window = windowKey(keyHolderGetKey(key_holder));
         impls[window].emplace(key_holder, it, inserted, hash_value);
+        updated_buckets[window] = true; /// updated
     }
 
     LookupResult ALWAYS_INLINE find(Key x, size_t hash_value)
@@ -289,6 +290,7 @@ public:
         {
             DB::writeIntBinary(p.first);
             p.second.write(wb);
+            DB::writeBinary(updated_buckets[p.first], wb);
         }
     }
 
@@ -309,7 +311,12 @@ public:
             /// Write key and key-value separator
             DB::writeIntText(p.first, wb);
             DB::writeChar(KEY_VALUE_SEPARATOR, wb);
+            /// <impl,updated>
+            DB::writeChar('<', wb);
             p.second.writeText(wb);
+            DB::writeChar(',', wb);
+            DB::writeBoolText(updated_buckets[p.first], wb);
+            DB::writeChar('>', wb);
         }
         DB::writeChar(END_BUCKET_MARKER, wb);
     }
@@ -327,6 +334,7 @@ public:
             assert(key != 0);
             assert(!impls.contains(key));
             impls[key].read(rb);
+            DB::readBinary(updated_buckets[key], rb);
         }
     }
 
@@ -349,7 +357,12 @@ public:
 
             assert(key != 0);
             assert(!impls.contains(key));
+            /// <impl,updated>
+            DB::assertChar('<', rb);
             impls[key].readText(rb);
+            DB::assertChar(',', rb);
+            DB::readBoolText(updated_buckets[key], rb);
+            DB::assertChar('>', rb);
         }
         DB::assertChar(END_BUCKET_MARKER, rb);
     }
@@ -402,6 +415,7 @@ public:
                 last_removed_watermark = it->first;
                 ++removed;
 
+                updated_buckets.erase(it->first);
                 it = impls.erase(it);
             }
             else
@@ -437,5 +451,46 @@ public:
             buckets.push_back(time_map.first);
 
         return buckets;
+    }
+
+    bool isBucketUpdated(Int64 bucket_) const
+    {
+        auto it = updated_buckets.find(bucket_);
+        if (it != updated_buckets.end())
+            return it->second;
+
+        return false;
+    }
+
+    void resetUpdatedBucket(Int64 bucket_)
+    {
+        auto it = updated_buckets.find(bucket_);
+        if (it != updated_buckets.end())
+            it->second = false;
+    }
+
+    void writeUpdatedBuckets(DB::WriteBuffer & wb) const
+    {
+        DB::writeVarUInt(updated_buckets.size(), wb);
+        for (const auto & [bucket, updated] : updated_buckets)
+        {
+            DB::writeIntBinary(bucket, wb);
+            DB::writeBinary(updated, wb);
+        }
+    }
+
+    void readUpdatedBuckets(DB::ReadBuffer & rb)
+    {
+        size_t size = 0;
+        DB::readVarUInt(size, rb);
+        updated_buckets.clear();
+        Int64 bucket = 0;
+        bool updated = false;
+        for (size_t i = 0; i < size; ++i)
+        {
+            DB::readIntBinary(bucket, rb);
+            DB::readBinary(updated, rb);
+            updated_buckets.emplace(bucket, updated);
+        }
     }
 };
