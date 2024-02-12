@@ -236,10 +236,10 @@ void assignWindow(
 
 SessionInfoPtr getLastFinalizedSession(const SessionInfoQueue & sessions)
 {
-    for (const auto & session : sessions | std::views::reverse)
+    for (auto riter = sessions.rbegin(); riter != sessions.rend(); ++riter)
     {
-        if (!session->active)
-            return session;
+        if (!(*riter)->active)
+            return *riter;
     }
     return nullptr;
 }

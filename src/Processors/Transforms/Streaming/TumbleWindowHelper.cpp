@@ -6,7 +6,7 @@ namespace DB
 {
 namespace Streaming::TumbleWindowHelper
 {
-/// @brief Get max window can be finalized by the @param watermark
+/// \brief Get max window can be finalized by the \param watermark
 /// For example: tumble(<stream>, 3s), assume current watermark is `5s` so
 /// - The window interval is `3s`
 ///  [second-0] [second-1] [second-2] [second-3] [second-4] [second-5] [second-6]
@@ -28,7 +28,7 @@ Window getLastFinalizedWindow(Int64 watermark, const TumbleWindowParams & params
         current_window_start};
 }
 
-/// @brief Get max exprired time bucket can be remove by the @param watermark
+/// \brief Get max exprired time bucket can be remove by the \param watermark
 /// For example: tumble(<stream>, 3s), assume current watermark is `5s` so
 /// - The window interval is `3s`
 ///  [second-0] [second-1] [second-2] [second-3] [second-4] [second-5] [second-6]

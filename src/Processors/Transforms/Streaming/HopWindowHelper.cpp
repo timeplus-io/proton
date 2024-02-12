@@ -14,7 +14,7 @@ WindowInterval gcdWindowInterval(const ColumnWithTypeAndName & interval_col1, co
     return {std::gcd(interval1.interval, interval2.interval), interval1.unit};
 }
 
-/// @brief Get max window can be finalized by the @param watermark
+/// \brief Get max window can be finalized by the \param watermark
 /// For example: hop(<stream>, 2s, 3s), assume current watermark is `6s` so
 /// - The slide interval is `2s`
 /// - The window interval is `3s`
@@ -47,8 +47,8 @@ Window getLastFinalizedWindow(Int64 watermark, const HopWindowParams & params)
         last_finalized_window_end};
 }
 
-/// @brief Get max exprired time bucket can be remove by the @param watermark
-/// @param is_start_time_bucket. true: <gcd window start time>, otherwise: <gcd window end time>
+/// \brief Get max exprired time bucket can be remove by the \param watermark
+/// \param is_start_time_bucket. true: <gcd window start time>, otherwise: <gcd window end time>
 /// For example: hop(<stream>, 2s, 3s), assume current watermark is `6s` so
 /// - The slide interval is `2s`
 /// - The window interval is `3s`

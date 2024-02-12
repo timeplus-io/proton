@@ -21,15 +21,15 @@ void assignWindow(
     size_t session_start_col_pos,
     size_t session_end_col_pos);
 
-/// @brief Get max window can be finalized
-/// @return last finalized session info, return nullptr if no finalized session
+/// \brief Get max window can be finalized
+/// \return last finalized session info, return nullptr if no finalized session
 SessionInfoPtr getLastFinalizedSession(const SessionInfoQueue & sessions);
 
-/// @brief Remove expired sessions that not active
-/// @return last removed expired session id
+/// \brief Remove expired sessions that not active
+/// \return last removed expired session id
 SessionID removeExpiredSessions(SessionInfoQueue & sessions);
 
-/// @brief Get windows with buckets
+/// \brief Get windows with buckets
 WindowsWithBuckets getWindowsWithBuckets(const SessionInfoQueue & sessions);
 }
 }
