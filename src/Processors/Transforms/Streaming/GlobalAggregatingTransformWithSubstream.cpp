@@ -105,7 +105,12 @@ void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
     }
     else
     {
-        auto chunk = AggregatingHelper::convertToChunk(variants, *params);
+        Chunk chunk;
+        if (AggregatingHelper::onlyEmitUpdates(params->emit_mode))
+            chunk = AggregatingHelper::convertUpdatesToChunk(variants, *params);
+        else
+            chunk = AggregatingHelper::convertToChunk(variants, *params);
+
         if (params->final && params->emit_version)
             emitVersion(chunk, substream_ctx);
 

@@ -1,7 +1,7 @@
 #include <Processors/Transforms/Streaming/SessionAggregatingTransformWithSubstream.h>
 
 #include <Interpreters/Streaming/TableFunctionDescription.h>
-#include <Processors/Transforms/Streaming/SessionHelper.h>
+#include <Processors/Transforms/Streaming/SessionWindowHelper.h>
 
 namespace DB
 {
@@ -45,7 +45,8 @@ SessionAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, c
 {
     auto columns = chunk.detachColumns();
     auto & sessions = substream_ctx->getField<SessionInfoQueue>();
-    SessionHelper::assignWindow(
+    /// window start/end column are replaced with session id
+    SessionWindowHelper::assignWindow(
         sessions, window_params, columns, wstart_col_pos, wend_col_pos, time_col_pos, session_start_col_pos, session_end_col_pos);
 
     auto num_rows = columns.at(0)->size();
@@ -57,51 +58,46 @@ SessionAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, c
         if (chunk.hasTimeoutWatermark())
             sessions.back()->active = false; /// force to finalize current session
 
-        for (auto riter = sessions.rbegin(); riter != sessions.rend(); ++riter)
+        auto last_finalized_session = SessionWindowHelper::getLastFinalizedSession(sessions);
+        if (last_finalized_session)
         {
-            if (!(*riter)->active)
-            {
-                chunk.setWatermark((*riter)->id);
-                return result;
-            }
+            chunk.setWatermark(last_finalized_session->win_end);
+            return result;
         }
     }
 
-    chunk.clearWatermark();
+    if (chunk.hasWatermark())
+    {
+        /// When get here, there are two scenarios:
+        /// 1) No sessions, and have periodic watermark or timeout watermark
+        /// 2) Only has one active session, and have periodic watermark
+        /// For case 2), we can set session start as watermark to just emit current session (for periodic emit)
+        if (!sessions.empty())
+        {
+            assert(sessions.size() == 1 && sessions.front()->active);
+            chunk.setWatermark(sessions.front()->win_start);
+        }
+    }
 
     return result;
 }
 
-WindowsWithBuckets
-SessionAggregatingTransformWithSubstream::getFinalizedWindowsWithBuckets(Int64 watermark, const SubstreamContextPtr & substream_ctx) const
+WindowsWithBuckets SessionAggregatingTransformWithSubstream::getWindowsWithBuckets(const SubstreamContextPtr & substream_ctx) const
 {
-    WindowsWithBuckets windows_with_buckets;
+    return SessionWindowHelper::getWindowsWithBuckets(substream_ctx->getField<SessionInfoQueue>());
+}
 
-    auto & sessions = substream_ctx->getField<SessionInfoQueue>();
-    for (const auto & session : sessions)
-    {
-        if (session->id <= watermark)
-        {
-            assert(!session->active || watermark == TIMEOUT_WATERMARK);
-            windows_with_buckets.emplace_back(WindowWithBuckets{{session->win_start, session->win_end}, {session->id}});
-        }
-    }
-
-    return windows_with_buckets;
+Window SessionAggregatingTransformWithSubstream::getLastFinalizedWindow(const SubstreamContextPtr & substream_ctx) const
+{
+    /// The finalized sessions already are removed, so we don't care it.
+    return {INVALID_WATERMARK, INVALID_WATERMARK};
 }
 
 void SessionAggregatingTransformWithSubstream::removeBucketsImpl(Int64 watermark, const SubstreamContextPtr & substream_ctx)
 {
     auto & sessions = substream_ctx->getField<SessionInfoQueue>();
-    for (auto iter = sessions.begin(); iter != sessions.end();)
-    {
-        if ((*iter)->id > watermark)
-            break;
-
-        iter = sessions.erase(iter);
-    }
-
-    params->aggregator.removeBucketsBefore(substream_ctx->variants, watermark);
+    Int64 last_expired_time_bucket = SessionWindowHelper::removeExpiredSessions(sessions);
+    params->aggregator.removeBucketsBefore(substream_ctx->variants, last_expired_time_bucket);
 }
 
 }

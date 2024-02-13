@@ -21,12 +21,16 @@ protected:
 private:
     inline void doFinalize(Int64 watermark, const SubstreamContextPtr & substream_ctx, const ChunkContextPtr & chunk_ctx);
 
-    virtual WindowsWithBuckets getFinalizedWindowsWithBuckets(Int64 watermark, const SubstreamContextPtr & substream_ctx) const = 0;
+    virtual WindowsWithBuckets getWindowsWithBuckets(const SubstreamContextPtr & substream_ctx) const = 0;
+    virtual Window getLastFinalizedWindow(const SubstreamContextPtr & substream_ctx) const = 0;
     virtual void removeBucketsImpl(Int64 watermark, const SubstreamContextPtr & substream_ctx) = 0;
     virtual bool needReassignWindow() const = 0;
 
     std::optional<size_t> window_start_col_pos;
     std::optional<size_t> window_end_col_pos;
+
+    bool only_emit_finalized_windows = true;
+    bool only_emit_updates = false;
 };
 
 }

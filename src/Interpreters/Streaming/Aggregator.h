@@ -819,11 +819,18 @@ public:
     ///   gcd_bucket1 - [00:00, 00:02)
     ///                            =>  result block - [00:00, 00:04)
     ///   gcd_bucket2 - [00:02, 00:04)
-    Block spliceAndConvertBucketsToBlock(AggregatedDataVariants & variants, bool final, const std::vector<Int64> & gcd_buckets) const;
-    Block mergeAndSpliceAndConvertBucketsToBlock(ManyAggregatedDataVariants & variants, bool final, const std::vector<Int64> & gcd_buckets) const;
+    Block spliceAndConvertToBlock(AggregatedDataVariants & variants, bool final, const std::vector<Int64> & gcd_buckets) const;
+    Block mergeAndSpliceAndConvertToBlock(ManyAggregatedDataVariants & variants, bool final, const std::vector<Int64> & gcd_buckets) const;
 
     /// Only convert the states of update groups tracked
     BlocksList convertUpdatesToBlocks(AggregatedDataVariants & data_variants) const;
+
+    /// Similar to 'spliceAndConvertToBlock', but only convert the states of update groups tracked
+    /// NOTE: Specially, we cannot reset the updated flag during the conversion process, because each window has overlapping gcd buckets
+    /// and needs to be manually reset by calling `resetUpdatedOfBuckets` after all hop windows conversions are completed.
+    Block spliceAndConvertUpdatesToBlock(AggregatedDataVariants & data_variants, const std::vector<Int64> & gcd_buckets) const;
+    Block mergeAndSpliceAndConvertUpdatesToBlock(ManyAggregatedDataVariants & data_variants, const std::vector<Int64> & gcd_buckets) const;
+    void resetUpdatedForBuckets(AggregatedDataVariants & data_variants, const std::vector<Int64> & gcd_buckets) const;
 
     /// \return: merged updated data if exists, when there is no update data, return nullptr
     AggregatedDataVariantsPtr mergeUpdateGroups(ManyAggregatedDataVariants & data_variants) const;
@@ -838,6 +845,7 @@ public:
     bool needTrackUpdates() const { return params.tracking_updates_type != TrackingUpdatesType::None; }
     TrackingUpdatesType trackingUpdatesType() const { return params.tracking_updates_type; }
 
+    std::vector<Int64> buckets(const AggregatedDataVariants & result) const;
     std::vector<Int64> bucketsBefore(const AggregatedDataVariants & result, Int64 max_bucket) const;
     void removeBucketsBefore(AggregatedDataVariants & result, Int64 max_bucket) const;
 
@@ -1047,13 +1055,7 @@ private:
         ConvertType type = ConvertType::Normal) const;
 
     /// proton: starts.
-    template <typename Method>
-    void spliceBucketsImpl(
-        AggregatedDataVariants & data_dest,
-        AggregatedDataVariants & data_src,
-        const std::vector<Int64> & gcd_buckets,
-        Arena * arena,
-        bool clear_states) const;
+    auto getZeroOutWindowKeysFunc(Arena * arena) const;
 
     template <typename Method>
     BlocksList mergeAndConvertTwoLevelToBlocksImpl(
@@ -1079,8 +1081,8 @@ private:
         ColumnRawPtrs & key_columns,
         AggregateFunctionInstruction * aggregate_instructions) const;
 
-    template <typename Method, bool is_two_level>
-    void mergeUpdateGroupsImpl(ManyAggregatedDataVariants & non_empty_data, Arena * arena) const;
+    template <bool is_two_level, typename Table, typename KeyHandler = EmptyKeyHandler>
+    void mergeUpdatesDataImpl(std::vector<Table *> & tables, Arena * arena, bool reset_updated, KeyHandler && key_handler = nullptr) const;
 
     template <typename Method>
     void mergeRetractGroupsImpl(ManyAggregatedDataVariants & non_empty_data, Arena * arena) const;

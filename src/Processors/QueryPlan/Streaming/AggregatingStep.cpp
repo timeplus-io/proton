@@ -37,7 +37,8 @@ AggregatingStep::AggregatingStep(
     size_t merge_threads_,
     size_t temporary_data_merge_threads_,
     bool emit_version_,
-    bool emit_changelog_)
+    bool emit_changelog_,
+    Streaming::EmitMode watermark_emit_mode_)
     : ITransformingStep(input_stream_, AggregatingTransformParams::getHeader(params_, final_, emit_version_, emit_changelog_), getTraits(), false)
     , params(std::move(params_))
     , final(std::move(final_))
@@ -45,6 +46,7 @@ AggregatingStep::AggregatingStep(
     , temporary_data_merge_threads(temporary_data_merge_threads_)
     , emit_version(emit_version_)
     , emit_changelog(emit_changelog_)
+    , emit_mode(watermark_emit_mode_)
 {
 }
 
@@ -69,7 +71,7 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
       * 1. Parallel aggregation is done, and the results should be merged in parallel.
       * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
       */
-    auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), final, emit_version, emit_changelog);
+    auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), final, emit_version, emit_changelog, emit_mode);
 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.getNumStreams() > 1)
@@ -90,13 +92,13 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
                 assert(transform_params->params.window_params);
                 switch (transform_params->params.window_params->type)
                 {
-                    case WindowType::TUMBLE:
+                    case WindowType::Tumble:
                         return std::make_shared<TumbleAggregatingTransform>(
                             header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
-                    case WindowType::HOP:
+                    case WindowType::Hop:
                         return std::make_shared<HopAggregatingTransform>(
                             header, transform_params, many_data, counter++, merge_threads, temporary_data_merge_threads);
-                    case WindowType::SESSION:
+                    case WindowType::Session:
                         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Parallel processing session window is not supported");
                     default:
                         throw Exception(
@@ -126,11 +128,11 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
                 assert(transform_params->params.window_params);
                 switch (transform_params->params.window_params->type)
                 {
-                    case WindowType::TUMBLE:
+                    case WindowType::Tumble:
                         return std::make_shared<TumbleAggregatingTransform>(header, transform_params);
-                    case WindowType::HOP:
+                    case WindowType::Hop:
                         return std::make_shared<HopAggregatingTransform>(header, transform_params);
-                    case WindowType::SESSION:
+                    case WindowType::Session:
                         return std::make_shared<SessionAggregatingTransform>(header, transform_params);
                     default:
                         throw Exception(

@@ -55,7 +55,7 @@ public:
     /// Whether it reads data from streaming store or historical store
     bool isStreamingQuery() const { return streaming; }
 
-    /// Return WindowType::NONE, if it has no window func
+    /// Return WindowType::None, if it has no window func
     WindowType windowType() const;
     TableFunctionDescriptionPtr getStreamingWindowFunctionDescription() const;
 

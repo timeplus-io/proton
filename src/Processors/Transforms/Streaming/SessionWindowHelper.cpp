@@ -1,9 +1,11 @@
-#include <Processors/Transforms/Streaming/SessionHelper.h>
+#include <Processors/Transforms/Streaming/SessionWindowHelper.h>
 
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnTuple.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Streaming/TimeTransformHelper.h>
+
+#include <ranges>
 
 namespace DB
 {
@@ -14,7 +16,7 @@ extern const int LOGICAL_ERROR;
 
 namespace Streaming
 {
-namespace SessionHelper
+namespace SessionWindowHelper
 {
 namespace
 {
@@ -232,6 +234,36 @@ void assignWindow(
     }
 }
 
+SessionInfoPtr getLastFinalizedSession(const SessionInfoQueue & sessions)
+{
+    for (auto riter = sessions.rbegin(); riter != sessions.rend(); ++riter)
+    {
+        if (!(*riter)->active)
+            return *riter;
+    }
+    return nullptr;
+}
+
+SessionID removeExpiredSessions(SessionInfoQueue & sessions)
+{
+    auto last_expired_session_id = -1;
+    while (!sessions.empty() && !sessions.front()->active)
+    {
+        last_expired_session_id = sessions.front()->id;
+        sessions.pop_front();
+    }
+    return last_expired_session_id;
+}
+
+WindowsWithBuckets getWindowsWithBuckets(const SessionInfoQueue & sessions)
+{
+    WindowsWithBuckets windows_with_buckets;
+    windows_with_buckets.reserve(sessions.size());
+    for (const auto & session : sessions)
+        windows_with_buckets.emplace_back(WindowWithBuckets{{session->win_start, session->win_end}, {session->id}});
+
+    return windows_with_buckets;
+}
 }
 }
 }

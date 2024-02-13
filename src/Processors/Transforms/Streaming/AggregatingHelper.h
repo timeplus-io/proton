@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Core/Streaming/Watermark.h>
+#include <base/defines.h>
 #include <base/types.h>
 
 #include <vector>
@@ -31,12 +33,26 @@ Chunk mergeAndConvertToChunk(ManyAggregatedDataVariants & data, const Aggregatin
 
 /// Only used for two level
 /// splice aggregatd state of multiple buckets and convert them to chunk
-Chunk spliceAndConvertBucketsToChunk(
-    AggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets);
+Chunk spliceAndConvertToChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets);
 /// Merge many aggregated state of multiple threads, then splice aggregatd state of multiple buckets and convert them to chunk
-Chunk mergeAndSpliceAndConvertBucketsToChunk(
+Chunk mergeAndSpliceAndConvertToChunk(
     ManyAggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets);
 
+/* for EMIT ON UPDATE */
+/// Convert aggregated state of update groups tracked to chunk
+Chunk convertUpdatesToChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params);
+/// Merge many aggregated state and convert them to chunk
+Chunk mergeAndConvertUpdatesToChunk(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params);
+
+/// Only used for two level
+/// splice aggregatd state of update groups tracked of multiple buckets and convert them to chunk
+Chunk spliceAndConvertUpdatesToChunk(
+    AggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets);
+/// Merge many aggregated state of multiple threads, then splice aggregatd state of multiple buckets and convert them to chunk
+Chunk mergeAndSpliceAndConvertUpdatesToChunk(
+    ManyAggregatedDataVariants & data, const AggregatingTransformParams & params, const std::vector<Int64> & buckets);
+
+/* for EMIT CHANGELOG */
 /// Changelog chunk converters are used for changelog emit. They can return a pair of chunks : one
 /// for retraction and one for updates. And those 2 chunks are expected to be passed to downstream
 /// consecutively otherwise the down stream aggregation result may not be correct or emit incorrect
@@ -47,6 +63,16 @@ Chunk mergeAndSpliceAndConvertBucketsToChunk(
 ///         latest update data
 ChunkPair convertToChangelogChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params);
 ChunkPair mergeAndConvertToChangelogChunk(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params);
+
+inline bool onlyEmitFinalizedWindows(EmitMode mode) noexcept
+{
+    return mode == EmitMode::Watermark;
+}
+
+inline bool onlyEmitUpdates(EmitMode mode) noexcept
+{
+    return mode >= EmitMode::OnUpdate;
+}
 }
 
 }

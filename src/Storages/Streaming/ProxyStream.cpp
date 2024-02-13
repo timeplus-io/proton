@@ -129,7 +129,7 @@ void ProxyStream::read(
 {
     if (!query_info.syntax_analyzer_result->streaming)
     {
-        if (windowType() == WindowType::SESSION || windowType() == WindowType::HOP)
+        if (windowType() == WindowType::Session || windowType() == WindowType::Hop)
             throw Exception(
                 ErrorCodes::NOT_IMPLEMENTED, "{} window can only work with streaming query.", magic_enum::enum_name(windowType()));
     }
@@ -374,7 +374,7 @@ void ProxyStream::buildStreamingFunctionQueryPlan(
             processTimestampStep(query_plan, query_info);
 
         /// tumble(dedup(table(stream), columns...), 5s)
-        if (table_func_desc && table_func_desc->type != WindowType::NONE)
+        if (table_func_desc && table_func_desc->type != WindowType::None)
             processWindowAssignmentStep(query_plan, query_info, required_columns, storage_snapshot);
     }
 }
@@ -455,7 +455,7 @@ void ProxyStream::processWindowAssignmentStep(
     const Names & required_columns,
     const StorageSnapshotPtr & /*storage_snapshot*/) const
 {
-    assert(table_func_desc && table_func_desc->type != WindowType::NONE);
+    assert(table_func_desc && table_func_desc->type != WindowType::None);
     auto output_header = checkAndGetOutputHeader(required_columns, query_plan.getCurrentDataStream().header);
 
     query_plan.addStep(std::make_unique<WindowAssignmentStep>(
@@ -472,15 +472,15 @@ StorageSnapshotPtr ProxyStream::getStorageSnapshot(const StorageMetadataPtr & me
 
 WindowType ProxyStream::windowType() const
 {
-    WindowType type = table_func_desc != nullptr ? table_func_desc->type : WindowType::NONE;
-    if (type == WindowType::NONE && nested_proxy_storage)
+    WindowType type = table_func_desc != nullptr ? table_func_desc->type : WindowType::None;
+    if (type == WindowType::None && nested_proxy_storage)
         type = nested_proxy_storage->as<ProxyStream>()->windowType();
     return type;
 }
 
 TableFunctionDescriptionPtr ProxyStream::getStreamingWindowFunctionDescription() const
 {
-    if (table_func_desc && table_func_desc->type != WindowType::NONE)
+    if (table_func_desc && table_func_desc->type != WindowType::None)
         return table_func_desc;
 
     if (nested_proxy_storage)

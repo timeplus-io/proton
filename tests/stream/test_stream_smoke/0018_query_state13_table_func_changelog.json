@@ -191,7 +191,7 @@
                     "statements": [
                         {"client":"python", "query_type": "table", "query": "insert into test19_right_stream4 (j, kk) values (2, 'kk1');"},
                         {"client":"python", "query_type": "stream","query_id":"19404-1", "terminate": "manual","query":"recover from '19404'"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_left_stream4 (i, k) values (2, 'k1');"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "insert into test19_left_stream4 (i, k) values (2, 'k1');"},
                         {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='19404' sync"},
                         {"client":"python", "query_type": "table", "query":"unsubscribe to '19404'"}
                     ]
@@ -233,7 +233,7 @@
                     "statements": [
                         {"client":"python", "query_type": "table", "query": "insert into test19_version_kv_stream4 (j, kk) values (2, 'kk1');"},
                         {"client":"python", "query_type": "stream","query_id":"19405-1", "terminate": "manual","query":"recover from '19405'"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_left_stream4 (i, k) values (2, 'k1');"},
+                        {"client":"python", "query_type": "table", "wait":2, "query": "insert into test19_left_stream4 (i, k) values (2, 'k1');"},
                         {"client":"python", "query_type": "table", "wait":2, "query": "kill query where query_id='19405' sync"},
                         {"client":"python", "query_type": "table", "query":"unsubscribe to '19405'"}
                     ]

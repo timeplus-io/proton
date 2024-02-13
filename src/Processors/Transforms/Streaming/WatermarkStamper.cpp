@@ -41,9 +41,6 @@ void mergeEmitQuerySettings(const ASTPtr & emit_query, WatermarkStamperParams & 
 
     if (emit->periodic_interval)
     {
-        if (emit->after_watermark)
-            throw Exception("Streaming doesn't support having both any watermark and periodic emit", ErrorCodes::INCORRECT_QUERY);
-
         if (emit->delay_interval)
             throw Exception("Streaming doesn't support having both delay and periodic emit", ErrorCodes::INCORRECT_QUERY);
 
@@ -52,7 +49,10 @@ void mergeEmitQuerySettings(const ASTPtr & emit_query, WatermarkStamperParams & 
 
         params.periodic_interval = extractInterval(emit->periodic_interval->as<ASTFunction>());
 
-        params.mode = WatermarkStamperParams::EmitMode::PERIODIC;
+        if (params.window_params)
+            params.mode = emit->on_update ? EmitMode::PeriodicWatermarkOnUpdate : EmitMode::PeriodicWatermark;
+        else
+            params.mode = emit->on_update ? EmitMode::PeriodicOnUpdate : EmitMode::Periodic;
     }
     else if (emit->after_watermark)
     {
@@ -60,11 +60,17 @@ void mergeEmitQuerySettings(const ASTPtr & emit_query, WatermarkStamperParams & 
             throw Exception(
                 ErrorCodes::INCORRECT_QUERY, "Watermark emit is only supported in streaming queries with streaming window function");
 
-        params.mode = params.window_params->type == WindowType::SESSION ? WatermarkStamperParams::EmitMode::WATERMARK_PER_ROW
-                                                                        : WatermarkStamperParams::EmitMode::WATERMARK;
+        params.mode = EmitMode::Watermark;
+    }
+    else if (emit->on_update)
+    {
+        if (params.window_params)
+            params.mode = EmitMode::WatermarkOnUpdate;
+        else
+            params.mode = EmitMode::OnUpdate;
     }
     else
-        params.mode = WatermarkStamperParams::EmitMode::NONE;
+        params.mode = EmitMode::None;
 
     if (emit->timeout_interval)
         params.timeout_interval = extractInterval(emit->timeout_interval->as<ASTFunction>());
@@ -85,33 +91,30 @@ WatermarkStamperParams::WatermarkStamperParams(ASTPtr query, TreeRewriterResultP
     if (syntax_analyzer_result->aggregates.empty() && !syntax_analyzer_result->has_group_by)
     {
         /// For streaming non-aggregation query
-        if (mode != EmitMode::TAIL && mode != EmitMode::NONE)
+        if (mode != EmitMode::Tail && mode != EmitMode::None)
             throw Exception("Streaming tail mode doesn't support any watermark or periodic emit", ErrorCodes::INCORRECT_QUERY);
 
         /// Set default emit mode
-        if (mode == EmitMode::NONE)
-            mode = EmitMode::TAIL;
+        if (mode == EmitMode::None)
+            mode = EmitMode::Tail;
     }
     else
     {
         /// For streaming aggregation query
-        if (mode == EmitMode::TAIL)
+        if (mode == EmitMode::Tail)
             throw Exception("Streaming aggregation doesn't support tail emit", ErrorCodes::INCORRECT_QUERY);
 
-        if (mode == EmitMode::PERIODIC && window_params)
-            throw Exception("Streaming window aggregation doesn't support periodic emit", ErrorCodes::INCORRECT_QUERY);
-
         /// Set default emit mode
-        if (mode == EmitMode::NONE)
+        if (mode == EmitMode::None)
         {
             if (window_params)
             {
-                mode = window_params->type == WindowType::SESSION ? EmitMode::WATERMARK_PER_ROW : EmitMode::WATERMARK;
+                mode = EmitMode::Watermark;
             }
             else
             {
                 /// If `PERIODIC INTERVAL ...` is missing in `EMIT STREAM` query
-                mode = EmitMode::PERIODIC;
+                mode = EmitMode::Periodic;
                 periodic_interval.interval = ProtonConsts::DEFAULT_PERIODIC_INTERVAL.first;
                 periodic_interval.unit = ProtonConsts::DEFAULT_PERIODIC_INTERVAL.second;
             }
@@ -123,13 +126,21 @@ void WatermarkStamper::preProcess(const Block & header)
 {
     switch (params.mode)
     {
-        case WatermarkStamperParams::EmitMode::PERIODIC: {
+        case EmitMode::Periodic:
+        case EmitMode::PeriodicOnUpdate:
+        {
             initPeriodicTimer(params.periodic_interval);
             break;
         }
-        case WatermarkStamperParams::EmitMode::WATERMARK:
+        case EmitMode::PeriodicWatermark:
+        case EmitMode::PeriodicWatermarkOnUpdate:
+        {
+            initPeriodicTimer(params.periodic_interval);
             [[fallthrough]];
-        case WatermarkStamperParams::EmitMode::WATERMARK_PER_ROW: {
+        }
+        case EmitMode::Watermark:
+        case EmitMode::WatermarkOnUpdate:
+        {
             assert(params.window_params);
             if (!header.has(params.window_params->desc->argument_names[0]))
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "The event time columns not found");
@@ -182,23 +193,37 @@ void WatermarkStamper::processAfterUnmuted(Chunk & chunk)
 
     switch (params.mode)
     {
-        case WatermarkStamperParams::EmitMode::PERIODIC:
+        case EmitMode::Periodic:
+        case EmitMode::PeriodicOnUpdate:
         {
-            processPeriodic(chunk);
+            processPeriodic(chunk, /*use_processing_time*/true);
             break;
         }
-        case WatermarkStamperParams::EmitMode::WATERMARK:
+        case EmitMode::OnUpdate:
         {
-            auto muted_watermark_ts = calculateWatermark(max_event_ts);
-            if (muted_watermark_ts != INVALID_WATERMARK) [[likely]]
-                chunk.setWatermark(muted_watermark_ts);
+            chunk.setWatermark(MonotonicNanoseconds::now());
             break;
         }
-        case WatermarkStamperParams::EmitMode::WATERMARK_PER_ROW:
+        case EmitMode::Watermark:
         {
-            auto muted_watermark_ts = calculateWatermarkPerRow(max_event_ts);
+            auto muted_watermark_ts = params.window_params->type == WindowType::Session ? calculateWatermarkPerRow(max_event_ts)
+                                                                                        : calculateWatermark(max_event_ts);
             if (muted_watermark_ts != INVALID_WATERMARK) [[likely]]
-                chunk.setWatermark(muted_watermark_ts);
+            {
+                watermark_ts = muted_watermark_ts;
+                chunk.setWatermark(watermark_ts);
+            }
+            break;
+        }
+        case EmitMode::PeriodicWatermark:
+        case EmitMode::PeriodicWatermarkOnUpdate:
+        {
+            auto muted_watermark_ts = params.window_params->type == WindowType::Session ? calculateWatermarkPerRow(max_event_ts)
+                                                                                        : calculateWatermark(max_event_ts);
+            if (muted_watermark_ts != INVALID_WATERMARK) [[likely]]
+                watermark_ts = muted_watermark_ts;
+
+            processPeriodic(chunk, /*use_processing_time*/ false);
             break;
         }
         default:
@@ -210,9 +235,8 @@ void WatermarkStamper::processWithMutedWatermark(Chunk & chunk)
 {
     /// NOTE: In order to avoid that when there is only backfill data and no new data, the window aggregation don't emit results after the backfill is completed.
     /// Even mute watermark, we still need collect `max_event_ts` which will be used in "processAfterUnmuted()" to emit a watermark as soon as the backfill is completed
-    if (chunk.hasRows() && (params.mode == WatermarkStamperParams::EmitMode::WATERMARK || params.mode == WatermarkStamperParams::EmitMode::WATERMARK_PER_ROW))
+    if (chunk.hasRows() && time_col_pos >= 0 && params.window_params)
     {
-        assert(params.window_params);
         if (params.window_params->time_col_is_datetime64)
             max_event_ts = std::max<Int64>(
                 max_event_ts,
@@ -231,24 +255,40 @@ void WatermarkStamper::process(Chunk & chunk)
 {
     switch (params.mode)
     {
-        case WatermarkStamperParams::EmitMode::PERIODIC: {
-            processPeriodic(chunk);
+        case EmitMode::PeriodicOnUpdate:
+            [[fallthrough]]; /// Emit only keyed and changed states for aggregating
+        case EmitMode::Periodic:
+        {
+            processPeriodic(chunk, /*use_processing_time=*/true);
             break;
         }
-        case WatermarkStamperParams::EmitMode::WATERMARK: {
-            assert(params.window_params);
-            if (params.window_params->time_col_is_datetime64)
-                processWatermark<ColumnDateTime64, false>(chunk);
-            else
-                processWatermark<ColumnDateTime, false>(chunk);
+        case EmitMode::OnUpdate:
+        {
+            if (chunk.hasRows())
+                chunk.setWatermark(MonotonicNanoseconds::now());
             break;
         }
-        case WatermarkStamperParams::EmitMode::WATERMARK_PER_ROW: {
-            assert(params.window_params);
-            if (params.window_params->time_col_is_datetime64)
-                processWatermark<ColumnDateTime64, true>(chunk);
-            else
-                processWatermark<ColumnDateTime, true>(chunk);
+        case EmitMode::Watermark:
+        {
+            processWatermark(chunk);
+            break;
+        }
+        case EmitMode::PeriodicWatermarkOnUpdate:
+            [[fallthrough]]; /// Emit only keyed and changed states for aggregating
+        case EmitMode::PeriodicWatermark:
+        {
+            processWatermark(chunk);
+            /// Clear watermark and set it in `processPeriodic()`
+            chunk.clearWatermark();
+            processPeriodic(chunk, /*use_processing_time=*/false);
+            break;
+        }
+        case EmitMode::WatermarkOnUpdate:
+        {
+            processWatermark(chunk);
+            /// Always emit the watermark for each batch of events
+            if (chunk.hasRows())
+                chunk.setWatermark(watermark_ts);
             break;
         }
         default:
@@ -259,7 +299,7 @@ void WatermarkStamper::process(Chunk & chunk)
     logLateEvents();
 }
 
-void WatermarkStamper::processPeriodic(Chunk & chunk)
+void WatermarkStamper::processPeriodic(Chunk & chunk, bool use_processing_time)
 {
     assert(next_periodic_emit_ts);
 
@@ -270,7 +310,7 @@ void WatermarkStamper::processPeriodic(Chunk & chunk)
 
     next_periodic_emit_ts = now + periodic_interval;
 
-    chunk.setWatermark(now);
+    chunk.setWatermark(use_processing_time ? now : watermark_ts);
 }
 
 void WatermarkStamper::processTimeout(Chunk & chunk)
@@ -312,7 +352,7 @@ void WatermarkStamper::logLateEvents()
 }
 
 template <typename TimeColumnType, bool apply_watermark_per_row>
-void WatermarkStamper::processWatermark(Chunk & chunk)
+void WatermarkStamper::processWatermarkImpl(Chunk & chunk)
 {
     if (!chunk.hasRows())
         return;
@@ -368,6 +408,25 @@ void WatermarkStamper::processWatermark(Chunk & chunk)
     {
         chunk.setWatermark(event_ts_watermark);
         watermark_ts = event_ts_watermark;
+    }
+}
+
+void WatermarkStamper::processWatermark(Chunk & chunk)
+{
+    assert(params.window_params);
+    if (params.window_params->type == WindowType::Session)
+    {
+        if (params.window_params->time_col_is_datetime64)
+            processWatermarkImpl<ColumnDateTime64, true>(chunk);
+        else
+            processWatermarkImpl<ColumnDateTime, true>(chunk);
+    }
+    else
+    {
+        if (params.window_params->time_col_is_datetime64)
+            processWatermarkImpl<ColumnDateTime64, false>(chunk);
+        else
+            processWatermarkImpl<ColumnDateTime, false>(chunk);
     }
 }
 
