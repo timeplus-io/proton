@@ -1,5 +1,6 @@
 #include "AvroRowInputFormat.h"
 #include "DataTypes/DataTypeLowCardinality.h"
+#include "Formats/KafkaSchemaRegistry.h"
 #if USE_AVRO
 
 #include <numeric>
@@ -663,59 +664,65 @@ public:
 private:
     avro::ValidSchema fetchSchema(uint32_t id)
     {
-        try
-        {
+        /// proton: starts
+        /// try
+        /// {
             try
             {
-                Poco::URI url(base_url, "/schemas/ids/" + std::to_string(id));
-                LOG_TRACE((&Poco::Logger::get("AvroConfluentRowInputFormat")), "Fetching schema id = {}", id);
+                /// Poco::URI url(base_url, "/schemas/ids/" + std::to_string(id));
+                /// LOG_TRACE((&Poco::Logger::get("AvroConfluentRowInputFormat")), "Fetching schema id = {}", id);
+                ///
+                /// /// One second for connect/send/receive. Just in case.
+                /// ConnectionTimeouts timeouts({1, 0}, {1, 0}, {1, 0});
+                ///
+                /// Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_GET, url.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1);
+                /// request.setHost(url.getHost());
+                ///
+                /// auto session = makePooledHTTPSession(url, timeouts, 1);
+                /// std::istream * response_body{};
+                /// try
+                /// {
+                ///     session->sendRequest(request);
+                ///
+                ///     Poco::Net::HTTPResponse response;
+                ///     response_body = receiveResponse(*session, request, response, false);
+                /// }
+                /// catch (const Poco::Exception & e)
+                /// {
+                ///     /// We use session data storage as storage for exception text
+                ///     /// Depend on it we can deduce to reconnect session or reresolve session host
+                ///     session->attachSessionData(e.message());
+                ///     throw;
+                /// }
+                /// Poco::JSON::Parser parser;
+                /// auto json_body = parser.parse(*response_body).extract<Poco::JSON::Object::Ptr>();
+                /// auto schema = json_body->getValue<std::string>("schema");
+                /// LOG_TRACE((&Poco::Logger::get("AvroConfluentRowInputFormat")), "Successfully fetched schema id = {}\n{}", id, schema);
 
-                /// One second for connect/send/receive. Just in case.
-                ConnectionTimeouts timeouts({1, 0}, {1, 0}, {1, 0});
-
-                Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_GET, url.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1);
-                request.setHost(url.getHost());
-
-                auto session = makePooledHTTPSession(url, timeouts, 1);
-                std::istream * response_body{};
-                try
-                {
-                    session->sendRequest(request);
-
-                    Poco::Net::HTTPResponse response;
-                    response_body = receiveResponse(*session, request, response, false);
-                }
-                catch (const Poco::Exception & e)
-                {
-                    /// We use session data storage as storage for exception text
-                    /// Depend on it we can deduce to reconnect session or reresolve session host
-                    session->attachSessionData(e.message());
-                    throw;
-                }
-                Poco::JSON::Parser parser;
-                auto json_body = parser.parse(*response_body).extract<Poco::JSON::Object::Ptr>();
-                auto schema = json_body->getValue<std::string>("schema");
-                LOG_TRACE((&Poco::Logger::get("AvroConfluentRowInputFormat")), "Successfully fetched schema id = {}\n{}", id, schema);
+                auto schema = KafkaSchemaRegistry::instance().fetchSchema(base_url, id);
                 return avro::compileJsonSchemaFromString(schema);
             }
-            catch (const Exception &)
-            {
-                throw;
-            }
-            catch (const Poco::Exception & e)
-            {
-                throw Exception(Exception::CreateFromPocoTag{}, e);
-            }
+            /// catch (const Exception &)
+            /// {
+            ///     throw;
+            /// }
+            /// catch (const Poco::Exception & e)
+            /// {
+            ///     throw Exception(Exception::CreateFromPocoTag{}, e);
+            /// }
             catch (const avro::Exception & e)
             {
-                throw Exception(e.what(), ErrorCodes::INCORRECT_DATA);
+                auto ex = Exception(e.what(), ErrorCodes::INCORRECT_DATA);
+                ex.addMessage("while fetching schema id = " + std::to_string(id));
+                throw std::move(ex);
             }
-        }
-        catch (Exception & e)
-        {
-            e.addMessage("while fetching schema id = " + std::to_string(id));
-            throw;
-        }
+        /// }
+        /// catch (Exception & e)
+        /// {
+        ///     e.addMessage("while fetching schema id = " + std::to_string(id));
+        ///     throw;
+        /// }
+        /// proton: ends
     }
 
     Poco::URI base_url;
@@ -740,35 +747,37 @@ static std::shared_ptr<ConfluentSchemaRegistry> getConfluentSchemaRegistry(const
     return schema_registry;
 }
 
-static uint32_t readConfluentSchemaId(ReadBuffer & in)
-{
-    uint8_t magic;
-    uint32_t schema_id;
-
-    try
-    {
-        readBinaryBigEndian(magic, in);
-        readBinaryBigEndian(schema_id, in);
-    }
-    catch (const Exception & e)
-    {
-        if (e.code() == ErrorCodes::CANNOT_READ_ALL_DATA)
-        {
-            /* empty or incomplete message without Avro Confluent magic number or schema id */
-            throw Exception("Missing AvroConfluent magic byte or schema identifier.", ErrorCodes::INCORRECT_DATA);
-        }
-        else
-            throw;
-    }
-
-    if (magic != 0x00)
-    {
-        throw Exception("Invalid magic byte before AvroConfluent schema identifier."
-            " Must be zero byte, found " + std::to_string(int(magic)) + " instead", ErrorCodes::INCORRECT_DATA);
-    }
-
-    return schema_id;
-}
+/// proton: starts
+/// static uint32_t readConfluentSchemaId(ReadBuffer & in)
+/// {
+///     uint8_t magic;
+///     uint32_t schema_id;
+///
+///     try
+///     {
+///         readBinaryBigEndian(magic, in);
+///         readBinaryBigEndian(schema_id, in);
+///     }
+///     catch (const Exception & e)
+///     {
+///         if (e.code() == ErrorCodes::CANNOT_READ_ALL_DATA)
+///         {
+///             /* empty or incomplete message without Avro Confluent magic number or schema id */
+///             throw Exception("Missing AvroConfluent magic byte or schema identifier.", ErrorCodes::INCORRECT_DATA);
+///         }
+///         else
+///             throw;
+///     }
+///
+///     if (magic != 0x00)
+///     {
+///         throw Exception("Invalid magic byte before AvroConfluent schema identifier."
+///             " Must be zero byte, found " + std::to_string(int(magic)) + " instead", ErrorCodes::INCORRECT_DATA);
+///     }
+///
+///     return schema_id;
+/// }
+/// proton: ends
 
 AvroConfluentRowInputFormat::AvroConfluentRowInputFormat(
     const Block & header_, ReadBuffer & in_, Params params_, const FormatSettings & format_settings_)
@@ -793,7 +802,7 @@ bool AvroConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadExten
     {
         return false;
     }
-    SchemaId schema_id = readConfluentSchemaId(*in);
+    SchemaId schema_id = KafkaSchemaRegistry::instance().readSchemaId(*in);
     const auto & deserializer = getOrCreateDeserializer(schema_id);
     deserializer.deserializeRow(columns, *decoder, ext);
     decoder->drain();
@@ -828,7 +837,7 @@ NamesAndTypesList AvroSchemaReader::readSchema()
     avro::NodePtr root_node;
     if (confluent)
     {
-        UInt32 schema_id = readConfluentSchemaId(in);
+        UInt32 schema_id = KafkaSchemaRegistry::instance().readSchemaId(in);
         root_node = getConfluentSchemaRegistry(format_settings)->getSchema(schema_id).root();
     }
     else
