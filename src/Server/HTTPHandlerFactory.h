@@ -45,12 +45,12 @@ public:
     template <typename... TArgs>
     explicit HandlingRuleHTTPHandlerFactory(TArgs &&... args)
     {
-        creator = [c_args = std::tuple<TArgs...>(std::forward<TArgs>(args) ...)]()
+        creator = [my_args = std::tuple<TArgs...>(std::forward<TArgs>(args) ...)]()
         {
             return std::apply([&](auto && ... endpoint_args)
             {
                 return std::make_unique<TEndpoint>(std::forward<decltype(endpoint_args)>(endpoint_args)...);
-            }, std::move(c_args));
+            }, std::move(my_args));
         };
     }
 

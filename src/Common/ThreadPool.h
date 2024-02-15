@@ -186,18 +186,18 @@ public:
         /// - If this will throw an exception, the destructor won't be called
         /// - this pointer cannot be passed in the lambda, since after detach() it will not be valid
         GlobalThreadPool::instance().scheduleOrThrow([
-            c_state = state,
-            c_func = std::forward<Function>(func),
-            c_args = std::make_tuple(std::forward<Args>(args)...)]() mutable /// mutable is needed to destroy capture
+            my_state = state,
+            my_func = std::forward<Function>(func),
+            my_args = std::make_tuple(std::forward<Args>(args)...)]() mutable /// mutable is needed to destroy capture
         {
-            SCOPE_EXIT(c_state->event.set());
+            SCOPE_EXIT(my_state->event.set());
 
-            c_state->thread_id = std::this_thread::get_id();
+            my_state->thread_id = std::this_thread::get_id();
 
             /// This moves are needed to destroy function and arguments before exit.
             /// It will guarantee that after ThreadFromGlobalPool::join all captured params are destroyed.
-            auto function = std::move(c_func);
-            auto arguments = std::move(c_args);
+            auto function = std::move(my_func);
+            auto arguments = std::move(my_args);
 
             /// Thread status holds raw pointer on query context, thus it always must be destroyed
             /// before sending signal that permits to join this thread.
