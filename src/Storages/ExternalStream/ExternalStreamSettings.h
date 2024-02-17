@@ -26,6 +26,8 @@ class ASTStorage;
     M(String, log_dir, "", "log root directory", 0) \
     M(String, timestamp_regex, "", "Regex to extract log timestamp", 0) \
     M(UInt64, hash_bytes, 1024, "File bytes to hash to decide if the same file", 0) \
+    /* those are pulsar related settings */ \
+    /* TODO: Add pulsar settings */\
     /* those are mapped to format factory settings */ \
     M(String, data_format, "", "The message format, for example JSONEachRow", 0) \
     M(String, row_delimiter, "\n", "The string to be considered as a delimiter in raw message.", 0) \

@@ -8,6 +8,10 @@ namespace DB
 {
 
 class IStorage;
+namespace Poco
+{
+class Logger;
+}
 
 class Pulsar final : public StorageExternalStreamImpl
 {
@@ -29,5 +33,8 @@ public:
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
         size_t num_streams) override;
+private:
+    StorageID storage_id;
+    Poco::Logger * log;
 };
 }

@@ -1,3 +1,6 @@
+#include "Pulsar.h"
+#include "PulsarSource.h"
+
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
@@ -28,10 +31,13 @@ extern const int RESOURCE_NOT_FOUND;
 Pulsar::Pulsar(
     IStorage * storage,
     std::unique_ptr<ExternalStreamSettings> settings_,
-    const ASTs & engine_args_,
-    bool attach,
-    ExternalStreamCounterPtr external_stream_counter_,
+    const ASTs &,
+    bool,
+    ExternalStreamCounterPtr,
     ContextPtr)
+    : StorageExternalStreamImpl(std::move(settings_))
+    , storage_id(storage->getStorageID())
+    , log(&Poco::Logger::get("External-PulsarLog"))
 {
 }
 
@@ -44,14 +50,23 @@ NamesAndTypesList Pulsar::getVirtuals() const
 Pipe Pulsar::read(
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
-    SelectQueryInfo & query_info,
+    SelectQueryInfo & /*query_info*/,
     ContextPtr context,
     QueryProcessingStage::Enum /*processed_stage*/,
     size_t max_block_size,
     size_t /*num_streams*/)
 {
-    Pipes pipes;
-    auto pipe = Pipe::unitePipes(std::move(pipes));
-    return pipe;
+    Block header;
+
+    if (!column_names.empty())
+        header = storage_snapshot->getSampleBlockForColumns(column_names);
+    else
+    {
+        auto physical_columns{storage_snapshot->getColumns(GetColumnsOptions(GetColumnsOptions::Ordinary))};
+        const auto & any_one_column = physical_columns.front();
+        header.insert({any_one_column.type->createColumn(), any_one_column.type, any_one_column.name});
+    }
+    return Pipe(std::make_shared<PulsarSource>(
+        this, std::move(header), std::move(context), max_block_size, log));
 }
 }
