@@ -43,6 +43,7 @@ protected:
     StorageExternalTable(
         const StorageID & table_id,
         std::unique_ptr<ExternalTableSettings> settings,
+        const String & comment,
         bool is_attach,
         ContextPtr context_);
 

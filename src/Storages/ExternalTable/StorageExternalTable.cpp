@@ -11,11 +11,19 @@ namespace DB
 StorageExternalTable::StorageExternalTable(
     const StorageID & table_id,
     std::unique_ptr<ExternalTableSettings>  settings,
+    const String & comment,
     bool is_attach,
     ContextPtr context_)
 : IStorage(table_id)
 , WithContext(context_)
 {
+    if (!comment.empty())
+    {
+        StorageInMemoryMetadata storage_metadata;
+        storage_metadata.setComment(comment);
+        setInMemoryMetadata(storage_metadata);
+    }
+
     external_table = ExternalTableFactory::instance().getExternalTable(table_id.getTableName(), std::move(settings));
 
     /// Two situations:
@@ -95,6 +103,7 @@ void registerStorageExternalTable(StorageFactory & factory)
         return StorageExternalTable::create(
                 args.table_id,
                 std::move(settings),
+                args.comment,
                 args.attach,
                 args.getContext()->getGlobalContext());
     };
