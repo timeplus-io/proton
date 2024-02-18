@@ -26,7 +26,7 @@ scope_guard EnabledRoles::subscribeForChanges(const OnChangeHandler & handler) c
     handlers->list.push_back(handler);
     auto it = std::prev(handlers->list.end());
 
-    return [my_handlers=handlers, it]
+    return [my_handlers = handlers, it]
     {
         std::lock_guard lock2{my_handlers->mutex};
         my_handlers->list.erase(it);
