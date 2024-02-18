@@ -47,7 +47,7 @@ scope_guard AccessChangesNotifier::subscribeForChanges(AccessEntityType type, co
     list.push_back(handler);
     auto handler_it = std::prev(list.end());
 
-    return [my_handlers=handlers, type, handler_it]
+    return [my_handlers = handlers, type, handler_it]
     {
         std::lock_guard lock2{my_handlers->mutex};
         auto & list2 = my_handlers->by_type[static_cast<size_t>(type)];
