@@ -63,7 +63,7 @@ scope_guard AccessChangesNotifier::subscribeForChanges(const UUID & id, const On
     list.push_back(handler);
     auto handler_it = std::prev(list.end());
 
-    return [my_handlers=handlers, it, handler_it]
+    return [my_handlers = handlers, it, handler_it]
     {
         std::lock_guard lock2{my_handlers->mutex};
         auto & list2 = it->second;
