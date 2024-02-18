@@ -8,6 +8,20 @@
 namespace DB
 {
 
+namespace
+{
+ASTPtr parseComment(IParser::Pos & pos, Expected & expected)
+{
+    ParserKeyword s_comment("COMMENT");
+    ParserStringLiteral string_literal_parser;
+    ASTPtr comment;
+
+    s_comment.ignore(pos, expected) && string_literal_parser.parse(pos, comment, expected);
+
+    return comment;
+}
+}
+
 bool DB::ParserCreateExternalTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_create("CREATE");
@@ -52,6 +66,8 @@ bool DB::ParserCreateExternalTableQuery::parseImpl(Pos & pos, ASTPtr & node, Exp
             return false;
     }
 
+    auto comment = parseComment(pos, expected);
+
     auto create_query = std::make_shared<ASTCreateQuery>();
     node = create_query;
 
@@ -71,6 +87,9 @@ bool DB::ParserCreateExternalTableQuery::parseImpl(Pos & pos, ASTPtr & node, Exp
         create_query->children.push_back(create_query->database);
     if (create_query->table)
         create_query->children.push_back(create_query->table);
+
+    if (comment)
+        create_query->set(create_query->comment, comment);
 
     auto storage = std::make_shared<ASTStorage>();
     storage->set(storage->engine, makeASTFunction("ExternalTable"));
