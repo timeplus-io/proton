@@ -406,7 +406,7 @@ void Loglet::removeSegmentFiles(
     {
         std::vector<LogSegmentPtr> copy{segments_to_delete};
         /// We will need pay close attention to the lifecycle here
-        adhoc_scheduler_->scheduleOrThrow([moved_segments = std::move(copy), reason = reason, logger_]() {
+        adhoc_scheduler_->scheduleOrThrow([moved_segments = std::move(copy), my_reason = reason, logger_]() {
             for (const auto & segment : moved_segments)
             {
                 LOG_INFO(
@@ -414,7 +414,7 @@ void Loglet::removeSegmentFiles(
                     "Deleting segment file={} base_sequence={} reason={}",
                     segment->filename().c_str(),
                     segment->baseSequence(),
-                    reason);
+                    my_reason);
                 segment->remove();
             }
         });

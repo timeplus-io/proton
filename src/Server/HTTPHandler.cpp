@@ -746,11 +746,11 @@ void HTTPHandler::processQuery(
             used_output.out->addHeaderCORS(true);
     }
 
-    auto append_callback = [context = context] (ProgressCallback callback)
+    auto append_callback = [my_context = context] (ProgressCallback callback)
     {
-        auto prev = context->getProgressCallback();
+        auto prev = my_context->getProgressCallback();
 
-        context->setProgressCallback([prev, callback] (const Progress & progress)
+        my_context->setProgressCallback([prev, callback] (const Progress & progress)
         {
             if (prev)
                 prev(progress);

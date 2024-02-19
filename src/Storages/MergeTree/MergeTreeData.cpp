@@ -4180,8 +4180,8 @@ RestoreDataTasks MergeTreeData::restoreDataPartsFromBackup(const BackupPtr & bac
                              backup,
                              data_path_in_backup,
                              part_name,
-                             part_info = std::move(part_info),
-                             filenames = std::move(filenames),
+                             my_part_info = std::move(part_info),
+                             my_filenames = std::move(filenames),
                              reservation,
                              increment]()
         {
@@ -4194,7 +4194,7 @@ RestoreDataTasks MergeTreeData::restoreDataPartsFromBackup(const BackupPtr & bac
             assert(temp_part_dir.starts_with(relative_data_path));
             String relative_temp_part_dir = temp_part_dir.substr(relative_data_path.size());
 
-            for (const String & filename : filenames)
+            for (const String & filename : my_filenames)
             {
                 auto backup_entry = backup->readFile(fs::path(data_path_in_backup) / part_name / filename);
                 auto read_buffer = backup_entry->getReadBuffer();
@@ -4204,7 +4204,7 @@ RestoreDataTasks MergeTreeData::restoreDataPartsFromBackup(const BackupPtr & bac
 
             auto single_disk_volume = std::make_shared<SingleDiskVolume>(disk->getName(), disk, 0);
             auto data_part_storage = std::make_shared<DataPartStorageOnDisk>(single_disk_volume, relative_data_path, relative_temp_part_dir);
-            auto part = createPart(part_name, *part_info, data_part_storage);
+            auto part = createPart(part_name, *my_part_info, data_part_storage);
             /// TODO Transactions: Decide what to do with version metadata (if any). Let's just remove it for now.
             disk->removeFileIfExists(fs::path(temp_part_dir) / IMergeTreeDataPart::TXN_VERSION_METADATA_FILE_NAME);
             part->version.setCreationTID(Tx::PrehistoricTID, nullptr);
