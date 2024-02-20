@@ -1,6 +1,5 @@
 #include "AvroRowInputFormat.h"
 #include "DataTypes/DataTypeLowCardinality.h"
-#include "Formats/KafkaSchemaRegistry.h"
 #if USE_AVRO
 
 #include <numeric>
@@ -66,6 +65,9 @@
 #include <Poco/Poco.h>
 #include <Poco/URI.h>
 
+/// proton: starts
+#include <Formats/KafkaSchemaRegistry.h>
+/// proton: ends
 
 namespace DB
 {
@@ -97,7 +99,7 @@ public:
         *data = reinterpret_cast<const uint8_t *>(in.position());
         *len = in.available();
 
-        in.position() += in.available();
+            in.position() += in.available();
         return true;
     }
 

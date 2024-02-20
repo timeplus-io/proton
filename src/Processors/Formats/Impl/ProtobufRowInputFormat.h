@@ -30,7 +30,12 @@ class ProtobufSerializer;
 class ProtobufRowInputFormat final : public IRowInputFormat
 {
 public:
-    ProtobufRowInputFormat(ReadBuffer & in_, const Block & header_, const Params & params_, const FormatSchemaInfo & schema_info_, bool with_length_delimiter_);
+    ProtobufRowInputFormat(
+        ReadBuffer & in_,
+        const Block & header_,
+        const Params & params_,
+        const FormatSchemaInfo & schema_info_,
+        bool with_length_delimiter_);
     ~ProtobufRowInputFormat() override;
 
     String getName() const override { return "ProtobufRowInputFormat"; }
@@ -61,6 +66,34 @@ private:
 };
 
 /// proton: starts
+/// Confluent framing + Protobuf binary datum encoding. Mainly used for Kafka.
+/// Uses 3 caches:
+/// 1. global: schema registry cache (base_url -> SchemaRegistry)
+/// 2. SchemaRegistry: schema cache (schema_id -> schema)
+/// 3. ProtobufConfluentRowInputFormat: deserializer cache (schema_id -> AvroDeserializer)
+/// This is needed because KafkaStorage creates a new instance of InputFormat per a batch of messages
+class ProtobufConfluentRowInputFormat final : public IRowInputFormat
+{
+public:
+    ProtobufConfluentRowInputFormat(ReadBuffer & in_, const Block & header_, Params params_, const FormatSettings & format_settings_);
+    String getName() const override { return "ProtobufConfluentRowInputFormat"; }
+
+    void setReadBuffer(ReadBuffer & buf) override;
+
+private:
+    bool readRow(MutableColumns & columns, RowReadExtension & row_read_extension) override;
+
+    bool allowSyncAfterError() const override { return true; }
+    void syncAfterError() override;
+
+    using SchemaId = uint32_t;
+
+    String registry_url;
+    std::unique_ptr<ProtobufReader> reader;
+    std::vector<size_t> missing_column_indices;
+    std::unique_ptr<ProtobufSerializer> serializer;
+};
+
 class ProtobufSchemaWriter : public IExternalSchemaWriter
 {
 public:

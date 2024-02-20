@@ -2,6 +2,7 @@
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
 #include <Poco/JSON/Parser.h>
+#include <Poco/Net/HTTPBasicCredentials.h>
 
 namespace DB
 {
@@ -11,7 +12,7 @@ namespace ErrorCodes
 extern const int INCORRECT_DATA;
 }
 
-String KafkaSchemaRegistry::fetchSchema(const Poco::URI & base_url, UInt32 id)
+String KafkaSchemaRegistry::fetchSchema(const Poco::URI & base_url, UInt32 id, const String & username, const String & password)
 {
     assert(!base_url.empty());
 
@@ -27,6 +28,9 @@ String KafkaSchemaRegistry::fetchSchema(const Poco::URI & base_url, UInt32 id)
 
             Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_GET, url.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1);
             request.setHost(url.getHost());
+
+            if (!username.empty())
+                Poco::Net::HTTPBasicCredentials(username, password).authenticate(request);
 
             auto session = makePooledHTTPSession(url, timeouts, 1);
             std::istream * response_body{};

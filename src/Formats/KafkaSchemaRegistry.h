@@ -6,6 +6,7 @@
 namespace DB
 {
 
+/// A helper class helps working with Kafka schema registry.
 class KafkaSchemaRegistry final
 {
 public:
@@ -16,7 +17,7 @@ public:
     }
 
     UInt32 readSchemaId(ReadBuffer & in);
-    String fetchSchema(const Poco::URI & base_url, UInt32 id);
+    String fetchSchema(const Poco::URI & base_url, UInt32 id, const String & username = "", const String & password = "");
 };
 
 }

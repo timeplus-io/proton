@@ -207,6 +207,9 @@ struct FormatSettings
         std::string format_schema;
         std::string format_schema_path;
         bool is_server = false;
+        /// proton: starts
+        std::string kafka_schema_registry_url;
+        /// proton: ends
     } schema;
 
     struct
