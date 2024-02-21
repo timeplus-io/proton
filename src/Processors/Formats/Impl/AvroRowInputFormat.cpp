@@ -644,14 +644,96 @@ bool AvroRowInputFormat::readRow(MutableColumns & columns, RowReadExtension &ext
     return false;
 }
 
+/// proton: starts
+/// class AvroConfluentRowInputFormat::SchemaRegistry
+/// {
+/// public:
+///     explicit SchemaRegistry(const std::string & base_url_, size_t schema_cache_max_size = 1000)
+///         : base_url(base_url_), schema_cache(schema_cache_max_size)
+///     {
+///         if (base_url.empty())
+///             throw Exception("Empty Schema Registry URL", ErrorCodes::BAD_ARGUMENTS);
+///     }
+///
+///     avro::ValidSchema getSchema(uint32_t id)
+///     {
+///         auto [schema, loaded] = schema_cache.getOrSet(
+///             id,
+///             [this, id](){ return std::make_shared<avro::ValidSchema>(fetchSchema(id)); }
+///         );
+///         return *schema;
+///     }
+///
+/// private:
+///     avro::ValidSchema fetchSchema(uint32_t id)
+///     {
+///          try
+///          {
+///              try
+///              {
+///                  Poco::URI url(base_url, "/schemas/ids/" + std::to_string(id));
+///                  LOG_TRACE((&Poco::Logger::get("AvroConfluentRowInputFormat")), "Fetching schema id = {}", id);
+///
+///                  /// One second for connect/send/receive. Just in case.
+///                  ConnectionTimeouts timeouts({1, 0}, {1, 0}, {1, 0});
+///
+///                  Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_GET, url.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1);
+///                  request.setHost(url.getHost());
+///
+///                  auto session = makePooledHTTPSession(url, timeouts, 1);
+///                  std::istream * response_body{};
+///                  try
+///                  {
+///                      session->sendRequest(request);
+///
+///                      Poco::Net::HTTPResponse response;
+///                      response_body = receiveResponse(*session, request, response, false);
+///                  }
+///                  catch (const Poco::Exception & e)
+///                  {
+///                      /// We use session data storage as storage for exception text
+///                      /// Depend on it we can deduce to reconnect session or reresolve session host
+///                      session->attachSessionData(e.message());
+///                      throw;
+///                  }
+///                  Poco::JSON::Parser parser;
+///                  auto json_body = parser.parse(*response_body).extract<Poco::JSON::Object::Ptr>();
+///                  auto schema = json_body->getValue<std::string>("schema");
+///                  LOG_TRACE((&Poco::Logger::get("AvroConfluentRowInputFormat")), "Successfully fetched schema id = {}\n{}", id, schema);
+///
+///                  return avro::compileJsonSchemaFromString(schema);
+///              }
+///              catch (const Exception &)
+///              {
+///                  throw;
+///              }
+///              catch (const Poco::Exception & e)
+///              {
+///                  throw Exception(Exception::CreateFromPocoTag{}, e);
+///              }
+///              catch (const avro::Exception & e)
+///              {
+///                  throw Exception(e.what(), ErrorCodes::INCORRECT_DATA);
+///              }
+///          }
+///          catch (Exception & e)
+///          {
+///              e.addMessage("while fetching schema id = " + std::to_string(id));
+///              throw;
+///          }
+///      }
+///
+///      Poco::URI base_url;
+///      LRUCache<uint32_t, avro::ValidSchema> schema_cache;
+///  };
+
 class AvroConfluentRowInputFormat::SchemaRegistry
 {
 public:
-    explicit SchemaRegistry(const std::string & base_url_, size_t schema_cache_max_size = 1000)
-        : base_url(base_url_), schema_cache(schema_cache_max_size)
+    explicit SchemaRegistry(const std::string & base_url, const std::string & credentials, size_t schema_cache_max_size = 1000)
+        : registry(base_url, credentials)
+        , schema_cache(schema_cache_max_size)
     {
-        if (base_url.empty())
-            throw Exception("Empty Schema Registry URL", ErrorCodes::BAD_ARGUMENTS);
     }
 
     avro::ValidSchema getSchema(uint32_t id)
@@ -666,70 +748,23 @@ public:
 private:
     avro::ValidSchema fetchSchema(uint32_t id)
     {
-        /// proton: starts
-        /// try
-        /// {
-            try
-            {
-                /// Poco::URI url(base_url, "/schemas/ids/" + std::to_string(id));
-                /// LOG_TRACE((&Poco::Logger::get("AvroConfluentRowInputFormat")), "Fetching schema id = {}", id);
-                ///
-                /// /// One second for connect/send/receive. Just in case.
-                /// ConnectionTimeouts timeouts({1, 0}, {1, 0}, {1, 0});
-                ///
-                /// Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_GET, url.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1);
-                /// request.setHost(url.getHost());
-                ///
-                /// auto session = makePooledHTTPSession(url, timeouts, 1);
-                /// std::istream * response_body{};
-                /// try
-                /// {
-                ///     session->sendRequest(request);
-                ///
-                ///     Poco::Net::HTTPResponse response;
-                ///     response_body = receiveResponse(*session, request, response, false);
-                /// }
-                /// catch (const Poco::Exception & e)
-                /// {
-                ///     /// We use session data storage as storage for exception text
-                ///     /// Depend on it we can deduce to reconnect session or reresolve session host
-                ///     session->attachSessionData(e.message());
-                ///     throw;
-                /// }
-                /// Poco::JSON::Parser parser;
-                /// auto json_body = parser.parse(*response_body).extract<Poco::JSON::Object::Ptr>();
-                /// auto schema = json_body->getValue<std::string>("schema");
-                /// LOG_TRACE((&Poco::Logger::get("AvroConfluentRowInputFormat")), "Successfully fetched schema id = {}\n{}", id, schema);
-
-                auto schema = KafkaSchemaRegistry::instance().fetchSchema(base_url, id);
-                return avro::compileJsonSchemaFromString(schema);
-            }
-            /// catch (const Exception &)
-            /// {
-            ///     throw;
-            /// }
-            /// catch (const Poco::Exception & e)
-            /// {
-            ///     throw Exception(Exception::CreateFromPocoTag{}, e);
-            /// }
-            catch (const avro::Exception & e)
-            {
-                auto ex = Exception(e.what(), ErrorCodes::INCORRECT_DATA);
-                ex.addMessage("while fetching schema id = " + std::to_string(id));
-                throw std::move(ex);
-            }
-        /// }
-        /// catch (Exception & e)
-        /// {
-        ///     e.addMessage("while fetching schema id = " + std::to_string(id));
-        ///     throw;
-        /// }
-        /// proton: ends
+        auto schema = registry.fetchSchema(id, "AVRO");
+        try
+        {
+            return avro::compileJsonSchemaFromString(schema);
+        }
+        catch (const avro::Exception & e)
+        {
+          auto ex = Exception(e.what(), ErrorCodes::INCORRECT_DATA);
+          ex.addMessage("while fetching schema id = " + std::to_string(id));
+          throw std::move(ex);
+        }
     }
 
-    Poco::URI base_url;
+    KafkaSchemaRegistry registry;
     LRUCache<uint32_t, avro::ValidSchema> schema_cache;
 };
+/// proton: ends
 
 using ConfluentSchemaRegistry = AvroConfluentRowInputFormat::SchemaRegistry;
 #define SCHEMA_REGISTRY_CACHE_MAX_SIZE 1000
@@ -738,14 +773,17 @@ static LRUCache<std::string, ConfluentSchemaRegistry>  schema_registry_cache(SCH
 
 static std::shared_ptr<ConfluentSchemaRegistry> getConfluentSchemaRegistry(const FormatSettings & format_settings)
 {
-    const auto & base_url = format_settings.avro.schema_registry_url;
+    /// proton: starts
+    const auto & base_url = format_settings.schema.kafka_schema_registry_url.empty() ? format_settings.avro.schema_registry_url : format_settings.schema.kafka_schema_registry_url;
+    const auto & credentials = format_settings.schema.kafka_schema_registry_credentials;
     auto [schema_registry, loaded] = schema_registry_cache.getOrSet(
-        base_url,
-        [base_url]()
+        base_url + credentials,
+        [base_url, credentials]()
         {
-            return std::make_shared<ConfluentSchemaRegistry>(base_url);
+            return std::make_shared<ConfluentSchemaRegistry>(base_url, credentials);
         }
     );
+    /// proton: ends
     return schema_registry;
 }
 
@@ -804,7 +842,7 @@ bool AvroConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadExten
     {
         return false;
     }
-    SchemaId schema_id = KafkaSchemaRegistry::instance().readSchemaId(*in);
+    SchemaId schema_id = KafkaSchemaRegistry::readSchemaId(*in);
     const auto & deserializer = getOrCreateDeserializer(schema_id);
     deserializer.deserializeRow(columns, *decoder, ext);
     decoder->drain();
@@ -839,7 +877,7 @@ NamesAndTypesList AvroSchemaReader::readSchema()
     avro::NodePtr root_node;
     if (confluent)
     {
-        UInt32 schema_id = KafkaSchemaRegistry::instance().readSchemaId(in);
+        UInt32 schema_id = KafkaSchemaRegistry::readSchemaId(in);
         root_node = getConfluentSchemaRegistry(format_settings)->getSchema(schema_id).root();
     }
     else

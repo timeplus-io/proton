@@ -1,6 +1,7 @@
 #pragma once
 
 #include <IO/ReadBuffer.h>
+#include <Poco/Net/HTTPBasicCredentials.h>
 #include <Poco/URI.h>
 
 namespace DB
@@ -10,14 +11,16 @@ namespace DB
 class KafkaSchemaRegistry final
 {
 public:
-    static KafkaSchemaRegistry & instance()
-    {
-        static KafkaSchemaRegistry ret {};
-        return ret;
-    }
+    static UInt32 readSchemaId(ReadBuffer & in);
 
-    UInt32 readSchemaId(ReadBuffer & in);
-    String fetchSchema(const Poco::URI & base_url, UInt32 id, const String & username = "", const String & password = "");
+    /// `credentials_` is expected to be formatted in "<username>:<password>".
+    KafkaSchemaRegistry(const String & base_url_, const String & credentials_);
+
+    String fetchSchema(UInt32 id, const String & expected_schema_type = "");
+
+private:
+    Poco::URI base_url;
+    Poco::Net::HTTPBasicCredentials credentials;
 };
 
 }

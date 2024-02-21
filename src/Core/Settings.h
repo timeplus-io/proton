@@ -770,6 +770,7 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(String, rawstore_time_extraction_type, "", "_tp_time extraction type (string, json, regex)", 0) \
     M(String, rawstore_time_extraction_rule, "", "_tp_time extraction rule (string, json, regex)", 0) \
     M(URI, kafka_schema_registry_url, "", "For ProtobufSingle format: Kafka Schema Registry URL.", 0) \
+    M(String, kafka_schema_registry_credentials, "", "Credetials to be used to fetch schema from the `kafka_schema_registry_url`, with format '<username>:<password>'.", 0) \
     /** proton: ends. */
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.

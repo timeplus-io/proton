@@ -209,6 +209,7 @@ struct FormatSettings
         bool is_server = false;
         /// proton: starts
         std::string kafka_schema_registry_url;
+        std::string kafka_schema_registry_credentials;
         /// proton: ends
     } schema;
 

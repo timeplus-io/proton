@@ -111,6 +111,7 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.schema.is_server = context->hasGlobalContext() && (context->getGlobalContext()->getApplicationType() == Context::ApplicationType::SERVER);
     /// proton: starts
     format_settings.schema.kafka_schema_registry_url = settings.kafka_schema_registry_url.toString();
+    format_settings.schema.kafka_schema_registry_credentials = settings.kafka_schema_registry_credentials;
     /// proton: ends
     format_settings.skip_unknown_fields = settings.input_format_skip_unknown_fields;
     format_settings.template_settings.resultset_format = settings.format_template_resultset;

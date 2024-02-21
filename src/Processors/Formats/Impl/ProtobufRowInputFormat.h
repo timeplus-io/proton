@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Formats/KafkaSchemaRegistry.h"
 #include "config.h"
 
 #if USE_PROTOBUF
@@ -80,15 +81,14 @@ public:
 
     void setReadBuffer(ReadBuffer & buf) override;
 
+    class SchemaRegistryWithCache;
+
 private:
     bool readRow(MutableColumns & columns, RowReadExtension & row_read_extension) override;
-
     bool allowSyncAfterError() const override { return true; }
     void syncAfterError() override;
 
-    using SchemaId = uint32_t;
-
-    String registry_url;
+    std::shared_ptr<SchemaRegistryWithCache> registry;
     std::unique_ptr<ProtobufReader> reader;
     std::vector<size_t> missing_column_indices;
     std::unique_ptr<ProtobufSerializer> serializer;

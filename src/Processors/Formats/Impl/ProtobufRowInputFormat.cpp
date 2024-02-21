@@ -1,5 +1,4 @@
 #include "ProtobufRowInputFormat.h"
-#include "Common/LRUCache.h"
 
 #if USE_PROTOBUF
 #    include <Core/Block.h>
@@ -13,11 +12,20 @@
 #    include <base/range.h>
 
 /// proton: starts
+#    include <Common/LRUCache.h>
 #    include <Formats/KafkaSchemaRegistry.h>
+#    include <google/protobuf/compiler/parser.h>
+#    include <google/protobuf/descriptor.pb.h>
+#    include <google/protobuf/io/tokenizer.h>
 /// proton: ends
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+extern const int INVALID_DATA;
+}
 
 ProtobufRowInputFormat::ProtobufRowInputFormat(
     ReadBuffer & in_, const Block & header_, const Params & params_, const FormatSchemaInfo & schema_info_, bool with_length_delimiter_)
@@ -120,10 +128,86 @@ NamesAndTypesList ProtobufSchemaReader::readSchema()
 }
 
 /// proton: starts
+namespace
+{
+using ConfluentSchemaRegistry = ProtobufConfluentRowInputFormat::SchemaRegistryWithCache;
+#define SCHEMA_REGISTRY_CACHE_MAX_SIZE 1000
+/// Cache of Schema Registry URL -> SchemaRegistry
+LRUCache<std::string, ConfluentSchemaRegistry>  schema_registry_cache(SCHEMA_REGISTRY_CACHE_MAX_SIZE);
+
+std::shared_ptr<ConfluentSchemaRegistry> getConfluentSchemaRegistry(const String & base_url, const String & credentials)
+{
+    auto [schema_registry, loaded] = schema_registry_cache.getOrSet(
+        base_url + credentials,
+        [base_url, credentials]()
+        {
+            return std::make_shared<ConfluentSchemaRegistry>(base_url, credentials);
+        }
+    );
+    return schema_registry;
+}
+}
+
+class ProtobufConfluentRowInputFormat::SchemaRegistryWithCache
+{
+public:
+    SchemaRegistryWithCache(const String & base_url, const String & credentials)
+    : registry(base_url, credentials)
+    {
+    }
+
+    const google::protobuf::Descriptor * getMessageType(uint32_t schema_id, const std::vector<Int64> & indexes)
+    {
+        assert(!indexes.empty());
+
+        const auto *descriptor = getSchema(schema_id)->message_type(indexes[0]);
+
+        for (auto i : indexes)
+        {
+            if (i > static_cast<Int64>(descriptor->nested_type_count()))
+                throw Exception(ErrorCodes::INVALID_DATA, "Invalid message index={} max_index={} descriptor={}", i, descriptor->nested_type_count(), descriptor->name());
+            descriptor = descriptor->nested_type(i);
+        }
+
+        return descriptor;
+    }
+
+private:
+    const google::protobuf::FileDescriptor * getSchema(uint32_t id)
+    {
+        const auto * ret = registry_pool()->FindFileByName("");
+        if (ret)
+            return ret;
+
+        return fetchSchema(id);
+    }
+
+    const google::protobuf::FileDescriptor* fetchSchema(uint32_t id)
+    {
+        auto schema = registry.fetchSchema(id, "PROTOBUF");
+        google::protobuf::io::ArrayInputStream input{schema.data(), static_cast<int>(schema.size())};
+        google::protobuf::io::Tokenizer tokenizer(&input, /*FIXME*/nullptr);
+        google::protobuf::FileDescriptorProto descriptor;
+        google::protobuf::compiler::Parser parser;
+
+        parser.RecordErrorsTo(/*FIXME*/nullptr);
+        parser.Parse(&tokenizer, &descriptor);
+        // if (!error_collector.getErrors().empty())
+        //     throw Exception(ErrorCodes::CANNOT_PARSE_PROTOBUF_SCHEMA, "Invalid protobuf schema FIXME");
+
+        return registry_pool()->BuildFile(descriptor);
+    }
+
+    KafkaSchemaRegistry registry;
+    google::protobuf::DescriptorPool registry_pool_;
+
+    google::protobuf::DescriptorPool* registry_pool() { return &registry_pool_; }
+};
+
 ProtobufConfluentRowInputFormat::ProtobufConfluentRowInputFormat(
     ReadBuffer & in_, const Block & header_, Params params_, const FormatSettings &  format_settings_)
     : IRowInputFormat(header_, in_, params_, ProcessorID::ProtobufRowInputFormatID)
-    , registry_url(format_settings_.schema.kafka_schema_registry_url)
+    , registry(getConfluentSchemaRegistry(format_settings_.schema.kafka_schema_registry_url, format_settings_.schema.kafka_schema_registry_credentials))
     , reader(std::make_unique<ProtobufReader>(in_))
 {
 }
@@ -144,8 +228,7 @@ bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadE
     if (reader->eof())
         return false;
 
-    auto & registry = KafkaSchemaRegistry::instance();
-    auto schema_id = registry.readSchemaId(*in);
+    auto schema_id = KafkaSchemaRegistry::readSchemaId(*in);
 
     auto indexes_count = reader->readSInt();
     std::vector<Int64> indexes(1);
@@ -163,7 +246,7 @@ bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadE
         header.getNames(),
         header.getDataTypes(),
         missing_column_indices,
-        *ProtobufSchemas::instance().getMessageTypeForSchemaRegistry(registry_url, schema_id, indexes),
+        *registry->getMessageType(schema_id, indexes),
         /*with_length_delimiter=*/false,
         *reader);
 
