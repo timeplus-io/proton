@@ -340,8 +340,8 @@ void validateFunctionSource(
     std::function<void(v8::Isolate *, v8::Local<v8::Context> &, v8::TryCatch &, v8::Local<v8::Value> &)> func)
 {
     /// FIXME, switch to global isolate allocation / pooling
-    UInt64 max_heap_size_in_bytes = 10 * 1024 * 1024;
-    UInt64 max_old_gen_size_in_bytes = 8 * 1024 * 1024;
+    UInt64 max_heap_size_in_bytes = static_cast<size_t>(getMemoryAmountOrZeroCached() * 0.6);
+    UInt64 max_old_gen_size_in_bytes = static_cast<size_t>(getMemoryAmountOrZeroCached() * 0.6);
 
     v8::Isolate::CreateParams isolate_params;
     isolate_params.array_buffer_allocator_shared
@@ -431,26 +431,63 @@ void validateStatelessFunctionSource(const std::string & func_name, const std::s
     validateFunctionSource(func_name, source, validate_function);
 }
 
+std::string getHeapStatisticsString(v8::HeapStatistics& heap_statistics) {
+    return fmt::format(
+        "Total Heap Size: {}\t"
+        "Total Heap Size Executable: {}\t"
+        "Total Physical Size: {}\t"
+        "Total Available Size: {}\t"
+        "Used Heap Size: {}\t"
+        "Heap Size Limit: {}\t"
+        "Malloced Memory: {}\t"
+        "External Memory: {}\t"
+        "Peak Malloced Memory: {}\t"
+        "Does Zap Garbage: {}\t"
+        "Number Of Native Contexts: {}\t"
+        "Number Of Detached Contexts: {}\t"
+        "Total Global Handles Size: {}\t"
+        "Used Global Handles Size: {}",
+        heap_statistics.total_heap_size(),
+        heap_statistics.total_heap_size_executable(),
+        heap_statistics.total_physical_size(),
+        heap_statistics.total_available_size(),
+        heap_statistics.used_heap_size(),
+        heap_statistics.heap_size_limit(),
+        heap_statistics.malloced_memory(),
+        heap_statistics.external_memory(),
+        heap_statistics.peak_malloced_memory(),
+        heap_statistics.does_zap_garbage(),
+        heap_statistics.number_of_native_contexts(),
+        heap_statistics.number_of_detached_contexts(),
+        heap_statistics.total_global_handles_size(),
+        heap_statistics.used_global_handles_size()
+    );
+}
+
 void checkHeapLimit(v8::Isolate * isolate, size_t max_v8_heap_size_in_bytes)
 {
     v8::Locker locker(isolate);
     v8::Isolate::Scope isolate_scope(isolate);
     v8::HandleScope handle_scope(isolate);
     v8::HandleScope scope(isolate);
+    /// TODO(qijun): add v8 heap stat metrics to system profile event capture
     v8::HeapStatistics heap_statistics;
     isolate->GetHeapStatistics(&heap_statistics);
 
-    auto used = heap_statistics.used_heap_size();
-    auto total = heap_statistics.heap_size_limit();
-    auto limit = std::min(static_cast<size_t>(0.9 * total), max_v8_heap_size_in_bytes);
+    size_t used = heap_statistics.used_heap_size();
+    size_t total = heap_statistics.heap_size_limit();
+    size_t limit = std::min(total, max_v8_heap_size_in_bytes);
+
     if (used > limit)
         throw Exception(
             ErrorCodes::UDF_MEMORY_THRESHOLD_EXCEEDED,
-            "Current V8 heap size used={} bytes, total={} bytes, javascript_max_memory_bytes={}, exceed the limit={} bytes",
+            "Current V8 heap size used={} bytes, total={} bytes, javascript_max_memory_bytes={}, exceed the limit={} bytes, v8 heap "
+            "stat={{{}}}",
             used,
             total,
             max_v8_heap_size_in_bytes,
-            limit);
+            limit,
+            V8::getHeapStatisticsString(heap_statistics));
 }
 }
 }

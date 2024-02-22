@@ -15,7 +15,7 @@ struct JavaScriptBlueprint
         void operator()(v8::Isolate * isolate_) const { isolate_->Dispose(); }
     };
 
-    JavaScriptBlueprint(const String & name, const String & source, size_t max_v8_heap_size_in_bytes);
+    JavaScriptBlueprint(const String & name, const String & source);
     ~JavaScriptBlueprint() noexcept;
 
     std::unique_ptr<v8::Isolate, IsolateDeleter> isolate;

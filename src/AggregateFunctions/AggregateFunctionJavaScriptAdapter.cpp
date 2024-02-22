@@ -1,5 +1,6 @@
 #include "AggregateFunctionJavaScriptAdapter.h"
 
+#include <base/getMemoryAmount.h>
 #include <Core/DecimalFunctions.h>
 #include <Functions/FunctionsConversion.h>
 #include <Functions/UserDefined/UserDefinedFunctionConfiguration.h>
@@ -19,14 +20,20 @@ extern const int UDF_COMPILE_ERROR;
 extern const int UDF_INTERNAL_ERROR;
 }
 
-JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & source, size_t max_v8_heap_size_in_bytes)
+JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & source)
 {
     /// FIXME, create isolate from V8::V8 global isolates pool
     v8::Isolate::CreateParams isolate_params;
-    isolate_params.constraints.ConfigureDefaultsFromHeapSize(0, static_cast<size_t>(max_v8_heap_size_in_bytes * 1.2));
+    size_t max_heap_size_in_bytes = static_cast<size_t>(getMemoryAmountOrZeroCached() * 0.6);
+    size_t max_old_gen_size_in_bytes = static_cast<size_t>(getMemoryAmountOrZeroCached() * 0.6);
+
+    isolate_params.constraints.ConfigureDefaultsFromHeapSize(0, max_heap_size_in_bytes);
+    isolate_params.constraints.set_max_old_generation_size_in_bytes(max_old_gen_size_in_bytes);
+
     isolate_params.array_buffer_allocator_shared
         = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
     isolate = std::unique_ptr<v8::Isolate, IsolateDeleter>(v8::Isolate::New(isolate_params), IsolateDeleter());
+
 
     auto * logger = &Poco::Logger::get("JavaScriptAggregateFunction");
 
@@ -275,7 +282,7 @@ AggregateFunctionJavaScriptAdapter::AggregateFunctionJavaScriptAdapter(
     , num_arguments(types.size())
     , is_changelog_input(is_changelog_input_)
     , max_v8_heap_size_in_bytes(max_v8_heap_size_in_bytes_)
-    , blueprint(config->name, config->source, max_v8_heap_size_in_bytes)
+    , blueprint(config->name, config->source)
 {
 }
 

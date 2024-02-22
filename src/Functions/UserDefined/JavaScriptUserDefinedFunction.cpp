@@ -1,6 +1,9 @@
 #include <Functions/UserDefined/JavaScriptUserDefinedFunction.h>
+
 #include <V8/ConvertDataTypes.h>
 #include <V8/Utils.h>
+#include <base/getMemoryAmount.h>
+
 #include <span>
 
 namespace DB
