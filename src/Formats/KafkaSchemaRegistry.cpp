@@ -25,7 +25,7 @@ KafkaSchemaRegistry::KafkaSchemaRegistry(const String & base_url_, const String 
     else
     {
         credentials.setUsername(credentials_.substr(0, pos));
-        credentials.setPassword(credentials_.substr(pos));
+        credentials.setPassword(credentials_.substr(pos + 1));
     }
 }
 
@@ -70,8 +70,8 @@ String KafkaSchemaRegistry::fetchSchema(UInt32 id, const String & expected_schem
 
             if (!expected_schema_type.empty())
             {
-                auto schema_type = json_body->getValue<std::string>("type");
-                if (boost::iequals(schema_type, expected_schema_type))
+                auto schema_type = json_body->getValue<std::string>("schemaType");
+                if (!boost::iequals(schema_type, expected_schema_type))
                     throw Exception(ErrorCodes::TYPE_MISMATCH, "Expected schema type {}, got {}", expected_schema_type, schema_type);
             }
             auto schema = json_body->getValue<std::string>("schema");

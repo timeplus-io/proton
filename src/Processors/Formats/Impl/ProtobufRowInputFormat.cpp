@@ -14,6 +14,7 @@
 /// proton: starts
 #    include <Common/LRUCache.h>
 #    include <Formats/KafkaSchemaRegistry.h>
+#    include <IO/VarInt.h>
 #    include <google/protobuf/compiler/parser.h>
 #    include <google/protobuf/descriptor.pb.h>
 #    include <google/protobuf/io/tokenizer.h>
@@ -132,7 +133,7 @@ namespace
 {
 using ConfluentSchemaRegistry = ProtobufConfluentRowInputFormat::SchemaRegistryWithCache;
 #define SCHEMA_REGISTRY_CACHE_MAX_SIZE 1000
-/// Cache of Schema Registry URL -> SchemaRegistry
+/// Cache of Schema Registry URL + credentials -> SchemaRegistry
 LRUCache<std::string, ConfluentSchemaRegistry>  schema_registry_cache(SCHEMA_REGISTRY_CACHE_MAX_SIZE);
 
 std::shared_ptr<ConfluentSchemaRegistry> getConfluentSchemaRegistry(const String & base_url, const String & credentials)
@@ -148,6 +149,25 @@ std::shared_ptr<ConfluentSchemaRegistry> getConfluentSchemaRegistry(const String
 }
 }
 
+namespace
+{
+class ErrorThrower final: public google::protobuf::io::ErrorCollector
+{
+public:
+    explicit ErrorThrower(UInt32 schema_id_): schema_id(schema_id_)
+    {
+    }
+
+    void AddError(int line, google::protobuf::io::ColumnNumber column, const std::string & message) override
+    {
+        throw Exception(ErrorCodes::INVALID_DATA, "Failed to parse schema {}: line={}, column={}, message={}", schema_id, line, column, message);
+    }
+
+private:
+    UInt32 schema_id;
+};
+}
+
 class ProtobufConfluentRowInputFormat::SchemaRegistryWithCache
 {
 public:
@@ -160,9 +180,14 @@ public:
     {
         assert(!indexes.empty());
 
-        const auto *descriptor = getSchema(schema_id)->message_type(indexes[0]);
+        const auto *fd = getSchema(schema_id);
+        auto mt_count = fd->message_type_count();
+        if (mt_count < indexes[0] + 1)
+            throw Exception(ErrorCodes::INVALID_DATA, "Invalid message index={} max_index={}", indexes[0], mt_count);
 
-        for (auto i : indexes)
+        const auto *descriptor = fd->message_type(indexes[0]);
+
+        for (auto i : std::vector<Int64>(indexes.begin() + 1, indexes.end()))
         {
             if (i > static_cast<Int64>(descriptor->nested_type_count()))
                 throw Exception(ErrorCodes::INVALID_DATA, "Invalid message index={} max_index={} descriptor={}", i, descriptor->nested_type_count(), descriptor->name());
@@ -175,9 +200,9 @@ public:
 private:
     const google::protobuf::FileDescriptor * getSchema(uint32_t id)
     {
-        const auto * ret = registry_pool()->FindFileByName("");
-        if (ret)
-            return ret;
+        const auto * loaded_descriptor = registry_pool()->FindFileByName(std::to_string(id));
+        if (loaded_descriptor)
+            return loaded_descriptor;
 
         return fetchSchema(id);
     }
@@ -185,17 +210,21 @@ private:
     const google::protobuf::FileDescriptor* fetchSchema(uint32_t id)
     {
         auto schema = registry.fetchSchema(id, "PROTOBUF");
+        ErrorThrower err_thrower {id};
+        std::string schema_content {schema.data(), schema.size()};
         google::protobuf::io::ArrayInputStream input{schema.data(), static_cast<int>(schema.size())};
-        google::protobuf::io::Tokenizer tokenizer(&input, /*FIXME*/nullptr);
+        google::protobuf::io::Tokenizer tokenizer(&input, &err_thrower);
         google::protobuf::FileDescriptorProto descriptor;
+        descriptor.set_name(std::to_string(id));
         google::protobuf::compiler::Parser parser;
-
-        parser.RecordErrorsTo(/*FIXME*/nullptr);
+        parser.RecordErrorsTo(&err_thrower);
         parser.Parse(&tokenizer, &descriptor);
-        // if (!error_collector.getErrors().empty())
-        //     throw Exception(ErrorCodes::CANNOT_PARSE_PROTOBUF_SCHEMA, "Invalid protobuf schema FIXME");
 
-        return registry_pool()->BuildFile(descriptor);
+        auto const * ret = registry_pool()->BuildFile(descriptor);
+        auto mt_count = ret->message_type_count();
+        if (mt_count < 1)
+            throw Exception(ErrorCodes::INVALID_DATA, "No message type in schema");
+        return ret;
     }
 
     KafkaSchemaRegistry registry;
@@ -212,11 +241,11 @@ ProtobufConfluentRowInputFormat::ProtobufConfluentRowInputFormat(
 {
 }
 
-void ProtobufConfluentRowInputFormat::setReadBuffer(ReadBuffer & buf)
-{
-    IInputFormat::setReadBuffer(buf);
-    reader->setReadBuffer(buf);
-}
+// void ProtobufConfluentRowInputFormat::setReadBuffer(ReadBuffer & buf)
+// {
+//     IInputFormat::setReadBuffer(buf);
+//     reader->setReadBuffer(buf);
+// }
 
 void ProtobufConfluentRowInputFormat::syncAfterError()
 {
@@ -225,30 +254,42 @@ void ProtobufConfluentRowInputFormat::syncAfterError()
 
 bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadExtension & row_read_extension)
 {
-    if (reader->eof())
+    if (in->eof())
         return false;
 
     auto schema_id = KafkaSchemaRegistry::readSchemaId(*in);
 
-    auto indexes_count = reader->readSInt();
-    std::vector<Int64> indexes(1);
+
+    Int64 indexes_count = 0;
+    readVarInt(indexes_count, *in);
+
+    std::vector<Int64> indexes;
+    indexes.reserve(indexes_count < 1 ? 1 : indexes_count);
+
     if (indexes_count < 1)
         indexes.push_back(0);
     else
     {
         for (size_t i = 0; i < static_cast<size_t>(indexes_count); i++)
-            indexes.push_back(reader->readSInt());
+        {
+            Int64 ind = 0;
+            readVarInt(ind, *in);
+            indexes.push_back(ind);
+        }
     }
 
     const auto & header = getPort().getHeader();
 
+    // reader->setReadBuffer(*in);
+
+    ProtobufReader reader_ {*in};
     serializer = ProtobufSerializer::create(
         header.getNames(),
         header.getDataTypes(),
         missing_column_indices,
         *registry->getMessageType(schema_id, indexes),
         /*with_length_delimiter=*/false,
-        *reader);
+        reader_);
 
     size_t row_num = columns.empty() ? 0 : columns[0]->size();
     if (!row_num)

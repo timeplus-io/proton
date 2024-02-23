@@ -79,7 +79,7 @@ public:
     ProtobufConfluentRowInputFormat(ReadBuffer & in_, const Block & header_, Params params_, const FormatSettings & format_settings_);
     String getName() const override { return "ProtobufConfluentRowInputFormat"; }
 
-    void setReadBuffer(ReadBuffer & buf) override;
+    // void setReadBuffer(ReadBuffer & buf) override;
 
     class SchemaRegistryWithCache;
 

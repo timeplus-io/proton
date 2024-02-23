@@ -439,13 +439,13 @@ KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreamingExternal(const Strin
         /// Create one
         auto ksettings = std::make_unique<KafkaWALSettings>();
 
-        ksettings->fetch_wait_max_ms = fetch_wait_max_ms;
+    ksettings->fetch_wait_max_ms = fetch_wait_max_ms;
 
-        ksettings->brokers = brokers;
+    ksettings->brokers = brokers;
 
-        /// Streaming WALs have a different group ID
-        ksettings->group_id += "-tp-external-streaming-query-" + std::to_string(consumers.second.size() + 1);
-        ksettings->auth = auth;
+    /// Streaming WALs have a different group ID
+    ksettings->group_id += "-tp-external-streaming-query-" + std::to_string(consumers.second.size() + 1);
+    ksettings->auth = auth;
 
         /// We don't care offset checkpointing for WALs used for streaming processing,
         /// No auto commit
