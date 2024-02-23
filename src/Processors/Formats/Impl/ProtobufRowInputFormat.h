@@ -85,11 +85,8 @@ public:
 
 private:
     bool readRow(MutableColumns & columns, RowReadExtension & row_read_extension) override;
-    bool allowSyncAfterError() const override { return true; }
-    void syncAfterError() override;
 
     std::shared_ptr<SchemaRegistryWithCache> registry;
-    std::unique_ptr<ProtobufReader> reader;
     std::vector<size_t> missing_column_indices;
     std::unique_ptr<ProtobufSerializer> serializer;
 };

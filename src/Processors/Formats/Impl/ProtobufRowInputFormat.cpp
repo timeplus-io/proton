@@ -237,19 +237,7 @@ ProtobufConfluentRowInputFormat::ProtobufConfluentRowInputFormat(
     ReadBuffer & in_, const Block & header_, Params params_, const FormatSettings &  format_settings_)
     : IRowInputFormat(header_, in_, params_, ProcessorID::ProtobufRowInputFormatID)
     , registry(getConfluentSchemaRegistry(format_settings_.schema.kafka_schema_registry_url, format_settings_.schema.kafka_schema_registry_credentials))
-    , reader(std::make_unique<ProtobufReader>(in_))
 {
-}
-
-// void ProtobufConfluentRowInputFormat::setReadBuffer(ReadBuffer & buf)
-// {
-//     IInputFormat::setReadBuffer(buf);
-//     reader->setReadBuffer(buf);
-// }
-
-void ProtobufConfluentRowInputFormat::syncAfterError()
-{
-    reader->endMessage(true);
 }
 
 bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadExtension & row_read_extension)
@@ -280,16 +268,14 @@ bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadE
 
     const auto & header = getPort().getHeader();
 
-    // reader->setReadBuffer(*in);
-
-    ProtobufReader reader_ {*in};
+    ProtobufReader reader {*in};
     serializer = ProtobufSerializer::create(
         header.getNames(),
         header.getDataTypes(),
         missing_column_indices,
         *registry->getMessageType(schema_id, indexes),
         /*with_length_delimiter=*/false,
-        reader_);
+        reader);
 
     size_t row_num = columns.empty() ? 0 : columns[0]->size();
     if (!row_num)
