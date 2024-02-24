@@ -965,9 +965,15 @@ void registerInputFormatAvro(FormatFactory & factory)
         ReadBuffer & buf,
         const Block & sample,
         const RowInputFormatParams & params,
-        const FormatSettings & settings)
+        const FormatSettings & settings) -> InputFormatPtr
     {
-        return std::make_shared<AvroRowInputFormat>(sample, buf, params, settings);
+        /// proton: starts
+        /// Use only one format name "Avro" to support both shema registry and non-schema registry use cases, rather than using another name "AvroConfluent"
+        if (settings.avro.schema_registry_url.empty() && settings.schema.kafka_schema_registry_url.empty())
+            return std::make_shared<AvroRowInputFormat>(sample, buf, params, settings);
+
+        return std::make_shared<AvroConfluentRowInputFormat>(sample, buf, params, settings);
+        /// proton: ends
     });
 
     factory.registerInputFormat("AvroConfluent",[](
