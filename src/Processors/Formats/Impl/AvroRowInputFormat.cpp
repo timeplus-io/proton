@@ -81,6 +81,10 @@ namespace ErrorCodes
     extern const int TYPE_MISMATCH;
     extern const int CANNOT_PARSE_UUID;
     extern const int CANNOT_READ_ALL_DATA;
+
+    /// proton: starts
+    extern const int INVALID_SETTING_VALUE;
+    /// proton: ends
 }
 
 class InputStreamReadBufferAdapter : public avro::InputStream
@@ -969,9 +973,12 @@ void registerInputFormatAvro(FormatFactory & factory)
     {
         /// proton: starts
         /// Use only one format name "Avro" to support both shema registry and non-schema registry use cases, rather than using another name "AvroConfluent"
+
         if (settings.avro.schema_registry_url.empty() && settings.schema.kafka_schema_registry_url.empty())
             return std::make_shared<AvroRowInputFormat>(sample, buf, params, settings);
 
+        if (!settings.schema.format_schema.empty())
+            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "schema_registry_url and format_schema cannot be used at the same time");
         return std::make_shared<AvroConfluentRowInputFormat>(sample, buf, params, settings);
         /// proton: ends
     });

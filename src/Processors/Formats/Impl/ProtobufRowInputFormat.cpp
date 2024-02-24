@@ -23,10 +23,13 @@
 namespace DB
 {
 
+/// proton: starts
 namespace ErrorCodes
 {
 extern const int INVALID_DATA;
+extern const int INVALID_SETTING_VALUE;
 }
+/// proton: ends
 
 ProtobufRowInputFormat::ProtobufRowInputFormat(
     ReadBuffer & in_, const Block & header_, const Params & params_, const FormatSchemaInfo & schema_info_, bool with_length_delimiter_)
@@ -100,6 +103,9 @@ void registerInputFormatProtobuf(FormatFactory & factory){
             if (settings.schema.kafka_schema_registry_url.empty())
                 return std::make_shared<ProtobufRowInputFormat>(
                     buf, sample, std::move(params), FormatSchemaInfo(settings, "Protobuf", true), /*with_length_delimiter=*/false);
+
+            if (!settings.schema.format_schema.empty())
+                throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "kafka_schema_registry_url and format_schema cannot be used at the same time");
 
             return std::make_shared<ProtobufConfluentRowInputFormat>(
                     buf, sample, std::move(params), settings);
