@@ -11,7 +11,6 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int INCORRECT_DATA;
-extern const int TYPE_MISMATCH;
 }
 
 KafkaSchemaRegistry::KafkaSchemaRegistry(const String & base_url_, const String & credentials_): base_url(base_url_)
@@ -29,7 +28,7 @@ KafkaSchemaRegistry::KafkaSchemaRegistry(const String & base_url_, const String 
     }
 }
 
-String KafkaSchemaRegistry::fetchSchema(UInt32 id, const String & expected_schema_type)
+String KafkaSchemaRegistry::fetchSchema(UInt32 id)
 {
     assert(!base_url.empty());
 
@@ -67,13 +66,6 @@ String KafkaSchemaRegistry::fetchSchema(UInt32 id, const String & expected_schem
             }
             Poco::JSON::Parser parser;
             auto json_body = parser.parse(*response_body).extract<Poco::JSON::Object::Ptr>();
-
-            if (!expected_schema_type.empty())
-            {
-                auto schema_type = json_body->getValue<std::string>("schemaType");
-                if (!boost::iequals(schema_type, expected_schema_type))
-                    throw Exception(ErrorCodes::TYPE_MISMATCH, "Expected schema type {}, got {}", expected_schema_type, schema_type);
-            }
             auto schema = json_body->getValue<std::string>("schema");
             LOG_TRACE((&Poco::Logger::get("KafkaSchemaRegistry")), "Successfully fetched schema id = {}\n{}", id, schema);
             return schema;

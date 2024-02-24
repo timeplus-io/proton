@@ -209,7 +209,7 @@ private:
 
     const google::protobuf::FileDescriptor* fetchSchema(uint32_t id)
     {
-        auto schema = registry.fetchSchema(id, "PROTOBUF");
+        auto schema = registry.fetchSchema(id);
         ErrorThrower err_thrower {id};
         std::string schema_content {schema.data(), schema.size()};
         google::protobuf::io::ArrayInputStream input{schema.data(), static_cast<int>(schema.size())};

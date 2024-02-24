@@ -748,7 +748,7 @@ public:
 private:
     avro::ValidSchema fetchSchema(uint32_t id)
     {
-        auto schema = registry.fetchSchema(id, "AVRO");
+        auto schema = registry.fetchSchema(id);
         try
         {
             return avro::compileJsonSchemaFromString(schema);
@@ -823,12 +823,12 @@ AvroConfluentRowInputFormat::AvroConfluentRowInputFormat(
     const Block & header_, ReadBuffer & in_, Params params_, const FormatSettings & format_settings_)
     : IRowInputFormat(header_, in_, params_, ProcessorID::AvroConfluentRowInputFormatID)
     , schema_registry(getConfluentSchemaRegistry(format_settings_))
-    , input_stream(std::make_unique<InputStreamReadBufferAdapter>(*in))
+    /// , input_stream(std::make_unique<InputStreamReadBufferAdapter>(*in)) /* proton: updates */
     , decoder(avro::binaryDecoder())
     , format_settings(format_settings_)
 
 {
-    decoder->init(*input_stream);
+    /// decoder->init(*input_stream); /* proton: updates */
 }
 
 bool AvroConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadExtension & ext)
@@ -842,8 +842,14 @@ bool AvroConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadExten
     {
         return false;
     }
+
+    /// proton: starts
     SchemaId schema_id = KafkaSchemaRegistry::readSchemaId(*in);
     const auto & deserializer = getOrCreateDeserializer(schema_id);
+    InputStreamReadBufferAdapter is {*in};
+    decoder->init(is);
+    /// proton: ends
+
     deserializer.deserializeRow(columns, *decoder, ext);
     decoder->drain();
     return true;

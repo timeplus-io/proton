@@ -16,7 +16,7 @@ public:
     /// `credentials_` is expected to be formatted in "<username>:<password>".
     KafkaSchemaRegistry(const String & base_url_, const String & credentials_);
 
-    String fetchSchema(UInt32 id, const String & expected_schema_type = "");
+    String fetchSchema(UInt32 id);
 
 private:
     Poco::URI base_url;
