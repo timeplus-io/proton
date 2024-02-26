@@ -961,6 +961,9 @@ max_concurrent_insert_queries: 100
 # Maximum number of concurrent select queries.
 max_concurrent_select_queries: 100
 
+# On Linux systems this can control the behavior of OOM killer.
+# oom_score: 1000
+
 settings:
     global:
         query_mode: streaming               # Default query mode. table or streaming
