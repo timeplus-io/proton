@@ -294,10 +294,13 @@ bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadE
 
     serializer->readRow(row_num);
 
-    row_read_extension.read_columns.clear();
-    row_read_extension.read_columns.resize(columns.size(), true);
-    for (size_t column_idx : missing_column_indices)
-        row_read_extension.read_columns[column_idx] = false;
+    assert(row_read_extension.read_columns.empty());
+    if (!missing_column_indices.empty())
+    {
+        row_read_extension.read_columns.resize(columns.size(), true);
+        for (size_t column_idx : missing_column_indices)
+            row_read_extension.read_columns[column_idx] = false;
+    }
     return true;
 }
 
