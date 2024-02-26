@@ -130,6 +130,7 @@ static void terminateRequestedSignalHandler(int sig, siginfo_t *, void *)
 }
 
 
+static std::atomic<bool> fatal_error_printed{false};
 /** Handler for "fault" or diagnostic signals. Send data about fault to separate thread to write into log.
   */
 static void signalHandler(int sig, siginfo_t * info, void * context)
@@ -155,7 +156,16 @@ static void signalHandler(int sig, siginfo_t * info, void * context)
     if (sig != SIGTSTP) /// This signal is used for debugging.
     {
         /// The time that is usually enough for separate thread to print info into log.
-        sleepForSeconds(20);  /// FIXME: use some feedback from threads that process stacktrace
+        /// Under MSan full stack unwinding with DWARF info about inline functions takes 101 seconds in one case.
+        for (size_t i = 0; i < 300; ++i)
+        {
+            /// We will synchronize with the thread printing the messages with an atomic variable to finish earlier.
+            if (fatal_error_printed)
+                break;
+
+            /// This coarse method of synchronization is perfectly ok for fatal signals.
+            sleepForSeconds(1);
+        }
         call_default_signal_handler(sig);
     }
 
@@ -305,7 +315,9 @@ private:
             }
 
             if (auto logs_queue = thread_ptr->getInternalTextLogsQueue())
+            {
                 DB::CurrentThread::attachInternalTextLogsQueue(logs_queue, DB::LogsLevel::trace);
+            }
         }
 
         LOG_FATAL(log, "########################################");
@@ -393,6 +405,8 @@ private:
         /// When everything is done, we will try to send these error messages to client.
         if (thread_ptr)
             thread_ptr->onFatalError();
+
+        fatal_error_printed = true;
     }
 };
 
