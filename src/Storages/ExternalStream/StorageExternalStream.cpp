@@ -142,11 +142,13 @@ StorageExternalStream::StorageExternalStream(
     ContextPtr context_,
     const ColumnsDescription & columns_,
     std::unique_ptr<ExternalStreamSettings> external_stream_settings_,
+    const String & comment,
     bool attach)
     : IStorage(table_id_), WithContext(context_->getGlobalContext())
 {
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
+    storage_metadata.setComment(comment);
     setInMemoryMetadata(storage_metadata);
 
     auto stream = createExternalStream(this, std::move(external_stream_settings_), context_, engine_args, attach, std::make_shared<ExternalStreamCounter>(), std::move(context_));
@@ -167,7 +169,7 @@ void registerStorageExternalStream(StorageFactory & factory)
             external_stream_settings->loadFromQuery(*args.storage_def);
 
             return StorageExternalStream::create(
-                args.engine_args, args.table_id, args.getContext(), args.columns, std::move(external_stream_settings), args.attach);
+                args.engine_args, args.table_id, args.getContext(), args.columns, std::move(external_stream_settings), args.comment, args.attach);
         }
         else
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream requires correct settings setup");
