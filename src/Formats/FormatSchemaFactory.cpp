@@ -4,9 +4,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <Processors/Formats/ISchemaWriter.h>
 
-/// proton: starts
 #include <format>
-/// proton: ends
 
 namespace DB
 {

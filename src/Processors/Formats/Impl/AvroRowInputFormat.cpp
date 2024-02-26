@@ -67,6 +67,7 @@
 
 /// proton: starts
 #include <Formats/KafkaSchemaRegistry.h>
+#include <format>
 /// proton: ends
 
 namespace DB
@@ -649,88 +650,8 @@ bool AvroRowInputFormat::readRow(MutableColumns & columns, RowReadExtension &ext
 }
 
 /// proton: starts
-/// class AvroConfluentRowInputFormat::SchemaRegistry
-/// {
-/// public:
-///     explicit SchemaRegistry(const std::string & base_url_, size_t schema_cache_max_size = 1000)
-///         : base_url(base_url_), schema_cache(schema_cache_max_size)
-///     {
-///         if (base_url.empty())
-///             throw Exception("Empty Schema Registry URL", ErrorCodes::BAD_ARGUMENTS);
-///     }
-///
-///     avro::ValidSchema getSchema(uint32_t id)
-///     {
-///         auto [schema, loaded] = schema_cache.getOrSet(
-///             id,
-///             [this, id](){ return std::make_shared<avro::ValidSchema>(fetchSchema(id)); }
-///         );
-///         return *schema;
-///     }
-///
-/// private:
-///     avro::ValidSchema fetchSchema(uint32_t id)
-///     {
-///          try
-///          {
-///              try
-///              {
-///                  Poco::URI url(base_url, "/schemas/ids/" + std::to_string(id));
-///                  LOG_TRACE((&Poco::Logger::get("AvroConfluentRowInputFormat")), "Fetching schema id = {}", id);
-///
-///                  /// One second for connect/send/receive. Just in case.
-///                  ConnectionTimeouts timeouts({1, 0}, {1, 0}, {1, 0});
-///
-///                  Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_GET, url.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1);
-///                  request.setHost(url.getHost());
-///
-///                  auto session = makePooledHTTPSession(url, timeouts, 1);
-///                  std::istream * response_body{};
-///                  try
-///                  {
-///                      session->sendRequest(request);
-///
-///                      Poco::Net::HTTPResponse response;
-///                      response_body = receiveResponse(*session, request, response, false);
-///                  }
-///                  catch (const Poco::Exception & e)
-///                  {
-///                      /// We use session data storage as storage for exception text
-///                      /// Depend on it we can deduce to reconnect session or reresolve session host
-///                      session->attachSessionData(e.message());
-///                      throw;
-///                  }
-///                  Poco::JSON::Parser parser;
-///                  auto json_body = parser.parse(*response_body).extract<Poco::JSON::Object::Ptr>();
-///                  auto schema = json_body->getValue<std::string>("schema");
-///                  LOG_TRACE((&Poco::Logger::get("AvroConfluentRowInputFormat")), "Successfully fetched schema id = {}\n{}", id, schema);
-///
-///                  return avro::compileJsonSchemaFromString(schema);
-///              }
-///              catch (const Exception &)
-///              {
-///                  throw;
-///              }
-///              catch (const Poco::Exception & e)
-///              {
-///                  throw Exception(Exception::CreateFromPocoTag{}, e);
-///              }
-///              catch (const avro::Exception & e)
-///              {
-///                  throw Exception(e.what(), ErrorCodes::INCORRECT_DATA);
-///              }
-///          }
-///          catch (Exception & e)
-///          {
-///              e.addMessage("while fetching schema id = " + std::to_string(id));
-///              throw;
-///          }
-///      }
-///
-///      Poco::URI base_url;
-///      LRUCache<uint32_t, avro::ValidSchema> schema_cache;
-///  };
-
+/// We have refactored this class from the original implementation by extracting the schema registry related code
+/// out to KafkaSchemaRegistry, to support other formats which also can be used with kafka schema registry.
 class AvroConfluentRowInputFormat::SchemaRegistry
 {
 public:
@@ -760,7 +681,7 @@ private:
         catch (const avro::Exception & e)
         {
           auto ex = Exception(e.what(), ErrorCodes::INCORRECT_DATA);
-          ex.addMessage("while fetching schema id = " + std::to_string(id));
+          ex.addMessage(std::format("while fetching schema id = ", id));
           throw std::move(ex);
         }
     }
@@ -782,7 +703,7 @@ static std::shared_ptr<ConfluentSchemaRegistry> getConfluentSchemaRegistry(const
     const auto & credentials = format_settings.schema.kafka_schema_registry_credentials;
     auto [schema_registry, loaded] = schema_registry_cache.getOrSet(
         base_url + credentials,
-        [base_url, credentials]()
+        [&base_url, &credentials]()
         {
             return std::make_shared<ConfluentSchemaRegistry>(base_url, credentials);
         }
@@ -791,48 +712,14 @@ static std::shared_ptr<ConfluentSchemaRegistry> getConfluentSchemaRegistry(const
     return schema_registry;
 }
 
-/// proton: starts
-/// static uint32_t readConfluentSchemaId(ReadBuffer & in)
-/// {
-///     uint8_t magic;
-///     uint32_t schema_id;
-///
-///     try
-///     {
-///         readBinaryBigEndian(magic, in);
-///         readBinaryBigEndian(schema_id, in);
-///     }
-///     catch (const Exception & e)
-///     {
-///         if (e.code() == ErrorCodes::CANNOT_READ_ALL_DATA)
-///         {
-///             /* empty or incomplete message without Avro Confluent magic number or schema id */
-///             throw Exception("Missing AvroConfluent magic byte or schema identifier.", ErrorCodes::INCORRECT_DATA);
-///         }
-///         else
-///             throw;
-///     }
-///
-///     if (magic != 0x00)
-///     {
-///         throw Exception("Invalid magic byte before AvroConfluent schema identifier."
-///             " Must be zero byte, found " + std::to_string(int(magic)) + " instead", ErrorCodes::INCORRECT_DATA);
-///     }
-///
-///     return schema_id;
-/// }
-/// proton: ends
-
 AvroConfluentRowInputFormat::AvroConfluentRowInputFormat(
     const Block & header_, ReadBuffer & in_, Params params_, const FormatSettings & format_settings_)
     : IRowInputFormat(header_, in_, params_, ProcessorID::AvroConfluentRowInputFormatID)
     , schema_registry(getConfluentSchemaRegistry(format_settings_))
-    /// , input_stream(std::make_unique<InputStreamReadBufferAdapter>(*in)) /* proton: updated */
     , decoder(avro::binaryDecoder())
     , format_settings(format_settings_)
 
 {
-    /// decoder->init(*input_stream); /* proton: updated */
 }
 
 bool AvroConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadExtension & ext)
@@ -972,24 +859,17 @@ void registerInputFormatAvro(FormatFactory & factory)
         const FormatSettings & settings) -> InputFormatPtr
     {
         /// proton: starts
-        /// Use only one format name "Avro" to support both shema registry and non-schema registry use cases, rather than using another name "AvroConfluent"
+        /// Use only one format name "Avro" to support both schema registry and non-schema registry use cases, rather than using another name "AvroConfluent",
+        /// which is what ClickHouse did.
 
         if (settings.avro.schema_registry_url.empty() && settings.schema.kafka_schema_registry_url.empty())
+            /// Non-schema registry case
             return std::make_shared<AvroRowInputFormat>(sample, buf, params, settings);
 
         if (!settings.schema.format_schema.empty())
             throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "schema_registry_url and format_schema cannot be used at the same time");
         return std::make_shared<AvroConfluentRowInputFormat>(sample, buf, params, settings);
         /// proton: ends
-    });
-
-    factory.registerInputFormat("AvroConfluent",[](
-        ReadBuffer & buf,
-        const Block & sample,
-        const RowInputFormatParams & params,
-        const FormatSettings & settings)
-    {
-        return std::make_shared<AvroConfluentRowInputFormat>(sample, buf, params, settings);
     });
 }
 

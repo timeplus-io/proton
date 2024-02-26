@@ -86,10 +86,8 @@ const google::protobuf::Descriptor * ProtobufSchemas::getMessageTypeForFormatSch
 /// Overrides google::protobuf::io::ErrorCollector:
 void ProtobufSchemas::AddError(int line, google::protobuf::io::ColumnNumber column, const std::string & message)
 {
-    throw Exception(
-        "Cannot parse schema, found an error at line " + std::to_string(line) + ", column " + std::to_string(column)
-            + ", " + message,
-        ErrorCodes::CANNOT_PARSE_PROTOBUF_SCHEMA);
+    throw Exception(ErrorCodes::CANNOT_PARSE_PROTOBUF_SCHEMA,
+        "Cannot parse schema, found an error at line {}, column {}, error: {}", line, column, message);
 }
 
 void ProtobufSchemas::validateSchema(std::string_view schema)

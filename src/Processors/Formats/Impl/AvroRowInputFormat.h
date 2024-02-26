@@ -155,7 +155,6 @@ private:
     std::unordered_map<SchemaId, AvroDeserializer> deserializer_cache;
     const AvroDeserializer & getOrCreateDeserializer(SchemaId schema_id);
 
-    /// avro::InputStreamPtr input_stream; /* proton: updated */
     avro::DecoderPtr decoder;
     FormatSettings format_settings;
 };

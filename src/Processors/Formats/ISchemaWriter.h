@@ -16,7 +16,7 @@ public:
 
     virtual ~IExternalSchemaWriter() = default;
 
-    /// Validates the schema input. Should throws exceptions on validation failures.
+    /// Validates the schema input. Should throw exceptions on validation failures.
     virtual void validate() = 0;
 
     /// Persistents the schema.

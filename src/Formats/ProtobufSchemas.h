@@ -3,15 +3,18 @@
 #include "config.h"
 #if USE_PROTOBUF
 
-#include <Formats/KafkaSchemaRegistry.h>
-
 #include <memory>
 #include <mutex>
 #include <unordered_map>
 #include <base/types.h>
 #include <boost/noncopyable.hpp>
+
+/// proton: starts
+#include <Formats/KafkaSchemaRegistry.h>
+
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/io/tokenizer.h>
+/// proton: ends
 
 
 namespace google
@@ -29,7 +32,7 @@ class FormatSchemaInfo;
 /** Keeps parsed google protobuf schemas parsed from files.
   * This class is used to handle the "Protobuf" input/output formats.
   */
-class ProtobufSchemas : private boost::noncopyable, public google::protobuf::io::ErrorCollector /* proton: updated */
+class ProtobufSchemas : public google::protobuf::io::ErrorCollector /* proton: updated */
 {
 public:
     static ProtobufSchemas & instance();

@@ -15,6 +15,8 @@
 #   include <Common/LRUCache.h>
 #   include <Formats/KafkaSchemaRegistry.h>
 #   include <IO/VarInt.h>
+#   include <span>
+
 #   include <google/protobuf/compiler/parser.h>
 #   include <google/protobuf/descriptor.pb.h>
 #   include <google/protobuf/io/tokenizer.h>
@@ -142,15 +144,19 @@ NamesAndTypesList ProtobufSchemaReader::readSchema()
 namespace
 {
 using ConfluentSchemaRegistry = ProtobufConfluentRowInputFormat::SchemaRegistryWithCache;
-#define SCHEMA_REGISTRY_CACHE_MAX_SIZE 1000
-/// Cache of Schema Registry URL + credentials -> SchemaRegistry
-LRUCache<std::string, ConfluentSchemaRegistry>  schema_registry_cache(SCHEMA_REGISTRY_CACHE_MAX_SIZE);
+
+auto & schemaRegistryCache()
+{
+    /// Cache of Schema Registry URL + credentials -> SchemaRegistry
+    static LRUCache<std::string, ConfluentSchemaRegistry>  schema_registry_cache(/*max_size_=*/1000);
+    return schema_registry_cache;
+}
 
 std::shared_ptr<ConfluentSchemaRegistry> getConfluentSchemaRegistry(const String & base_url, const String & credentials)
 {
-    auto [schema_registry, loaded] = schema_registry_cache.getOrSet(
+    auto [schema_registry, loaded] = schemaRegistryCache().getOrSet(
         base_url + credentials,
-        [base_url, credentials]()
+        [&base_url, &credentials]()
         {
             return std::make_shared<ConfluentSchemaRegistry>(base_url, credentials);
         }
@@ -177,16 +183,19 @@ public:
     {
         assert(!indexes.empty());
 
-        const auto *fd = getSchema(schema_id);
+        const auto * fd = getSchema(schema_id);
+
+        /// Check https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html#wire-format
+        /// for how to get the message with the indexes.
         auto mt_count = fd->message_type_count();
         if (mt_count < indexes[0] + 1)
             throw Exception(ErrorCodes::INVALID_DATA, "Invalid message index={} max_index={}", indexes[0], mt_count);
 
-        const auto *descriptor = fd->message_type(indexes[0]);
+        const auto * descriptor = fd->message_type(indexes[0]);
 
-        for (auto i : std::vector<Int64>(indexes.begin() + 1, indexes.end()))
+        for (auto i : std::span(indexes.begin() + 1, indexes.end()))
         {
-            if (i > static_cast<Int64>(descriptor->nested_type_count()))
+            if (i > descriptor->nested_type_count())
                 throw Exception(ErrorCodes::INVALID_DATA, "Invalid message index={} max_index={} descriptor={}", i, descriptor->nested_type_count(), descriptor->name());
             descriptor = descriptor->nested_type(i);
         }
@@ -197,36 +206,33 @@ public:
 private:
     const google::protobuf::FileDescriptor * getSchema(uint32_t id)
     {
-        const auto * loaded_descriptor = registry_pool()->FindFileByName(std::to_string(id));
+        const auto * loaded_descriptor = descriptor_pool.FindFileByName(std::to_string(id));
         if (loaded_descriptor)
             return loaded_descriptor;
 
         return fetchSchema(id);
     }
 
-    const google::protobuf::FileDescriptor* fetchSchema(uint32_t id)
+    const google::protobuf::FileDescriptor * fetchSchema(uint32_t id)
     {
         auto schema = registry.fetchSchema(id);
-        std::string schema_content {schema.data(), schema.size()};
         google::protobuf::io::ArrayInputStream input{schema.data(), static_cast<int>(schema.size())};
         google::protobuf::io::Tokenizer tokenizer(&input, this);
-        google::protobuf::FileDescriptorProto descriptor;
-        descriptor.set_name(std::to_string(id));
+        google::protobuf::FileDescriptorProto file_descriptor;
+        file_descriptor.set_name(std::to_string(id));
         google::protobuf::compiler::Parser parser;
         parser.RecordErrorsTo(this);
-        parser.Parse(&tokenizer, &descriptor);
+        parser.Parse(&tokenizer, &file_descriptor);
 
-        auto const * ret = registry_pool()->BuildFile(descriptor);
-        auto mt_count = ret->message_type_count();
-        if (mt_count < 1)
-            throw Exception(ErrorCodes::INVALID_DATA, "No message type in schema");
-        return ret;
+        auto const * descriptor = descriptor_pool.BuildFile(file_descriptor);
+        if (descriptor && descriptor->message_type_count() > 0)
+            return descriptor;
+
+        throw Exception(ErrorCodes::INVALID_DATA, "No message type in schema");
     }
 
     KafkaSchemaRegistry registry;
-    google::protobuf::DescriptorPool registry_pool_;
-
-    google::protobuf::DescriptorPool* registry_pool() { return &registry_pool_; }
+    google::protobuf::DescriptorPool descriptor_pool;
 };
 
 ProtobufConfluentRowInputFormat::ProtobufConfluentRowInputFormat(
@@ -251,10 +257,12 @@ bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadE
     indexes.reserve(indexes_count < 1 ? 1 : indexes_count);
 
     if (indexes_count < 1)
+    {
         indexes.push_back(0);
+    }
     else
     {
-        for (size_t i = 0; i < static_cast<size_t>(indexes_count); i++)
+        for (Int64 i = 0; i < indexes_count; i++)
         {
             Int64 ind = 0;
             readVarInt(ind, *in);

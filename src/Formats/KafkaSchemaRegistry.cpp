@@ -1,6 +1,8 @@
 #include <Formats/KafkaSchemaRegistry.h>
 #include <IO/HTTPCommon.h>
 #include <IO/ReadHelpers.h>
+#include <format>
+
 #include <Poco/JSON/Parser.h>
 #include <Poco/Net/HTTPBasicCredentials.h>
 #include <boost/algorithm/string/predicate.hpp>
@@ -13,13 +15,13 @@ namespace ErrorCodes
 extern const int INCORRECT_DATA;
 }
 
-KafkaSchemaRegistry::KafkaSchemaRegistry(const String & base_url_, const String & credentials_): base_url(base_url_)
+KafkaSchemaRegistry::KafkaSchemaRegistry(const String & base_url_, const String & credentials_)
+    : base_url(base_url_)
+    , logger(&Poco::Logger::get("KafkaSchemaRegistry"))
 {
-    if (credentials_.empty())
-        return;
+    assert(!base_url.empty());
 
-    auto pos = credentials_.find(':');
-    if (pos == credentials_.npos)
+    if (auto pos = credentials_.find(':'); pos == credentials_.npos)
         credentials.setUsername(credentials_);
     else
     {
@@ -30,14 +32,12 @@ KafkaSchemaRegistry::KafkaSchemaRegistry(const String & base_url_, const String 
 
 String KafkaSchemaRegistry::fetchSchema(UInt32 id)
 {
-    assert(!base_url.empty());
-
     try
     {
         try
         {
-            Poco::URI url(base_url, "/schemas/ids/" + std::to_string(id));
-            LOG_TRACE((&Poco::Logger::get("KafkaSchemaRegistry")), "Fetching schema id = {}", id);
+            Poco::URI url(base_url, std::format("/schemas/ids/{}", id));
+            LOG_TRACE(logger, "Fetching schema id = {}", id);
 
             /// One second for connect/send/receive. Just in case.
             ConnectionTimeouts timeouts({1, 0}, {1, 0}, {1, 0});
@@ -67,7 +67,7 @@ String KafkaSchemaRegistry::fetchSchema(UInt32 id)
             Poco::JSON::Parser parser;
             auto json_body = parser.parse(*response_body).extract<Poco::JSON::Object::Ptr>();
             auto schema = json_body->getValue<std::string>("schema");
-            LOG_TRACE((&Poco::Logger::get("KafkaSchemaRegistry")), "Successfully fetched schema id = {}\n{}", id, schema);
+            LOG_TRACE(logger, "Successfully fetched schema id = {}\n{}", id, schema);
             return schema;
         }
         catch (const Exception &)
@@ -81,7 +81,7 @@ String KafkaSchemaRegistry::fetchSchema(UInt32 id)
     }
     catch (Exception & e)
     {
-        e.addMessage("while fetching schema id = " + std::to_string(id));
+        e.addMessage(std::format("while fetching schema with id {}", id));
         throw;
     }
 }
@@ -99,19 +99,15 @@ UInt32 KafkaSchemaRegistry::readSchemaId(ReadBuffer & in)
     catch (const Exception & e)
     {
         if (e.code() == ErrorCodes::CANNOT_READ_ALL_DATA)
-        {
             /// empty or incomplete message without magic byte or schema id
-            throw Exception("Missing magic byte or schema identifier.", ErrorCodes::INCORRECT_DATA);
-        }
+            throw Exception(ErrorCodes::INCORRECT_DATA, "Missing magic byte or schema identifier.");
         else
             throw;
     }
 
     if (magic != 0x00)
-    {
-        throw Exception("Invalid magic byte before schema identifier."
-            " Must be zero byte, found " + std::to_string(int(magic)) + " instead", ErrorCodes::INCORRECT_DATA);
-    }
+        throw Exception(ErrorCodes::INCORRECT_DATA, "Invalid magic byte before schema identifier."
+            " Must be zero byte, found 0x{:x} instead", magic);
 
     return schema_id;
 }

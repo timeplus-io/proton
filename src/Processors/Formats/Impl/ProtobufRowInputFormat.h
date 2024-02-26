@@ -7,6 +7,7 @@
 #    include <Processors/Formats/IRowInputFormat.h>
 #    include <Processors/Formats/ISchemaReader.h>
 #    include <Processors/Formats/ISchemaWriter.h>
+
 /// proton: starts
 #    include <Formats/KafkaSchemaRegistry.h>
 /// proton: ends
@@ -71,7 +72,7 @@ private:
 /// proton: starts
 /// Confluent framing + Protobuf binary datum encoding. Mainly used for Kafka.
 /// Uses 3 caches:
-/// 1. global: schema registry cache (base_url -> SchemaRegistry)
+/// 1. global: schema registry cache (base_url + credentials -> SchemaRegistry)
 /// 2. SchemaRegistry: schema cache (schema_id -> schema)
 /// 3. ProtobufConfluentRowInputFormat: deserializer cache (schema_id -> AvroDeserializer)
 /// This is needed because KafkaStorage creates a new instance of InputFormat per a batch of messages
