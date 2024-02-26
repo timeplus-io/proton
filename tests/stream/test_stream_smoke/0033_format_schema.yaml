@@ -144,13 +144,13 @@ tests:
     expected_results:
       - query_id: fmt-2-0
         # unknown format type
-        expected_results: error_code:73
+        expected_results: error_code:2613
       - query_id: fmt-2-1
         # empty body
         expected_results: error_code:36
       - query_id: fmt-2-2
         # invalid schema
-        expected_results: error_code:2504
+        expected_results: error_code:434
       - query_id: fmt-2-3
         # nonexists
         expected_results: error_code:2611
