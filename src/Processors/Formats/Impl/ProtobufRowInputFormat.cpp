@@ -215,6 +215,12 @@ private:
 
     const google::protobuf::FileDescriptor * fetchSchema(uint32_t id)
     {
+        std::lock_guard lock(mutex);
+        /// Just in case we got beaten
+        const auto * loaded_descriptor = descriptor_pool.FindFileByName(std::to_string(id));
+        if (loaded_descriptor)
+            return loaded_descriptor;
+
         auto schema = registry.fetchSchema(id);
         google::protobuf::io::ArrayInputStream input{schema.data(), static_cast<int>(schema.size())};
         google::protobuf::io::Tokenizer tokenizer(&input, this);
@@ -231,6 +237,7 @@ private:
         throw Exception(ErrorCodes::INVALID_DATA, "No message type in schema");
     }
 
+    std::mutex mutex;
     KafkaSchemaRegistry registry;
     google::protobuf::DescriptorPool descriptor_pool;
 };
