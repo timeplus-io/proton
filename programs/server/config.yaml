@@ -979,7 +979,7 @@ settings:
         max_insert_block_size: 65409 # 65536 - (PADDING_FOR_SIMD - 1)
 
     stream:
-        default_shards: 2
+        default_shards: 1
         default_replicas: 1
         default_sharding_expr: ""   # Empty string means `rand()` or `weak_hash32(<primary_keys>) if primary key set`
         distributed_ingest_mode: "async"    # Data ingestion mode for Stream
