@@ -146,6 +146,7 @@ struct KafkaWALSettings
         settings.push_back(fmt::format("shared_subscription_flush_threshold_bytes={}", shared_subscription_flush_threshold_bytes));
         settings.push_back(fmt::format("shared_subscription_flush_threshold_ms={}", shared_subscription_flush_threshold_ms));
         settings.push_back(fmt::format("auth.security.protocol={}", auth.security_protocol));
+        settings.push_back(fmt::format("auth.sasl.mechanism={}", auth.sasl_mechanism));
         settings.push_back(fmt::format("auth.username={}", auth.username));
         settings.push_back(fmt::format("auth.password={}", auth.password));
         settings.push_back(fmt::format("auth.ssl.ca.location={}", auth.ssl_ca_cert_file));
