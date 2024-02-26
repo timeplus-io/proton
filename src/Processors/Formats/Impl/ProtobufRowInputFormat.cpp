@@ -1,23 +1,23 @@
 #include "ProtobufRowInputFormat.h"
 
 #if USE_PROTOBUF
-#    include <Core/Block.h>
-#    include <Formats/FormatFactory.h>
-#    include <Formats/FormatSchemaInfo.h>
-#    include <Formats/ProtobufReader.h>
-#    include <Formats/ProtobufSchemas.h>
-#    include <Formats/ProtobufSerializer.h>
-#    include <IO/WriteBufferFromFile.h>
-#    include <Interpreters/Context.h>
-#    include <base/range.h>
+#   include <Core/Block.h>
+#   include <Formats/FormatFactory.h>
+#   include <Formats/FormatSchemaInfo.h>
+#   include <Formats/ProtobufReader.h>
+#   include <Formats/ProtobufSchemas.h>
+#   include <Formats/ProtobufSerializer.h>
+#   include <Interpreters/Context.h>
+#   include <IO/WriteBufferFromFile.h>
+#   include <base/range.h>
 
 /// proton: starts
-#    include <Common/LRUCache.h>
-#    include <Formats/KafkaSchemaRegistry.h>
-#    include <IO/VarInt.h>
-#    include <google/protobuf/compiler/parser.h>
-#    include <google/protobuf/descriptor.pb.h>
-#    include <google/protobuf/io/tokenizer.h>
+#   include <Common/LRUCache.h>
+#   include <Formats/KafkaSchemaRegistry.h>
+#   include <IO/VarInt.h>
+#   include <google/protobuf/compiler/parser.h>
+#   include <google/protobuf/descriptor.pb.h>
+#   include <google/protobuf/io/tokenizer.h>
 /// proton: ends
 
 namespace DB
@@ -124,7 +124,11 @@ void registerInputFormatProtobuf(FormatFactory & factory){
 
 ProtobufSchemaReader::ProtobufSchemaReader(const FormatSettings & format_settings)
     : schema_info(
-        format_settings.schema.format_schema, "Protobuf", true, format_settings.schema.is_server, format_settings.schema.format_schema_path)
+          format_settings.schema.format_schema,
+          "Protobuf",
+          true,
+          format_settings.schema.is_server,
+          format_settings.schema.format_schema_path)
 {
 }
 

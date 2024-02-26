@@ -103,7 +103,7 @@ public:
         *data = reinterpret_cast<const uint8_t *>(in.position());
         *len = in.available();
 
-            in.position() += in.available();
+        in.position() += in.available();
         return true;
     }
 
@@ -827,12 +827,12 @@ AvroConfluentRowInputFormat::AvroConfluentRowInputFormat(
     const Block & header_, ReadBuffer & in_, Params params_, const FormatSettings & format_settings_)
     : IRowInputFormat(header_, in_, params_, ProcessorID::AvroConfluentRowInputFormatID)
     , schema_registry(getConfluentSchemaRegistry(format_settings_))
-    /// , input_stream(std::make_unique<InputStreamReadBufferAdapter>(*in)) /* proton: updates */
+    /// , input_stream(std::make_unique<InputStreamReadBufferAdapter>(*in)) /* proton: updated */
     , decoder(avro::binaryDecoder())
     , format_settings(format_settings_)
 
 {
-    /// decoder->init(*input_stream); /* proton: updates */
+    /// decoder->init(*input_stream); /* proton: updated */
 }
 
 bool AvroConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadExtension & ext)
