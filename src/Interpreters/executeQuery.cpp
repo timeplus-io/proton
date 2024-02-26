@@ -647,7 +647,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         /// Put query to process list. But don't put SHOW PROCESSLIST query itself.
         ProcessList::EntryPtr process_list_entry;
-        if (!internal && !ast->as<ASTShowProcesslistQuery>())
+        if (!internal && !ast->as<ASTShowProcesslistQuery>() && !ast->as<ASTInsertQuery>())
         {
             /// processlist also has query masked now, to avoid secrets leaks though SHOW PROCESSLIST by other users.
             process_list_entry = context->getProcessList().insert(query_for_logging, ast.get(), context);
