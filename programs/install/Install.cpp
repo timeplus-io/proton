@@ -68,6 +68,7 @@ namespace ErrorCodes
     extern const int NOT_ENOUGH_SPACE;
     extern const int NOT_IMPLEMENTED;
     extern const int CANNOT_KILL;
+    extern const int BAD_ARGUMENTS;
 }
 
 }
@@ -1072,8 +1073,11 @@ namespace
         return pid;
     }
 
-    int stop(const fs::path & pid_file, bool force)
+    int stop(const fs::path & pid_file, bool force, bool do_not_kill)
     {
+        if (force && do_not_kill)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Specified flags are incompatible");
+
         int pid = isRunning(pid_file);
 
         if (!pid)
@@ -1102,9 +1106,15 @@ namespace
 
         if (try_num == num_tries)
         {
-            fmt::print("Will terminate forcefully.\n", pid);
+            if (do_not_kill)
+            {
+                fmt::print("Process (pid = {}) is still running. Will not try to kill it.\n", pid);
+                return 1;
+            }
+
+            fmt::print("Will terminate forcefully (pid = {}).\n", pid);
             if (0 == kill(pid, 9))
-                fmt::print("Sent kill signal.\n", pid);
+                fmt::print("Sent kill signal (pid = {}).\n", pid);
             else
                 throwFromErrno("Cannot send kill signal", ErrorCodes::SYSTEM_ERROR);
 
@@ -1185,6 +1195,7 @@ int mainStop(int argc, char ** argv)
             ("prefix", po::value<std::string>()->default_value("/"), "prefix for all paths")
             ("pid-path", po::value<std::string>()->default_value("var/run/proton-server"), "directory for pid file")
             ("force", po::bool_switch(), "Stop with KILL signal instead of TERM")
+            ("do-not-kill", po::bool_switch(), "Do not send KILL even if TERM did not help")
         ;
 
         po::variables_map options;
@@ -1199,7 +1210,9 @@ int mainStop(int argc, char ** argv)
         fs::path prefix = options["prefix"].as<std::string>();
         fs::path pid_file = prefix / options["pid-path"].as<std::string>() / "proton-server.pid";
 
-        return stop(pid_file, options["force"].as<bool>());
+        bool force = options["force"].as<bool>();
+        bool do_not_kill = options["do-not-kill"].as<bool>();
+        return stop(pid_file, force, do_not_kill);
     }
     catch (...)
     {
@@ -1257,6 +1270,7 @@ int mainRestart(int argc, char ** argv)
             ("pid-path", po::value<std::string>()->default_value("var/run/proton-server"), "directory for pid file")
             ("user", po::value<std::string>()->default_value(DEFAULT_CLICKHOUSE_SERVER_USER), "proton user")
             ("force", po::value<bool>()->default_value(false), "Stop with KILL signal instead of TERM")
+            ("do-not-kill", po::bool_switch(), "Do not send KILL even if TERM did not help")
         ;
 
         po::variables_map options;
@@ -1275,7 +1289,9 @@ int mainRestart(int argc, char ** argv)
         fs::path config = prefix / options["config-path"].as<std::string>() / "config.yaml";
         fs::path pid_file = prefix / options["pid-path"].as<std::string>() / "proton-server.pid";
 
-        if (int res = stop(pid_file, options["force"].as<bool>()))
+        bool force = options["force"].as<bool>();
+        bool do_not_kill = options["do-not-kill"].as<bool>();
+        if (int res = stop(pid_file, force, do_not_kill))
             return res;
 
         return start(user, executable, config, pid_file);
