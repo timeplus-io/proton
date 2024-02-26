@@ -86,7 +86,8 @@ namespace ProfileEvents
     extern const Event FailedSelectQuery;
     extern const Event QueryTimeMicroseconds;
     extern const Event SelectQueryTimeMicroseconds;
-    extern const Event InsertQueryTimeMicroseconds;
+    /// removed in https://github.com/timeplus-io/proton/pull/577/commits/27be123cc70ef08b2dc34f3e24b23ca55e757f0e
+    /// extern const Event InsertQueryTimeMicroseconds; 
     extern const Event OSCPUWaitMicroseconds;
     extern const Event OSCPUVirtualTimeMicroseconds;
 }
@@ -893,10 +894,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 if (query_ast->as<ASTSelectQuery>() || query_ast->as<ASTSelectWithUnionQuery>())
                 {
                     ProfileEvents::increment(ProfileEvents::SelectQueryTimeMicroseconds, query_time);
-                }
-                else if (query_ast->as<ASTInsertQuery>())
-                {
-                    ProfileEvents::increment(ProfileEvents::InsertQueryTimeMicroseconds, query_time);
                 }
 
                 element.query_duration_ms = static_cast<UInt64>(info.elapsed_seconds * 1000);
