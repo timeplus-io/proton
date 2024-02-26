@@ -111,6 +111,8 @@ public:
 
     StorageSnapshotPtr getStorageSnapshot(const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) const override;
 
+    bool prefersLargeBlocks() const override { return false; }
+
 private:
     /// Partition helpers
 
