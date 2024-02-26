@@ -6,20 +6,6 @@
 namespace DB
 {
 
-struct SchemaValidationError final
-{
-    /// On which line the error happens. If line < 0, it indicates the error is not related to specific line,
-    /// or the validator is unable to provide such information.
-    int line;
-    /// At which column the error happens. If col < 0, it indicates the error is not related to specific column,
-    /// or the validator is unable to provide such information.
-    int col;
-    /// Error message
-    String error;
-};
-
-using SchemaValidationErrors = std::vector<SchemaValidationError>;
-
 class IExternalSchemaWriter
 {
 public:
@@ -30,8 +16,8 @@ public:
 
     virtual ~IExternalSchemaWriter() = default;
 
-    /// Validates the schema input.
-    virtual SchemaValidationErrors validate() = 0;
+    /// Validates the schema input. Should throws exceptions on validation failures.
+    virtual void validate() = 0;
 
     /// Persistents the schema.
     /// If the schema already exists, and replace_if_exist is false, it returns false.

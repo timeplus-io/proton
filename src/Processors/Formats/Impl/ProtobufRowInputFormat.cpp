@@ -155,31 +155,18 @@ std::shared_ptr<ConfluentSchemaRegistry> getConfluentSchemaRegistry(const String
 }
 }
 
-namespace
-{
-class ErrorThrower final: public google::protobuf::io::ErrorCollector
-{
-public:
-    explicit ErrorThrower(UInt32 schema_id_): schema_id(schema_id_)
-    {
-    }
-
-    void AddError(int line, google::protobuf::io::ColumnNumber column, const std::string & message) override
-    {
-        throw Exception(ErrorCodes::INVALID_DATA, "Failed to parse schema {}: line={}, column={}, message={}", schema_id, line, column, message);
-    }
-
-private:
-    UInt32 schema_id;
-};
-}
-
-class ProtobufConfluentRowInputFormat::SchemaRegistryWithCache
+class ProtobufConfluentRowInputFormat::SchemaRegistryWithCache: public google::protobuf::io::ErrorCollector
 {
 public:
     SchemaRegistryWithCache(const String & base_url, const String & credentials)
     : registry(base_url, credentials)
     {
+    }
+
+    /// Overrides google::protobuf::io::ErrorCollector.
+    void AddError(int line, google::protobuf::io::ColumnNumber column, const std::string & message) override
+    {
+        throw Exception(ErrorCodes::INVALID_DATA, "Failed to parse schema, line={}, column={}, message={}", line, column, message);
     }
 
     const google::protobuf::Descriptor * getMessageType(uint32_t schema_id, const std::vector<Int64> & indexes)
@@ -216,14 +203,13 @@ private:
     const google::protobuf::FileDescriptor* fetchSchema(uint32_t id)
     {
         auto schema = registry.fetchSchema(id);
-        ErrorThrower err_thrower {id};
         std::string schema_content {schema.data(), schema.size()};
         google::protobuf::io::ArrayInputStream input{schema.data(), static_cast<int>(schema.size())};
-        google::protobuf::io::Tokenizer tokenizer(&input, &err_thrower);
+        google::protobuf::io::Tokenizer tokenizer(&input, this);
         google::protobuf::FileDescriptorProto descriptor;
         descriptor.set_name(std::to_string(id));
         google::protobuf::compiler::Parser parser;
-        parser.RecordErrorsTo(&err_thrower);
+        parser.RecordErrorsTo(this);
         parser.Parse(&tokenizer, &descriptor);
 
         auto const * ret = registry_pool()->BuildFile(descriptor);
@@ -302,9 +288,9 @@ ProtobufSchemaWriter::ProtobufSchemaWriter(std::string_view schema_body_, const 
 {
 }
 
-SchemaValidationErrors ProtobufSchemaWriter::validate()
+void ProtobufSchemaWriter::validate()
 {
-    return ProtobufSchemas::instance().validateSchema(schema_body);
+    ProtobufSchemas::instance().validateSchema(schema_body);
 }
 
 bool ProtobufSchemaWriter::write(bool replace_if_exist)

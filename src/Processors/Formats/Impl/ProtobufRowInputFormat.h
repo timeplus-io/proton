@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Formats/KafkaSchemaRegistry.h"
 #include "config.h"
 
 #if USE_PROTOBUF
@@ -8,6 +7,9 @@
 #    include <Processors/Formats/IRowInputFormat.h>
 #    include <Processors/Formats/ISchemaReader.h>
 #    include <Processors/Formats/ISchemaWriter.h>
+/// proton: starts
+#    include <Formats/KafkaSchemaRegistry.h>
+/// proton: ends
 
 namespace DB
 {
@@ -96,7 +98,7 @@ class ProtobufSchemaWriter : public IExternalSchemaWriter
 public:
     explicit ProtobufSchemaWriter(std::string_view schema_body_, const FormatSettings & settings_);
 
-    SchemaValidationErrors validate() override;
+    void validate() override;
     bool write(bool replace_if_exist) override;
 
 private:
