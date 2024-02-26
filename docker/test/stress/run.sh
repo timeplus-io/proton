@@ -101,7 +101,14 @@ EOL
 
 function stop()
 {
-    clickhouse stop --do-not-kill && return
+    # --max-tries is supported only since 22.12
+    if dpkg --compare-versions "$(clickhouse local -q 'select version()')" ge "22.12"; then
+        # Increase default waiting timeout for sanitizers and debug builds
+        clickhouse stop --max-tries 180 --do-not-kill && return
+    else
+        clickhouse stop --do-not-kill && return
+    fi
+
     # We failed to stop the server with SIGTERM. Maybe it hang, let's collect stacktraces.
     kill -TERM "$(pidof gdb)" ||:
     sleep 5
