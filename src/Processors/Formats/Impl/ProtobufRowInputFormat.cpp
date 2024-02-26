@@ -7,8 +7,8 @@
 #   include <Formats/ProtobufReader.h>
 #   include <Formats/ProtobufSchemas.h>
 #   include <Formats/ProtobufSerializer.h>
-#   include <Interpreters/Context.h>
 #   include <IO/WriteBufferFromFile.h>
+#   include <Interpreters/Context.h>
 #   include <base/range.h>
 
 /// proton: starts
@@ -85,7 +85,8 @@ void ProtobufRowInputFormat::syncAfterError()
     reader->endMessage(true);
 }
 
-void registerInputFormatProtobuf(FormatFactory & factory){
+void registerInputFormatProtobuf(FormatFactory & factory)
+{
     /// proton: starts
     /// for (bool with_length_delimiter : {false, true})
     /// {
@@ -100,28 +101,27 @@ void registerInputFormatProtobuf(FormatFactory & factory){
 
     factory.registerInputFormat(
         "ProtobufSingle",
-        [](ReadBuffer & buf, const Block & sample, IRowInputFormat::Params params, const FormatSettings & settings) -> std::shared_ptr<IInputFormat>
+        [](ReadBuffer & buf, const Block & sample, IRowInputFormat::Params params, const FormatSettings & settings)
+            -> std::shared_ptr<IInputFormat>
         {
             if (settings.schema.kafka_schema_registry_url.empty())
                 return std::make_shared<ProtobufRowInputFormat>(
                     buf, sample, std::move(params), FormatSchemaInfo(settings, "Protobuf", true), /*with_length_delimiter=*/false);
 
             if (!settings.schema.format_schema.empty())
-                throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "kafka_schema_registry_url and format_schema cannot be used at the same time");
+                throw Exception(
+                    ErrorCodes::INVALID_SETTING_VALUE, "kafka_schema_registry_url and format_schema cannot be used at the same time");
 
-            return std::make_shared<ProtobufConfluentRowInputFormat>(
-                    buf, sample, std::move(params), settings);
+            return std::make_shared<ProtobufConfluentRowInputFormat>(buf, sample, std::move(params), settings);
         });
 
     factory.registerInputFormat(
-        "Protobuf",
-        [](ReadBuffer & buf, const Block & sample, IRowInputFormat::Params params, const FormatSettings & settings)
+        "Protobuf", [](ReadBuffer & buf, const Block & sample, IRowInputFormat::Params params, const FormatSettings & settings)
         {
             return std::make_shared<ProtobufRowInputFormat>(
                 buf, sample, std::move(params), FormatSchemaInfo(settings, "Protobuf", true), /*with_length_delimiter=*/true);
         });
     /// proton: ends
-
 }
 
 ProtobufSchemaReader::ProtobufSchemaReader(const FormatSettings & format_settings)
@@ -148,7 +148,7 @@ using ConfluentSchemaRegistry = ProtobufConfluentRowInputFormat::SchemaRegistryW
 auto & schemaRegistryCache()
 {
     /// Cache of Schema Registry URL + credentials -> SchemaRegistry
-    static LRUCache<std::string, ConfluentSchemaRegistry>  schema_registry_cache(/*max_size_=*/1000);
+    static LRUCache<std::string, ConfluentSchemaRegistry> schema_registry_cache(/*max_size_=*/1000);
     return schema_registry_cache;
 }
 
@@ -156,22 +156,15 @@ std::shared_ptr<ConfluentSchemaRegistry> getConfluentSchemaRegistry(const String
 {
     auto [schema_registry, loaded] = schemaRegistryCache().getOrSet(
         base_url + credentials,
-        [&base_url, &credentials]()
-        {
-            return std::make_shared<ConfluentSchemaRegistry>(base_url, credentials);
-        }
-    );
+        [&base_url, &credentials]() { return std::make_shared<ConfluentSchemaRegistry>(base_url, credentials); });
     return schema_registry;
 }
 }
 
-class ProtobufConfluentRowInputFormat::SchemaRegistryWithCache: public google::protobuf::io::ErrorCollector
+class ProtobufConfluentRowInputFormat::SchemaRegistryWithCache : public google::protobuf::io::ErrorCollector
 {
 public:
-    SchemaRegistryWithCache(const String & base_url, const String & credentials)
-    : registry(base_url, credentials)
-    {
-    }
+    SchemaRegistryWithCache(const String & base_url, const String & credentials) : registry(base_url, credentials) { }
 
     /// Overrides google::protobuf::io::ErrorCollector.
     void AddError(int line, google::protobuf::io::ColumnNumber column, const std::string & message) override
@@ -196,7 +189,12 @@ public:
         for (auto i : std::span(indexes.begin() + 1, indexes.end()))
         {
             if (i > descriptor->nested_type_count())
-                throw Exception(ErrorCodes::INVALID_DATA, "Invalid message index={} max_index={} descriptor={}", i, descriptor->nested_type_count(), descriptor->name());
+                throw Exception(
+                    ErrorCodes::INVALID_DATA,
+                    "Invalid message index={} max_index={} descriptor={}",
+                    i,
+                    descriptor->nested_type_count(),
+                    descriptor->name());
             descriptor = descriptor->nested_type(i);
         }
 
@@ -243,9 +241,10 @@ private:
 };
 
 ProtobufConfluentRowInputFormat::ProtobufConfluentRowInputFormat(
-    ReadBuffer & in_, const Block & header_, Params params_, const FormatSettings &  format_settings_)
+    ReadBuffer & in_, const Block & header_, Params params_, const FormatSettings & format_settings_)
     : IRowInputFormat(header_, in_, params_, ProcessorID::ProtobufRowInputFormatID)
-    , registry(getConfluentSchemaRegistry(format_settings_.schema.kafka_schema_registry_url, format_settings_.schema.kafka_schema_registry_credentials))
+    , registry(getConfluentSchemaRegistry(
+          format_settings_.schema.kafka_schema_registry_url, format_settings_.schema.kafka_schema_registry_credentials))
 {
 }
 
@@ -279,7 +278,7 @@ bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadE
 
     const auto & header = getPort().getHeader();
 
-    ProtobufReader reader {*in};
+    ProtobufReader reader{*in};
     serializer = ProtobufSerializer::create(
         header.getNames(),
         header.getDataTypes(),
