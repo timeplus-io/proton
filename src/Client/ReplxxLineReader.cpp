@@ -24,7 +24,7 @@ namespace
 {
 
 /// Trim ending whitespace inplace
-void trim(String & s)
+void rightTrim(String & s)
 {
     s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), s.end());
 }
@@ -273,7 +273,7 @@ LineReader::InputStatus ReplxxLineReader::readOneLine(const String & prompt)
         return (errno != EAGAIN) ? ABORT : RESET_LINE;
     input = cinput;
 
-    trim(input);
+    rightTrim(input);
     return INPUT_LINE;
 }
 
