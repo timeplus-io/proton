@@ -402,15 +402,18 @@ void TableRestRouterHandler::buildRetentionSettings(Poco::JSON::Object & resp_ta
 
 void TableRestRouterHandler::buildColumnsJSON(Poco::JSON::Object & resp_table, const ASTColumns * columns_list) const
 {
-    const auto & columns_ast = columns_list->columns;
     Poco::JSON::Array columns_mapping_json;
-    for (auto & ast_it : columns_ast->children)
+    if (columns_list && columns_list->columns)
     {
-        Poco::JSON::Object column_mapping_json;
-        const auto & col_decl = ast_it->as<ASTColumnDeclaration &>();
+        const auto & columns_ast = columns_list->columns;
+        for (auto & ast_it : columns_ast->children)
+        {
+            Poco::JSON::Object column_mapping_json;
+            const auto & col_decl = ast_it->as<ASTColumnDeclaration &>();
 
-        Streaming::columnDeclarationToJSON(column_mapping_json, col_decl);
-        columns_mapping_json.add(column_mapping_json);
+            Streaming::columnDeclarationToJSON(column_mapping_json, col_decl);
+            columns_mapping_json.add(column_mapping_json);
+        }
     }
     resp_table.set("columns", columns_mapping_json);
 }
