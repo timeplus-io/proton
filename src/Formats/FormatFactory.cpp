@@ -110,8 +110,12 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.schema.format_schema_path = context->getFormatSchemaPath();
     format_settings.schema.is_server = context->hasGlobalContext() && (context->getGlobalContext()->getApplicationType() == Context::ApplicationType::SERVER);
     /// proton: starts
-    format_settings.schema.kafka_schema_registry_url = settings.kafka_schema_registry_url.toString();
-    format_settings.schema.kafka_schema_registry_credentials = settings.kafka_schema_registry_credentials;
+    format_settings.kafka_schema_registry.url = settings.kafka_schema_registry_url.toString();
+    format_settings.kafka_schema_registry.credentials = settings.kafka_schema_registry_credentials;
+    format_settings.kafka_schema_registry.private_key_file = settings.kafka_schema_registry_private_key_file;
+    format_settings.kafka_schema_registry.certificate_file = settings.kafka_schema_registry_cert_file;
+    format_settings.kafka_schema_registry.ca_location = settings.kafka_schema_registry_ca_location;
+    format_settings.kafka_schema_registry.skip_cert_check = settings.kafka_schema_registry_skip_cert_check;
     /// proton: ends
     format_settings.skip_unknown_fields = settings.input_format_skip_unknown_fields;
     format_settings.template_settings.resultset_format = settings.format_template_resultset;

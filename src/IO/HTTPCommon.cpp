@@ -67,7 +67,7 @@ namespace
             throw Exception("Unsupported scheme in URI '" + uri.toString() + "'", ErrorCodes::UNSUPPORTED_URI_SCHEME);
     }
 
-    HTTPSessionPtr makeHTTPSessionImpl(const std::string & host, UInt16 port, bool https, bool keep_alive, bool resolve_host = true)
+    HTTPSessionPtr makeHTTPSessionImpl(const std::string & host, UInt16 port, bool https, bool keep_alive, Poco::Net::Context & context, bool resolve_host = true) /* proton: updated */
     {
         HTTPSessionPtr session;
 
@@ -75,7 +75,7 @@ namespace
         {
 #if USE_SSL
             /// Cannot resolve host in advance, otherwise SNI won't work in Poco.
-            session = std::make_shared<Poco::Net::HTTPSClientSession>(host, port);
+            session = std::make_shared<Poco::Net::HTTPSClientSession>(host, port, context);
 #else
             throw Exception("proton was built without HTTPS support", ErrorCodes::FEATURE_IS_NOT_ENABLED_AT_BUILD_TIME);
 #endif
@@ -108,10 +108,11 @@ namespace
         const UInt16 proxy_port;
         bool proxy_https;
         bool resolve_host;
+        Poco::Net::Context context; /* proton: updated */
         using Base = PoolBase<Poco::Net::HTTPClientSession>;
         ObjectPtr allocObject() override
         {
-            auto session = makeHTTPSessionImpl(host, port, https, true, resolve_host);
+            auto session = makeHTTPSessionImpl(host, port, https, true, context, resolve_host);
             if (!proxy_host.empty())
             {
                 const String proxy_scheme = proxy_https ? "https" : "http";
@@ -136,6 +137,12 @@ namespace
                 const std::string & proxy_host_,
                 UInt16 proxy_port_,
                 bool proxy_https_,
+                /// proton: starts
+                const String & private_key_file,
+                const String & certificate_file,
+                const String & ca_location,
+                Poco::Net::Context::VerificationMode verification_mode,
+                /// proton: ends
                 size_t max_pool_size_,
                 bool resolve_host_ = true)
             : Base(static_cast<unsigned>(max_pool_size_), &Poco::Logger::get("HTTPSessionPool"))
@@ -146,6 +153,14 @@ namespace
             , proxy_port(proxy_port_)
             , proxy_https(proxy_https_)
             , resolve_host(resolve_host_)
+            , context(
+                Poco::Net::SSLManager::instance().defaultClientContext()->usage(),
+                private_key_file,
+                certificate_file,
+                ca_location,
+                /*verificationMode=*/verification_mode,
+                /*verificationDepth=*/9,
+                /*loadDefaultCAs=*/true)
         {
         }
     };
@@ -162,10 +177,21 @@ namespace
             UInt16 proxy_port;
             bool is_proxy_https;
 
+            /// proton: starts
+            String private_key_file;
+            String certificate_file;
+            String ca_location;
+            Poco::Net::Context::VerificationMode Verification_mode;
+            /// proton: ends
+
             bool operator ==(const Key & rhs) const
             {
-                return std::tie(target_host, target_port, is_target_https, proxy_host, proxy_port, is_proxy_https)
-                    == std::tie(rhs.target_host, rhs.target_port, rhs.is_target_https, rhs.proxy_host, rhs.proxy_port, rhs.is_proxy_https);
+                /// proton: starts
+                return std::tie(target_host, target_port, is_target_https, proxy_host, proxy_port, is_proxy_https,
+                        private_key_file, certificate_file, ca_location, Verification_mode)
+                    == std::tie(rhs.target_host, rhs.target_port, rhs.is_target_https, rhs.proxy_host, rhs.proxy_port, rhs.is_proxy_https,
+                        rhs.private_key_file, rhs.certificate_file, rhs.ca_location, rhs.Verification_mode);
+                /// proton: ends
             }
         };
 
@@ -204,6 +230,12 @@ namespace
         Entry getSession(
             const Poco::URI & uri,
             const Poco::URI & proxy_uri,
+            /// proton: starts
+            const String & private_key_file,
+            const String & certificate_file,
+            const String & ca_location,
+            Poco::Net::Context::VerificationMode verification_mode,
+            /// proton: ends
             const ConnectionTimeouts & timeouts,
             size_t max_connections_per_endpoint,
             bool resolve_host = true)
@@ -224,11 +256,16 @@ namespace
                 proxy_https = isHTTPS(proxy_uri);
             }
 
-            HTTPSessionPool::Key key{host, port, https, proxy_host, proxy_port, proxy_https};
+            HTTPSessionPool::Key key{
+                host, port, https, proxy_host, proxy_port, proxy_https,
+                private_key_file, certificate_file, ca_location, verification_mode};
             auto pool_ptr = endpoints_pool.find(key);
             if (pool_ptr == endpoints_pool.end())
                 std::tie(pool_ptr, std::ignore) = endpoints_pool.emplace(
-                    key, std::make_shared<SingleEndpointHTTPSessionPool>(host, port, https, proxy_host, proxy_port, proxy_https, max_connections_per_endpoint, resolve_host));
+                    key, std::make_shared<SingleEndpointHTTPSessionPool>(
+                        host, port, https, proxy_host, proxy_port, proxy_https,
+                        private_key_file, certificate_file, ca_location, verification_mode, /* proton: updated */
+                        max_connections_per_endpoint, resolve_host));
 
             auto retry_timeout = timeouts.connection_timeout.totalMicroseconds();
             auto session = pool_ptr->second->get(retry_timeout);
@@ -280,10 +317,44 @@ HTTPSessionPtr makeHTTPSession(const Poco::URI & uri, const ConnectionTimeouts &
     UInt16 port = uri.getPort();
     bool https = isHTTPS(uri);
 
-    auto session = makeHTTPSessionImpl(host, port, https, false, resolve_host);
+    Poco::Net::Context * context = Poco::Net::SSLManager::instance().defaultClientContext();
+    auto session = makeHTTPSessionImpl(host, port, https, false, *context, resolve_host);
     setTimeouts(*session, timeouts);
     return session;
 }
+
+/// proton: starts
+PooledHTTPSessionPtr makePooledHTTPSession(
+    const Poco::URI & uri,
+    const String & private_key_file,
+    const String & certificate_file,
+    const String & ca_location,
+    Poco::Net::Context::VerificationMode verification_mode,
+    const ConnectionTimeouts & timeouts,
+    size_t per_endpoint_pool_size,
+    bool resolve_host)
+{
+    return makePooledHTTPSession(uri, {},
+        private_key_file, certificate_file, ca_location, verification_mode,
+        timeouts, per_endpoint_pool_size, resolve_host);
+}
+
+PooledHTTPSessionPtr makePooledHTTPSession(
+    const Poco::URI & uri,
+    const Poco::URI & proxy_uri,
+    const String & private_key_file,
+    const String & certificate_file,
+    const String & ca_location,
+    Poco::Net::Context::VerificationMode verification_mode,
+    const ConnectionTimeouts & timeouts,
+    size_t per_endpoint_pool_size,
+    bool resolve_host)
+{
+    return HTTPSessionPool::instance().getSession(uri, proxy_uri,
+        private_key_file, certificate_file, ca_location, verification_mode,
+        timeouts, per_endpoint_pool_size, resolve_host);
+}
+/// proton: ends
 
 
 PooledHTTPSessionPtr makePooledHTTPSession(const Poco::URI & uri, const ConnectionTimeouts & timeouts, size_t per_endpoint_pool_size, bool resolve_host)
@@ -291,9 +362,16 @@ PooledHTTPSessionPtr makePooledHTTPSession(const Poco::URI & uri, const Connecti
     return makePooledHTTPSession(uri, {}, timeouts, per_endpoint_pool_size, resolve_host);
 }
 
-PooledHTTPSessionPtr makePooledHTTPSession(const Poco::URI & uri, const Poco::URI & proxy_uri, const ConnectionTimeouts & timeouts, size_t per_endpoint_pool_size, bool resolve_host)
+PooledHTTPSessionPtr makePooledHTTPSession(
+    const Poco::URI & uri,
+    const Poco::URI & proxy_uri,
+    const ConnectionTimeouts & timeouts,
+    size_t per_endpoint_pool_size,
+    bool resolve_host)
 {
-    return HTTPSessionPool::instance().getSession(uri, proxy_uri, timeouts, per_endpoint_pool_size, resolve_host);
+    return HTTPSessionPool::instance().getSession(uri, proxy_uri,
+        /*private_key_file=*/"", /*certificate_file=*/"", /*ca_location=*/"", /*verification_mode=*/Poco::Net::Context::VERIFY_RELAXED,
+            timeouts, per_endpoint_pool_size, resolve_host);
 }
 
 bool isRedirect(const Poco::Net::HTTPResponse::HTTPStatus status) { return status == Poco::Net::HTTPResponse::HTTP_MOVED_PERMANENTLY  || status == Poco::Net::HTTPResponse::HTTP_FOUND || status == Poco::Net::HTTPResponse::HTTP_SEE_OTHER  || status == Poco::Net::HTTPResponse::HTTP_TEMPORARY_REDIRECT; }

@@ -655,8 +655,15 @@ bool AvroRowInputFormat::readRow(MutableColumns & columns, RowReadExtension &ext
 class AvroConfluentRowInputFormat::SchemaRegistry
 {
 public:
-    explicit SchemaRegistry(const std::string & base_url, const std::string & credentials, size_t schema_cache_max_size = 1000)
-        : registry(base_url, credentials)
+    SchemaRegistry(
+        const std::string & base_url,
+        const std::string & credentials,
+        const std::string & private_key_file,
+        const std::string & certificate_file,
+        const std::string & ca_location,
+        bool skip_cert_check,
+        size_t schema_cache_max_size = 1000)
+        : registry(base_url, credentials, private_key_file, certificate_file, ca_location, skip_cert_check)
         , schema_cache(schema_cache_max_size)
     {
     }
@@ -694,18 +701,26 @@ private:
 using ConfluentSchemaRegistry = AvroConfluentRowInputFormat::SchemaRegistry;
 #define SCHEMA_REGISTRY_CACHE_MAX_SIZE 1000
 /// Cache of Schema Registry URL -> SchemaRegistry
-static LRUCache<std::string, ConfluentSchemaRegistry>  schema_registry_cache(SCHEMA_REGISTRY_CACHE_MAX_SIZE);
+static LRUCache<KafkaSchemaRegistry::CacheKey, ConfluentSchemaRegistry, KafkaSchemaRegistry::CacheHasher>  schema_registry_cache(SCHEMA_REGISTRY_CACHE_MAX_SIZE);
 
 static std::shared_ptr<ConfluentSchemaRegistry> getConfluentSchemaRegistry(const FormatSettings & format_settings)
 {
     /// proton: starts
-    const auto & base_url = format_settings.schema.kafka_schema_registry_url.empty() ? format_settings.avro.schema_registry_url : format_settings.schema.kafka_schema_registry_url;
-    const auto & credentials = format_settings.schema.kafka_schema_registry_credentials;
+    const auto & base_url = format_settings.kafka_schema_registry.url.empty() ? format_settings.avro.schema_registry_url : format_settings.kafka_schema_registry.url;
+
+    KafkaSchemaRegistry::CacheKey key {
+          base_url,
+          format_settings.kafka_schema_registry.credentials,
+          format_settings.kafka_schema_registry.private_key_file,
+          format_settings.kafka_schema_registry.certificate_file,
+          format_settings.kafka_schema_registry.ca_location,
+          format_settings.kafka_schema_registry.skip_cert_check};
+
     auto [schema_registry, loaded] = schema_registry_cache.getOrSet(
-        base_url + credentials,
-        [&base_url, &credentials]()
+        key,
+        [&key]()
         {
-            return std::make_shared<ConfluentSchemaRegistry>(base_url, credentials);
+            return std::make_shared<ConfluentSchemaRegistry>(key.base_url, key.credentials, key.private_key_file, key.certificate_file, key.ca_location, key.skip_cert_check);
         }
     );
     /// proton: ends
@@ -862,7 +877,7 @@ void registerInputFormatAvro(FormatFactory & factory)
         /// Use only one format name "Avro" to support both schema registry and non-schema registry use cases, rather than using another name "AvroConfluent",
         /// which is what ClickHouse did.
 
-        if (settings.avro.schema_registry_url.empty() && settings.schema.kafka_schema_registry_url.empty())
+        if (settings.avro.schema_registry_url.empty() && settings.kafka_schema_registry.url.empty())
             /// Non-schema registry case
             return std::make_shared<AvroRowInputFormat>(sample, buf, params, settings);
 
