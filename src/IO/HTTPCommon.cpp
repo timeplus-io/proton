@@ -67,7 +67,7 @@ namespace
             throw Exception("Unsupported scheme in URI '" + uri.toString() + "'", ErrorCodes::UNSUPPORTED_URI_SCHEME);
     }
 
-    HTTPSessionPtr makeHTTPSessionImpl(const std::string & host, UInt16 port, bool https, bool keep_alive, Poco::Net::Context & context, bool resolve_host = true) /* proton: updated */
+    HTTPSessionPtr makeHTTPSessionImpl(const std::string & host, UInt16 port, bool https, bool keep_alive, Poco::Net::Context::Ptr context, bool resolve_host = true) /* proton: updated */
     {
         HTTPSessionPtr session;
 
@@ -108,7 +108,7 @@ namespace
         const UInt16 proxy_port;
         bool proxy_https;
         bool resolve_host;
-        Poco::Net::Context context; /* proton: updated */
+        Poco::Net::Context::Ptr context; /* proton: updated */
         using Base = PoolBase<Poco::Net::HTTPClientSession>;
         ObjectPtr allocObject() override
         {
@@ -153,14 +153,14 @@ namespace
             , proxy_port(proxy_port_)
             , proxy_https(proxy_https_)
             , resolve_host(resolve_host_)
-            , context(
+            , context(new Poco::Net::Context(
                 Poco::Net::SSLManager::instance().defaultClientContext()->usage(),
                 private_key_file,
                 certificate_file,
                 ca_location,
                 /*verificationMode=*/verification_mode,
                 /*verificationDepth=*/9,
-                /*loadDefaultCAs=*/true)
+                /*loadDefaultCAs=*/true))
         {
         }
     };
@@ -317,8 +317,7 @@ HTTPSessionPtr makeHTTPSession(const Poco::URI & uri, const ConnectionTimeouts &
     UInt16 port = uri.getPort();
     bool https = isHTTPS(uri);
 
-    Poco::Net::Context * context = Poco::Net::SSLManager::instance().defaultClientContext();
-    auto session = makeHTTPSessionImpl(host, port, https, false, *context, resolve_host);
+    auto session = makeHTTPSessionImpl(host, port, https, false, Poco::Net::SSLManager::instance().defaultClientContext(), resolve_host);
     setTimeouts(*session, timeouts);
     return session;
 }

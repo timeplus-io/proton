@@ -217,7 +217,7 @@ struct FormatSettings
         std::string private_key_file;
         std::string certificate_file;
         std::string ca_location;
-        bool skip_cert_check;
+        bool skip_cert_check = false;
     } kafka_schema_registry;
     /// proton: ends
 
