@@ -15,8 +15,18 @@ namespace ErrorCodes
 extern const int INCORRECT_DATA;
 }
 
-KafkaSchemaRegistry::KafkaSchemaRegistry(const String & base_url_, const String & credentials_)
+KafkaSchemaRegistry::KafkaSchemaRegistry(
+    const String & base_url_,
+    const String & credentials_,
+    const String & private_key_file_,
+    const String & certificate_file_,
+    const String & ca_location_,
+    bool skip_cert_check)
     : base_url(base_url_)
+    , private_key_file(private_key_file_)
+    , certificate_file(certificate_file_)
+    , ca_location(ca_location_)
+    , Verification_mode(skip_cert_check ? Poco::Net::Context::VERIFY_NONE : Poco::Net::Context::VERIFY_RELAXED)
     , logger(&Poco::Logger::get("KafkaSchemaRegistry"))
 {
     assert(!base_url.empty());
@@ -48,7 +58,7 @@ String KafkaSchemaRegistry::fetchSchema(UInt32 id)
             if (!credentials.empty())
                 credentials.authenticate(request);
 
-            auto session = makePooledHTTPSession(url, timeouts, 1);
+            auto session = makePooledHTTPSession(url, private_key_file, certificate_file, ca_location, Verification_mode, timeouts, 1);
             std::istream * response_body{};
             try
             {

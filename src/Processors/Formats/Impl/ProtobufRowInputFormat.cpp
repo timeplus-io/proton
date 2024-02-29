@@ -104,7 +104,7 @@ void registerInputFormatProtobuf(FormatFactory & factory)
         [](ReadBuffer & buf, const Block & sample, IRowInputFormat::Params params, const FormatSettings & settings)
             -> std::shared_ptr<IInputFormat>
         {
-            if (settings.schema.kafka_schema_registry_url.empty())
+            if (settings.kafka_schema_registry.url.empty())
                 return std::make_shared<ProtobufRowInputFormat>(
                     buf, sample, std::move(params), FormatSchemaInfo(settings, "Protobuf", true), /*with_length_delimiter=*/false);
 
@@ -147,16 +147,23 @@ using ConfluentSchemaRegistry = ProtobufConfluentRowInputFormat::SchemaRegistryW
 
 auto & schemaRegistryCache()
 {
-    /// Cache of Schema Registry URL + credentials -> SchemaRegistry
-    static LRUCache<std::string, ConfluentSchemaRegistry> schema_registry_cache(/*max_size_=*/1000);
+    static LRUCache<KafkaSchemaRegistry::CacheKey, ConfluentSchemaRegistry, KafkaSchemaRegistry::CacheHasher> schema_registry_cache(/*max_size_=*/1000);
     return schema_registry_cache;
 }
 
-std::shared_ptr<ConfluentSchemaRegistry> getConfluentSchemaRegistry(const String & base_url, const String & credentials)
+std::shared_ptr<ConfluentSchemaRegistry> getConfluentSchemaRegistry(const FormatSettings & format_settings)
 {
+    KafkaSchemaRegistry::CacheKey key {
+          format_settings.kafka_schema_registry.url,
+          format_settings.kafka_schema_registry.credentials,
+          format_settings.kafka_schema_registry.private_key_file,
+          format_settings.kafka_schema_registry.certificate_file,
+          format_settings.kafka_schema_registry.ca_location,
+          format_settings.kafka_schema_registry.skip_cert_check};
+
     auto [schema_registry, loaded] = schemaRegistryCache().getOrSet(
-        base_url + credentials,
-        [&base_url, &credentials]() { return std::make_shared<ConfluentSchemaRegistry>(base_url, credentials); });
+        key,
+        [&key]() { return std::make_shared<ConfluentSchemaRegistry>(key.base_url, key.credentials, key.private_key_file, key.certificate_file, key.ca_location, key.skip_cert_check); });
     return schema_registry;
 }
 }
@@ -164,7 +171,14 @@ std::shared_ptr<ConfluentSchemaRegistry> getConfluentSchemaRegistry(const String
 class ProtobufConfluentRowInputFormat::SchemaRegistryWithCache : public google::protobuf::io::ErrorCollector
 {
 public:
-    SchemaRegistryWithCache(const String & base_url, const String & credentials) : registry(base_url, credentials) { }
+    SchemaRegistryWithCache(
+        const String & base_url,
+        const String & credentials,
+        const String & private_key_file,
+        const String & certificate_file,
+        const String & ca_location,
+        bool skip_cert_check)
+        : registry(base_url, credentials, private_key_file, certificate_file, ca_location, skip_cert_check) { }
 
     /// Overrides google::protobuf::io::ErrorCollector.
     void AddError(int line, google::protobuf::io::ColumnNumber column, const std::string & message) override
@@ -243,8 +257,7 @@ private:
 ProtobufConfluentRowInputFormat::ProtobufConfluentRowInputFormat(
     ReadBuffer & in_, const Block & header_, Params params_, const FormatSettings & format_settings_)
     : IRowInputFormat(header_, in_, params_, ProcessorID::ProtobufRowInputFormatID)
-    , registry(getConfluentSchemaRegistry(
-          format_settings_.schema.kafka_schema_registry_url, format_settings_.schema.kafka_schema_registry_credentials))
+    , registry(getConfluentSchemaRegistry(format_settings_))
 {
 }
 

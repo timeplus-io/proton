@@ -4,6 +4,7 @@
 #include <memory>
 #include <mutex>
 
+#include <Poco/Net/Context.h>
 #include <Poco/Net/HTTPClientSession.h>
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
@@ -76,6 +77,29 @@ HTTPSessionPtr makeHTTPSession(const Poco::URI & uri, const ConnectionTimeouts &
 /// As previous method creates session, but tooks it from pool, without and with proxy uri.
 PooledHTTPSessionPtr makePooledHTTPSession(const Poco::URI & uri, const ConnectionTimeouts & timeouts, size_t per_endpoint_pool_size, bool resolve_host = true);
 PooledHTTPSessionPtr makePooledHTTPSession(const Poco::URI & uri, const Poco::URI & proxy_uri, const ConnectionTimeouts & timeouts, size_t per_endpoint_pool_size, bool resolve_host = true);
+
+/// proton: starts
+PooledHTTPSessionPtr makePooledHTTPSession(
+    const Poco::URI & uri,
+    const String & private_key_file,
+    const String & certificate_file,
+    const String & ca_location,
+    Poco::Net::Context::VerificationMode verification_mode,
+    const ConnectionTimeouts & timeouts,
+    size_t per_endpoint_pool_size,
+    bool resolve_host = true);
+
+PooledHTTPSessionPtr makePooledHTTPSession(
+    const Poco::URI & uri,
+    const Poco::URI & proxy_uri,
+    const String & private_key_file,
+    const String & certificate_file,
+    const String & ca_location,
+    Poco::Net::Context::VerificationMode verification_mode,
+    const ConnectionTimeouts & timeouts,
+    size_t per_endpoint_pool_size,
+    bool resolve_host = true);
+/// proton: ends
 
 bool isRedirect(Poco::Net::HTTPResponse::HTTPStatus status);
 
