@@ -22,7 +22,7 @@ KafkaSchemaRegistry::KafkaSchemaRegistry(
     const String & certificate_file_,
     const String & ca_location_,
     bool skip_cert_check)
-    : base_url(base_url_)
+    : base_url(base_url_.ends_with("/") ? base_url_ : base_url_ + "/")
     , private_key_file(private_key_file_)
     , certificate_file(certificate_file_)
     , ca_location(ca_location_)
@@ -46,7 +46,8 @@ String KafkaSchemaRegistry::fetchSchema(UInt32 id)
     {
         try
         {
-            Poco::URI url(base_url, std::format("/schemas/ids/{}", id));
+            /// Do not use "/schemas/ids/{}" here, otherwise the `path` in `base_url` will be removed.
+            Poco::URI url(base_url, std::format("schemas/ids/{}", id));
             LOG_TRACE(logger, "Fetching schema id = {}", id);
 
             /// One second for connect/send/receive. Just in case.
