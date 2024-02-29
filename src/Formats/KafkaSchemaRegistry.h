@@ -26,7 +26,7 @@ public:
         String ca_location;
         bool skip_cert_check;
 
-        bool operator ==(const CacheKey & rhs) const
+        bool operator==(const CacheKey & rhs) const
         {
             return std::tie(base_url, credentials, private_key_file, certificate_file, ca_location, skip_cert_check)
                 == std::tie(rhs.base_url, rhs.credentials, rhs.private_key_file, rhs.certificate_file, rhs.ca_location, rhs.skip_cert_check);
