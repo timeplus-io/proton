@@ -91,7 +91,7 @@ private:
     bool is_changelog_input = false;
     size_t max_v8_heap_size_in_bytes;
     JavaScriptBlueprint blueprint;
-
+    Poco::Logger * logger;
 public:
     AggregateFunctionJavaScriptAdapter(
         JavaScriptUserDefinedFunctionConfigurationPtr config_,

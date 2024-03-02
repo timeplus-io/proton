@@ -32,6 +32,10 @@ extern const int UNKNOWN_FUNCTION;
 /// proton: ends
 }
 
+UserDefinedFunctionFactory::UserDefinedFunctionFactory() : logger(&Poco::Logger::get("UserDefinedFunctionFactory"))
+{
+}
+
 UserDefinedFunctionFactory & UserDefinedFunctionFactory::instance()
 {
     static UserDefinedFunctionFactory result;
@@ -68,6 +72,7 @@ AggregateFunctionPtr UserDefinedFunctionFactory::getAggregateFunction(
     const DataTypes & types,
     const Array & parameters,
     AggregateFunctionProperties & /*properties*/,
+    ContextPtr context,
     bool is_changelog_input)
 {
     const auto & loader = ExternalUserDefinedFunctionsLoader::instance(nullptr);
@@ -107,18 +112,14 @@ AggregateFunctionPtr UserDefinedFunctionFactory::getAggregateFunction(
         size_t num_of_args = config->arguments.size();
         validate_arguments(types.back()->getName() == "int8" ? num_of_args : num_of_args - 1);
 
-        ContextPtr query_context;
-        if (CurrentThread::isInitialized())
-            query_context = CurrentThread::get().getQueryContext();
-
-        if (!query_context || !query_context->getSettingsRef().javascript_max_memory_bytes)
+        if (!context || !context->getSettingsRef().javascript_max_memory_bytes)
         {
-            LOG_ERROR(&Poco::Logger::get("UserDefinedFunctionFactory"), "query_context is invalid");
+            LOG_ERROR(instance().getLogger(), "query_context is invalid");
             return nullptr;
         }
 
         return std::make_shared<AggregateFunctionJavaScriptAdapter>(
-            config, types, parameters, is_changelog_input, query_context->getSettingsRef().javascript_max_memory_bytes);
+            config, types, parameters, is_changelog_input, context->getSettingsRef().javascript_max_memory_bytes);
     }
 
     return nullptr;
@@ -160,7 +161,7 @@ FunctionOverloadResolverPtr UserDefinedFunctionFactory::tryGet(const String & fu
     /// proton: starts
     try
     {
-        return get(function_name,std::move(context));
+        return get(function_name, std::move(context));
     }
     catch (Exception &)
     {
@@ -196,11 +197,7 @@ std::vector<String> UserDefinedFunctionFactory::getRegisteredNames(ContextPtr co
 
 /// proton: starts
 bool UserDefinedFunctionFactory::registerFunction(
-    ContextPtr context,
-    const String & function_name,
-    Poco::JSON::Object::Ptr json_func,
-    bool throw_if_exists,
-    bool replace_if_exists)
+    ContextPtr context, const String & function_name, Poco::JSON::Object::Ptr json_func, bool throw_if_exists, bool replace_if_exists)
 {
     Streaming::validateUDFName(function_name);
 

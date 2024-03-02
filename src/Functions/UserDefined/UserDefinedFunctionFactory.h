@@ -31,6 +31,7 @@ public:
         const DataTypes & types,
         const Array & parameters,
         AggregateFunctionProperties & properties,
+        ContextPtr context,
         /// whether input of aggregation function is changelog, aggregate function does not pass _tp_delta column to UDA if it is false
         bool is_changelog_input = false);
 
@@ -53,6 +54,12 @@ public:
     static bool has(const String & function_name, ContextPtr context);
 
     static std::vector<String> getRegisteredNames(ContextPtr context);
+
+    Poco::Logger * getLogger() const { return logger; }
+
+private:
+    UserDefinedFunctionFactory();
+    Poco::Logger * logger;
 };
 
 }

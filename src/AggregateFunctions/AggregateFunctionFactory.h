@@ -69,6 +69,7 @@ public:
         const DataTypes & argument_types,
         const Array & parameters,
         AggregateFunctionProperties & out_properties,
+        ContextPtr context = nullptr,
         bool is_changelog_input = false) const;
 
     /// Returns nullptr if not found.
@@ -77,6 +78,7 @@ public:
         const DataTypes & argument_types,
         const Array & parameters,
         AggregateFunctionProperties & out_properties,
+        ContextPtr context = nullptr,
         bool is_changelog_input = false) const;
     /// proton: ends
 
@@ -97,6 +99,7 @@ private:
         const Array & parameters,
         AggregateFunctionProperties & out_properties,
         bool has_null_arguments,
+        ContextPtr context,
         bool is_changelog_input = false) const;
     /// proton: ends
 

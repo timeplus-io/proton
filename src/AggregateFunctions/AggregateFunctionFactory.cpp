@@ -76,6 +76,7 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
     const DataTypes & argument_types,
     const Array & parameters,
     AggregateFunctionProperties & out_properties,
+    ContextPtr context,
     bool is_changelog_input) const
 /// proton: ends
 {
@@ -98,7 +99,7 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
             [](const auto & type) { return type->onlyNull(); });
 
         AggregateFunctionPtr nested_function = getImpl(
-            name, nested_types, nested_parameters, out_properties, has_null_arguments, is_changelog_input);
+            name, nested_types, nested_parameters, out_properties, has_null_arguments, context, is_changelog_input);
 
         // Pure window functions are not real aggregate functions. Applying
         // combinators doesn't make sense for them, they must handle the
@@ -109,7 +110,7 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
             return combinator->transformAggregateFunction(nested_function, out_properties, types_without_low_cardinality, parameters);
     }
 
-    auto with_original_arguments = getImpl(name, types_without_low_cardinality, parameters, out_properties, false, is_changelog_input);
+    auto with_original_arguments = getImpl(name, types_without_low_cardinality, parameters, out_properties, false, context, is_changelog_input);
 
     if (!with_original_arguments)
         throw Exception("Logical error: AggregateFunctionFactory returned nullptr", ErrorCodes::LOGICAL_ERROR);
@@ -123,6 +124,7 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
     const Array & parameters,
     AggregateFunctionProperties & out_properties,
     bool has_null_arguments,
+    ContextPtr context,
     bool is_changelog_input) const
 /// proton: ends
 {
@@ -202,7 +204,7 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
     }
 
     /// proton: starts. Check user defined aggr function
-    auto aggr = UserDefinedFunctionFactory::getAggregateFunction(name, argument_types, parameters, out_properties, is_changelog_input);
+    auto aggr = UserDefinedFunctionFactory::getAggregateFunction(name, argument_types, parameters, out_properties, context, is_changelog_input);
     if (aggr)
         return aggr;
     /// proton: ends
@@ -225,12 +227,13 @@ AggregateFunctionPtr AggregateFunctionFactory::tryGet(
     const DataTypes & argument_types,
     const Array & parameters,
     AggregateFunctionProperties & out_properties,
+    ContextPtr context,
     bool is_changelog_input) const
 /// proton: ends
 {
     return isAggregateFunctionName(name)
         /// proton: starts
-        ? get(name, argument_types, parameters, out_properties, is_changelog_input)
+        ? get(name, argument_types, parameters, out_properties, context, is_changelog_input)
         /// proton: ends
         : nullptr;
 }

@@ -283,7 +283,9 @@ AggregateFunctionJavaScriptAdapter::AggregateFunctionJavaScriptAdapter(
     , is_changelog_input(is_changelog_input_)
     , max_v8_heap_size_in_bytes(max_v8_heap_size_in_bytes_)
     , blueprint(config->name, config->source)
+    , logger(&Poco::Logger::get("JavaScriptAggregateFunction"))
 {
+    LOG_INFO(logger, "udf name={}, javascript_max_memory_bytes={}", config->name, max_v8_heap_size_in_bytes);
 }
 
 String AggregateFunctionJavaScriptAdapter::getName() const

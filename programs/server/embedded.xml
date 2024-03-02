@@ -141,7 +141,7 @@
         <part_commit_pool_size>8</part_commit_pool_size>
         <max_idempotent_ids>1000</max_idempotent_ids>
         <_tp_internal_system_open_sesame>true</_tp_internal_system_open_sesame>
-        <javascript_max_memory_bytes>104857600</javascript_max_memory_bytes>
+        <javascript_max_memory_bytes>204857600</javascript_max_memory_bytes>
       </global>
       <stream>
         <default_shards>1</default_shards>
