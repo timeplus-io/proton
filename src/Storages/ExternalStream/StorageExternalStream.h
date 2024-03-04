@@ -60,6 +60,7 @@ protected:
         ContextPtr context_,
         const ColumnsDescription & columns_,
         std::unique_ptr<ExternalStreamSettings> external_stream_settings_,
+        const String & comment,
         bool attach);
 
 private:

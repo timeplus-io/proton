@@ -209,6 +209,18 @@ struct FormatSettings
         bool is_server = false;
     } schema;
 
+    /// proton: starts
+    struct
+    {
+        std::string url;
+        std::string credentials;
+        std::string private_key_file;
+        std::string certificate_file;
+        std::string ca_location;
+        bool skip_cert_check = false;
+    } kafka_schema_registry;
+    /// proton: ends
+
     struct
     {
         String resultset_format;

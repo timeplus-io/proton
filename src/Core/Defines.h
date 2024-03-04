@@ -27,7 +27,7 @@
   *  and if the parts were small, then it would be costly then to combine them.
   */
 #define DEFAULT_INSERT_BLOCK_SIZE \
-    1048449 /// 1048576 - PADDING_FOR_SIMD - (PADDING_FOR_SIMD - 1) bytes padding that we usually have in arrays
+    65409 /// 65536 - PADDING_FOR_SIMD - (PADDING_FOR_SIMD - 1) bytes padding that we usually have in arrays
 
 /** The same, but for merge operations. Less DEFAULT_BLOCK_SIZE for saving RAM (since all the columns are read).
   * Significantly less, since there are 10-way mergers.

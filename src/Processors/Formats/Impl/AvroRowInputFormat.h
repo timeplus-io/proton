@@ -145,7 +145,7 @@ public:
     class SchemaRegistry;
 
 private:
-    virtual bool readRow(MutableColumns & columns, RowReadExtension & ext) override;
+    bool readRow(MutableColumns & columns, RowReadExtension & ext) override; /* proton: updated */
 
     bool allowSyncAfterError() const override { return true; }
     void syncAfterError() override;
@@ -155,7 +155,6 @@ private:
     std::unordered_map<SchemaId, AvroDeserializer> deserializer_cache;
     const AvroDeserializer & getOrCreateDeserializer(SchemaId schema_id);
 
-    avro::InputStreamPtr input_stream;
     avro::DecoderPtr decoder;
     FormatSettings format_settings;
 };

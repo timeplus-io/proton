@@ -1175,15 +1175,19 @@ void ClientBase::processInsertQuery(const String & query_to_execute, ASTPtr pars
 void ClientBase::sendData(Block & sample, const ColumnsDescription & columns_description, ASTPtr parsed_query)
 {
     /// Get columns description from variable or (if it was empty) create it from sample.
-    auto columns_description_for_query = columns_description.empty() ? ColumnsDescription(sample.getNamesAndTypesList()) : columns_description;
+    /// proton : starts. If users exclude columns in insert when reading from file (infile), derive the columns description from sample block
+    auto * parsed_insert_query = parsed_query->as<ASTInsertQuery>();
+    /// If INSERT data must be sent.
+    if (!parsed_insert_query)
+        return;
+
+    bool from_sample = (columns_description.empty() || (parsed_insert_query->infile && columns_description.size() != sample.columns()));
+    auto columns_description_for_query =  from_sample ? ColumnsDescription(sample.getNamesAndTypesList()) : columns_description;
     if (columns_description_for_query.empty())
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Column description is empty and it can't be built from sample from table. Cannot execute query.");
     }
-    /// If INSERT data must be sent.
-    auto * parsed_insert_query = parsed_query->as<ASTInsertQuery>();
-    if (!parsed_insert_query)
-        return;
+    /// proton : ends
 
     bool have_data_in_stdin = !is_interactive && !stdin_is_a_tty && !std_in.eof();
 
