@@ -813,7 +813,6 @@ namespace
 
         query_context->setCurrentQueryId(query_info.query_id());
 
-        /// Should we send internal logs to client?
         /// proton: starts. Disable send_logs_level
         query_scope.emplace(query_context);
         /// [this]{ onFatalError(); });

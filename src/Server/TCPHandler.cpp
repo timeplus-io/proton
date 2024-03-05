@@ -240,7 +240,6 @@ void TCPHandler::runImpl()
             if (state.empty() && state.part_uuids_to_ignore && !receivePacket())
                 continue;
 
-            /// Should we send internal logs to client?
             /// proton: starts. Disable send_logs_level
             query_scope.emplace(query_context);
             /// [this]
