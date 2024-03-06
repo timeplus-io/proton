@@ -3,7 +3,7 @@
 #include <KafkaLog/KafkaWALContext.h>
 #include <KafkaLog/KafkaWALSimpleConsumer.h>
 #include <IO/ReadBufferFromMemory.h>
-#include <Processors/ISource.h>
+#include <Processors/Streaming/ISource.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageSnapshot.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
@@ -21,7 +21,7 @@ namespace DB
 class Kafka;
 class StreamingFormatExecutor;
 
-class KafkaSource final : public ISource
+class KafkaSource final : public Streaming::ISource
 {
 public:
     KafkaSource(
@@ -41,7 +41,7 @@ public:
 
     Chunk generate() override;
 
-    void checkpoint(CheckpointContextPtr ckpt_ctx_) override;
+    Int64 lastSN() const override { return ckpt_data.last_sn; }
 
     void recover(CheckpointContextPtr ckpt_ctx_) override;
 
@@ -56,7 +56,7 @@ private:
 
     inline void readAndProcess();
 
-    Chunk doCheckpoint(CheckpointContextPtr ckpt_ctx_);
+    Chunk doCheckpoint(CheckpointContextPtr ckpt_ctx_) override;
 
 private:
     StorageSnapshotPtr storage_snapshot;

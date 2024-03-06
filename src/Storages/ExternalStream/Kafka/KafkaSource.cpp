@@ -38,7 +38,7 @@ KafkaSource::KafkaSource(
     size_t max_block_size_,
     Poco::Logger * log_,
     ExternalStreamCounterPtr external_stream_counter_)
-    : ISource(header_, true, ProcessorID::KafkaSourceID)
+    : Streaming::ISource(header_, true, ProcessorID::KafkaSourceID)
     , storage_snapshot(storage_snapshot_)
     , query_context(std::move(query_context_))
     , max_block_size(max_block_size_)
@@ -53,8 +53,6 @@ KafkaSource::KafkaSource(
     , external_stream_counter(external_stream_counter_)
 {
     assert(external_stream_counter);
-
-    is_streaming = true;
 
     calculateColumnPositions();
     initConsumer(kafka);
@@ -77,9 +75,6 @@ Chunk KafkaSource::generate()
 {
     if (isCancelled())
         return {};
-
-    if (auto current_ckpt_ctx = ckpt_request.poll(); current_ckpt_ctx)
-        return doCheckpoint(std::move(current_ckpt_ctx));
 
     if (result_chunks.empty() || iter == result_chunks.end())
     {
@@ -333,16 +328,6 @@ void KafkaSource::calculateColumnPositions()
         const auto & physical_column = physical_columns.front();
         physical_header.insert({physical_column.type->createColumn(), physical_column.type, physical_column.name});
     }
-}
-
-
-/// It basically initiate a checkpoint
-/// Since the checkpoint method is called in a different thread (CheckpointCoordinator)
-/// We nee make sure it is thread safe
-void KafkaSource::checkpoint(CheckpointContextPtr ckpt_ctx_)
-{
-    /// We assume the previous ckpt is already done
-    ckpt_request.setCheckpointRequestCtx(ckpt_ctx_);
 }
 
 /// 1) Generate a checkpoint barrier
