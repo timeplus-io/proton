@@ -42,6 +42,7 @@ public:
     Chunk generate() override;
 
     Int64 lastSN() const override { return ckpt_data.last_sn; }
+    void resetSN(Int64 sn) override;
 
     void recover(CheckpointContextPtr ckpt_ctx_) override;
 

@@ -23,6 +23,8 @@ public:
 
     ~StreamingStoreSource() override = default;
 
+    void resetSN(Int64 sn) override;
+
     void recover(CheckpointContextPtr ckpt_ctx_) override;
 
     String getName() const override { return "StreamingStoreSource"; }

@@ -357,6 +357,15 @@ void KafkaSource::recover(CheckpointContextPtr ckpt_ctx_)
         consume_ctx.offset = ckpt_data.last_sn + 1;
 }
 
+void KafkaSource::resetSN(Int64 sn)
+{
+    if (sn >= 0)
+    {
+        ckpt_data.last_sn = sn - 1;
+        consume_ctx.offset = sn;
+    }
+}
+
 void KafkaSource::State::serialize(WriteBuffer & wb) const
 {
     writeStringBinary(topic, wb);

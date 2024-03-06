@@ -21,6 +21,13 @@
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
 
+/// proton: starts.
+#include <Processors/Streaming/ISource.h>
+#include <Common/assert_cast.h>
+
+#include <ranges>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -579,4 +586,33 @@ std::unique_ptr<ReadProgressCallback> QueryPipeline::getReadProgressCallback() c
     return callback;
 }
 
+/// proton: starts.
+std::vector<Int64> QueryPipeline::getLastSNsOfStreamingSources() const
+{
+    std::vector<Int64> sns;
+    for (const auto & processor : processors)
+    {
+        if (processor->isSource() && processor->isStreaming())
+            sns.emplace_back(assert_cast<const Streaming::ISource &>(*processor).lastSN());
+    }
+    return sns;
+}
+
+void QueryPipeline::resetSNsOfStreamingSources(const std::vector<Int64> & sns)
+{
+    std::vector<Streaming::ISource *> streaming_sources;
+    streaming_sources.reserve(sns.size());
+    for (const auto & processor : processors)
+    {
+        if (processor->isSource() && processor->isStreaming())
+            streaming_sources.emplace_back(assert_cast<Streaming::ISource *>(processor.get()));
+    }
+
+    if (sns.size() != streaming_sources.size())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Number of sequence numbers doesn't match number of streaming sources");
+
+    for (auto [streaming_source, sn] : std::views::zip(streaming_sources, sns))
+        streaming_source->resetSN(sn);
+}
+/// proton: ends.
 }

@@ -133,6 +133,10 @@ public:
 
     /// proton : starts
     void setExecuteMode(ExecuteMode exec_mode_) { exec_mode = exec_mode_; }
+
+    std::vector<Int64> getLastSNsOfStreamingSources() const;
+
+    void resetSNsOfStreamingSources(const std::vector<Int64> & sources_sns);
     /// proton : ends
 
 private:

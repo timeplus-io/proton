@@ -141,4 +141,16 @@ void StreamingStoreSource::recover(CheckpointContextPtr ckpt_ctx_)
             kafka_reader->resetOffset(last_sn + 1);
     }
 }
+
+void StreamingStoreSource::resetSN(Int64 sn)
+{
+    if (sn >= 0)
+    {
+        last_sn = sn - 1;
+        if (nativelog_reader)
+            nativelog_reader->resetSequenceNumber(sn);
+        else
+            kafka_reader->resetOffset(sn);
+    }
+}
 }
