@@ -78,12 +78,12 @@ std::optional<String> tryGetBlockDeviceId([[maybe_unused]] const String & path)
 
 }
 
-#if !defined(__linux__)
+#if !defined(OS_LINUX)
 [[noreturn]]
 #endif
 String getBlockDeviceId([[maybe_unused]] const String & path)
 {
-#if defined(__linux__)
+#if defined(OS_LINUX)
     struct stat sb;
     if (lstat(path.c_str(), &sb))
         throwFromErrnoWithPath("Cannot lstat " + path, path, ErrorCodes::CANNOT_STAT);
@@ -95,12 +95,12 @@ String getBlockDeviceId([[maybe_unused]] const String & path)
 #endif
 }
 
-#if !defined(__linux__)
+#if !defined(OS_LINUX)
 [[noreturn]]
 #endif
 BlockDeviceType getBlockDeviceType([[maybe_unused]] const String & device_id)
 {
-#if defined(__linux__)
+#if defined(OS_LINUX)
     try
     {
         ReadBufferFromFile in("/sys/dev/block/" + device_id + "/queue/rotational");
@@ -117,12 +117,12 @@ BlockDeviceType getBlockDeviceType([[maybe_unused]] const String & device_id)
 #endif
 }
 
-#if !defined(__linux__)
+#if !defined(OS_LINUX)
 [[noreturn]]
 #endif
 UInt64 getBlockDeviceReadAheadBytes([[maybe_unused]] const String & device_id)
 {
-#if defined(__linux__)
+#if defined(OS_LINUX)
     try
     {
         ReadBufferFromFile in("/sys/dev/block/" + device_id + "/queue/read_ahead_kb");

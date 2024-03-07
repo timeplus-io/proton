@@ -16,7 +16,7 @@ uint64_t getAvailableMemoryAmountOrZero()
 {
 #if defined(_SC_AVPHYS_PAGES) // linux
     return getPageSize() * sysconf(_SC_AVPHYS_PAGES);
-#elif defined(__FreeBSD__)
+#elif defined(OS_FREEBSD)
     struct vmtotal vmt;
     size_t vmt_size = sizeof(vmt);
     if (sysctlbyname("vm.vmtotal", &vmt, &vmt_size, NULL, 0) == 0)

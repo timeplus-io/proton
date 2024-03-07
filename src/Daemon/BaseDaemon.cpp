@@ -11,7 +11,6 @@
 #include <sys/time.h>
 #include <sys/wait.h>
 #include <sys/resource.h>
-
 #if defined(OS_LINUX)
     #include <sys/prctl.h>
 #endif
