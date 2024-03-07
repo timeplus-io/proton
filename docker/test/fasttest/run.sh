@@ -224,7 +224,23 @@ function build
 {
     (
         cd "$FASTTEST_BUILD"
-        time ninja clickhouse-bundle 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee "$FASTTEST_OUTPUT/build_log.txt"
+        TIMEFORMAT=$'\nreal\t%3R\nuser\t%3U\nsys\t%3S'
+        ( time ninja clickhouse-bundle clickhouse-stripped) |& ts '%Y-%m-%d %H:%M:%S' | tee "$FASTTEST_OUTPUT/build_log.txt"
+        BUILD_SECONDS_ELAPSED=$(awk '/^....-..-.. ..:..:.. real\t[0-9]/ {print $4}' < "$FASTTEST_OUTPUT/build_log.txt")
+        echo "build_clickhouse_fasttest_binary: [ OK ] $BUILD_SECONDS_ELAPSED sec." \
+          | ts '%Y-%m-%d %H:%M:%S' \
+          | tee "$FASTTEST_OUTPUT/test_result.txt"
+
+        (
+            # This query should fail, and print stacktrace with proper symbol names (even on a stripped binary)
+            clickhouse_output=$(programs/clickhouse-stripped --stacktrace -q 'select' 2>&1 || :)
+            if [[ $clickhouse_output =~ DB::LocalServer::main ]]; then
+                echo "stripped_clickhouse_shows_symbols_names: [ OK ] 0 sec."
+            else
+                echo -e "stripped_clickhouse_shows_symbols_names: [ FAIL ] 0 sec. - clickhouse output:\n\n$clickhouse_output\n"
+            fi
+        ) | ts '%Y-%m-%d %H:%M:%S' | tee -a "$FASTTEST_OUTPUT/test_result.txt"
+
         if [ "$COPY_CLICKHOUSE_BINARY_TO_OUTPUT" -eq "1" ]; then
             cp programs/clickhouse "$FASTTEST_OUTPUT/clickhouse"
 
