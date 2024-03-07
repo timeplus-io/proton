@@ -11,6 +11,7 @@
 
 #include <type_traits>
 
+#include <Common/StackTrace.h>
 #include <Common/formatIPv6.h>
 #include <Common/DateLUT.h>
 #include <Common/LocalDate.h>
@@ -1117,6 +1118,8 @@ inline void readBinary(Decimal64 & x, ReadBuffer & buf) { readPODBinary(x, buf);
 inline void readBinary(Decimal128 & x, ReadBuffer & buf) { readPODBinary(x, buf); }
 inline void readBinary(Decimal256 & x, ReadBuffer & buf) { readPODBinary(x.value, buf); }
 inline void readBinary(LocalDate & x, ReadBuffer & buf) { readPODBinary(x, buf); }
+
+inline void readBinary(StackTrace::FramePointers & x, ReadBuffer & buf) { readPODBinary(x, buf); }
 
 /// proton: starts
 template <typename T1, typename T2>

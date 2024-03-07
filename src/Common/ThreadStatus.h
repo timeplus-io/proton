@@ -282,7 +282,8 @@ public:
 
     void logToQueryViewsLog(const ViewRuntimeData & vinfo);
 
-protected:
+private:
+    void applyGlobalSettings();
     void applyQuerySettings();
 
     void initPerformanceCounters();

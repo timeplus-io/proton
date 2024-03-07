@@ -174,7 +174,11 @@ ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, ssize_t priority, std::
             }
         }
 
-        jobs.emplace(std::move(job), priority);
+        jobs.emplace(std::move(job),
+                     priority,
+                     /// capture_frame_pointers
+                     DB::Exception::enable_job_stack_trace);
+
         ++scheduled_jobs;
     }
 
@@ -330,6 +334,8 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
         /// This is inside the loop to also reset previous thread names set inside the jobs.
         setThreadName("ThreadPool");
 
+        std::vector<StackTrace::FramePointers> thread_frame_pointers;
+
         /// Get a job from the queue.
         Job job;
 
@@ -374,6 +380,9 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
             /// boost::priority_queue does not provide interface for getting non-const reference to an element
             /// to prevent us from modifying its priority. We have to use const_cast to force move semantics on JobWithPriority::job.
             job = std::move(const_cast<Job &>(jobs.top().job));
+            DB::Exception::enable_job_stack_trace = jobs.top().enable_job_stack_trace;
+            if (DB::Exception::enable_job_stack_trace)
+                thread_frame_pointers = std::move(const_cast<std::vector<StackTrace::FramePointers> &>(jobs.top().frame_pointers));
             jobs.pop();
             /// We don't run jobs after `shutdown` is set, but we have to properly dequeue all jobs and finish them.
             if (shutdown)
@@ -386,9 +395,11 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
         /// Run the job.
         try
         {
-            ALLOW_ALLOCATIONS_IN_SCOPE;
-            CurrentMetrics::Increment metric_active_threads(
-                std::is_same_v<Thread, std::thread> ? CurrentMetrics::GlobalThreadActive : CurrentMetrics::LocalThreadActive);
+            if (DB::Exception::enable_job_stack_trace)
+                DB::Exception::thread_frame_pointers = std::move(thread_frame_pointers);
+
+
+            CurrentMetrics::Increment metric_active_pool_threads(metric_active_threads);
 
             job();
             /// job should be reset before decrementing scheduled_jobs to

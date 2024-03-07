@@ -25,7 +25,11 @@ class Exception : public Poco::Exception
 public:
     using FramePointers = std::vector<void *>;
 
-    Exception() = default;
+    Exception()
+    {
+        capture_thread_frame_pointers = thread_frame_pointers;
+    }
+
     Exception(const std::string & msg, int code, bool remote_ = false);
 
     Exception(int code, const std::string & message)
@@ -42,6 +46,7 @@ public:
     template <typename... Args>
     Exception(int code, fmt::format_string<Args...> fmt, Args &&... args) : Exception(fmt::format(fmt, std::forward<Args>(args)...), code)
     {
+        capture_thread_frame_pointers = thread_frame_pointers;
     }
 
     struct CreateFromPocoTag {};
@@ -82,6 +87,10 @@ private:
     bool remote = false;
 
     const char * className() const noexcept override { return "DB::Exception"; }
+
+protected:
+    /// Local copy of static per-thread thread_frame_pointers, should be mutable to be unpoisoned on printout
+    mutable std::vector<StackTrace::FramePointers> capture_thread_frame_pointers;
 };
 
 

@@ -36,6 +36,17 @@ namespace ErrorCodes
     extern const int CANNOT_SET_THREAD_PRIORITY;
 }
 
+void ThreadStatus::applyGlobalSettings()
+{
+    auto global_context_ptr = global_context.lock();
+    if (!global_context_ptr)
+        return;
+
+    const Settings & settings = global_context_ptr->getSettingsRef();
+
+    DB::Exception::enable_job_stack_trace = settings.enable_job_stack_trace;
+}
+
 void ThreadStatus::applyQuerySettings()
 {
     auto query_context_ptr = query_context.lock();
@@ -43,6 +54,9 @@ void ThreadStatus::applyQuerySettings()
     const Settings & settings = query_context_ptr->getSettingsRef();
 
     query_id = query_context_ptr->getCurrentQueryId();
+    DB::Exception::enable_job_stack_trace = settings.enable_job_stack_trace;
+
+    query_id_from_query_context = query_context_ptr->getCurrentQueryId();
     initQueryProfiler();
 
     untracked_memory_limit = settings.max_untracked_memory;
@@ -90,6 +104,7 @@ void ThreadStatus::attachQueryContext(ContextPtr query_context_)
         thread_trace_context.span_id = thread_local_rng();
     }
 
+    applyGlobalSettings();
     applyQuerySettings();
 }
 
@@ -128,6 +143,7 @@ void ThreadStatus::setupState(const ThreadGroupStatusPtr & thread_group_)
 
     if (auto query_context_ptr = query_context.lock())
     {
+        applyGlobalSettings();
         applyQuerySettings();
 
         // Generate new span for thread manually here, because we can't depend
