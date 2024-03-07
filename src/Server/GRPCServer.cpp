@@ -812,7 +812,11 @@ namespace
         query_context->applySettingsChanges(settings_changes);
 
         query_context->setCurrentQueryId(query_info.query_id());
+
+        /// proton: starts. Disable send_logs_level
         query_scope.emplace(query_context);
+        /// [this]{ onFatalError(); });
+        /// proton: ends.
 
         /// Prepare for sending exceptions and logs.
         const Settings & settings = query_context->getSettingsRef();
@@ -824,7 +828,6 @@ namespace
         //     logs_queue = std::make_shared<InternalTextLogsQueue>();
         //     logs_queue->max_priority = Poco::Logger::parseLevel(client_logs_level.toString());
         //     CurrentThread::attachInternalTextLogsQueue(logs_queue, client_logs_level);
-        //     CurrentThread::setFatalErrorCallback([this]{ onFatalError(); });
         // }
         /// proton: ends.
 

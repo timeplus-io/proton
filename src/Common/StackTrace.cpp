@@ -7,6 +7,10 @@
 #include <base/CachedFn.h>
 #include <base/demangle.h>
 
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
+#include <IO/Operators.h>
+
 #include <cstring>
 #include <filesystem>
 #include <sstream>
@@ -18,8 +22,8 @@
 
 std::string signalToErrorMessage(int sig, const siginfo_t & info, [[maybe_unused]] const ucontext_t & context)
 {
-    std::stringstream error;        // STYLE_CHECK_ALLOW_STD_STRING_STREAM
-    error.exceptions(std::ios::failbit);
+    DB::WriteBufferFromOwnString error;
+
     switch (sig)
     {
         case SIGSEGV:
@@ -28,7 +32,7 @@ std::string signalToErrorMessage(int sig, const siginfo_t & info, [[maybe_unused
             if (nullptr == info.si_addr)
                 error << "Address: NULL pointer.";
             else
-                error << "Address: " << info.si_addr;
+                error << "Address: " << fmt::format("{}", info.si_addr);
 
 #if defined(__x86_64__) && !defined(OS_FREEBSD) && !defined(OS_DARWIN) && !defined(__arm__) && !defined(__powerpc__)
             auto err_mask = context.uc_mcontext.gregs[REG_ERR];
@@ -332,9 +336,6 @@ static void toStringEveryLineImpl(
     const DB::SymbolIndex & symbol_index = *symbol_index_ptr;
     std::unordered_map<std::string, DB::Dwarf> dwarfs;
 
-    std::stringstream out;  // STYLE_CHECK_ALLOW_STD_STRING_STREAM
-    out.exceptions(std::ios::failbit);
-
     for (size_t i = offset; i < size; ++i)
     {
         std::vector<DB::Dwarf::SymbolizedFrame> inline_frames;
@@ -343,6 +344,7 @@ static void toStringEveryLineImpl(
         uintptr_t virtual_offset = object ? uintptr_t(object->address_begin) : 0;
         const void * physical_addr = reinterpret_cast<const void *>(uintptr_t(virtual_addr) - virtual_offset);
 
+        DB::WriteBufferFromOwnString out;
         out << i << ". ";
 
         if (object)
@@ -367,7 +369,8 @@ static void toStringEveryLineImpl(
         else
             out << "?";
 
-        out << " @ " << physical_addr;
+        out << " @ ";
+        DB::writePointerHex(physical_addr, out);
         out << " in " << (object ? object->name : "?");
 
         for (size_t j = 0; j < inline_frames.size(); ++j)
@@ -379,27 +382,22 @@ static void toStringEveryLineImpl(
         }
 
         callback(out.str());
-        out.str({});
     }
 #else
-    std::stringstream out;  // STYLE_CHECK_ALLOW_STD_STRING_STREAM
-    out.exceptions(std::ios::failbit);
-
     for (size_t i = offset; i < size; ++i)
     {
         const void * addr = frame_pointers[i];
+        DB::WriteBufferFromOwnString out;
         out << i << ". " << addr;
 
         callback(out.str());
-        out.str({});
     }
 #endif
 }
 
 static std::string toStringImpl(const StackTrace::FramePointers & frame_pointers, size_t offset, size_t size)
 {
-    std::stringstream out;      // STYLE_CHECK_ALLOW_STD_STRING_STREAM
-    out.exceptions(std::ios::failbit);
+    DB::WriteBufferFromOwnString out;
     toStringEveryLineImpl(false, frame_pointers, offset, size, [&](const std::string & str) { out << str << '\n'; });
     return out.str();
 }
