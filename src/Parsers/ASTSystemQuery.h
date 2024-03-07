@@ -45,7 +45,6 @@ public:
         RELOAD_FUNCTIONS,
         RELOAD_EMBEDDED_DICTIONARIES,
         RELOAD_CONFIG,
-        RELOAD_SYMBOLS,
         RESTART_DISK,
         STOP_MERGES,
         START_MERGES,

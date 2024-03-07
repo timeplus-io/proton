@@ -490,16 +490,6 @@ BlockIO InterpreterSystemQuery::execute()
             getContext()->checkAccess(AccessType::SYSTEM_RELOAD_CONFIG);
             system_context->reloadConfig();
             break;
-        case Type::RELOAD_SYMBOLS:
-        {
-#if defined(__ELF__) && !defined(OS_FREEBSD)
-            getContext()->checkAccess(AccessType::SYSTEM_RELOAD_SYMBOLS);
-            SymbolIndex::reload();
-            break;
-#else
-            throw Exception("SYSTEM RELOAD SYMBOLS is not supported on current platform", ErrorCodes::NOT_IMPLEMENTED);
-#endif
-        }
         case Type::STOP_MERGES:
             startStopAction(ActionLocks::PartsMerge, false);
             break;
@@ -708,11 +698,6 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
         case Type::RELOAD_CONFIG:
         {
             required_access.emplace_back(AccessType::SYSTEM_RELOAD_CONFIG);
-            break;
-        }
-        case Type::RELOAD_SYMBOLS:
-        {
-            required_access.emplace_back(AccessType::SYSTEM_RELOAD_SYMBOLS);
             break;
         }
         case Type::STOP_MERGES: [[fallthrough]];
