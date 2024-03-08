@@ -99,6 +99,10 @@ using TimeBucketAggregatedDataWithStringKeyTwoLevel = TimeBucketHashMapWithSaved
 using TimeBucketAggregatedDataWithKeys128TwoLevel = TimeBucketHashMap<UInt128, AggregateDataPtr, UInt128HashCRC32>;
 using TimeBucketAggregatedDataWithKeys256TwoLevel = TimeBucketHashMap<UInt256, AggregateDataPtr, UInt256HashCRC32>;
 
+using TimeBucketAggregatedDataWithKeys128TwoLevelNullable = TimeBucketHashMap<UInt128, AggregateDataPtr, UInt128HashCRC32, getBitmapSize<UInt128>()>;
+using TimeBucketAggregatedDataWithKeys256TwoLevelNullable = TimeBucketHashMap<UInt256, AggregateDataPtr, UInt256HashCRC32, getBitmapSize<UInt256>()>;
+
+
 class Aggregator;
 struct AggregatedDataMetrics;
 
@@ -205,8 +209,8 @@ SERDE struct AggregatedDataVariants : private boost::noncopyable
     std::unique_ptr<AggregationMethodKeysFixed<TimeBucketAggregatedDataWithKeys256TwoLevel>>    time_bucket_keys256_two_level;
 
     /// Nullable
-    std::unique_ptr<AggregationMethodKeysFixed<TimeBucketAggregatedDataWithKeys128TwoLevel, true>>  time_bucket_nullable_keys128_two_level;
-    std::unique_ptr<AggregationMethodKeysFixed<TimeBucketAggregatedDataWithKeys256TwoLevel, true>>  time_bucket_nullable_keys256_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<TimeBucketAggregatedDataWithKeys128TwoLevelNullable, true>>  time_bucket_nullable_keys128_two_level;
+    std::unique_ptr<AggregationMethodKeysFixed<TimeBucketAggregatedDataWithKeys256TwoLevelNullable, true>>  time_bucket_nullable_keys256_two_level;
 
     /// Low cardinality
 //    std::unique_ptr<AggregationMethodSingleLowCardinalityColumn<AggregationMethodOneNumber<UInt32, StreamingAggregatedDataWithNullableUInt64KeyTwoLevel>>> streaming_low_cardinality_key32_two_level;

@@ -21,7 +21,8 @@ template <
     typename Hash,
     typename Grower,
     typename Allocator,
-    typename ImplTable = HashTable<Key, Cell, Hash, Grower, Allocator>>
+    typename ImplTable = HashTable<Key, Cell, Hash, Grower, Allocator>,
+    size_t WindowOffset = 0>
 class TimeBucketHashTable : private boost::noncopyable, protected Hash /// empty base optimization
 {
 protected:
@@ -49,7 +50,8 @@ public:
         /// window time key is always: 4 or 8 bytes
         /// window time key are always lower bits of integral type of T
         /// key & 0xFFFF or 0xFFFFFFFF or 0xFFFFFFFFFFFFFFFF
-        return key & ((0xFFull << ((win_key_size - 1) << 3)) + ((1ull << ((win_key_size - 1) << 3)) - 1));
+
+        return (key >> (8 * WindowOffset)) & ((0xFFull << ((win_key_size - 1) << 3)) + ((1ull << ((win_key_size - 1) << 3)) - 1));
     }
 
     ALWAYS_INLINE Int64 windowKey(StringRef key)
