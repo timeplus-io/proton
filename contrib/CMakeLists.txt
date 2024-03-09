@@ -144,6 +144,8 @@ add_contrib (fast_float-cmake fast_float)
 add_contrib (datasketches-cpp-cmake datasketches-cpp)
 add_contrib (hashidsxx-cmake hashidsxx)
 
+add_contrib (pulsar-client-cpp-cmake pulsar-client-cpp)
+
 option(ENABLE_NLP "Enable NLP functions support" ${ENABLE_LIBRARIES})
 if (ENABLE_NLP)
     add_contrib (libstemmer-c-cmake libstemmer_c)

@@ -21,6 +21,8 @@ class ASTStorage;
     M(String, sharding_expr, "", "An expression which will be evaluated on each row of data returned by the query to calculate the an integer which will be used to determine the ID of the partition to which the row of data will be sent. If not set, data are sent to any partition randomly.", 0) \
     M(String, message_key, "", "An expression which will be evaluated on each row of data returned by the query to compute a string which will be used as the message key.", 0) \
     M(Bool, one_message_per_row, false, "If set to true, when send data to the Kafka external stream with row-based data format like `JSONEachRow`, it will produce one message per row.", 0) \
+    /* those are pulsar related settings */ \
+    M(String, service_url, "", "A pulsar service url.", 0) \
     /* those are log related settings */ \
     M(String, log_files, "", "A comma-separated list of log files", 0) \
     M(String, log_dir, "", "log root directory", 0) \

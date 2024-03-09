@@ -19,6 +19,8 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/split.hpp>
 
+#include <pulsar/Client.h>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -33,18 +35,77 @@ Pulsar::Pulsar(
     std::unique_ptr<ExternalStreamSettings> settings_,
     const ASTs &,
     bool,
-    ExternalStreamCounterPtr,
+    ExternalStreamCounterPtr external_stream_counter_,
     ContextPtr)
     : StorageExternalStreamImpl(std::move(settings_))
     , storage_id(storage->getStorageID())
-    , log(&Poco::Logger::get("External-PulsarLog"))
+    , logger(&Poco::Logger::get("External-PulsarLog"))
+    , external_stream_counter(external_stream_counter_)
+    , data_format(StorageExternalStreamImpl::dataFormat())
 {
+    assert(settings->type.value == StreamTypes::PULSAR);
+    assert(external_stream_counter);
+
+    if (settings->service_url.value.empty())
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `service_url` setting for {} external stream", settings->type.value);
+
+    if (settings->topic.value.empty())
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `topic` setting for {} external stream", settings->type.value);
+
+    calculateDataFormat(storage);
+
+    cacheVirtualColumnNamesAndTypes();
+
+    validate();
 }
 
 NamesAndTypesList Pulsar::getVirtuals() const
 {
     NamesAndTypesList n;
     return n;
+}
+
+void Pulsar::calculateDataFormat(const IStorage * storage)
+{
+    if (!data_format.empty())
+        return;
+
+    /// If there is only one column and its type is a string type, use RawBLOB. Use JSONEachRow otherwise.
+    auto column_names_and_types{storage->getInMemoryMetadata().getColumns().getOrdinary()};
+    if (column_names_and_types.size() == 1)
+    {
+        auto type = column_names_and_types.begin()->type->getTypeId();
+        if (type == TypeIndex::String || type == TypeIndex::FixedString)
+        {
+            data_format = "RawBLOB";
+            return;
+        }
+    }
+
+    data_format = "JSONEachRow";
+}
+
+void Pulsar::cacheVirtualColumnNamesAndTypes()
+{
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_APPEND_TIME, std::make_shared<DataTypeDateTime64>(3, "UTC")));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_TIME, std::make_shared<DataTypeDateTime64>(3, "UTC")));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_PROCESS_TIME, std::make_shared<DataTypeDateTime64>(3, "UTC")));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_SHARD, std::make_shared<DataTypeInt32>()));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, std::make_shared<DataTypeInt64>()));
+}
+
+/// Validate the topic still exists, specified partitions are still valid etc
+void Pulsar::validate(const std::vector<int32_t> & shards_to_query)
+{
+    std::scoped_lock lock(shards_mutex);
+    /// We haven't describe the topic yet
+    pulsar::Client client(settings->service_url.value);
+
+    std::vector<std::string> partitions;
+    pulsar::Result res = client.getPartitionsForTopic(settings->topic, partitions);
+    if (res != pulsar::ResultOk) {
+        throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "{} topic doesn't exist", settings->topic.value);
+    }
 }
 
 Pipe Pulsar::read(

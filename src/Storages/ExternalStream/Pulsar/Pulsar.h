@@ -35,7 +35,17 @@ public:
         size_t max_block_size,
         size_t num_streams) override;
 private:
+    void calculateDataFormat(const IStorage * storage);
+    void cacheVirtualColumnNamesAndTypes();
+    void validate(const std::vector<int32_t> & shards_to_query = {});
+
     StorageID storage_id;
-    Poco::Logger * log;
+    Poco::Logger * logger;
+    ExternalStreamCounterPtr external_stream_counter;
+    String data_format;
+
+    NamesAndTypesList virtual_column_names_and_types;
+
+    std::mutex shards_mutex;
 };
 }
