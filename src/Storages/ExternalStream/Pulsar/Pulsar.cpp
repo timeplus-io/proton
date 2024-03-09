@@ -67,6 +67,7 @@ Pipe Pulsar::read(
         header.insert({any_one_column.type->createColumn(), any_one_column.type, any_one_column.name});
     }
     return Pipe(std::make_shared<PulsarSource>(
-        this, std::move(header), std::move(context), max_block_size, log));
+        this, std::move(header), std::move(context), max_block_size));
 }
 }
+

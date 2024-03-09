@@ -4,14 +4,15 @@
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
 
-namespace DB
-{
-
-class IStorage;
 namespace Poco
 {
 class Logger;
 }
+
+namespace DB
+{
+
+class IStorage;
 
 class Pulsar final : public StorageExternalStreamImpl
 {

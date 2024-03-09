@@ -21,8 +21,8 @@ public:
         Pulsar * pulsar_,
         Block header_,
         ContextPtr query_context_,
-        size_t max_block_size,
-        Poco::Logger * log_);
+        size_t max_block_size
+        /*Poco::Logger * log_*/);
 
     ~PulsarSource() override;
 
@@ -34,11 +34,11 @@ public:
 //
 //    void recover(CheckpointContextPtr ckpt_ctx_) override;
 private:
-    Pulsar * pulsar;
+//    Pulsar * pulsar;
     ContextPtr query_context;
     Chunk head_chunk;
-    size_t max_block_size;
-    Poco::Logger * log;
+//    size_t max_block_size;
+//    Poco::Logger * log;
     DataTypePtr column_type;
 };
 }
