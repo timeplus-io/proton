@@ -352,13 +352,15 @@ void KafkaSource::recover(CheckpointContextPtr ckpt_ctx_)
 
     LOG_INFO(log, "Recovered last_sn={}", ckpt_data.last_sn);
 
-    /// Reset consume offset started from the next of last sn
-    if (ckpt_data.last_sn >= 0)
-        consume_ctx.offset = ckpt_data.last_sn + 1;
+    /// Reset consume offset started from the next of last sn (if not manually reset before recovery)
+    resetSN(ckpt_data.last_sn + 1);
 }
 
 void KafkaSource::resetSN(Int64 sn)
 {
+    if (sn_reseted.test_and_set())
+        return;
+
     if (sn >= 0)
     {
         ckpt_data.last_sn = sn - 1;

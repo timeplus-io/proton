@@ -133,20 +133,19 @@ void StreamingStoreSource::recover(CheckpointContextPtr ckpt_ctx_)
 {
     StreamingStoreSourceBase::recover(std::move(ckpt_ctx_));
 
-    if (last_sn >= 0)
-    {
-        if (nativelog_reader)
-            nativelog_reader->resetSequenceNumber(last_sn + 1);
-        else
-            kafka_reader->resetOffset(last_sn + 1);
-    }
+    /// Reset consume offset started from the next of last sn (if not manually reset before recovery)
+    resetSN(last_sn + 1);
 }
 
 void StreamingStoreSource::resetSN(Int64 sn)
 {
+    if (sn_reseted.test_and_set())
+        return;
+
     if (sn >= 0)
     {
         last_sn = sn - 1;
+
         if (nativelog_reader)
             nativelog_reader->resetSequenceNumber(sn);
         else

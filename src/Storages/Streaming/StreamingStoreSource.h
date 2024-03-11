@@ -40,6 +40,8 @@ private:
 
     std::unique_ptr<StreamingBlockReaderNativeLog> nativelog_reader;
 
+    std::atomic_flag sn_reseted;
+
     UInt32 record_consume_batch_count = 1000;
     Int32 record_consume_timeout_ms = 100;
 };

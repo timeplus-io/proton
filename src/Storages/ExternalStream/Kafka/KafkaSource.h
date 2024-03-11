@@ -108,6 +108,8 @@ private:
         explicit State(const klog::KafkaWALContext & consume_ctx_) : topic(consume_ctx_.topic), partition(consume_ctx_.partition) { }
     } ckpt_data;
 
+    std::atomic_flag sn_reseted;
+
     ExternalStreamCounterPtr external_stream_counter;
 };
 
