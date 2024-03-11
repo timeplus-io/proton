@@ -626,9 +626,23 @@ template<typename ReturnType>
 ReturnType SerializationNullable::deserializeTextJSONImpl(IColumn & column, ReadBuffer & istr, const FormatSettings & settings,
                                                     const SerializationPtr & nested)
 {
-    return safeDeserialize<ReturnType>(column, *nested,
-        [&istr] { return checkStringByFirstCharacterAndAssertTheRest("null", istr); },
-        [&nested, &istr, &settings] (IColumn & nested_column) { nested->deserializeTextJSON(nested_column, istr, settings); });
+    return safeDeserialize<ReturnType>(
+        column,
+        *nested,
+        [&istr, &column] {
+            if (column.isNullable())
+            {
+                /// If the column is nullable and the value field is empty, we assume it is NULL.
+                /// eg. {"key": ""}
+                if (*istr.position() == '"' && (*(istr.position() + 1) == '"'))
+                {
+                    istr.position() += 2;
+                    return true;
+                }
+            }
+            return checkStringByFirstCharacterAndAssertTheRest("null", istr);
+        },
+        [&nested, &istr, &settings](IColumn & nested_column) { nested->deserializeTextJSON(nested_column, istr, settings); });
 }
 
 void SerializationNullable::serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const

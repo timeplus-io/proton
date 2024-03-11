@@ -211,7 +211,6 @@ SERDE struct AggregatedDataVariants : private boost::noncopyable
     /// Nullable
     std::unique_ptr<AggregationMethodKeysFixed<TimeBucketAggregatedDataWithKeys128TwoLevelNullable, true>>  time_bucket_nullable_keys128_two_level;
     std::unique_ptr<AggregationMethodKeysFixed<TimeBucketAggregatedDataWithKeys256TwoLevelNullable, true>>  time_bucket_nullable_keys256_two_level;
-
     /// Low cardinality
 //    std::unique_ptr<AggregationMethodSingleLowCardinalityColumn<AggregationMethodOneNumber<UInt32, StreamingAggregatedDataWithNullableUInt64KeyTwoLevel>>> streaming_low_cardinality_key32_two_level;
 //    std::unique_ptr<AggregationMethodSingleLowCardinalityColumn<AggregationMethodOneNumber<UInt64, StreamingAggregatedDataWithNullableUInt64KeyTwoLevel>>> streaming_low_cardinality_key64_two_level;
