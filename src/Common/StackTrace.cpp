@@ -387,10 +387,7 @@ static void toStringEveryLineImpl(
     for (size_t i = offset; i < size; ++i)
     {
         const void * addr = frame_pointers[i];
-        DB::WriteBufferFromOwnString out;
-        out << i << ". " << addr;
-
-        callback(out.str());
+        callback(fmt::format("{}. {}", i, addr));
     }
 #endif
 }
