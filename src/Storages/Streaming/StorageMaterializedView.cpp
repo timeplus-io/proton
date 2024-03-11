@@ -21,6 +21,8 @@
 #include <QueryPipeline/QueryPipelineBuilder.h>
 #include <QueryPipeline/ReadProgressCallback.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/ExternalStream/StorageExternalStream.h>
+#include <Storages/ExternalTable/StorageExternalTable.h>
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/StorageFactory.h>
 #include <Common/ErrorCodes.h>
@@ -28,8 +30,6 @@
 #include <Common/ProtonCommon.h>
 #include <Common/checkStackSize.h>
 #include <Common/setThreadName.h>
-#include <Storages/ExternalStream/StorageExternalStream.h>
-#include <Storages/ExternalTable/StorageExternalTable.h>
 
 #include <ranges>
 
@@ -202,8 +202,10 @@ StorageMaterializedView::StorageMaterializedView(
             if (!target_table)
                 throw Exception(ErrorCodes::INCORRECT_QUERY, "Target stream is not found", target_table_id.getFullTableName());
 
-            if (!target_table->as<StorageStream>() && !target_table->as<StorageExternalStream>() && !target_table->as<StorageExternalTable>())
-                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "MaterializedView doesn't support target storage is {}", target_table->getName());
+            if (!target_table->as<StorageStream>() && !target_table->as<StorageExternalStream>()
+                && !target_table->as<StorageExternalTable>())
+                throw Exception(
+                    ErrorCodes::NOT_IMPLEMENTED, "MaterializedView doesn't support target storage is {}", target_table->getName());
         }
     }
     else if (attach_)
@@ -343,15 +345,19 @@ void StorageMaterializedView::initBackgroundState()
 
             /// FIXME: limit retry times ?
             size_t retry_times = 0;
+            /// Keep the last SNs of the stream source during the last retries.
+            std::deque<std::vector<Int64>> last_sns_of_streaming_sources;
+            std::vector<Int64> recovered_sns_of_streaming_sources;
             while (1)
             {
                 if (background_state.is_cancelled)
                     break;
 
                 ++retry_times;
+
+                BlockIO io;
                 try
                 {
-                    BlockIO io;
                     auto current_status = background_state.thread_status.load(std::memory_order_relaxed);
                     switch (current_status)
                     {
@@ -376,6 +382,8 @@ void StorageMaterializedView::initBackgroundState()
                             background_state.updateStatus(State::EXECUTING_PIPELINE);
                             background_state.err = ErrorCodes::OK; /// Reset the status is ok after recovered
                             io.pipeline.setExecuteMode(exec_mode);
+                            if (!recovered_sns_of_streaming_sources.empty())
+                                io.pipeline.resetSNsOfStreamingSources(recovered_sns_of_streaming_sources);
                             executeBackgroundPipeline(io, local_context);
                             break;
                         }
@@ -431,6 +439,42 @@ void StorageMaterializedView::initBackgroundState()
                                 retry_times,
                                 getStorageID().getFullTableName(),
                                 e.what()));
+
+                        /// Allow skipping some SNs to avoid permanent errors
+                        auto current_sns_of_streaming_source = io.pipeline.getLastSNsOfStreamingSources();
+                        if (last_sns_of_streaming_sources.size() >= 2)
+                        {
+                            std::vector<Int64> next_sns;
+                            next_sns.reserve(current_sns_of_streaming_source.size());
+                            bool need_reset_recovered_sns = false;
+                            for (size_t i = 0; i < current_sns_of_streaming_source.size(); ++i)
+                            {
+                                /// If the current SN fails three times in a row, recovery will begin from the next SN.
+                                if (std::ranges::all_of(last_sns_of_streaming_sources, [&](const auto & sns) {
+                                        return sns[i] == current_sns_of_streaming_source[i];
+                                    }))
+                                {
+                                    need_reset_recovered_sns = true;
+                                    next_sns.emplace_back(current_sns_of_streaming_source[i] + 1);
+                                }
+                                else
+                                    next_sns.emplace_back(-1);
+                            }
+
+                            if (!need_reset_recovered_sns)
+                                next_sns.clear();
+                            else
+                                LOG_INFO(
+                                    background_state.log,
+                                    "Skip some SNs to avoid permanent errors, next SNs: {}",
+                                    fmt::join(next_sns | std::views::transform([](auto sn) { return std::to_string(sn); }), ", "));
+
+                            recovered_sns_of_streaming_sources.swap(next_sns);
+
+                            last_sns_of_streaming_sources.pop_front();
+                        }
+
+                        last_sns_of_streaming_sources.emplace_back(std::move(current_sns_of_streaming_source));
 
                         /// For some queries that always go wrong, we don’t want to recover too frequently. Now wait 5s, 10s, 15s, ... 30s, 30s for each time
                         std::this_thread::sleep_for(recover_interval * std::min<size_t>(retry_times, 6));

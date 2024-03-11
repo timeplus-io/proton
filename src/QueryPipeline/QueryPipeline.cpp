@@ -23,7 +23,6 @@
 
 /// proton: starts.
 #include <Processors/Streaming/ISource.h>
-#include <Common/assert_cast.h>
 
 #include <ranges>
 /// proton: ends.
@@ -593,19 +592,19 @@ std::vector<Int64> QueryPipeline::getLastSNsOfStreamingSources() const
     for (const auto & processor : processors)
     {
         if (processor->isSource() && processor->isStreaming())
-            sns.emplace_back(assert_cast<const Streaming::ISource &>(*processor).lastSN());
+            sns.emplace_back(std::static_pointer_cast<const Streaming::ISource>(processor)->lastSN());
     }
     return sns;
 }
 
 void QueryPipeline::resetSNsOfStreamingSources(const std::vector<Int64> & sns)
 {
-    std::vector<Streaming::ISource *> streaming_sources;
+    std::vector<std::shared_ptr<Streaming::ISource>> streaming_sources;
     streaming_sources.reserve(sns.size());
     for (const auto & processor : processors)
     {
         if (processor->isSource() && processor->isStreaming())
-            streaming_sources.emplace_back(assert_cast<Streaming::ISource *>(processor.get()));
+            streaming_sources.emplace_back(std::static_pointer_cast<Streaming::ISource>(processor));
     }
 
     if (sns.size() != streaming_sources.size())
