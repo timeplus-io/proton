@@ -8,6 +8,7 @@
 
 /// proton : starts
 #include <Core/ExecuteMode.h>
+#include <Core/RecoveryPolicy.h>
 /// proton : ends
 
 
@@ -831,6 +832,7 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(Bool, _tp_internal_system_open_sesame, true, "Control the access to system.* streams", 0) \
     M(UInt64, javascript_max_memory_bytes, 100 * 1024 * 1024, "Maximum heap size of javascript UDA/UDF in bytes", 0) \
     M(Bool, enable_dependency_check, true, "Enable the dependency check of view/materialized view", 0) \
+    M(RecoveryPolicy, recovery_policy, RecoveryPolicy::Strict, "Default recovery policy for materialized view when inner query failed. Strict(0): always recover from checkpointed; Loose(2): attempts to recover from checkpointed and allow skipping of some data with permanent errors;", 0) \
     M(UInt64, max_number_of_parameters_for_json_values, 1000, "Max arguments number of json_values limit", 0) \
     M(UInt64, max_block_size, DEFAULT_BLOCK_SIZE, "Maximum block size for reading", 0) \
     M(UInt64, max_insert_block_size, DEFAULT_INSERT_BLOCK_SIZE, "The maximum block size for insertion, if we control the creation of blocks for insertion.", 0) \

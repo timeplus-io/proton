@@ -432,52 +432,74 @@ void StorageMaterializedView::initBackgroundState()
                     }
                     else
                     {
-                        background_state.setException(
-                            err_code,
-                            fmt::format(
-                                "Wait for {}th recovering background pipeline of matierialized view '{}'. Background runtime error: {}",
-                                retry_times,
-                                getStorageID().getFullTableName(),
-                                e.what()));
-
-                        /// Allow skipping some SNs to avoid permanent errors
-                        auto current_sns_of_streaming_source = io.pipeline.getLastSNsOfStreamingSources();
-                        if (last_sns_of_streaming_sources.size() >= 2)
+                        switch (local_context->getSettingsRef().recovery_policy)
                         {
-                            std::vector<Int64> next_sns;
-                            next_sns.reserve(current_sns_of_streaming_source.size());
-                            bool need_reset_recovered_sns = false;
-                            for (size_t i = 0; i < current_sns_of_streaming_source.size(); ++i)
+                            case RecoveryPolicy::Strict:
                             {
-                                /// If the current SN fails three times in a row, recovery will begin from the next SN.
-                                if (std::ranges::all_of(last_sns_of_streaming_sources, [&](const auto & sns) {
-                                        return sns[i] == current_sns_of_streaming_source[i];
-                                    }))
-                                {
-                                    need_reset_recovered_sns = true;
-                                    next_sns.emplace_back(current_sns_of_streaming_source[i] + 1);
-                                }
-                                else
-                                    next_sns.emplace_back(-1);
+                                background_state.setException(
+                                    err_code,
+                                    fmt::format(
+                                        "Wait for {}th recovering background pipeline of matierialized view '{}'. Background runtime "
+                                        "error: {}",
+                                        retry_times,
+                                        getStorageID().getFullTableName(),
+                                        e.what()));
+
+                                /// For some queries that always go wrong, we don’t want to recover too frequently. Now wait 5s, 10s, 15s, ... 30s, 30s for each time
+                                std::this_thread::sleep_for(recover_interval * std::min<size_t>(retry_times, 6));
+                                break;
                             }
+                            case RecoveryPolicy::Loose:
+                            {
+                                auto current_sns_of_streaming_source = io.pipeline.getLastSNsOfStreamingSources();
+                                background_state.setException(
+                                    err_code,
+                                    fmt::format(
+                                        "Wait for {}th recovering background pipeline of matierialized view '{}'. Background runtime "
+                                        "error: {}",
+                                        retry_times,
+                                        getStorageID().getFullTableName(),
+                                        e.what()));
 
-                            if (!need_reset_recovered_sns)
-                                next_sns.clear();
-                            else
-                                LOG_INFO(
-                                    background_state.log,
-                                    "Skip some SNs to avoid permanent errors, next SNs: {}",
-                                    fmt::join(next_sns | std::views::transform([](auto sn) { return std::to_string(sn); }), ", "));
+                                /// Allow skipping some SNs to avoid permanent recovery
+                                if (last_sns_of_streaming_sources.size() >= 2)
+                                {
+                                    std::vector<Int64> next_sns;
+                                    next_sns.reserve(current_sns_of_streaming_source.size());
+                                    bool need_reset_recovered_sns = false;
+                                    for (size_t i = 0; i < current_sns_of_streaming_source.size(); ++i)
+                                    {
+                                        /// If the current SN fails three times in a row, recovery will begin from the next SN.
+                                        if (std::ranges::all_of(last_sns_of_streaming_sources, [&](const auto & sns) {
+                                                return sns[i] == current_sns_of_streaming_source[i];
+                                            }))
+                                        {
+                                            need_reset_recovered_sns = true;
+                                            next_sns.emplace_back(current_sns_of_streaming_source[i] + 1);
+                                        }
+                                        else
+                                            next_sns.emplace_back(-1);
+                                    }
 
-                            recovered_sns_of_streaming_sources.swap(next_sns);
+                                    if (!need_reset_recovered_sns)
+                                        next_sns.clear();
+                                    else
+                                        LOG_INFO(
+                                            background_state.log,
+                                            "Skip some SNs to avoid permanent errors, will recover from SNs: {}",
+                                            fmt::join(next_sns | std::views::transform([](auto sn) { return std::to_string(sn); }), ", "));
 
-                            last_sns_of_streaming_sources.pop_front();
+                                    recovered_sns_of_streaming_sources.swap(next_sns);
+
+                                    last_sns_of_streaming_sources.pop_front();
+                                }
+
+                                last_sns_of_streaming_sources.emplace_back(std::move(current_sns_of_streaming_source));
+
+                                std::this_thread::sleep_for(recover_interval);
+                                break;
+                            }
                         }
-
-                        last_sns_of_streaming_sources.emplace_back(std::move(current_sns_of_streaming_source));
-
-                        /// For some queries that always go wrong, we don’t want to recover too frequently. Now wait 5s, 10s, 15s, ... 30s, 30s for each time
-                        std::this_thread::sleep_for(recover_interval * std::min<size_t>(retry_times, 6));
 
                         /// Retry recovering with recover mode
                         if (current_status == State::EXECUTING_PIPELINE)
