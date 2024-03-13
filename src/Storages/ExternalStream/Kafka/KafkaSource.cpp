@@ -345,27 +345,18 @@ Chunk KafkaSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
     return result;
 }
 
-void KafkaSource::recover(CheckpointContextPtr ckpt_ctx_)
+void KafkaSource::doRecover(CheckpointContextPtr ckpt_ctx_)
 {
     ckpt_ctx_->coordinator->recover(
         getLogicID(), ckpt_ctx_, [&](VersionType version, ReadBuffer & rb) { ckpt_data.deserialize(version, rb); });
 
     LOG_INFO(log, "Recovered last_sn={}", ckpt_data.last_sn);
-
-    /// Reset consume offset started from the next of last sn (if not manually reset before recovery)
-    resetSN(ckpt_data.last_sn + 1);
 }
 
-void KafkaSource::resetSN(Int64 sn)
+void KafkaSource::doResetStartSN(Int64 sn)
 {
-    if (sn_reseted.test_and_set())
-        return;
-
     if (sn >= 0)
-    {
-        ckpt_data.last_sn = sn - 1;
         consume_ctx.offset = sn;
-    }
 }
 
 void KafkaSource::State::serialize(WriteBuffer & wb) const

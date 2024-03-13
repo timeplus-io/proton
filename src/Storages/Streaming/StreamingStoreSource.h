@@ -23,11 +23,9 @@ public:
 
     ~StreamingStoreSource() override = default;
 
-    void resetSN(Int64 sn) override;
-
-    void recover(CheckpointContextPtr ckpt_ctx_) override;
-
     String getName() const override { return "StreamingStoreSource"; }
+
+    String description() const override;
 
     std::pair<String, Int32> getStreamShard() const override;
 
@@ -35,12 +33,12 @@ private:
     inline nlog::RecordPtrs read();
     void readAndProcess() override;
 
+    void doResetStartSN(Int64 sn) override;
+
 private:
     std::unique_ptr<StreamingBlockReaderKafka> kafka_reader;
 
     std::unique_ptr<StreamingBlockReaderNativeLog> nativelog_reader;
-
-    std::atomic_flag sn_reseted;
 
     UInt32 record_consume_batch_count = 1000;
     Int32 record_consume_timeout_ms = 100;

@@ -39,12 +39,11 @@ public:
 
     String getName() const override { return "KafkaSource"; }
 
+    String description() const override { return fmt::format("topic={}, partition={}", consume_ctx.topic, consume_ctx.partition); }
+
     Chunk generate() override;
 
     Int64 lastSN() const override { return ckpt_data.last_sn; }
-    void resetSN(Int64 sn) override;
-
-    void recover(CheckpointContextPtr ckpt_ctx_) override;
 
 private:
     void calculateColumnPositions();
@@ -58,6 +57,8 @@ private:
     inline void readAndProcess();
 
     Chunk doCheckpoint(CheckpointContextPtr ckpt_ctx_) override;
+    void doRecover(CheckpointContextPtr ckpt_ctx_) override;
+    void doResetStartSN(Int64 sn) override;
 
 private:
     StorageSnapshotPtr storage_snapshot;
@@ -107,8 +108,6 @@ private:
 
         explicit State(const klog::KafkaWALContext & consume_ctx_) : topic(consume_ctx_.topic), partition(consume_ctx_.partition) { }
     } ckpt_data;
-
-    std::atomic_flag sn_reseted;
 
     ExternalStreamCounterPtr external_stream_counter;
 };

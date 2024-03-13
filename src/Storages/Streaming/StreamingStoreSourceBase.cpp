@@ -30,7 +30,7 @@ StreamingStoreSourceBase::StreamingStoreSourceBase(
         storage_snapshot->object_columns.set(std::make_unique<ColumnsDescription>(storage_snapshot->object_columns.get()->getByNames(
             GetColumnsOptions::AllPhysical, columns_desc.physical_object_columns_to_read.getNames())));
 
-    iter = result_chunks.begin();
+    iter = result_chunks_with_sns.begin();
 }
 
 ColumnPtr
@@ -136,7 +136,7 @@ Chunk StreamingStoreSourceBase::generate()
     if (isCancelled())
         return {};
 
-    if (result_chunks.empty() || iter == result_chunks.end())
+    if (result_chunks_with_sns.empty() || iter == result_chunks_with_sns.end())
     {
         readAndProcess();
 
@@ -144,14 +144,15 @@ Chunk StreamingStoreSourceBase::generate()
             return {};
 
         /// After processing blocks, check again to see if there are new results
-        if (result_chunks.empty() || iter == result_chunks.end())
+        if (result_chunks_with_sns.empty() || iter == result_chunks_with_sns.end())
             /// Act as a heart beat
             return header_chunk.clone();
 
         /// result_blocks is not empty, fallthrough
     }
 
-    return std::move(*iter++);
+    last_sn = iter->second;
+    return std::move((iter++)->first);
 }
 
 /// 1) Generate a checkpoint barrier
@@ -179,7 +180,7 @@ Chunk StreamingStoreSourceBase::doCheckpoint(CheckpointContextPtr current_ckpt_c
     return result;
 }
 
-void StreamingStoreSourceBase::recover(CheckpointContextPtr ckpt_ctx_)
+void StreamingStoreSourceBase::doRecover(CheckpointContextPtr ckpt_ctx_)
 {
     ckpt_ctx_->coordinator->recover(getLogicID(), ckpt_ctx_, [&](VersionType /*version*/, ReadBuffer & rb) {
         UInt32 recovered_pid = 0;

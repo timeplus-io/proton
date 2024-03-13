@@ -23,13 +23,12 @@ public:
 
     Int64 lastSN() const override { return last_sn; }
 
-    void recover(CheckpointContextPtr ckpt_ctx_) override;
-
 private:
     virtual void readAndProcess() = 0;
     virtual std::pair<String, Int32> getStreamShard() const = 0;
 
     Chunk doCheckpoint(CheckpointContextPtr ckpt_ctx_) override;
+    void doRecover(CheckpointContextPtr ckpt_ctx_) override;
 
 protected:
     StorageSnapshotPtr storage_snapshot;
@@ -46,8 +45,8 @@ protected:
     ColumnPtr getSubcolumnFromBlock(const Block & block, size_t parent_column_pos, const NameAndTypePair & subcolumn_pair) const;
     void fillAndUpdateObjectsIfNecessary(Block & block);
 
-    std::vector<Chunk> result_chunks;
-    std::vector<Chunk>::iterator iter;
+    std::vector<std::pair<Chunk, Int64>> result_chunks_with_sns;
+    std::vector<std::pair<Chunk, Int64>>::iterator iter;
 
     Int64 last_sn = -1;
 };

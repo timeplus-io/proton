@@ -586,32 +586,15 @@ std::unique_ptr<ReadProgressCallback> QueryPipeline::getReadProgressCallback() c
 }
 
 /// proton: starts.
-std::vector<Int64> QueryPipeline::getLastSNsOfStreamingSources() const
-{
-    std::vector<Int64> sns;
-    for (const auto & processor : processors)
-    {
-        if (processor->isSource() && processor->isStreaming())
-            sns.emplace_back(std::static_pointer_cast<const Streaming::ISource>(processor)->lastSN());
-    }
-    return sns;
-}
-
-void QueryPipeline::resetSNsOfStreamingSources(const std::vector<Int64> & sns)
+std::vector<std::shared_ptr<Streaming::ISource>> QueryPipeline::getStreamingSources() const
 {
     std::vector<std::shared_ptr<Streaming::ISource>> streaming_sources;
-    streaming_sources.reserve(sns.size());
     for (const auto & processor : processors)
     {
         if (processor->isSource() && processor->isStreaming())
             streaming_sources.emplace_back(std::static_pointer_cast<Streaming::ISource>(processor));
     }
-
-    if (sns.size() != streaming_sources.size())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Number of sequence numbers doesn't match number of streaming sources");
-
-    for (auto [streaming_source, sn] : std::views::zip(streaming_sources, sns))
-        streaming_source->resetSN(sn);
+    return streaming_sources;
 }
 /// proton: ends.
 }

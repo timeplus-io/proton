@@ -50,6 +50,18 @@ StreamingStoreSource::StreamingStoreSource(
     }
 }
 
+String StreamingStoreSource::description() const
+{
+    String uuid;
+    Int64 shard;
+    if (nativelog_reader)
+        std::tie(uuid, shard) = nativelog_reader->getStreamShard();
+    else
+        std::tie(uuid, shard) = kafka_reader->getStreamShard();
+
+    return fmt::format("uuid={},shard={}", uuid, shard);
+}
+
 nlog::RecordPtrs StreamingStoreSource::read()
 {
     if (nativelog_reader)
@@ -64,15 +76,13 @@ void StreamingStoreSource::readAndProcess()
     if (records.empty())
         return;
 
-    result_chunks.clear();
-    result_chunks.reserve(records.size());
+    result_chunks_with_sns.clear();
+    result_chunks_with_sns.reserve(records.size());
 
     for (auto & record : records)
     {
         if (record->empty())
             continue;
-
-        last_sn = record->getSN();
 
         Columns columns;
         columns.reserve(header_chunk.getNumColumns());
@@ -110,15 +120,15 @@ void StreamingStoreSource::readAndProcess()
             }
         }
 
-        result_chunks.emplace_back(std::move(columns), rows);
+        result_chunks_with_sns.emplace_back(Chunk{std::move(columns), rows}, record->getSN());
         if (likely(block.info.appendTime() > 0))
         {
             auto chunk_ctx = ChunkContext::create();
             chunk_ctx->setAppendTime(block.info.appendTime());
-            result_chunks.back().setChunkContext(std::move(chunk_ctx));
+            result_chunks_with_sns.back().first.setChunkContext(std::move(chunk_ctx));
         }
     }
-    iter = result_chunks.begin();
+    iter = result_chunks_with_sns.begin();
 }
 
 std::pair<String, Int32> StreamingStoreSource::getStreamShard() const
@@ -129,23 +139,10 @@ std::pair<String, Int32> StreamingStoreSource::getStreamShard() const
         return kafka_reader->getStreamShard();
 }
 
-void StreamingStoreSource::recover(CheckpointContextPtr ckpt_ctx_)
+void StreamingStoreSource::doResetStartSN(Int64 sn)
 {
-    StreamingStoreSourceBase::recover(std::move(ckpt_ctx_));
-
-    /// Reset consume offset started from the next of last sn (if not manually reset before recovery)
-    resetSN(last_sn + 1);
-}
-
-void StreamingStoreSource::resetSN(Int64 sn)
-{
-    if (sn_reseted.test_and_set())
-        return;
-
     if (sn >= 0)
     {
-        last_sn = sn - 1;
-
         if (nativelog_reader)
             nativelog_reader->resetSequenceNumber(sn);
         else
