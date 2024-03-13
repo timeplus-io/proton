@@ -141,20 +141,19 @@ tests:
             kill query where query_id = '3100' sync;
 
         - client: python
+          query_type: table
+          depends_on_stream: test_31_multishards_stream
+          wait: 1
+          query: |
+            insert into test_31_multishards_stream(i, v) values(101, 'test');
+
+        - client: python
           query_type: stream
           query_id: 3100-1
           depends_on_stream: test_31_multishards_stream
           wait: 1
           query: |
             recover from '3100';
-
-        - client: python
-          query_type: table
-          depends_on_stream: test_31_multishards_stream
-          depends_on: 3100
-          wait: 1
-          query: |
-            insert into test_31_multishards_stream(i, v) values(101, 'test');
 
         - client: python
           query_table: table
@@ -217,18 +216,17 @@ tests:
             kill query where query_id = '3101' sync;
 
         - client: python
+          query_type: table
+          wait: 1
+          query: |
+            insert into test_31_multishards_stream(i, v) values(101, 'test');
+
+        - client: python
           query_type: stream
           query_id: 3101-1
           wait: 1
           query: |
             recover from '3101';
-
-        - client: python
-          query_type: table
-          depends_on: 3101
-          wait: 1
-          query: |
-            insert into test_31_multishards_stream(i, v) values(101, 'test');
 
         - client: python
           query_table: table
