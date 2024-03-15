@@ -15,6 +15,22 @@ struct TimeBucketHashTableGrower : public HashTableGrower<initial_size_degree>
     void increaseSize() { this->size_degree += this->size_degree >= 15 ? 1 : 2; }
 };
 
+
+/**
+ * why need WindowOffset? what is it?
+ * In query such as 'select ... from tumble(stream, 5s) group by window_start, col', if the toatal length of group by key are fixed,
+ * and the col are nullable columns, in function 'packFixed', it will put the KeysNullMap(indicates which column of this row of data is null) in the front of the key,
+ * then put the window time key and other group by key behind it.But in TimeBucketHashTable::windowKey, we assume the window time key is in the front of the key, 
+ * The key's layout is like:
+ *  |           key                |
+ *  +-----------------+------------+
+ *  | col, window time| KeysNullMap|
+ *  +-----------------+------------+ low bit
+ *                    |WindowOffset|
+ * 
+ * so we need to add a WindowOffset to indicate the length of the KeysNullMap, then we can get the window time key correctly.
+ * PS: The WindowOffset will only work in this situation(group by window_start and other nullable column), other situation will not be 0, and it will not affect the result.
+*/
 template <
     typename Key,
     typename Cell,

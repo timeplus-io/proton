@@ -5,6 +5,8 @@
 #include <DataTypes/DataTypesNumber.h>
 
 #include <Columns/ColumnNullable.h>
+#include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnString.h>
 #include <Core/Field.h>
 #include <IO/ReadBuffer.h>
 #include <IO/ReadHelpers.h>
@@ -13,6 +15,8 @@
 #include <IO/PeekableReadBuffer.h>
 #include <Common/assert_cast.h>
 #include <base/scope_guard.h>
+
+#include <typeinfo>
 
 namespace DB
 {
@@ -622,9 +626,9 @@ void SerializationNullable::deserializeTextJSON(IColumn & column, ReadBuffer & i
     deserializeTextJSONImpl<void>(column, istr, settings, nested);
 }
 
-template<typename ReturnType>
-ReturnType SerializationNullable::deserializeTextJSONImpl(IColumn & column, ReadBuffer & istr, const FormatSettings & settings,
-                                                    const SerializationPtr & nested)
+template <typename ReturnType>
+ReturnType SerializationNullable::deserializeTextJSONImpl(
+    IColumn & column, ReadBuffer & istr, const FormatSettings & settings, const SerializationPtr & nested)
 {
     return safeDeserialize<ReturnType>(
         column,
@@ -632,12 +636,17 @@ ReturnType SerializationNullable::deserializeTextJSONImpl(IColumn & column, Read
         [&istr, &column] {
             if (column.isNullable())
             {
-                /// If the column is nullable and the value field is empty, we assume it is NULL.
-                /// eg. {"key": ""}
-                if (*istr.position() == '"' && (*(istr.position() + 1) == '"'))
+                auto & column_nullable = dynamic_cast<ColumnNullable &>(column);
+                auto & nested_column = column_nullable.getNestedColumn();
+                if (typeid(nested_column) != typeid(ColumnString) && typeid(nested_column) != typeid(ColumnFixedString))
                 {
-                    istr.position() += 2;
-                    return true;
+                    /// If the column is nullable and the value field is empty, we assume it is NULL.
+                    /// eg. {"key": ""}
+                    if (*istr.position() == '"' && (*(istr.position() + 1) == '"'))
+                    {
+                        istr.position() += 2;
+                        return true;
+                    }
                 }
             }
             return checkStringByFirstCharacterAndAssertTheRest("null", istr);
