@@ -16,18 +16,7 @@
 1	1	a	\N	[1]	[1]	['a']	['a']	2000-01-01
 1	\N	a	a	[1]	[1]	['a']	['a']	2000-01-01
 ----- TinyLog engine -----
-1	1	a	a	[1]	[1]	['a']	['a']	2000-01-01
-1	1	a	a	[1]	[1]	['a']	[NULL]	2000-01-01
-1	1	a	a	[1]	[NULL]	['a']	['a']	2000-01-01
-1	1	a	\N	[1]	[1]	['a']	['a']	2000-01-01
-1	\N	a	a	[1]	[1]	['a']	['a']	2000-01-01
------ Log engine -----
-1	1	a	a	[1]	[1]	['a']	['a']	2000-01-01
-1	1	a	a	[1]	[1]	['a']	[NULL]	2000-01-01
-1	1	a	a	[1]	[NULL]	['a']	['a']	2000-01-01
-1	1	a	\N	[1]	[1]	['a']	['a']	2000-01-01
-1	\N	a	a	[1]	[1]	['a']	['a']	2000-01-01
------ StripeLog engine -----
+0
 1	1	a	a	[1]	[1]	['a']	['a']	2000-01-01
 1	1	a	a	[1]	[1]	['a']	[NULL]	2000-01-01
 1	1	a	a	[1]	[NULL]	['a']	['a']	2000-01-01
@@ -51,12 +40,12 @@
 58
 406
 ----- isNull, isNotNull -----
-2	7	0	1
-5	1	0	1
-9	\N	0	0
-42	42	0	1
-\N	6	1	1
-\N	\N	1	0
+2	7	false	true
+5	1	false	true
+9	\N	false	false
+42	42	false	true
+\N	6	true	true
+\N	\N	true	false
 ----- if_null, null_if -----
 2	7	2
 5	1	5
@@ -102,6 +91,7 @@
 \N
 \N
 ----- if -----
+0
 a	1	uint8
 b	1	uint8
 c	0	uint8
@@ -162,6 +152,7 @@ d
 2
 3
 ----- variable arrays -----
+0
 2
 \N
 2
@@ -182,6 +173,7 @@ d
 \N
 4
 \N
+0
 a
 \N
 a
@@ -202,11 +194,13 @@ ghij
 \N
 ghij
 \N
+0
 2
 3
 7
 4
 \N
+0
 a
 bc
 def
@@ -214,108 +208,115 @@ ghij
 \N
 ----- has -----
 ----- constant arrays -----
-1
-1
-1
-1
-0
-1
-1
-1
-1
-1
-1
-1
-0
-1
-1
-1
-0
-1
-1
-0
-1
-1
-1
-0
-1
-1
-1
+true
+true
+true
+true
+false
+true
+true
+true
+true
+true
+true
+true
+false
+true
+true
+true
+false
+true
+true
+false
+true
+true
+true
+false
+true
+true
+true
 ----- variable arrays -----
-1
 0
-1
-1
+true
+false
+true
+true
+false
+true
+true
+false
+true
+false
+false
+true
+false
+true
+false
+false
+false
+false
+false
+false
+true
+true
+true
+false
+false
+true
+true
+true
+true
+true
 0
-1
-1
+true
+false
+true
+true
+false
+true
+true
+false
+true
+false
+true
+true
+true
+false
+false
+false
+true
+false
+true
+false
+true
+true
+true
+true
+true
 0
-1
+true
+true
+true
+false
 0
+true
+true
+true
+false
+true
 0
-1
+true
+true
+true
+true
 0
-1
-0
-0
-0
-0
-0
-0
-1
-1
-1
-0
-0
-1
-1
-1
-1
-1
-1
-0
-1
-1
-0
-1
-1
-0
-1
-0
-1
-1
-1
-0
-0
-0
-1
-0
-1
-0
-1
-1
-1
-1
-1
-1
-1
-1
-0
-1
-1
-1
-0
-1
-1
-1
-1
-1
-1
-1
-1
-1
-1
+true
+true
+true
+true
+true
 ----- Aggregation -----
+0
 A	0	2
 A	1	2
 B	1	4
@@ -323,18 +324,22 @@ C	1	1
 C	\N	3
 \N	1	1
 \N	\N	1
+0
 A	0	2
 A	1	2
 B	1	4
 C	1	1
 C	\N	3
+0
 A	4
 B	4
 C	4
 \N	2
+0
 0	2
 1	7
 \N	3
+0
 0	2	1
 0	3	1
 1	2	2
@@ -342,6 +347,7 @@ C	4
 1	5	3
 \N	2	1
 \N	3	2
+0
 0	2	1	1
 0	3	\N	1
 1	2	1	1
@@ -353,6 +359,7 @@ C	4
 \N	2	\N	1
 \N	3	1	1
 \N	3	\N	1
+0
 [0]	2
 [1]	7
 [NULL]	3

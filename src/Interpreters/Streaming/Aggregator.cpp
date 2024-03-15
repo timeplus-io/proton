@@ -718,7 +718,7 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethodTimeBucketTwoLev
         }
 
         /// Fallback case.
-        return AggregatedDataVariants::Type::serialized;
+        return AggregatedDataVariants::Type::time_bucket_serialized_two_level;
     }
 
     /// No key has been found to be nullable.

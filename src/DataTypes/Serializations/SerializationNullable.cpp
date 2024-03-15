@@ -5,6 +5,8 @@
 #include <DataTypes/DataTypesNumber.h>
 
 #include <Columns/ColumnNullable.h>
+#include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnString.h>
 #include <Core/Field.h>
 #include <IO/ReadBuffer.h>
 #include <IO/ReadHelpers.h>
@@ -13,6 +15,8 @@
 #include <IO/PeekableReadBuffer.h>
 #include <Common/assert_cast.h>
 #include <base/scope_guard.h>
+
+#include <typeinfo>
 
 namespace DB
 {
@@ -622,13 +626,32 @@ void SerializationNullable::deserializeTextJSON(IColumn & column, ReadBuffer & i
     deserializeTextJSONImpl<void>(column, istr, settings, nested);
 }
 
-template<typename ReturnType>
-ReturnType SerializationNullable::deserializeTextJSONImpl(IColumn & column, ReadBuffer & istr, const FormatSettings & settings,
-                                                    const SerializationPtr & nested)
+template <typename ReturnType>
+ReturnType SerializationNullable::deserializeTextJSONImpl(
+    IColumn & column, ReadBuffer & istr, const FormatSettings & settings, const SerializationPtr & nested)
 {
-    return safeDeserialize<ReturnType>(column, *nested,
-        [&istr] { return checkStringByFirstCharacterAndAssertTheRest("null", istr); },
-        [&nested, &istr, &settings] (IColumn & nested_column) { nested->deserializeTextJSON(nested_column, istr, settings); });
+    return safeDeserialize<ReturnType>(
+        column,
+        *nested,
+        [&istr, &column] {
+            if (column.isNullable())
+            {
+                auto & column_nullable = dynamic_cast<ColumnNullable &>(column);
+                auto & nested_column = column_nullable.getNestedColumn();
+                if (typeid(nested_column) != typeid(ColumnString) && typeid(nested_column) != typeid(ColumnFixedString))
+                {
+                    /// If the column is nullable and the value field is empty, we assume it is NULL.
+                    /// eg. {"key": ""}
+                    if (*istr.position() == '"' && (*(istr.position() + 1) == '"'))
+                    {
+                        istr.position() += 2;
+                        return true;
+                    }
+                }
+            }
+            return checkStringByFirstCharacterAndAssertTheRest("null", istr);
+        },
+        [&nested, &istr, &settings](IColumn & nested_column) { nested->deserializeTextJSON(nested_column, istr, settings); });
 }
 
 void SerializationNullable::serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const
