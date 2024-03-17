@@ -128,10 +128,7 @@ initRdKafkaHandle(rd_kafka_type_t type, KConfParams & params, KafkaWALStats * st
     std::unique_ptr<struct rd_kafka_s, void (*)(rd_kafka_t *)> kafka_handle(
         rd_kafka_new(type, kconf.release(), errstr, sizeof(errstr)), rd_kafka_destroy);
     if (!kafka_handle)
-    {
-        LOG_ERROR(stats->log, "Failed to create kafka handle, error={}", errstr);
-        throw DB::Exception("Failed to create kafka handle", mapErrorCode(rd_kafka_last_error()));
-    }
+        throw DB::Exception(mapErrorCode(rd_kafka_last_error()), "Failed to create kafka handle, error={}", errstr);
 
     return kafka_handle;
 }

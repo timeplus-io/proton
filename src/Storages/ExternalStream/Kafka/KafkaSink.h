@@ -52,9 +52,8 @@ public:
         const Block & header,
         Int32 initial_partition_cnt,
         const ASTPtr & message_key,
-        ContextPtr context,
-        Poco::Logger * logger_,
-        ExternalStreamCounterPtr external_stream_counter_);
+        ExternalStreamCounterPtr external_stream_counter_,
+        ContextPtr context);
     ~KafkaSink() override;
 
     String getName() const override { return "KafkaSink"; }
@@ -86,11 +85,13 @@ private:
 
     static const int POLL_TIMEOUT_MS {500};
 
+    RdKafka::Producer & producer;
+    std::unique_ptr<RdKafka::Topic> topic;
+
     Int32 partition_cnt {0};
     bool one_message_per_row {false};
+    Int32 topic_refresh_interval_ms = 0;
 
-    klog::KafkaPtr producer {nullptr, rd_kafka_destroy};
-    klog::KTopicPtr topic {nullptr, rd_kafka_topic_destroy};
     ThreadPool background_jobs {1};
     std::atomic_flag is_finished {false};
 
@@ -120,7 +121,7 @@ private:
 
     State state;
 
-    Poco::Logger * logger;
     ExternalStreamCounterPtr external_stream_counter;
+    Poco::Logger * logger;
 };
 }

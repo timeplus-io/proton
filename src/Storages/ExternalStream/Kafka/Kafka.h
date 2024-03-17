@@ -5,6 +5,9 @@
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
+#include <Storages/ExternalStream/Kafka/Consumer.h>
+#include <Storages/ExternalStream/Kafka/ConsumerPool.h>
+#include <Storages/ExternalStream/Kafka/Producer.h>
 #include <Storages/Streaming/SeekToInfo.h>
 
 namespace DB
@@ -12,9 +15,13 @@ namespace DB
 
 class IStorage;
 
+
 class Kafka final : public StorageExternalStreamImpl
 {
 public:
+    using ConfPtr = std::unique_ptr<rd_kafka_conf_t, decltype(rd_kafka_conf_destroy) *>;
+    using HandlerPtr = std::shared_ptr<rd_kafka_t>;
+
     Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach, ExternalStreamCounterPtr external_stream_counter_, ContextPtr context);
     ~Kafka() override = default;
 
@@ -35,19 +42,31 @@ public:
 
     SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) override;
 
-    bool produceOneMessagePerRow() const { return settings->one_message_per_row; }
+    bool produceOneMessagePerRow() const { return one_message_per_row; }
+    Int32 topicRefreshIntervalMs() const { return topic_refresh_interval_ms; }
     const String & brokers() const { return settings->brokers.value; }
     const String & dataFormat() const override { return data_format; }
     const String & topic() const { return settings->topic.value; }
-    const klog::KConfParams & properties() const { return kafka_properties; }
-    const klog::KafkaWALAuth & auth() const noexcept { return *auth_info; }
     const ASTPtr & shardingExprAst() const { assert(!engine_args.empty()); return engine_args[0]; }
     bool hasCustomShardingExpr() const;
-    klog::KafkaWALSimpleConsumerPtr getConsumer(int32_t fetch_wait_max_ms = 200) const;
+
+    RdKafka::Producer & getProducer() const
+    {
+        assert(producer);
+        return *producer;
+    }
+    RdKafka::ConsumerPool::Entry getConsumer() const
+    {
+        assert(consumer_pool);
+        return consumer_pool->get(/*max_wait_ms=*/1000);
+    }
+
+    String getLoggerName() const { return storage_id.getDatabaseName() == "default" ? storage_id.getTableName() : storage_id.getFullNameNotQuoted(); }
 
 private:
     void calculateDataFormat(const IStorage * storage);
     void cacheVirtualColumnNamesAndTypes();
+    void initHandlers();
     std::vector<Int64> getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const;
     void validateMessageKey(const String & message_key, IStorage * storage, const ContextPtr & context);
     void validate(const std::vector<int32_t> & shards_to_query = {});
@@ -55,17 +74,21 @@ private:
 
     StorageID storage_id;
     ASTs engine_args;
-    klog::KConfParams kafka_properties;
     String data_format;
-    const std::unique_ptr<klog::KafkaWALAuth> auth_info;
+    bool one_message_per_row = false;
     ExternalStreamCounterPtr external_stream_counter;
 
     NamesAndTypesList virtual_column_names_and_types;
 
     std::mutex shards_mutex;
-    int32_t shards = 0;
+    Int32 shards = 0;
 
     ASTPtr message_key_ast;
+    Int32 topic_refresh_interval_ms = 0;
+
+    ConfPtr conf;
+    RdKafka::ConsumerPoolPtr consumer_pool;
+    std::unique_ptr<RdKafka::Producer> producer;
 
     Poco::Logger * logger;
 };

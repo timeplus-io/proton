@@ -1,6 +1,5 @@
 #pragma once
 
-#include "KafkaWALProperties.h"
 #include "Results.h"
 
 #include <NativeLog/Record/Record.h>
@@ -29,6 +28,8 @@ using KTopicPtr = std::unique_ptr<rd_kafka_topic_t, decltype(rd_kafka_topic_dest
 using KConfPtr = std::unique_ptr<rd_kafka_conf_t, decltype(rd_kafka_conf_destroy) *>;
 using KTopicConfPtr = std::unique_ptr<rd_kafka_topic_conf_t, decltype(rd_kafka_topic_conf_destroy) *>;
 using KConfCallback = std::function<void(rd_kafka_conf_t *)>;
+
+using KConfParams = std::vector<std::pair<std::string, std::string>>;
 
 struct PartitionTimestamp
 {

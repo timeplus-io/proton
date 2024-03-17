@@ -128,90 +128,17 @@ KafkaSink::KafkaSink(
     const Block & header,
     Int32 initial_partition_cnt,
     const ASTPtr & message_key_ast,
-    ContextPtr context,
-    Poco::Logger * logger_,
-    ExternalStreamCounterPtr external_stream_counter_)
+    ExternalStreamCounterPtr external_stream_counter_,
+    ContextPtr context)
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
+    , producer(kafka->getProducer())
+    , topic(std::make_unique<RdKafka::Topic>(producer.getHandle(), kafka->topic(), this))
     , partition_cnt(initial_partition_cnt)
     , one_message_per_row(kafka->produceOneMessagePerRow())
-    , logger(logger_)
+    , topic_refresh_interval_ms(kafka->topicRefreshIntervalMs())
     , external_stream_counter(external_stream_counter_)
+    , logger(&Poco::Logger::get(fmt::format("{}(sink-{})", kafka->getLoggerName(), context->getInitialQueryId())))
 {
-    /// default values
-    std::vector<std::pair<String, String>> producer_params{
-        {"enable.idempotence", "true"},
-        {"message.timeout.ms", "0" /* infinite */},
-    };
-
-    static const std::unordered_set<String> allowed_properties{
-        "enable.idempotence",
-        "message.timeout.ms",
-        "queue.buffering.max.messages",
-        "queue.buffering.max.kbytes",
-        "queue.buffering.max.ms",
-        "message.max.bytes",
-        "message.send.max.retries",
-        "retries",
-        "retry.backoff.ms",
-        "retry.backoff.max.ms",
-        "batch.num.messages",
-        "batch.size",
-        "compression.codec",
-        "compression.type",
-        "compression.level",
-        "topic.metadata.refresh.interval.ms",
-    };
-
-    /// customization, overrides default values
-    for (const auto & pair : kafka->properties())
-    {
-        if (allowed_properties.contains(pair.first))
-        {
-            producer_params.emplace_back(pair.first, pair.second);
-            continue;
-        }
-        throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Unsupported property {}", pair.first);
-    }
-
-    /// properies from settings have higher priority
-    producer_params.emplace_back("bootstrap.servers", kafka->brokers());
-    kafka->auth().populateConfigs(producer_params);
-
-    auto * conf = rd_kafka_conf_new();
-    char errstr[512]{'\0'};
-    for (const auto & param : producer_params)
-    {
-        auto ret = rd_kafka_conf_set(conf, param.first.c_str(), param.second.c_str(), errstr, sizeof(errstr));
-        if (ret != RD_KAFKA_CONF_OK)
-        {
-            rd_kafka_conf_destroy(conf);
-            throw Exception(
-                ErrorCodes::INVALID_CONFIG_PARAMETER,
-                "Failed to set kafka config `{}` with value `{}` error={}",
-                param.first,
-                param.second,
-                ret);
-        }
-    }
-
-    rd_kafka_conf_set_opaque(conf, this); /* needed by onMessageDelivery */
-    rd_kafka_conf_set_dr_msg_cb(conf, &KafkaSink::onMessageDelivery);
-
-    size_t value_size = 8;
-    char topic_refresh_interval_ms_value[8]{'\0'}; /// max: 3600000
-    rd_kafka_conf_get(conf, "topic.metadata.refresh.interval.ms", topic_refresh_interval_ms_value, &value_size);
-    Int32 topic_refresh_interval_ms {std::stoi(topic_refresh_interval_ms_value)};
-
-    producer.reset(rd_kafka_new(RD_KAFKA_PRODUCER, conf, errstr, sizeof(errstr)));
-    if (!producer)
-    {
-        // librdkafka will take the ownership of `conf` if `rd_kafka_new` succeeds,
-        // but if it does not, we need to take care of cleaning it up by ourselves.
-        rd_kafka_conf_destroy(conf);
-        throw Exception("Failed to create kafka handle", klog::mapErrorCode(rd_kafka_last_error()));
-    }
-
-    topic.reset(rd_kafka_topic_new(producer.get(), kafka->topic().c_str(), nullptr));
     wb = std::make_unique<WriteBufferFromKafkaSink>([this](char * pos, size_t len) { addMessageToBatch(pos, len); });
 
     const auto & data_format = kafka->dataFormat();
@@ -254,7 +181,7 @@ KafkaSink::KafkaSink(
         while (!is_finished.test())
         {
             /// Firstly, poll messages
-            if (auto n = rd_kafka_poll(producer.get(), POLL_TIMEOUT_MS))
+            if (auto n = rd_kafka_poll(producer.getHandle(), POLL_TIMEOUT_MS))
                 LOG_TRACE(logger, "polled {} events", n);
 
             /// Then, fetch topic metadata for partition updates
@@ -263,7 +190,7 @@ KafkaSink::KafkaSink(
 
             metadata_refresh_stopwatch.restart();
 
-            auto result {klog::describeTopic(topic.get(), producer.get(), logger)};
+            auto result {klog::describeTopic(topic->getHandle(), producer.getHandle(), logger)};
             if (result.err)
             {
                 LOG_WARNING(logger, "Failed to describe topic, error code: {}", result.err);
@@ -372,7 +299,7 @@ void KafkaSink::consume(Chunk chunk)
 
     /// With `wb->setAutoFlush()`, it makes sure that all messages are generated for the chunk at this point.
     rd_kafka_produce_batch(
-        topic.get(),
+        topic->getHandle(),
         RD_KAFKA_PARTITION_UA,
         RD_KAFKA_MSG_F_FREE | RD_KAFKA_MSG_F_PARTITION | RD_KAFKA_MSG_F_BLOCK,
         current_batch.data(),
@@ -426,7 +353,7 @@ void KafkaSink::onFinish()
     /// Make sure all outstanding requests are transmitted and handled.
     /// It should not block for ever here, otherwise, it will block proton from stopping the job
     /// or block proton from terminating.
-    if (auto err = rd_kafka_flush(producer.get(), 15000 /* time_ms */); err)
+    if (auto err = rd_kafka_flush(producer.getHandle(), 15000 /* time_ms */); err)
         LOG_ERROR(logger, "Failed to flush kafka producer, error={}", rd_kafka_err2str(err));
 
     if (auto err = lastSeenError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
@@ -472,7 +399,7 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
         if (is_finished.test())
         {
             /// for a final check, it should not wait for too long
-            if (auto err = rd_kafka_flush(producer.get(), 15000 /* time_ms */); err)
+            if (auto err = rd_kafka_flush(producer.getHandle(), 15000 /* time_ms */); err)
                 throw Exception(klog::mapErrorCode(err), "Failed to flush kafka producer, error={}", rd_kafka_err2str(err));
 
             if (auto err = lastSeenError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
