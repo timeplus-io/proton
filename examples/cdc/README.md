@@ -58,7 +58,7 @@ Use a MySQL client(e.g. DBeaver) to add/update/delete some records to see the up
 
 If you want to generate CDC messages in Avro format and consume the data in Proton, you need to:
 
-1. Add additional JARs to the `debezium/connect` docker image. 
+1. Add additional JARs to the `debezium/connect` docker image.
 
    > Beginning with Debezium 2.0.0, Confluent Schema Registry support is not included in the Debezium containers ([Source](https://debezium.io/documentation/reference/stable/configuration/avro.html#confluent-schema-registry))
 
@@ -69,7 +69,7 @@ The detailed steps are:
 
 ### Add additional JARs to debezium container
 
-Beginning with Debezium 2.0.0, Confluent Schema Registry support is not included in the Debezium containers. You need to download those JARs and add to the class path.  The Debezium [documeantion](https://debezium.io/documentation/reference/stable/configuration/avro.html#confluent-schema-registry) shared the breif steps. But the list of JAR is not complete. The following ones are required:
+Beginning with Debezium 2.0.0, Confluent Schema Registry support is not included in the Debezium containers. You need to download those JARs and add to the class path. The Debezium [documeantion](https://debezium.io/documentation/reference/stable/configuration/avro.html#confluent-schema-registry) shared the breif steps. But the list of JAR is not complete. The following ones are required:
 
 1. avro-1.11.3.jar
 2. common-config-7.6.0.jar
@@ -104,7 +104,7 @@ curl --request POST \
   --url http://localhost:8083/connectors \
   --header 'Content-Type: application/json' \
   --data '{
-  "name": "inventory-connector",
+  "name": "inventory-connector-avro",
   "config": {
     "connector.class": "io.debezium.connector.mysql.MySqlConnector",
     "tasks.max": "1",
@@ -119,6 +119,11 @@ curl --request POST \
     "schema.history.internal.kafka.topic": "schema-changes.inventory",
     "key.converter": "io.confluent.connect.avro.AvroConverter",
     "value.converter": "io.confluent.connect.avro.AvroConverter",
+    "transforms": "unwrap",
+    "transforms.unwrap.type":"io.debezium.transforms.ExtractNewRecordState",
+		"transforms.unwrap.drop.tombstones":"false",
+		"transforms.unwrap.delete.handling.mode":"rewrite",
+		"transforms.unwrap.add.fields":"table,lsn",
     "key.converter.schema.registry.url":"http://redpanda:8081",
     "value.converter.schema.registry.url":"http://redpanda:8081"
   }
@@ -130,7 +135,12 @@ curl --request POST \
 Since Proton 1.5, the schema registry with Avro format is supported. Run the following SQL to create an external stream:
 
 ```sql
-CREATE EXTERNAL STREAM customers_avro(op string)
+CREATE EXTERNAL STREAM customers_avro(
+  id int,
+  first_name string,
+  last_name string,
+  email string
+)
 SETTINGS 	type='kafka',
           brokers='redpanda:9092',
           topic='dbserver1.inventory.customers',
