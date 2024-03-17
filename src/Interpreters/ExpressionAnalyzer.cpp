@@ -1997,7 +1997,7 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
                 if (const auto * proxy = storage->as<Streaming::ProxyStream>())
                 {
                     if (auto window_desc = proxy->getStreamingWindowFunctionDescription();
-                        window_desc && window_desc->type == Streaming::WindowType::SESSION)
+                        window_desc && window_desc->type == Streaming::WindowType::Session)
                     {
                         auto & step = chain.getLastStep();
                         step.addRequiredOutput(window_desc->argument_names[0]);

@@ -65,7 +65,7 @@ SerializationPtr DataTypeDecimal<T>::doGetDefaultSerialization() const
 }
 
 
-static DataTypePtr create(const ASTPtr & arguments)
+static DataTypePtr create(const ASTPtr & arguments, [[maybe_unused]] bool compatible_with_clickhouse = false) /// proton: updated
 {
     if (!arguments || arguments->children.size() != 2)
         throw Exception("The decimal data type family must have exactly two arguments: precision and scale",
@@ -85,7 +85,7 @@ static DataTypePtr create(const ASTPtr & arguments)
 }
 
 template <typename T>
-static DataTypePtr createExact(const ASTPtr & arguments)
+static DataTypePtr createExact(const ASTPtr & arguments, [[maybe_unused]] bool compatible_with_clickhouse = false) /// proton: updated
 {
     if (!arguments || arguments->children.size() != 1)
         throw Exception("The decimal data type family must have exactly two arguments: precision and scale",
@@ -113,6 +113,15 @@ void registerDataTypeDecimal(DataTypeFactory & factory)
     /// factory.registerAlias("DEC", "decimal", DataTypeFactory::CaseInsensitive);
     /// factory.registerAlias("NUMERIC", "decimal", DataTypeFactory::CaseInsensitive);
     /// factory.registerAlias("FIXED", "decimal", DataTypeFactory::CaseInsensitive);
+
+    /// proton: starts
+    factory.registerClickHouseAlias("Decimal32", "decimal32");
+    factory.registerClickHouseAlias("Decimal64", "decimal64");
+    factory.registerClickHouseAlias("Decimal128", "decimal128");
+    factory.registerClickHouseAlias("Decimal256", "decimal256");
+
+    factory.registerClickHouseAlias("Decimal", "decimal");
+    /// proton: ends
 }
 
 /// Explicit template instantiations.

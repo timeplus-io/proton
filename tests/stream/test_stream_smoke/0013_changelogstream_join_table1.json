@@ -1068,7 +1068,7 @@
                             "query_type": "stream",
                             "query_id": "14114",
                             "wait": 3,
-                            "terminate": "manuel",
+                            "terminate": "manual",
                             "query": "select i, j, k, ii, jj, kk from test14_stream_1 as a join table(test14_table_1) as b on a.j = b.jj;"
                         },
                         {
@@ -1199,7 +1199,7 @@
                             "query_type": "stream",
                             "query_id": "14115",
                             "wait": 3,
-                            "terminate": "manuel",
+                            "terminate": "manual",
                             "query": "select i, j, k, ii, jj, kk from test14_stream_1 as a left join table(test14_table_1) as b on a.j = b.jj;"
                         },
                         {
@@ -1338,7 +1338,7 @@
                             "query_type": "stream",
                             "query_id": "14116",
                             "wait": 3,
-                            "terminate": "manuel",
+                            "terminate": "manual",
                             "query": "select i, j, k, ii, jj, kk, b._tp_delta from test14_stream_1 as a inner join table(test14_table_1) as b on a.j = b.jj;"
                         },
                         {
@@ -1439,7 +1439,7 @@
                             "query_type": "stream",
                             "query_id": "14117",
                             "wait": 3,
-                            "terminate": "manuel",
+                            "terminate": "manual",
                             "query": "select i, j, k, ii, jj, kk, b._tp_delta from test14_stream as a left join table(test14_table) as b on a.j = b.jj;"
                         },
                         {
@@ -1539,7 +1539,7 @@
                             "query_type": "stream",
                             "query_id": "14118",
                             "wait": 3,
-                            "terminate": "manuel",
+                            "terminate": "manual",
                             "query": "select i, j, k, ii, jj, kk from test15_stream_1 as a inner join table(test15_table_1) as b on a.j = b.jj;"
                         },
                         {
@@ -1685,7 +1685,7 @@
                             "query_type": "stream",
                             "query_id": "14119",
                             "wait": 3,
-                            "terminate": "manuel",
+                            "terminate": "manual",
                             "query": "select i, j, k, ii, jj, kk from test14_stream_1 as a left join table(test14_table_1) as b on a.j = b.jj;"
                         },
                         {
@@ -1845,7 +1845,7 @@
                             "query_type": "stream",
                             "query_id": "14120",
                             "wait": 3,
-                            "terminate": "manuel",
+                            "terminate": "manual",
                             "query": "select i, j, k, ii, jj, kk, b._tp_delta from test14_stream_1 as a inner join table(test14_table_1) as b on a.j = b.jj;"
                         },
                         {
@@ -1975,7 +1975,7 @@
                             "query_type": "stream",
                             "query_id": "14121",
                             "wait": 3,
-                            "terminate": "manuel",
+                            "terminate": "manual",
                             "query": "select i, j, k, ii, jj, kk, b._tp_delta from test14_stream_1 as a left join table(test14_table_1) as b on a.j = b.jj;"
                         },
                         {
@@ -2124,7 +2124,7 @@
                             "query_type": "stream",
                             "query_id": "14122",
                             "wait": 3,
-                            "terminate": "manuel",
+                            "terminate": "manual",
                             "query": "select * from test14_stream_1 as a inner join table(test14_table_1) as b on a.j = b.jj;"
                         },
                         {

@@ -15,7 +15,7 @@ if [ -z "$sanitizer" ]; then
 fi
 
 cmake .. \
-    -DCMAKE_BUILD_TYPE=${build_type} \
+    -DCMAKE_BUILD_TYPE="$build_type" \
     -DENABLE_PROTON_ALL=OFF \
     -DENABLE_PROTON_SERVER=ON \
     -DENABLE_PROTON_CLIENT=ON \
@@ -73,5 +73,6 @@ cmake .. \
     -DENABLE_SNOWFLAKE_FUNCS=ON \
     -DENABLE_ENCRYPT_DECRYPT_FUNCS=ON \
     -DENABLE_DEBUG_FUNCS=ON \
-    -DENABLE_URL_FUNCS=ON
+    -DENABLE_URL_FUNCS=ON \
+    -DENABLE_AVRO=ON
 

@@ -86,7 +86,8 @@ namespace ProfileEvents
     extern const Event FailedSelectQuery;
     extern const Event QueryTimeMicroseconds;
     extern const Event SelectQueryTimeMicroseconds;
-    extern const Event InsertQueryTimeMicroseconds;
+    /// removed in https://github.com/timeplus-io/proton/pull/577/commits/27be123cc70ef08b2dc34f3e24b23ca55e757f0e
+    /// extern const Event InsertQueryTimeMicroseconds; 
     extern const Event OSCPUWaitMicroseconds;
     extern const Event OSCPUVirtualTimeMicroseconds;
 }
@@ -647,7 +648,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         /// Put query to process list. But don't put SHOW PROCESSLIST query itself.
         ProcessList::EntryPtr process_list_entry;
-        if (!internal && !ast->as<ASTShowProcesslistQuery>())
+        if (!internal && !ast->as<ASTShowProcesslistQuery>() && !ast->as<ASTInsertQuery>())
         {
             /// processlist also has query masked now, to avoid secrets leaks though SHOW PROCESSLIST by other users.
             process_list_entry = context->getProcessList().insert(query_for_logging, ast.get(), context);
@@ -894,10 +895,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 {
                     ProfileEvents::increment(ProfileEvents::SelectQueryTimeMicroseconds, query_time);
                 }
-                else if (query_ast->as<ASTInsertQuery>())
-                {
-                    ProfileEvents::increment(ProfileEvents::InsertQueryTimeMicroseconds, query_time);
-                }
 
                 element.query_duration_ms = static_cast<UInt64>(info.elapsed_seconds * 1000);
 
@@ -1069,13 +1066,13 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                  log_queries,
                  log_queries_min_type = settings.log_queries_min_type,
                  log_queries_min_query_duration_ms = settings.log_queries_min_query_duration_ms.totalMilliseconds(),
-                 quota(quota), status_info_to_query_log] () mutable
+                 my_quota(quota), status_info_to_query_log] () mutable
             {
                 if (auto txn = context->getCurrentTransaction())
                     txn->onException();
 
-                if (quota)
-                    quota->used(QuotaType::ERRORS, 1, /* check_exceeded = */ false);
+                if (my_quota)
+                    my_quota->used(QuotaType::ERRORS, 1, /* check_exceeded = */ false);
 
                 elem.type = QueryLogElementType::EXCEPTION_WHILE_PROCESSING;
 

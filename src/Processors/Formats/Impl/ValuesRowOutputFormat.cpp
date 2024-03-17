@@ -37,6 +37,10 @@ void ValuesRowOutputFormat::writeRowEndDelimiter()
 
 void ValuesRowOutputFormat::writeRowBetweenDelimiter()
 {
+    /// proton: starts
+    if (format_settings.values.no_commas_between_rows)
+        return;
+    /// proton: ends
     writeCString(",", out);
 }
 

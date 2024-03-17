@@ -189,22 +189,11 @@ void AggregatingTransform::consume(Chunk chunk)
 std::pair<bool, bool> AggregatingTransform::executeOrMergeColumns(Chunk & chunk, size_t num_rows)
 {
     auto columns = chunk.detachColumns();
-    if (params->only_merge)
-    {
-        auto block = getInputs().front().getHeader().cloneWithColumns(columns);
-        materializeBlockInplace(block);
-        /// FIXME
-        /// Blocking finalization during execution on current variant
-        std::lock_guard lock(variants_mutex);
-        auto success = params->aggregator.mergeOnBlock(block, variants, no_more_keys);
-        return {!success, false};
-    }
-    else
-    {
-        /// Blocking finalization during execution on current variant
-        std::lock_guard lock(variants_mutex);
-        return params->aggregator.executeOnBlock(std::move(columns), 0, num_rows, variants, key_columns, aggregate_columns, no_more_keys);
-    }
+    assert(!params->only_merge && !no_more_keys);
+
+    /// Blocking finalization during execution on current variant
+    std::lock_guard lock(variants_mutex);
+    return params->aggregator.executeOnBlock(std::move(columns), 0, num_rows, variants, key_columns, aggregate_columns);
 }
 
 void AggregatingTransform::emitVersion(Chunk & chunk)
@@ -294,11 +283,13 @@ void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
         }
 
         auto new_watermark = chunk_ctx->getWatermark();
-        if (likely(new_watermark > watermark))
+        if (new_watermark > watermark)
             /// Found min watermark to finalize
             try_finalizing_watermark = updateAndAlignWatermark(new_watermark);
-        else if (new_watermark < watermark)
+        else if (new_watermark < watermark) [[unlikely]]
             LOG_ERROR(log, "Found outdated watermark. current watermark={}, but got watermark={}", watermark, new_watermark);
+        else
+            try_finalizing_watermark = new_watermark; /// When received the same watermark (it may be a periodic watermark), so we still try finalize it
     }
 
     if (!try_finalizing_watermark.has_value())
@@ -498,7 +489,7 @@ void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
         }
 
         /// Serializing no shared data
-        params->aggregator.checkpoint(variants, wb);
+        variants.serialize(wb, params->aggregator);
 
         DB::writeIntBinary(watermark, wb);
 
@@ -554,7 +545,7 @@ void AggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
         }
 
         /// Serializing local or stable data during checkpointing
-        params->aggregator.recover(variants, rb);
+        variants.deserialize(rb, params->aggregator);
 
         DB::readIntBinary(watermark, rb);
 

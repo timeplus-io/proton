@@ -111,6 +111,7 @@
 #include <Processors/QueryPlan/Streaming/WatermarkStep.h>
 #include <Processors/QueryPlan/Streaming/WatermarkStepWithSubstream.h>
 #include <Processors/QueryPlan/Streaming/WindowStep.h>
+#include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/Streaming/WatermarkStamper.h>
 #include <Storages/Streaming/ProxyStream.h>
 #include <Storages/Streaming/StorageStream.h>
@@ -3219,7 +3220,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(
                 ErrorCodes::NOT_IMPLEMENTED,
                 "User defined aggregation function with emit strategy shouldn't be used together with other aggregation function");
 
-        if (windowType() != Streaming::WindowType::NONE)
+        if (windowType() != Streaming::WindowType::None)
             throw Exception(
                 ErrorCodes::NOT_IMPLEMENTED,
                 "User defined aggregation function with emit strategy shouldn't be used together with streaming window");
@@ -3236,6 +3237,13 @@ void InterpreterSelectQuery::executeStreamingAggregation(
             ErrorCodes::NOT_IMPLEMENTED,
             "Streaming aggregatation group by overflow mode '{}' is not implemented",
             magic_enum::enum_name(settings.group_by_overflow_mode.value));
+
+    auto tracking_updates_type = Streaming::TrackingUpdatesType::None;
+    if (data_stream_semantic_pair.isChangelogOutput())
+        tracking_updates_type = Streaming::TrackingUpdatesType::UpdatesWithRetract;
+    /// TODO: A optimization for `emit on update`, we don't need to track updates and just directly convert each input (fast in and fast out)
+    else if (Streaming::AggregatingHelper::onlyEmitUpdates(emit_mode))
+        tracking_updates_type = Streaming::TrackingUpdatesType::Updates;
 
     Streaming::Aggregator::Params params(
         header_before_aggregation,
@@ -3261,7 +3269,8 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         streaming_group_by,
         delta_col_pos,
         window_keys_num,
-        query_info.streaming_window_params);
+        query_info.streaming_window_params,
+        tracking_updates_type);
 
     auto merge_threads = max_streams;
     auto temporary_data_merge_threads = settings.aggregation_memory_efficient_merge_threads
@@ -3273,10 +3282,10 @@ void InterpreterSelectQuery::executeStreamingAggregation(
     /// 2) `shuffle by`: calculating light substream without substream ID (The data have been shuffled by `LightShufflingTransform`)
     if (query_info.hasPartitionByKeys() || light_shuffled)
         query_plan.addStep(std::make_unique<Streaming::AggregatingStepWithSubstream>(
-            query_plan.getCurrentDataStream(), std::move(params), final, emit_version, data_stream_semantic_pair.isChangelogOutput()));
+            query_plan.getCurrentDataStream(), std::move(params), final, emit_version, data_stream_semantic_pair.isChangelogOutput(), emit_mode));
     else
         query_plan.addStep(std::make_unique<Streaming::AggregatingStep>(
-            query_plan.getCurrentDataStream(), std::move(params), final, merge_threads, temporary_data_merge_threads, emit_version, data_stream_semantic_pair.isChangelogOutput()));
+            query_plan.getCurrentDataStream(), std::move(params), final, merge_threads, temporary_data_merge_threads, emit_version, data_stream_semantic_pair.isChangelogOutput(), emit_mode));
 }
 
 /// Resolve input / output data stream semantic.
@@ -3365,7 +3374,7 @@ Streaming::WindowType InterpreterSelectQuery::windowType() const
         }
     }
 
-    return Streaming::WindowType::NONE;
+    return Streaming::WindowType::None;
 }
 
 bool InterpreterSelectQuery::hasStreamingGlobalAggregation() const
@@ -3493,11 +3502,13 @@ void InterpreterSelectQuery::buildShufflingQueryPlan(QueryPlan & query_plan)
         query_plan.getCurrentDataStream(), std::move(substream_key_positions), shuffle_output_streams));
 }
 
-void InterpreterSelectQuery::buildWatermarkQueryPlan(QueryPlan & query_plan) const
+void InterpreterSelectQuery::buildWatermarkQueryPlan(QueryPlan & query_plan)
 {
     assert(isStreamingQuery());
     auto params = std::make_shared<Streaming::WatermarkStamperParams>(
         query_info.query, query_info.syntax_analyzer_result, query_info.streaming_window_params);
+
+    emit_mode = params->mode; /// saved it to be used for streaming aggregating step
 
     bool skip_stamping_for_backfill_data = !context->getSettingsRef().emit_during_backfill.value;
 

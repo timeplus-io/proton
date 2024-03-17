@@ -22,35 +22,34 @@ namespace Streaming
 {
 namespace
 {
-WatermarkStamperPtr initWatermark(const WatermarkStamperParams & params, Poco::Logger * log)
+WatermarkStamperPtr initWatermark(const WatermarkStamperParams & params, Poco::Logger * logger)
 {
-    assert(params.mode != WatermarkStamperParams::EmitMode::NONE);
+    assert(params.mode != EmitMode::None);
     if (params.window_params)
     {
         switch (params.window_params->type)
         {
-            case WindowType::TUMBLE:
-                return std::make_unique<TumbleWatermarkStamper>(params, log);
-            case WindowType::HOP:
-                return std::make_unique<HopWatermarkStamper>(params, log);
-            case WindowType::SESSION:
-                return std::make_unique<SessionWatermarkStamper>(params, log);
+            case WindowType::Tumble:
+                return std::make_unique<TumbleWatermarkStamper>(params, logger);
+            case WindowType::Hop:
+                return std::make_unique<HopWatermarkStamper>(params, logger);
+            case WindowType::Session:
+                return std::make_unique<SessionWatermarkStamper>(params, logger);
             default:
                 break;
         }
     }
-    return std::make_unique<WatermarkStamper>(params, log);
+    return std::make_unique<WatermarkStamper>(params, logger);
 }
 }
 
 WatermarkTransformWithSubstream::WatermarkTransformWithSubstream(
-    const Block & header, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * log_)
+    const Block & header, WatermarkStamperParamsPtr params_, bool skip_stamping_for_backfill_data_, Poco::Logger * logger)
     : IProcessor({header}, {header}, ProcessorID::WatermarkTransformWithSubstreamID)
     , params(std::move(params_))
     , skip_stamping_for_backfill_data(skip_stamping_for_backfill_data_)
-    , log(log_)
 {
-    watermark_template = initWatermark(*params, log);
+    watermark_template = initWatermark(*params, logger);
     assert(watermark_template);
     watermark_template->preProcess(header);
 }

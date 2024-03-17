@@ -293,7 +293,7 @@
             "description": "an example positive test that uses insert into w/o column",
             "steps": [
                 {"statements": [
-                    {"client":"python", "query_id":"101" ,"query_type": "stream","depends_on_stream":"test_smoke", "terminate":"manual","query":"select window_start, window_end, count(*) from tumble(test_smoke, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark and delay interval 2 second"}]},
+                    {"client":"python", "query_id":"101" ,"query_type": "stream","depends_on_stream":"test_smoke", "terminate":"manual","query":"select window_start, window_end, count(*) from tumble(test_smoke, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark with delay interval 2 second"}]},
                 {"inputs": [
                     {"table_name":"test_smoke", "depends_on":"101","data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:30"]]},
                     {"table_name":"test_smoke", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:31"]]},
@@ -334,10 +334,10 @@
             "id": 9,
             "tags": ["tumble window", "delay"],
             "name": "stream query tumble window w/delay: no aggregation to be emit before delay gate",
-            "description": "steram query with 5sec window and delay 3 sec w/late events within 2 sec delay",
+            "description": "steram query with 5sec window with delay 3 sec w/late events within 2 sec delay",
             "steps": [
                 {"statements": [
-                    {"client":"python", "query_id":"101", "query_type": "stream","depends_on_stream":"test_smoke", "terminate":"manual","query":"select window_start, window_end, count(*) from tumble(test_smoke, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark and delay interval 3 second"}]},
+                    {"client":"python", "query_id":"101", "query_type": "stream","depends_on_stream":"test_smoke", "terminate":"manual","query":"select window_start, window_end, count(*) from tumble(test_smoke, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark with delay interval 3 second"}]},
                 {"inputs": [
                     {"table_name":"test_smoke","depends_on":"101", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -354,10 +354,10 @@
             "id": 10,
             "tags": ["tumble window", "delay"],
             "name": "stream query tumble window w/delay: no aggregation to be emit when delay gate",
-            "description": "steram query with 5sec window and delay 3 sec w/late events within 2 sec delay",
+            "description": "steram query with 5sec window with delay 3 sec w/late events within 2 sec delay",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":"101", "query_type": "stream","depends_on_stream":"test_smoke", "terminate":"manual","query":"select window_start, window_end, count(*) from tumble(test_smoke, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark and delay interval 3 second"}]},
+                    {"client":"python", "query_id":"101", "query_type": "stream","depends_on_stream":"test_smoke", "terminate":"manual","query":"select window_start, window_end, count(*) from tumble(test_smoke, timestamp, interval 5 second) group by  window_start, window_end, value emit stream after watermark with delay interval 3 second"}]},
                 {"inputs": [
                     {"table_name":"test_smoke", "depends_on":"101","data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -474,7 +474,7 @@
             "description": "tumble window aggregate by max and group by id, window_start, window_end",
             "steps":[
                 {"statements": [
-                    {"client":"python", "query_id":"101", "query_type": "stream", "depends_on_stream":"test_smoke","terminate":"manual", "query":"select location, count(*), window_start, window_end from hop(test_smoke, timestamp, interval 3 second, interval 5 second) group by location, window_start, window_end emit stream after watermark and delay interval 2 second"}]},
+                    {"client":"python", "query_id":"101", "query_type": "stream", "depends_on_stream":"test_smoke","terminate":"manual", "query":"select location, count(*), window_start, window_end from hop(test_smoke, timestamp, interval 3 second, interval 5 second) group by location, window_start, window_end emit stream after watermark with delay interval 2 second"}]},
                 {"inputs": [
                     {"table_name":"test_smoke","depends_on":"101", "data": [["dev1", "ca", 51, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:00"],
                     ["dev1", "ca", 99, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:00:02"],
@@ -600,10 +600,10 @@
             "id": 18,
             "tags": ["last x", "native_not_support"],
             "name": "last x tumble delay",
-            "description": "max(value) tumble 5s and delay 2s group by id, window_start, window_end and last 1m",
+            "description": "max(value) tumble 5s with delay 2s group by id, window_start, window_end and last 1m",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream", "terminate":"manual", "query":"select id, max(value), window_start, window_end from tumble(test_smoke_no_default_tp_time, timestamp, 5s) group by id, window_start, window_end limit 6 emit after watermark and delay 2s and last 6s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream", "terminate":"manual", "query":"select id, max(value), window_start, window_end from tumble(test_smoke_no_default_tp_time, timestamp, 5s) group by id, window_start, window_end limit 6 emit after watermark with delay 2s and last 6s"}]},
                 {"inputs": [
                     {"table_name":"test_smoke_no_default_tp_time", "depends_on":"101","data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 66, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],
@@ -637,7 +637,7 @@
             "description": "last 20s tumble 5s count(*)",
             "steps":[
                 {"statements": [
-                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test_smoke", "terminate":"manual", "query":"select id, sum(distinct value), window_end from tumble(test_smoke_no_default_tp_time, timestamp, 5s) group by id, window_end emit after watermark and delay 2s and last 1s"}]},
+                    {"client":"python","query_id":"101", "query_type": "stream","depends_on_stream":"test_smoke", "terminate":"manual", "query":"select id, sum(distinct value), window_end from tumble(test_smoke_no_default_tp_time, timestamp, 5s) group by id, window_end emit after watermark with delay 2s and last 1s"}]},
                 {"inputs": [
                     {"table_name":"test_smoke_no_default_tp_time","depends_on":"101", "data": [["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:00"],
                     ["dev1", "ca", 57.3, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:01"],

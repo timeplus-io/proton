@@ -219,6 +219,7 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DENABLE_KRB5=ON')
         cmake_flags.append('-DENABLE_BROTLI=ON')
         cmake_flags.append('-DENABLE_S3=ON')
+        cmake_flags.append('-DENABLE_AVRO=ON')
 
     # krb5: Disabled in environments other than Linux and native Darwin.
     # Reference: contrib/krb5-cmake/CMakeLists.txt:3

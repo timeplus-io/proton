@@ -24,6 +24,20 @@ void registerDataTypeInterval(DataTypeFactory & factory)
     factory.registerSimpleDataType("interval_month", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Month)); });
     factory.registerSimpleDataType("interval_quarter", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Quarter)); });
     factory.registerSimpleDataType("interval_year", [] { return DataTypePtr(std::make_shared<DataTypeInterval>(IntervalKind::Year)); });
+
+    /// proton: starts
+    factory.registerClickHouseAlias("IntervalNanosecond", "interval_nanosecond");
+    factory.registerClickHouseAlias("IntervalMicrosecond", "interval_microsecond");
+    factory.registerClickHouseAlias("IntervalMillisecond", "interval_millisecond");
+    factory.registerClickHouseAlias("IntervalSecond", "interval_second");
+    factory.registerClickHouseAlias("IntervalMinute", "interval_minute");
+    factory.registerClickHouseAlias("IntervalHour", "interval_hour");
+    factory.registerClickHouseAlias("IntervalDay", "interval_day");
+    factory.registerClickHouseAlias("IntervalWeek", "interval_week");
+    factory.registerClickHouseAlias("IntervalMonth", "interval_month");
+    factory.registerClickHouseAlias("IntervalQuarter", "interval_quarter");
+    factory.registerClickHouseAlias("IntervalYear", "interval_year");
+    /// proton: ends
 }
 
 }

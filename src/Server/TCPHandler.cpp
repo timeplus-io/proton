@@ -240,7 +240,14 @@ void TCPHandler::runImpl()
             if (state.empty() && state.part_uuids_to_ignore && !receivePacket())
                 continue;
 
+            /// proton: starts. Disable send_logs_level
             query_scope.emplace(query_context);
+            /// [this]
+            /// {
+            ///         std::lock_guard lock(fatal_error_mutex);
+            ///         sendLogs();
+            /// }
+            /// proton: ends
 
             /// If query received, then settings in query_context has been updated.
             /// So it's better to update the connection settings for flexibility.
@@ -261,11 +268,6 @@ void TCPHandler::runImpl()
             //     state.logs_queue = std::make_shared<InternalTextLogsQueue>();
             //     state.logs_queue->max_priority = Poco::Logger::parseLevel(client_logs_level.toString());
             //     CurrentThread::attachInternalTextLogsQueue(state.logs_queue, client_logs_level);
-            //     CurrentThread::setFatalErrorCallback([this]
-            //     {
-            //         std::lock_guard lock(fatal_error_mutex);
-            //         sendLogs();
-            //     });
             // }
             /// proton: ends.
             if (client_tcp_protocol_version >= DBMS_MIN_PROTOCOL_VERSION_WITH_INCREMENTAL_PROFILE_EVENTS)

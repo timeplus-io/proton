@@ -8,12 +8,14 @@ This folder lists some examples to run Proton in various use cases. For more rea
 
 - cdc: demonstrates how to use Debezium to sync database changes from MySQL to Proton, via Redpanda and show live updates(UPSERT and DELETE) in Proton via changelog stream.
 
+- clickhouse: demonstrates how to read from ClickHouse or write to ClickHouse with the new External Table feature.
+
 - ecommerce: a combination of Proton, Redpanda, owl-shop and Redpanda Console. Owl Shop is an imaginary ecommerce shop that simulates microservices exchanging data via Apache Kafka. Sample data streams are: clickstreams(frontend events), customer info, customer orders. [Learn more](https://docs.timeplus.com/proton-kafka#tutorial)
 
 - fraud_detection: demonstrates how to leverage proton to build a real-time fraud detection where proton is used as a real-time feature store.
 
-- hackernews: just two containers: Proton and [a bytewax-based data loader](https://github.com/timeplus-io/proton-python-driver/tree/develop/example/bytewax). Inspired by https://bytewax.io/blog/polling-hacker-news, you can call Hacker News HTTP API with Bytewax and send latest news to Proton for SQL-based analysis.
-
 - grafana: an example of how to use Grafana to connect to Proton and visualize the query results.
+
+- hackernews: just two containers: Proton and [a bytewax-based data loader](https://github.com/timeplus-io/proton-python-driver/tree/develop/example/bytewax). Inspired by https://bytewax.io/blog/polling-hacker-news, you can call Hacker News HTTP API with Bytewax and send latest news to Proton for SQL-based analysis.
 
 - jdbc: demonstrates how to connect to Proton via JDBC using DBeaver or Metabase.

@@ -482,8 +482,8 @@
             "steps":[
                 {"statements": [
                     {"client":"python", "query_type": "table", "query":"drop view if exists test1_mv_union"},
-                    {"client":"python","query_id":"300", "wait":3, "query_type": "table", "query":"create materialized view test1_mv_union as (select id, sum(value) as sum_value from test1_mv group by id limit 4 union select id, sum(value) as sum_value from test1_mv group by id limit 4)"},
-                    {"client":"python", "query_id":"301", "query_type": "stream","depends_on_stream":"test1_mv_union","wait":2,"query_end_timer":5,"drop_view":"test1_mv_union", "drop_view_wait":1, "query":"select id, sum_value from test1_mv_union settings seek_to='earliest'"}
+                    {"client":"python", "wait":3, "query_type": "table", "query":"create materialized view test1_mv_union as (select id, sum(value) as sum_value from test1_mv group by id union select id, sum(value) as sum_value from test1_mv group by id)"},
+                    {"client":"python", "query_id":"301", "query_type": "stream","depends_on_stream":"test1_mv_union","wait":2, "query":"select id, sum_value from test1_mv_union settings seek_to='earliest'"}
 
                     ]},
                 {"inputs": [
@@ -498,7 +498,8 @@
                     ["dev2", "ca", 76, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:05"],
                     ["dev2", "ca", 80, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:03"],
                     ["dev8", "ca", 67, "\"create_time\":\"2021-11-02 20:00:01\"", "2020-02-02 20:01:02"],
-                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]]}
+                    ["dev8", "ca", 77, "\"create_time\":\"2021-11-02 20:00:10\"", "2020-02-02 20:01:08"]],
+                    "kill":301, "kill_wait":3, "drop_view":"test1_mv_union", "drop_view_wait":2}
                 ]}
             ],
 

@@ -209,6 +209,18 @@ struct FormatSettings
         bool is_server = false;
     } schema;
 
+    /// proton: starts
+    struct
+    {
+        std::string url;
+        std::string credentials;
+        std::string private_key_file;
+        std::string certificate_file;
+        std::string ca_location;
+        bool skip_cert_check = false;
+    } kafka_schema_registry;
+    /// proton: ends
+
     struct
     {
         String resultset_format;
@@ -230,6 +242,9 @@ struct FormatSettings
         bool interpret_expressions = true;
         bool deduce_templates_of_expressions = true;
         bool accurate_types_of_literals = true;
+        /// proton: starts
+        bool no_commas_between_rows = false;
+        /// proton: ends
     } values;
 
     struct

@@ -87,24 +87,21 @@ TEST(IntervalAliasTest, IntervalAliasInEmit)
 {
     EXPECT_TRUE(checkASTTree(
         /* origin query */
-        "SELECT device, avg(temperature) FROM default.devices group by device emit last +1s and delay +1s and periodic +1s",
+        "SELECT device, avg(temperature) FROM default.devices group by device emit after watermark with delay +1s and last +1s and periodic +1s",
         /* check query */
-        "SELECT device, avg(temperature) FROM default.devices group by device emit last interval +1 second and delay interval +1 "
-        "second and periodic interval +1 second"));
+        "SELECT device, avg(temperature) FROM default.devices group by device emit after watermark with delay interval +1 second and periodic interval +1 second and last interval +1 second"));
 
     EXPECT_TRUE(checkASTTree(
         /* origin query */
-        "SELECT device, avg(temperature) FROM default.devices group by device emit last -1s and delay -1s and periodic +1s",
+        "SELECT device, avg(temperature) FROM default.devices group by device emit after watermark with delay -1s and last -1s and periodic +1s",
         /* check query */
-        "SELECT device, avg(temperature) FROM default.devices group by device emit last interval -1 second and delay interval -1 "
-        "second and periodic interval -1 second"));
+        "SELECT device, avg(temperature) FROM default.devices group by device emit after watermark with delay interval -1 second and periodic interval 1 second and last interval -1 second"));
 
     EXPECT_TRUE(checkASTTree(
         /* origin query */
-        "SELECT device, avg(temperature) FROM default.devices group by device emit last +1s and delay +1s and periodic +1s",
+        "SELECT device, avg(temperature) FROM default.devices group by device emit after watermark with delay +1s and last +1s and periodic +1s",
         /* check query */
-        "SELECT device, avg(temperature) FROM default.devices group by device emit last interval 1 second and delay interval 1 "
-        "second and periodic interval 1 second"));
+        "SELECT device, avg(temperature) FROM default.devices group by device emit after watermark with delay interval +1 second and periodic interval 1 second and last interval 1 second"));
 }
 
 TEST(IntervalAliasTest, IntervalAliasInTumbleFunc)

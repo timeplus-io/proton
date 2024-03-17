@@ -77,16 +77,16 @@ function configure()
     # max_server_memory_usage will be hard limit, and queries that should be
     # executed regardless memory limits will use max_memory_usage_for_user=0,
     # instead of relying on max_untracked_memory
-    local max_server_mem
-    max_server_mem=$((total_mem*75/100)) # 75%
-    echo "Setting max_server_memory_usage=$max_server_mem"
+
+    max_server_memory_usage_to_ram_ratio=0.5
+    echo "Setting max_server_memory_usage_to_ram_ratio to ${max_server_memory_usage_to_ram_ratio}"
     cat > /etc/clickhouse-server/config.d/max_server_memory_usage.xml <<EOL
 <clickhouse>
-    <max_server_memory_usage>${max_server_mem}</max_server_memory_usage>
+    <max_server_memory_usage_to_ram_ratio>${max_server_memory_usage_to_ram_ratio}</max_server_memory_usage_to_ram_ratio>
 </clickhouse>
 EOL
     local max_users_mem
-    max_users_mem=$((total_mem*50/100)) # 50%
+    max_users_mem=$((total_mem*30/100)) # 30%
     echo "Setting max_memory_usage_for_user=$max_users_mem"
     cat > /etc/clickhouse-server/users.d/max_memory_usage_for_user.xml <<EOL
 <clickhouse>
@@ -97,11 +97,30 @@ EOL
     </profiles>
 </clickhouse>
 EOL
+    cat > /etc/clickhouse-server/config.d/core.xml <<EOL
+    # Let OOM killer terminate other processes before clickhouse-server:
+    cat > /etc/clickhouse-server/config.d/oom_score.xml <<EOL
+<clickhouse>
+    <oom_score>-1000</oom_score>
+</clickhouse>
+EOL
 }
 
 function stop()
 {
-    clickhouse stop
+    # --max-tries is supported only since 22.12
+    if dpkg --compare-versions "$(clickhouse local -q 'select version()')" ge "22.12"; then
+        # Increase default waiting timeout for sanitizers and debug builds
+        clickhouse stop --max-tries 180 --do-not-kill && return
+    else
+        clickhouse stop --do-not-kill && return
+    fi
+
+    # We failed to stop the server with SIGTERM. Maybe it hang, let's collect stacktraces.
+    kill -TERM "$(pidof gdb)" ||:
+    sleep 5
+    gdb -batch -ex 'thread apply all backtrace' -p "$(cat /var/run/clickhouse-server/clickhouse-server.pid)" ||:
+    clickhouse stop --force
 }
 
 function start()

@@ -294,7 +294,7 @@ void LocalFileSystemCheckpoint::preCheckpoint(CheckpointContextPtr ckpt_ctx)
         {
             if (std::filesystem::exists(dir, ec))
                 /// Somebody else created it
-                throw Exception(ErrorCodes::DIRECTORY_ALREADY_EXISTS, "Directory '{}' already exists", dir.c_str());
+                LOG_WARNING(logger, "Directory '{}' already exists, somebody created it", dir.c_str());
             else
                 throw Exception(
                     ErrorCodes::CANNOT_CREATE_DIRECTORY, "Failed to create directory '{}', error={}", dir.c_str(), ec.message());
@@ -302,7 +302,24 @@ void LocalFileSystemCheckpoint::preCheckpoint(CheckpointContextPtr ckpt_ctx)
     }
     else
     {
-        throw Exception(ErrorCodes::DIRECTORY_ALREADY_EXISTS, "Directory '{}' already exists", dir.c_str());
+        /// Exists delete-mark file
+        if (std::filesystem::exists(dir / DELETE_FILE, ec))
+        {
+            LOG_WARNING(logger, "Directory '{}' already exists, but it was marked to deleted, so clear all contents", dir.c_str());
+            std::filesystem::directory_iterator dir_it(dir);
+            for (auto & entry : dir_it)
+                std::filesystem::remove_all(entry.path(), ec);
+        }
+        /// No committed-mark file
+        else if (!std::filesystem::exists(dir / COMMITTED_FILE, ec))
+        {
+            LOG_WARNING(logger, "Directory '{}' already exists, but it doesn't be committed, so clear all contents", dir.c_str());
+            std::filesystem::directory_iterator dir_it(dir);
+            for (auto & entry : dir_it)
+                std::filesystem::remove_all(entry.path(), ec);
+        }
+        else
+            throw Exception(ErrorCodes::DIRECTORY_ALREADY_EXISTS, "Directory '{}' already exists", dir.c_str());
     }
 }
 

@@ -34,7 +34,7 @@ DataTypePtr DataTypeFactory::get(TypeIndex type) const
 }
 /// proton: ends.
 
-DataTypePtr DataTypeFactory::get(const String & full_name) const
+DataTypePtr DataTypeFactory::get(const String & full_name/* proton: starts*/, bool compatible_with_clickhouse/* proton: ends*/) const
 {
     /// Data type parser can be invoked from coroutines with small stack.
     /// Value 315 is known to cause stack overflow in some test configurations (debug build, sanitizers)
@@ -49,21 +49,21 @@ DataTypePtr DataTypeFactory::get(const String & full_name) const
 
     ParserDataType parser;
     ASTPtr ast = parseQuery(parser, full_name.data(), full_name.data() + full_name.size(), "data type", 0, data_type_max_parse_depth);
-    return get(ast);
+    return get(ast, compatible_with_clickhouse);
 }
 
-DataTypePtr DataTypeFactory::get(const ASTPtr & ast) const
+DataTypePtr DataTypeFactory::get(const ASTPtr & ast/* proton: starts */, bool compatible_with_clickhouse/* proton: ends*/) const
 {
     if (const auto * func = ast->as<ASTFunction>())
     {
         if (func->parameters)
             throw Exception("Data type cannot have multiple parenthesized parameters.", ErrorCodes::ILLEGAL_SYNTAX_FOR_DATA_TYPE);
-        return get(func->name, func->arguments);
+        return get(func->name, func->arguments, compatible_with_clickhouse);
     }
 
     if (const auto * ident = ast->as<ASTIdentifier>())
     {
-        return get(ident->name(), {});
+        return get(ident->name(), {}, compatible_with_clickhouse);
     }
 
     if (const auto * lit = ast->as<ASTLiteral>())
@@ -75,11 +75,15 @@ DataTypePtr DataTypeFactory::get(const ASTPtr & ast) const
     throw Exception("Unexpected AST element for data type.", ErrorCodes::UNEXPECTED_AST_STRUCTURE);
 }
 
-DataTypePtr DataTypeFactory::get(const String & family_name_param, const ASTPtr & parameters) const
+DataTypePtr DataTypeFactory::get(const String & family_name_param, const ASTPtr & parameters/* proton: starts */, bool compatible_with_clickhouse/* proton: ends */) const
 {
-    String family_name = getAliasToOrName(family_name_param);
+    String family_name;
+    if (compatible_with_clickhouse)
+        family_name = getAliasToOrName(getClickHouseAliasToOrName(family_name_param));
+    else
+        family_name = getAliasToOrName(family_name_param);
 
-    if (endsWith(family_name, "_with_dictionary"))
+    if (endsWith(family_name, "_with_dictionary")/* proton: starts */ || (compatible_with_clickhouse && endsWith(family_name, "WithDictionary"))/* proton: ends */)
     {
         ASTPtr low_cardinality_params = std::make_shared<ASTExpressionList>();
         String param_name = family_name.substr(0, family_name.size() - strlen("_with_dictionary"));
@@ -96,7 +100,7 @@ DataTypePtr DataTypeFactory::get(const String & family_name_param, const ASTPtr 
         return get("low_cardinality", low_cardinality_params);
     }
 
-    return findCreatorByName(family_name)(parameters);
+    return findCreatorByName(family_name)(parameters, compatible_with_clickhouse);
 }
 
 DataTypePtr DataTypeFactory::getCustom(DataTypeCustomDescPtr customization) const
@@ -138,7 +142,7 @@ void DataTypeFactory::registerSimpleDataType(const String & name, SimpleCreator 
         throw Exception("DataTypeFactory: the data type " + name + " has been provided "
             " a null constructor", ErrorCodes::LOGICAL_ERROR);
 
-    registerDataType(name, [name, creator](const ASTPtr & ast)
+    registerDataType(name, [name, creator](const ASTPtr & ast/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]]/* proton: ends */)
     {
         if (ast)
             throw Exception("Data type " + name + " cannot have arguments", ErrorCodes::DATA_TYPE_CANNOT_HAVE_ARGUMENTS);
@@ -148,9 +152,9 @@ void DataTypeFactory::registerSimpleDataType(const String & name, SimpleCreator 
 
 void DataTypeFactory::registerDataTypeCustom(const String & family_name, CreatorWithCustom creator, CaseSensitiveness case_sensitiveness)
 {
-    registerDataType(family_name, [creator](const ASTPtr & ast)
+    registerDataType(family_name, [creator](const ASTPtr & ast/* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]]/* proton: ends */)
     {
-        auto res = creator(ast);
+        auto res = creator(ast, compatible_with_clickhouse);
         res.first->setCustomization(std::move(res.second));
 
         return res.first;
@@ -159,7 +163,7 @@ void DataTypeFactory::registerDataTypeCustom(const String & family_name, Creator
 
 void DataTypeFactory::registerSimpleDataTypeCustom(const String &name, SimpleCreatorWithCustom creator, CaseSensitiveness case_sensitiveness)
 {
-    registerDataTypeCustom(name, [creator](const ASTPtr & /*ast*/)
+    registerDataTypeCustom(name, [creator](const ASTPtr & /*ast*//* proton: starts */, bool compatible_with_clickhouse [[maybe_unused]]/* proton: ends */)
     {
         return creator();
     }, case_sensitiveness);

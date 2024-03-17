@@ -5,10 +5,10 @@ pytest-cases==3.6.5
 unidiff==0.7.0
 docker-compose==1.29.2
 boto3==1.20.4
-urllib3==1.26.7
+urllib3==1.26.18
 pytest-html==3.1.1
 psycopg2-binary==2.9.3
 kafka-python==2.0.2
-timeplus==1.1.2
+timeplus==1.3.0
 sseclient-py>=1.7.2
 proton-driver>=0.2.9

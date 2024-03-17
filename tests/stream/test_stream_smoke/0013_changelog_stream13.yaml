@@ -53,7 +53,7 @@ tests:
       - client: python
         query_type: stream
         query_id: 12181627214-1
-        wait: 2
+        wait: 1
         terminate: manual
         query: recover from '12181627214'
       - client: python
@@ -61,17 +61,17 @@ tests:
         depends_on: 12181627214
         wait: 1
         depends_on_stream: v_12181627
-        query: insert into v_12181627(id, val) values(4, 40),(5, 50);
+        query: insert into v_12181627(id, val) values(4, 40),(5, 40);
+      - client: python
+        query_type: table
+        depends_on_stream: v_12181627
+        wait: 2
+        query: insert into v_12181627(id, val, _tp_delta) values(4, 40, -1),(5, 40, -1);
       - client: python
         query_type: table
         depends_on_stream: v_12181627
         wait: 2
         query: insert into v_12181627(id, val) values(4, 40),(5, 50);
-      - client: python
-        query_type: table
-        depends_on_stream: v_12181627
-        wait: 2
-        query: insert into v_12181627(id, val, _tp_delta) values(4, 40, -1),(5, 50, -1);
       - client: python
         query_type: table
         depends_on_stream: v_12181627
@@ -91,10 +91,10 @@ tests:
       - query_id: '12181627214-1'
         expected_results:
           - [30, 30, 1, 1, -1]
-          - [120, 120, 3, 3, 1]
-          - [120, 120, 3, 3, -1]
-          - [120, 210, 3, 5, 1]
-          - [120, 210, 3, 5, -1]
+          - [70, 110, 2, 3, 1]
+          - [70, 110, 2, 3, -1]
+          - [30, 30, 1, 1, 1]
+          - [30, 30, 1, 1, -1]
           - [120, 120, 3, 3, 1]
           - [120, 120, 3, 3, -1]
           - [30, 30, 1, 1, 1]
@@ -129,14 +129,14 @@ tests:
         depends_on_stream: v_12181727
         query_type: table
         wait: 2
-        query: insert into v_12181727(id, val, _tp_delta) values(5, 50, -1), (6, 60, +1);
+        query: insert into v_12181727(id, val, _tp_delta) values(5, 50, -1), (7, 60, +1);
       - client: python
         query_type: table
         depends_on_stream: v_12181727
         kill: '12181727213'
         kill_wait: 3
         wait: 2
-        query: insert into v_12181727(id, val, _tp_delta) values(6, 60, -1),(6, 60, -1),(5, 50, +1);
+        query: insert into v_12181727(id, val, _tp_delta) values(6, 60, -1),(7, 60, -1),(5, 50, +1);
     expected_results:
       - query_id: '12181727213'
         expected_results:
@@ -169,27 +169,27 @@ tests:
         depends_on_stream: v_12181827
         query_type: table
         wait: 2
-        query: insert into v_12181827(id, val) values(3, 30),(3, 30),(4, 40);
+        query: insert into v_12181827(id, val) values(3, 30),(5, 30),(4, 40);
       - client: python
         depends_on_stream: v_12181827
         query_type: table
         wait: 2
-        query: insert into v_12181827(id, val) values(5, 50),(4, 40);
+        query: insert into v_12181827(id, val) values(1, 50),(2, 40);
       - client: python
         depends_on_stream: v_12181827
         query_type: table
         wait: 2
-        query: insert into v_12181827(id, val, _tp_delta) values(5, 50, -1);
-      - client: python
-        depends_on_stream: v_12181827
-        query_type: table
-        wait: 2
-        query: insert into v_12181827(id, val, _tp_delta) values(4, 40, -1);
+        query: insert into v_12181827(id, val, _tp_delta) values(1, 50, -1);
       - client: python
         depends_on_stream: v_12181827
         query_type: table
         wait: 2
         query: insert into v_12181827(id, val, _tp_delta) values(4, 40, -1);
+      - client: python
+        depends_on_stream: v_12181827
+        query_type: table
+        wait: 2
+        query: insert into v_12181827(id, val, _tp_delta) values(2, 40, -1);
       - client: python
         depends_on_stream: v_12181827
         query_type: table
@@ -201,7 +201,7 @@ tests:
         kill: '12181827213'
         kill_wait: 2
         wait: 3
-        query: insert into v_12181827(id, val, _tp_delta) values(3, 30, -1);
+        query: insert into v_12181827(id, val, _tp_delta) values(5, 30, -1);
     expected_results:
       - query_id: '12181827213'
         expected_results:
@@ -312,17 +312,17 @@ tests:
         depends_on: 12180413213
         wait: 1
         depends_on_stream: v_12180413
-        query: insert into v_12180413(id, val) values(4, 40),(5, 50);
+        query: insert into v_12180413(id, val) values(4, 40),(5, 40);
+      - client: python
+        query_type: table
+        depends_on_stream: v_12180413
+        wait: 2
+        query: insert into v_12180413(id, val, _tp_delta) values(4, 40, -1),(5, 40, -1);
       - client: python
         query_type: table
         depends_on_stream: v_12180413
         wait: 2
         query: insert into v_12180413(id, val) values(4, 40),(5, 50);
-      - client: python
-        query_type: table
-        depends_on_stream: v_12180413
-        wait: 2
-        query: insert into v_12180413(id, val, _tp_delta) values(4, 40, -1),(5, 50, -1);
       - client: python
         query_type: table
         depends_on_stream: v_12180413
@@ -341,8 +341,8 @@ tests:
           - [30, 30, 1, 1]
       - query_id: '12180413213-1'
         expected_results:
-          - [120, 120, 3, 3]
-          - [120, 210, 3, 5]
+          - [70, 110, 2, 3]
+          - [30, 30, 1, 1]
           - [120, 120, 3, 3]
           - [30, 30, 1, 1]
   - id: 108
@@ -368,12 +368,12 @@ tests:
         wait: 2
         depends_on_stream: changelog_kv_13
         query_id: '13108'
-        query: select count_distinct(val), sum_distinct(val) from changelog_kv_13;
+        query: select count_distinct(val), sum_distinct(val) from changelog_kv_13 emit periodic 1s;
 
       - client: python
         query_type: table
         depends_on: '13108'
-        wait: 3
+        wait: 2
         kill: '13108'
         kill_wait: 2
         query: insert into changelog_kv_13(id, val, _tp_delta) values(2, 1, 1)(2, 1, -1)(3, 2, 1)(3, 2, -1);

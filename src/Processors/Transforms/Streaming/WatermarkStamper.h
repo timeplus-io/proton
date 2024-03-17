@@ -22,18 +22,9 @@ struct WatermarkStamperParams
 public:
     WatermarkStamperParams(ASTPtr query, TreeRewriterResultPtr syntax_analyzer_result, WindowParamsPtr window_params_);
 
-    enum class EmitMode
-    {
-        NONE,
-        TAIL,
-        PERIODIC,
-        WATERMARK, /// Allow time skew in same window
-        WATERMARK_PER_ROW /// No allow time skew
-    };
-
     WindowParamsPtr window_params;
 
-    EmitMode mode = EmitMode::NONE;
+    EmitMode mode = EmitMode::None;
 
     WindowInterval periodic_interval;
 
@@ -77,10 +68,13 @@ protected:
     virtual VersionType getVersionFromRevision(UInt64 revision) const;
 
 private:
-    template <typename TimeColumnType, bool apply_watermark_per_row>
     void processWatermark(Chunk & chunk);
 
-    void processPeriodic(Chunk & chunk);
+    template <typename TimeColumnType, bool apply_watermark_per_row>
+    void processWatermarkImpl(Chunk & chunk);
+
+    /// \param use_processing_time - if true, use processing time as watermark, otherwise use event time `watermark_ts`
+    void processPeriodic(Chunk & chunk, bool use_processing_time);
 
     void processTimeout(Chunk & chunk);
 
@@ -113,10 +107,11 @@ protected:
     SERDE mutable std::optional<VersionType> version;
 
     /// max event time observed so far
-    SERDE Int64 max_event_ts = 0;
+    SERDE Int64 max_event_ts = INVALID_WATERMARK;
 
-    /// max watermark projected so far
-    SERDE Int64 watermark_ts = 0;
+    /// max watermark projected so far.
+    /// Not initialize to INVALID_WATERMARK, we can dirctly emit it periodically if no watermark is applied
+    SERDE Int64 watermark_ts = INVALID_WATERMARK + 1;
 
     /// Event count which is late than current watermark
     static constexpr Int64 LOG_LATE_EVENTS_INTERVAL_SECONDS = 5; /// 5s, TODO: add settings ?

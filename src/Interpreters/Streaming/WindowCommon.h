@@ -72,10 +72,10 @@ namespace Streaming
 
 enum class WindowType
 {
-    NONE,
-    HOP,
-    TUMBLE,
-    SESSION
+    None,
+    Hop,
+    Tumble,
+    Session
 };
 
 const String TUMBLE_HELP_MESSAGE = "Function 'tumble' requires from 2 to 4 parameters: "
@@ -272,6 +272,10 @@ struct SessionWindowParams : WindowParams
     IntervalKind::Kind interval_kind;
     bool start_with_inclusion;
     bool end_with_inclusion;
+
+    /// So far, only for session window, we evaluate the watermark and window for the events in Aggregate Transform
+    /// For other windows, we assigned the watermark in window assignment step.
+    bool pushdown_window_assignment = true;
 
     SessionWindowParams(TableFunctionDescriptionPtr window_desc);
 };

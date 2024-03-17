@@ -548,7 +548,7 @@
                         {"client":"python", "query_type": "table", "wait":1, "query":"drop view if exists test19_state_mv7"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists test19_state_stream7"},
                         {"client":"python", "query_type": "table", "exist":"test19_state_stream7", "exist_wait":2, "wait":1, "query":"create stream test19_state_stream7 (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
-                        {"client":"python", "query_type": "table", "exist":"test19_state_mv7", "exist_wait":2, "wait":1, "query":"create materialized view test19_state_mv7 as (select id, sum(value) as sum_value from test19_state_stream7 group by id limit 4 union select id, sum(value) as sum_value from test19_state_stream7 group by id limit 4)"},
+                        {"client":"python", "query_type": "table", "exist":"test19_state_mv7", "exist_wait":2, "wait":1, "query":"create materialized view test19_state_mv7 as (select id, sum(value) as sum_value from test19_state_stream7 group by id union select id, sum(value) as sum_value from test19_state_stream7 group by id)"},
                         {"client":"python", "query_type": "stream", "query_id":"19177", "wait":1, "terminate":"manual", "query":"subscribe to select id, sum_value from test19_state_mv7 settings checkpoint_interval=1"},
                         {"client":"python", "query_type": "table", "depends_on":"19177", "kill":"19177", "kill_wait":3, "wait":1, "query": "insert into test19_state_stream7(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')('dev2', 'ca', 58.3, '2020-02-02 20:00:03')"}
                     ]
@@ -579,8 +579,10 @@
                     "expected_results":[
                         ["dev1", "57.3"],
                         ["dev2", "127.3"],
+                        ["dev4", "67"],
                         ["dev1", "57.3"],
-                        ["dev2", "127.3"]
+                        ["dev2", "127.3"],
+                        ["dev4", "67"]
                     ]
                 }
             ]

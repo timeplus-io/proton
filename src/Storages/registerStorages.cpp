@@ -20,6 +20,7 @@ void registerStorageView(StorageFactory & factory);
 /// proton: starts.
 void registerStorageStream(StorageFactory & factory);
 void registerStorageMaterializedView(StorageFactory & factory);
+void registerStorageExternalTable(StorageFactory & factory);
 void registerStorageExternalStream(StorageFactory & factory);
 void registerStorageRandom(StorageFactory & factory);
 /// proton: ends.
@@ -59,6 +60,7 @@ void registerStorages()
     /// proton: starts.
     registerStorageStream(factory);
     registerStorageMaterializedView(factory);
+    registerStorageExternalTable(factory);
     registerStorageExternalStream(factory);
     registerStorageRandom(factory);
     /// proton: ends.

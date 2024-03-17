@@ -4,7 +4,8 @@
 #include <Common/ColumnsHashing.h>
 #include <Common/HashTable/FixedHashMap.h>
 #include <Common/HashTable/HashMap.h>
-#include <Common/HashTable/StringHashTable.h>
+#include <Common/HashTable/StringHashMap.h>
+#include <Common/HashTable/TwoLevelStringHashMap.h>
 
 namespace DB
 {
@@ -24,9 +25,14 @@ void serializeHashMap(const Map & map, MappedSerializer && mapped_serializer, Wr
     });
 }
 
-template <bool is_string_hash_map, typename Map, typename MappedDeserializer>
+template <typename Map, typename MappedDeserializer>
 void deserializeHashMap(Map & map, MappedDeserializer && mapped_deserializer, Arena & pool, ReadBuffer & rb)
 {
+    using Mapped = std::decay_t<Map>::mapped_type;
+
+    constexpr bool is_string_hash_map
+        = std::is_same_v<std::decay_t<Map>, StringHashMap<Mapped>> || std::is_same_v<std::decay_t<Map>, TwoLevelStringHashMap<Mapped>>;
+
     /// For StringHashMap or TwoLevelStringHashMap, it requires StringRef key padded 8 keys(left and right).
     /// So far, the Arena's MemoryChunk is always padding right 15, so we just pad left 8 here
     if constexpr (is_string_hash_map)
@@ -58,6 +64,20 @@ void deserializeHashMap(Map & map, MappedDeserializer && mapped_deserializer, Ar
     /// No need padding after deserialized
     if constexpr (is_string_hash_map)
         pool.setPaddingLeft(0);
+}
+
+template <typename Map, typename MappedSerializer>
+void serializeTwoLevelHashMap(const Map & map, MappedSerializer && mapped_serializer, WriteBuffer & wb)
+{
+    serializeHashMap<Map, MappedSerializer>(map, std::move(mapped_serializer), wb);
+    map.writeUpdatedBuckets(wb);
+}
+
+template <typename Map, typename MappedDeserializer>
+void deserializeTwoLevelHashMap(Map & map, MappedDeserializer && mapped_deserializer, Arena & pool, ReadBuffer & rb)
+{
+    deserializeHashMap<Map, MappedDeserializer>(map, std::move(mapped_deserializer), pool, rb);
+    map.readUpdatedBuckets(rb); /// recover buckets updated status
 }
 
 /// HashMapsTemplate is a taken from HashJoin class and make it standalone
@@ -187,7 +207,7 @@ struct HashMapsTemplate
 #define M(NAME) \
     case HashType::NAME: { \
         assert(NAME); \
-        deserializeHashMap<false>(*NAME, mapped_deserializer, pool, rb); \
+        deserializeHashMap(*NAME, mapped_deserializer, pool, rb); \
         return; \
     }
             APPLY_FOR_HASH_KEY_VARIANTS(M)
