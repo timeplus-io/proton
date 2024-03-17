@@ -1,12 +1,12 @@
 version: "3.3"
 services:
   proton:
-     image: ghcr.io/timeplus-io/proton:latest
-     pull_policy: always
-     ports:
+    image: ghcr.io/timeplus-io/proton:latest
+    pull_policy: always
+    ports:
       #  - 3218:3218 #http port for JDBC driver, default streaming mode
-       - 8123:8123 #http port for JDBC driver, default batch mode
-       - 8463:8463 #native port for proton client
+      - 8123:8123 #http port for JDBC driver, default batch mode
+      - 8463:8463 #native port for proton client
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
     ports:
@@ -26,6 +26,7 @@ services:
       - "0"
       - --kafka-addr
       - PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
       - --advertise-kafka-addr
       - PLAINTEXT://redpanda:29092,OUTSIDE://redpanda:9092
       - --check=false
@@ -38,15 +39,18 @@ services:
       CONSOLE_CONFIG_FILE: |
         kafka:
           brokers: ["redpanda:9092"]
+          schemaRegistry:
+            enabled: true
+            urls: ["http://redpanda:8081"]
         connect:
           enabled: true
-          clusters:  
+          clusters:
           - name: cdc
             url: http://connect:8083
     ports:
       - 8080:8080
     depends_on:
-      - redpanda    
+      - redpanda
   connect:
     image: debezium/connect
     depends_on:
