@@ -1,3 +1,4 @@
+#include "Common/Exception.h"
 #include <Common/logger_useful.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -132,7 +133,7 @@ KafkaSink::KafkaSink(
     ContextPtr context)
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
     , producer(kafka->getProducer())
-    , topic(std::make_unique<RdKafka::Topic>(producer.getHandle(), kafka->topic(), this))
+    , topic(std::make_unique<RdKafka::Topic>(*producer.getHandle(), kafka->topic(), this))
     , partition_cnt(initial_partition_cnt)
     , one_message_per_row(kafka->produceOneMessagePerRow())
     , topic_refresh_interval_ms(kafka->topicRefreshIntervalMs())
@@ -190,13 +191,14 @@ KafkaSink::KafkaSink(
 
             metadata_refresh_stopwatch.restart();
 
-            auto result {klog::describeTopic(topic->getHandle(), producer.getHandle(), logger)};
-            if (result.err)
+            try
             {
-                LOG_WARNING(logger, "Failed to describe topic, error code: {}", result.err);
-                continue;
+                partition_cnt = topic->describe();
             }
-            partition_cnt = result.partitions;
+            catch (...) /// do not break the loop until finished
+            {
+                LOG_WARNING(logger, "Failed to describe topic, error code: {}", getCurrentExceptionMessage(true, true));
+            }
         }
     });
 }

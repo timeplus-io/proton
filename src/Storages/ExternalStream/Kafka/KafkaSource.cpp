@@ -83,7 +83,10 @@ Chunk KafkaSource::generate()
         return {};
 
     if (!consume_started)
+    {
         consumer->startConsume(*topic, shard, offset);
+        consume_started = true;
+    }
 
     if (result_chunks.empty() || iter == result_chunks.end())
     {

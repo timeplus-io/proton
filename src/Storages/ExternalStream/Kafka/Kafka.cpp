@@ -200,7 +200,7 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     , engine_args(engine_args_)
     , data_format(StorageExternalStreamImpl::dataFormat())
     , external_stream_counter(external_stream_counter_)
-    , conf(createConfFromSettings(settings_->getKafkaSettings()))
+    , conf(createConfFromSettings(settings->getKafkaSettings()))
     , logger(&Poco::Logger::get(getLoggerName()))
 {
     assert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);
@@ -372,7 +372,8 @@ void Kafka::validate(const std::vector<int32_t> & shards_to_query)
         {
             /// We haven't describe the topic yet
             auto consumer = getConsumer();
-            shards = consumer->describeTopic(settings->topic.value);
+            RdKafka::Topic rkt {*consumer->getHandle(), topic()};
+            shards = rkt.describe();
         }
     }
 
@@ -453,7 +454,7 @@ Pipe Kafka::read(
         assert(offsets.size() == shards_to_query.size());
 
         auto consumer = getConsumer();
-        auto rkt = std::make_shared<RdKafka::Topic>(consumer->getHandle(), topic());
+        auto rkt = std::make_shared<RdKafka::Topic>(*consumer->getHandle(), topic());
         for (auto [shard, offset] : std::ranges::views::zip(shards_to_query, offsets))
             pipes.emplace_back(
                 std::make_shared<KafkaSource>(
