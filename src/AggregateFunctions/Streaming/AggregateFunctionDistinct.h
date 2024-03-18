@@ -19,65 +19,66 @@ struct AggregateFunctionDistinctSingleNumericData
     using Self = AggregateFunctionDistinctSingleNumericData<T>;
     Set set;
 
-    /// proton: starts. Resolve multiple finalizations problem for streaming global aggreagtion query
+    /// Resolve multiple finalizations problem for streaming global aggreagtion query
+    /// Optimized, put the new coming data that the set does not have into extra_data_since_last_finalize.
     std::vector<T> extra_data_since_last_finalize;
-    bool use_extra_data = false;  /// Optimized, only streaming global aggreagtion query need to use extra data after first finalization.
-    /// proton: ends.
+
+    // If has new data
+    bool has_new_data = false;
 
     void add(const IColumn ** columns, size_t /* columns_num */, size_t row_num, Arena *)
     {
         const auto & vec = assert_cast<const ColumnVector<T> &>(*columns[0]).getData();
-        /// proton: starts.
         auto [_, inserted] = set.insert(vec[row_num]);
-        if (use_extra_data && inserted)
+        has_new_data = false;
+        if (inserted)
+        {
+            has_new_data = true;
             extra_data_since_last_finalize.emplace_back(vec[row_num]);
-        /// proton: ends.
+        }
     }
 
     void merge(const Self & rhs, Arena *)
     {
-        /// proton: starts.
-        if (rhs.use_extra_data)
+        if (rhs.extra_data_since_last_finalize.size())
         {
             for (const auto & data : rhs.extra_data_since_last_finalize)
             {
                 auto [_, inserted] = set.insert(data);
-                if (use_extra_data && inserted)
+                if (inserted)
                     extra_data_since_last_finalize.emplace_back(data);
             }
         }
-        else if (use_extra_data)
-        {
-            for (const auto & elem : rhs.set)
-            {
-                auto [_, inserted] = set.insert(elem.getValue());
-                if (inserted)
-                    extra_data_since_last_finalize.emplace_back(elem.getValue());
-            }
-        }
-        else
+        /**
+         * Under what circumstances will extra_data_since_last_finalize.size() be zero but has_new_data be true?
+         * Only in the first round of inserting data into multi-shard stream.
+         * For example: create stream test(id int, value int) settings shards=3;
+         *              select count_distinct(value) from test;
+         *              insert into test(id, value) values (3, 30), (4, 40);
+         * when execute the 'insert' command, it will trigger merge function, because in Aggregator::mergeSingleLevelDataImpl(...),
+         * there is a varible 'non_empty_data' to indicate if the other shard has data, and then call merge function.
+         * Since we are in the first round of inserting data, the other shard has no data, then in the insertResultIntoImpl function,
+         * the extra_data_since_last_finalize will be cleared.But actually, we do have new data.
+         * So it is just a special case and will just happen once.
+         */
+        else if (rhs.has_new_data)
         {
             set.merge(rhs.set);
         }
-        /// proton: ends.
     }
 
     void serialize(WriteBuffer & buf) const
     {
         set.write(buf);
-        /// proton: starts.
         writeVectorBinary(extra_data_since_last_finalize, buf);
-        writeBoolText(use_extra_data, buf);
-        /// proton: ends.
+        writeBoolText(has_new_data, buf);
     }
 
     void deserialize(ReadBuffer & buf, Arena *)
     {
         set.read(buf);
-        /// proton: starts.
         readVectorBinary(extra_data_since_last_finalize, buf);
-        readBoolText(use_extra_data, buf);
-        /// proton: ends.
+        readBoolText(has_new_data, buf);
     }
 
     MutableColumns getArguments(const DataTypes & argument_types) const
@@ -85,18 +86,8 @@ struct AggregateFunctionDistinctSingleNumericData
         MutableColumns argument_columns;
         argument_columns.emplace_back(argument_types[0]->createColumn());
 
-        /// proton: starts.
-        if (use_extra_data)
-        {
-            for (const auto & data : extra_data_since_last_finalize)
-                argument_columns[0]->insert(data);
-        }
-        else
-        {
-            for (const auto & elem : set)
-                argument_columns[0]->insert(elem.getValue());
-        }
-        /// proton: ends.
+        for (const auto & data : extra_data_since_last_finalize)
+            argument_columns[0]->insert(data);
 
         return argument_columns;
     }
@@ -108,27 +99,33 @@ struct AggregateFunctionDistinctGenericData
     using Set = HashSetWithSavedHashWithStackMemory<StringRef, StringRefHash, 4>;
     using Self = AggregateFunctionDistinctGenericData;
     Set set;
-    /// proton: starts. Resolve multiple finalizations problem for streaming global aggreagtion query
+    /// Resolve multiple finalizations problem for streaming global aggreagtion query
+    /// Optimized, put the new coming data that the set does not have into extra_data_since_last_finalize.
     std::vector<StringRef> extra_data_since_last_finalize;
-    bool use_extra_data = false;  /// Optimized, only streaming global aggreagtion query need to use extra data after first finalization.
-    /// proton: ends.
+    bool has_new_data = false;
+
 
     void merge(const Self & rhs, Arena * arena)
     {
         Set::LookupResult it;
         bool inserted;
-        for (const auto & elem : rhs.set)
-        /// proton: starts.
-        {
-            set.emplace(ArenaKeyHolder{elem.getValue(), *arena}, it, inserted);
 
-            if (use_extra_data && inserted)
+        if (rhs.extra_data_since_last_finalize.size())
+        {
+            for (const auto & data : rhs.extra_data_since_last_finalize)
             {
-                assert(it);
-                extra_data_since_last_finalize.emplace_back(it->getValue());
+                set.emplace(ArenaKeyHolder{data, *arena}, it, inserted);
+                if (inserted)
+                {
+                    assert(it);
+                    extra_data_since_last_finalize.emplace_back(it->getValue());
+                }
             }
         }
-        /// proton: ends.
+        else if (rhs.has_new_data)
+        {
+            set.merge(rhs.set);
+        }
     }
 
     void serialize(WriteBuffer & buf) const
@@ -137,13 +134,11 @@ struct AggregateFunctionDistinctGenericData
         for (const auto & elem : set)
             writeStringBinary(elem.getValue(), buf);
 
-        /// proton: starts.
         writeVarUInt(extra_data_since_last_finalize.size(), buf);
         for (const auto & data : extra_data_since_last_finalize)
             writeStringBinary(data, buf);
 
-        writeBoolText(use_extra_data, buf);
-        /// proton: ends.
+        writeBoolText(has_new_data, buf);
     }
 
     void deserialize(ReadBuffer & buf, Arena * arena)
@@ -153,15 +148,13 @@ struct AggregateFunctionDistinctGenericData
         for (size_t i = 0; i < size; ++i)
             set.insert(readStringBinaryInto(*arena, buf));
 
-        /// proton: starts.
         size_t extra_size;
         readVarUInt(extra_size, buf);
         extra_data_since_last_finalize.resize(extra_size);
         for (size_t i = 0; i < extra_size; ++i)
             extra_data_since_last_finalize[i] = readStringBinaryInto(*arena, buf);
 
-        readBoolText(use_extra_data, buf);
-        /// proton: ends.
+        readBoolText(has_new_data, buf);
     }
 };
 
@@ -170,18 +163,17 @@ struct AggregateFunctionDistinctSingleGenericData : public AggregateFunctionDist
 {
     void add(const IColumn ** columns, size_t /* columns_num */, size_t row_num, Arena * arena)
     {
+        has_new_data = false;
         Set::LookupResult it;
         bool inserted;
         auto key_holder = getKeyHolder<is_plain_column>(*columns[0], row_num, *arena);
         set.emplace(key_holder, it, inserted);
-
-        /// proton: starts.
-        if (use_extra_data && inserted)
+        if (inserted)
         {
             assert(it);
+            has_new_data = true;
             extra_data_since_last_finalize.emplace_back(it->getValue());
         }
-        /// proton: ends.
     }
 
     MutableColumns getArguments(const DataTypes & argument_types) const
@@ -189,18 +181,8 @@ struct AggregateFunctionDistinctSingleGenericData : public AggregateFunctionDist
         MutableColumns argument_columns;
         argument_columns.emplace_back(argument_types[0]->createColumn());
 
-        /// proton: starts.
-        if (use_extra_data)
-        {
-            for (const auto & data : extra_data_since_last_finalize)
-                deserializeAndInsert<is_plain_column>(data, *argument_columns[0]);
-        }
-        else
-        {
-            for (const auto & elem : set)
-                deserializeAndInsert<is_plain_column>(elem.getValue(), *argument_columns[0]);
-        }
-        /// proton: ends.
+        for (const auto & data : extra_data_since_last_finalize)
+            deserializeAndInsert<is_plain_column>(data, *argument_columns[0]);
 
         return argument_columns;
     }
@@ -219,18 +201,18 @@ struct AggregateFunctionDistinctMultipleGenericData : public AggregateFunctionDi
             value.size += cur_ref.size;
         }
 
+        has_new_data = false;
         Set::LookupResult it;
         bool inserted;
         auto key_holder = SerializedKeyHolder{value, *arena};
         set.emplace(key_holder, it, inserted);
 
-        /// proton: starts.
-        if (use_extra_data && inserted)
+        if (inserted)
         {
             assert(it);
+            has_new_data = true;
             extra_data_since_last_finalize.emplace_back(it->getValue());
         }
-        /// proton: ends.
     }
 
     MutableColumns getArguments(const DataTypes & argument_types) const
@@ -239,26 +221,12 @@ struct AggregateFunctionDistinctMultipleGenericData : public AggregateFunctionDi
         for (size_t i = 0; i < argument_types.size(); ++i)
             argument_columns[i] = argument_types[i]->createColumn();
 
-        /// proton: starts.
-        if (use_extra_data)
+        for (const auto & data : extra_data_since_last_finalize)
         {
-            for (const auto & data : extra_data_since_last_finalize)
-            {
-                const char * begin = data.data;
-                for (auto & column : argument_columns)
-                    begin = column->deserializeAndInsertFromArena(begin);
-            }
+            const char * begin = data.data;
+            for (auto & column : argument_columns)
+                begin = column->deserializeAndInsertFromArena(begin);
         }
-        else
-        {
-            for (const auto & elem : set)
-            {
-                const char * begin = elem.getValue().data;
-                for (auto & column : argument_columns)
-                    begin = column->deserializeAndInsertFromArena(begin);
-            }
-        }
-        /// proton: ends.
 
         return argument_columns;
     }
@@ -334,7 +302,7 @@ public:
             nested_func->insertResultInto(getNestedPlace(place), to, arena);
 
         /// proton: starts. Next finalization will use extra data, used in streaming global aggregation query.
-        this->data(place).use_extra_data = true;
+        // this->data(place).use_extra_data = true;
         this->data(place).extra_data_since_last_finalize.clear();
         /// proton: ends.
     }
