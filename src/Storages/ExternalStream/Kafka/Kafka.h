@@ -42,7 +42,7 @@ public:
 
     SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) override;
 
-    bool produceOneMessagePerRow() const { return one_message_per_row; }
+    bool produceOneMessagePerRow() const { return settings->one_message_per_row; }
     Int32 topicRefreshIntervalMs() const { return topic_refresh_interval_ms; }
     const String & brokers() const { return settings->brokers.value; }
     const String & dataFormat() const override { return data_format; }
@@ -75,7 +75,6 @@ private:
     StorageID storage_id;
     ASTs engine_args;
     String data_format;
-    bool one_message_per_row = false;
     ExternalStreamCounterPtr external_stream_counter;
 
     NamesAndTypesList virtual_column_names_and_types;

@@ -46,7 +46,11 @@ public:
 
     FormatSettings getFormatSettings(const ContextPtr & context) const
     {
-        return settings->getFormatSettings(context);
+        auto ret = settings->getFormatSettings(context);
+        /// This is needed otherwise using an external stream with ProtobufSingle format as the target stream
+        /// of a MV (or in `INSERT ... SELECT ...`), i.e. more than one rows sent to the stream, exception will be thrown.
+        ret.protobuf.allow_multiple_rows_without_delimiter = true;
+        return ret;
     }
 
 protected:
