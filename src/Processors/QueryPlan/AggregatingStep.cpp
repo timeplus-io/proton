@@ -10,7 +10,9 @@
 #include <Processors/Merges/FinishAggregatingInOrderTransform.h>
 #include <Interpreters/Aggregator.h>
 #include <Processors/QueryPlan/IQueryPlanStep.h>
+#include <Columns/ColumnFixedString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/DataTypeFixedString.h>
 
 namespace DB
 {
@@ -29,6 +31,17 @@ static ITransformingStep::Traits getTraits()
             .preserves_number_of_rows = false,
         }
     };
+}
+
+Block appendGroupingSetColumn(Block header)
+{
+    Block res;
+    res.insert({std::make_shared<DataTypeUInt64>(), "__grouping_set"});
+
+    for (auto & col : header)
+        res.insert(std::move(col));
+
+    return res;
 }
 
 static Block appendGroupingColumn(Block block, const GroupingSetsParamsList & params)
