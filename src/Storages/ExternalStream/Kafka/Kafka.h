@@ -74,7 +74,6 @@ public:
 private:
     void calculateDataFormat(const IStorage * storage);
     void cacheVirtualColumnNamesAndTypes();
-    void initHandlers();
     std::vector<Int64> getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const;
     void validateMessageKey(const String & message_key, IStorage * storage, const ContextPtr & context);
     void validate(const std::vector<int32_t> & shards_to_query = {});
@@ -96,8 +95,6 @@ private:
     ConfPtr conf;
     RdKafka::ConsumerPoolPtr consumer_pool;
     std::unique_ptr<RdKafka::Producer> producer;
-
-    klog::KafkaWALStatsPtr stats;
 
     Poco::Logger * logger;
 };

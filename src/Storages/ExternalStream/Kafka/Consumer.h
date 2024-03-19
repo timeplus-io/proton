@@ -23,9 +23,6 @@ public:
 
     rd_kafka_t * getHandle() const { return rk.get(); }
 
-    /// Fetches the number of partitions of the topic by describing the topic.
-    int describeTopic(const std::string & topic_name) const;
-
     std::vector<Int64> getOffsetsForTimestamps(const std::string & topic, const std::vector<klog::PartitionTimestamp> & partition_timestamps, int32_t timeout_ms = 5000) const;
 
     void startConsume(Topic & topic, Int32 parition, Int64 offset = RD_KAFKA_OFFSET_END);

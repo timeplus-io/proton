@@ -74,10 +74,7 @@ private:
     /// the number of outstanding messages for the current checkpoint period
     size_t outstandings() const noexcept { return state.outstandings; }
     /// the last error code received from delivery report callback
-    rd_kafka_resp_err_t lastSeenError() const {
-        Int32 code = state.last_error_code;
-        return static_cast<rd_kafka_resp_err_t>(code);
-    }
+    rd_kafka_resp_err_t lastSeenError() const { return static_cast<rd_kafka_resp_err_t>(state.last_error_code.load()); }
     /// check if there are no more outstandings (i.e. delivery reports have been recieved
     /// for all out-go messages, regardless if a message is successfully delivered or not)
     bool hasOutstandingMessages() const noexcept { return state.outstandings != state.acked + state.error_count; }

@@ -19,11 +19,8 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int CANNOT_WRITE_TO_KAFKA;
-extern const int MISSING_ACKNOWLEDGEMENT;
-extern const int INVALID_CONFIG_PARAMETER;
 extern const int TYPE_MISMATCH;
 extern const int INVALID_SETTING_VALUE;
-extern const int UNKNOWN_EXCEPTION;
 }
 
 namespace
@@ -175,9 +172,6 @@ KafkaSink::KafkaSink(
     }
     else
         partitioner = std::make_unique<KafkaStream::ChunkSharder>();
-
-    if (lastSeenError() != 0)
-        throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "SHIT HAPPENED!");
 
     /// Polling message deliveries.
     background_jobs.scheduleOrThrowOnError([this, refresh_interval_ms = static_cast<UInt64>(topic_refresh_interval_ms)]() {

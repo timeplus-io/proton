@@ -8,7 +8,6 @@ namespace DB
 
 namespace ErrorCodes
 {
-extern const int INVALID_CONFIG_PARAMETER;
 extern const int RESOURCE_NOT_FOUND;
 }
 
@@ -42,30 +41,6 @@ void Consumer::backgroundPoll() const
         rd_kafka_poll(rk.get(), /*timeout_ms=*/100);
 
     LOG_INFO(logger, "Consumer poll stopped");
-}
-
-int Consumer::describeTopic(const std::string & topic_name) const
-{
-    const struct rd_kafka_metadata * metadata = nullptr;
-
-    auto err = rd_kafka_metadata(rk.get(), 0, nullptr, &metadata, /*timeout_ms=*/5000);
-    if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
-        throw Exception(klog::mapErrorCode(err), "failed to describe topic {}, error_code={}, error_msg={}", topic_name, err, rd_kafka_err2str(err));
-
-    if (metadata->topic_cnt < 1)
-    {
-        rd_kafka_metadata_destroy(metadata);
-        throw Exception(DB::ErrorCodes::RESOURCE_NOT_FOUND, "Could not find topic {}", topic_name);
-    }
-
-    assert(metadata->topic_cnt == 1);
-
-    auto partition_cnt = metadata->topics[0].partition_cnt;
-    rd_kafka_metadata_destroy(metadata);
-    if (partition_cnt > 0)
-        return partition_cnt;
-    else
-        throw Exception(DB::ErrorCodes::RESOURCE_NOT_FOUND, "Describe topic of {} returned 0 partitions", topic_name);
 }
 
 std::vector<Int64> Consumer::getOffsetsForTimestamps(const std::string & topic, const std::vector<klog::PartitionTimestamp> & partition_timestamps, int32_t timeout_ms) const

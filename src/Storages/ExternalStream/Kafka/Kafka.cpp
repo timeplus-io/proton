@@ -228,14 +228,15 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
 
     cacheVirtualColumnNamesAndTypes();
 
-    stats = std::make_unique<klog::KafkaWALStats>("*", logger);
-    rd_kafka_conf_set_opaque(conf.get(), stats.get());
     rd_kafka_conf_set_error_cb(conf.get(), &Kafka::onError);
     rd_kafka_conf_set_stats_cb(conf.get(), &Kafka::onStats);
     rd_kafka_conf_set_throttle_cb(conf.get(), &Kafka::onThrottle);
     rd_kafka_conf_set_dr_msg_cb(conf.get(), &KafkaSink::onMessageDelivery);
 
+    /// A Producer instance can be used by multiple sinks at the same time, thus we only need one.
     producer = std::make_unique<RdKafka::Producer>(rd_kafka_conf_dup(conf.get()), logger);
+    /// A Consumer can only be used by one source at the same time (technically speaking, it can be used by multple sources as long as each source read from a different topic,
+    /// but we will leave this as an enhancement later, probably when we introduce the `Connection` concept), thus we need a consumer pool.
     consumer_pool = std::make_shared<RdKafka::ConsumerPool>(/*size=*/100, storage_id, *conf.get(), logger);
 
     if (!attach)
@@ -265,10 +266,6 @@ void Kafka::cacheVirtualColumnNamesAndTypes()
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_PROCESS_TIME, std::make_shared<DataTypeDateTime64>(3, "UTC")));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_SHARD, std::make_shared<DataTypeInt32>()));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, std::make_shared<DataTypeInt64>()));
-}
-
-void Kafka::initHandlers()
-{
 }
 
 std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const
@@ -502,7 +499,8 @@ SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr
 int Kafka::onStats(struct rd_kafka_s * rk, char * json, size_t json_len, void *  /*opaque*/)
 {
     std::string s(json, json + json_len);
-    LOG_TRACE(cbLogger(), "stats of {}: {}", rd_kafka_name(rk), s);
+    /// controlled by the `statistics.interval.ms` property, which by default is `0`, meaning no stats
+    LOG_INFO(cbLogger(), "stats of {}: {}", rd_kafka_name(rk), s);
     return 0;
 }
 
