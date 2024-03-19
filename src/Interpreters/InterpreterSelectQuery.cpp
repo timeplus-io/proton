@@ -1881,7 +1881,7 @@ static void executeMergeAggregatedImpl(
       *  but it can work more slowly.
       */
 
-    Aggregator::Params params(header_before_merge, keys, aggregates, overflow_row, settings.max_threads);
+    Aggregator::Params params(header_before_merge, keys, aggregates, overflow_row, settings.max_threads, settings.max_block_size);
 
     auto transform_params = std::make_shared<AggregatingTransformParams>(
         params,
@@ -2512,6 +2512,7 @@ static Aggregator::Params getAggregatorParams(
         settings.min_free_disk_space_for_temporary_data,
         settings.compile_aggregate_expressions,
         settings.min_count_to_compile_aggregate_expression,
+        settings.max_block_size,
         Block{},
         stats_collecting_params
     };
