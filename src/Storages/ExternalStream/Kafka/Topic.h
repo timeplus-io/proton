@@ -14,7 +14,7 @@ using Properties = std::vector<std::pair<std::string, std::string>>;
 class Topic : boost::noncopyable
 {
 public:
-    Topic(rd_kafka_t & rk, const std::string & name, void * opaque = nullptr);
+    Topic(rd_kafka_t & rk, const std::string & name);
     ~Topic() = default;
 
     rd_kafka_topic_t * getHandle() const { return rkt.get(); }

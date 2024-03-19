@@ -20,7 +20,15 @@ class Kafka final : public StorageExternalStreamImpl
 {
 public:
     using ConfPtr = std::unique_ptr<rd_kafka_conf_t, decltype(rd_kafka_conf_destroy) *>;
-    using HandlerPtr = std::shared_ptr<rd_kafka_t>;
+
+    static Poco::Logger * cbLogger() {
+        static Poco::Logger * logger { &Poco::Logger::get("KafkaExternalStream") };
+        return logger;
+    }
+
+    static int onStats(struct rd_kafka_s * rk, char * json, size_t json_len, void * opaque);
+    static void onError(struct rd_kafka_s * rk, int err, const char * reason, void * opaque);
+    static void onThrottle(struct rd_kafka_s * rk, const char * broker_name, int32_t broker_id, int throttle_time_ms, void * opaque);
 
     Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach, ExternalStreamCounterPtr external_stream_counter_, ContextPtr context);
     ~Kafka() override = default;
@@ -89,6 +97,9 @@ private:
     RdKafka::ConsumerPoolPtr consumer_pool;
     std::unique_ptr<RdKafka::Producer> producer;
 
+    klog::KafkaWALStatsPtr stats;
+
     Poco::Logger * logger;
 };
+
 }

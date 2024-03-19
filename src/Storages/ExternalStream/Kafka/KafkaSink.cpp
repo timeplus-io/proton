@@ -23,6 +23,7 @@ extern const int MISSING_ACKNOWLEDGEMENT;
 extern const int INVALID_CONFIG_PARAMETER;
 extern const int TYPE_MISMATCH;
 extern const int INVALID_SETTING_VALUE;
+extern const int UNKNOWN_EXCEPTION;
 }
 
 namespace
@@ -133,7 +134,7 @@ KafkaSink::KafkaSink(
     ContextPtr context)
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
     , producer(kafka->getProducer())
-    , topic(std::make_unique<RdKafka::Topic>(*producer.getHandle(), kafka->topic(), this))
+    , topic(std::make_unique<RdKafka::Topic>(*producer.getHandle(), kafka->topic()))
     , partition_cnt(initial_partition_cnt)
     , one_message_per_row(kafka->produceOneMessagePerRow())
     , topic_refresh_interval_ms(kafka->topicRefreshIntervalMs())
@@ -174,6 +175,9 @@ KafkaSink::KafkaSink(
     }
     else
         partitioner = std::make_unique<KafkaStream::ChunkSharder>();
+
+    if (lastSeenError() != 0)
+        throw Exception(ErrorCodes::UNKNOWN_EXCEPTION, "SHIT HAPPENED!");
 
     /// Polling message deliveries.
     background_jobs.scheduleOrThrowOnError([this, refresh_interval_ms = static_cast<UInt64>(topic_refresh_interval_ms)]() {
@@ -218,6 +222,7 @@ void KafkaSink::addMessageToBatch(char * pos, size_t len)
         .len = len,
         .key = const_cast<char *>(key.data),
         .key_len = key.size,
+        ._private = this,
     });
 
     batch_payload.push_back(std::move(payload));
@@ -230,6 +235,8 @@ void KafkaSink::consume(Chunk chunk)
         return;
 
     auto total_rows = chunk.rows();
+    LOG_INFO(logger, "consuming {} rows", total_rows);
+
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
     auto blocks = partitioner->shard(std::move(block), partition_cnt);
 
@@ -366,16 +373,17 @@ void KafkaSink::onFinish()
         LOG_ERROR(logger, "Not all messsages are sent successfully, expected={} actual={}", outstandings(), acked());
 }
 
-void KafkaSink::onMessageDelivery(rd_kafka_t * /* producer */, const rd_kafka_message_t * msg, void * opaque)
+void KafkaSink::onMessageDelivery(rd_kafka_t * /* producer */, const rd_kafka_message_t * msg, void *  /*opaque*/)
 {
-    static_cast<KafkaSink *>(opaque)->onMessageDelivery(msg);
+    auto * sink = static_cast<KafkaSink *>(msg->_private);
+    sink->onMessageDelivery(msg->err);
 }
 
-void KafkaSink::onMessageDelivery(const rd_kafka_message_t * msg)
+void KafkaSink::onMessageDelivery(rd_kafka_resp_err_t err)
 {
-    if (msg->err)
+    if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
     {
-        state.last_error_code.store(msg->err);
+        state.last_error_code.store(err);
         ++state.error_count;
     }
     else
@@ -424,7 +432,7 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     } while (true);
 
-    resetState();
+    state.reset();
     IProcessor::checkpoint(context);
 }
 

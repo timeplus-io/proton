@@ -228,6 +228,13 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
 
     cacheVirtualColumnNamesAndTypes();
 
+    stats = std::make_unique<klog::KafkaWALStats>("*", logger);
+    rd_kafka_conf_set_opaque(conf.get(), stats.get());
+    rd_kafka_conf_set_error_cb(conf.get(), &Kafka::onError);
+    rd_kafka_conf_set_stats_cb(conf.get(), &Kafka::onStats);
+    rd_kafka_conf_set_throttle_cb(conf.get(), &Kafka::onThrottle);
+    rd_kafka_conf_set_dr_msg_cb(conf.get(), &KafkaSink::onMessageDelivery);
+
     producer = std::make_unique<RdKafka::Producer>(rd_kafka_conf_dup(conf.get()), logger);
     consumer_pool = std::make_shared<RdKafka::ConsumerPool>(/*size=*/100, storage_id, *conf.get(), logger);
 
@@ -491,4 +498,31 @@ SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr
     return std::make_shared<KafkaSink>(
         this, metadata_snapshot->getSampleBlock(), shards, message_key_ast, external_stream_counter, context);
 }
+
+int Kafka::onStats(struct rd_kafka_s * rk, char * json, size_t json_len, void *  /*opaque*/)
+{
+    std::string s(json, json + json_len);
+    LOG_TRACE(cbLogger(), "stats of {}: {}", rd_kafka_name(rk), s);
+    return 0;
+}
+
+void Kafka::onError(struct rd_kafka_s * rk, int err, const char * reason, void *  /*opaque*/)
+{
+    if (err == RD_KAFKA_RESP_ERR__FATAL)
+    {
+        char errstr[512] = {'\0'};
+        rd_kafka_fatal_error(rk, errstr, sizeof(errstr));
+        LOG_ERROR(cbLogger(), "Fatal error found on {}, error={}", rd_kafka_name(rk), errstr);
+    }
+    else
+    {
+        LOG_WARNING(cbLogger(), "Error occurred on {}, error={}, reason={}", rd_kafka_name(rk), rd_kafka_err2str(static_cast<rd_kafka_resp_err_t>(err)), reason);
+    }
+}
+
+void Kafka::onThrottle(struct rd_kafka_s *  /*rk*/, const char * broker_name, int32_t broker_id, int throttle_time_ms, void *  /*opaque*/)
+{
+    LOG_WARNING(cbLogger(), "Throttled on broker={}, broker_id={}, throttle_time_ms={}", broker_name, broker_id, throttle_time_ms);
+}
+
 }

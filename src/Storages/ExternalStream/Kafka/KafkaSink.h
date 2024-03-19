@@ -8,16 +8,12 @@
 #include <Storages/ExternalStream/Kafka/WriteBufferFromKafkaSink.h>
 #include <Common/ThreadPool.h>
 
-namespace Poco
-{
-class Logger;
-}
-
 namespace DB
 {
 
 namespace KafkaStream
 {
+
 /// Shard Chunk's to shards (or partitions in Kafka's term) by the sharding expression.
 class ChunkSharder
 {
@@ -42,11 +38,15 @@ private:
     String sharding_key_column_name;
     bool random_sharding = false;
 };
+
 }
 
 class KafkaSink final : public SinkToStorage
 {
 public:
+    /// Callback for Kafka message delivery report
+    static void onMessageDelivery(rd_kafka_t * /* producer */, const rd_kafka_message_t * msg, void *  /*opaque*/);
+
     KafkaSink(
         const Kafka * kafka,
         const Block & header,
@@ -63,10 +63,8 @@ public:
     void checkpoint(CheckpointContextPtr) override;
 
 private:
-    /// Callback for Kafka message delivery report
-    static void onMessageDelivery(rd_kafka_t * /* producer */, const rd_kafka_message_t * msg, void *  /*opaque*/);
-    void onMessageDelivery(const rd_kafka_message_t * msg);
-
+    // void onMessageDelivery(const rd_kafka_message_t * msg);
+    void onMessageDelivery(rd_kafka_resp_err_t err);
     void addMessageToBatch(char * pos, size_t len);
 
     /// the number of acknowledgement has been received so far for the current checkpoint period
@@ -76,12 +74,13 @@ private:
     /// the number of outstanding messages for the current checkpoint period
     size_t outstandings() const noexcept { return state.outstandings; }
     /// the last error code received from delivery report callback
-    rd_kafka_resp_err_t lastSeenError() const { return static_cast<rd_kafka_resp_err_t>(state.last_error_code.load()); }
+    rd_kafka_resp_err_t lastSeenError() const {
+        Int32 code = state.last_error_code;
+        return static_cast<rd_kafka_resp_err_t>(code);
+    }
     /// check if there are no more outstandings (i.e. delivery reports have been recieved
     /// for all out-go messages, regardless if a message is successfully delivered or not)
     bool hasOutstandingMessages() const noexcept { return state.outstandings != state.acked + state.error_count; }
-    /// allows to reset the state after each checkpoint
-    void resetState() { state.reset(); }
 
     static const int POLL_TIMEOUT_MS {500};
 
@@ -114,8 +113,9 @@ private:
         std::atomic_size_t outstandings {0};
         std::atomic_size_t acked {0};
         std::atomic_size_t error_count {0};
-        std::atomic_int last_error_code {0};
+        std::atomic_int32_t last_error_code {0};
 
+        /// allows to reset the state after each checkpoint
         void reset();
     };
 
@@ -124,4 +124,5 @@ private:
     ExternalStreamCounterPtr external_stream_counter;
     Poco::Logger * logger;
 };
+
 }
