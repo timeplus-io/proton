@@ -65,7 +65,8 @@ static void compileFunction(llvm::Module & module, const IFunctionBase & functio
 {
     const auto & function_argument_types = function.getArgumentTypes();
 
-    llvm::IRBuilder<> b(module.getContext());
+    auto & context = module.getContext();
+    llvm::IRBuilder<> b(context);
     auto * size_type = b.getIntNTy(sizeof(size_t) * 8);
     auto * data_type = llvm::StructType::get(b.getInt8PtrTy(), b.getInt8PtrTy());
     auto * func_type = llvm::FunctionType::get(b.getVoidTy(), { size_type, data_type->getPointerTo() }, /*isVarArg=*/false);
@@ -73,6 +74,8 @@ static void compileFunction(llvm::Module & module, const IFunctionBase & functio
     /// Create function in module
 
     auto * func = llvm::Function::Create(func_type, llvm::Function::ExternalLinkage, function.getName(), module);
+    func->setAttributes(llvm::AttributeList::get(context, {{2, llvm::Attribute::get(context, llvm::Attribute::AttrKind::NoAlias)}}));
+
     auto * args = func->args().begin();
     llvm::Value * rows_count_arg = args++;
     llvm::Value * columns_arg = args++;
@@ -194,6 +197,9 @@ static void compileCreateAggregateStatesFunctions(llvm::Module & module, const s
     auto * create_aggregate_states_function_type = llvm::FunctionType::get(b.getVoidTy(), { aggregate_data_places_type }, false);
     auto * create_aggregate_states_function = llvm::Function::Create(create_aggregate_states_function_type, llvm::Function::ExternalLinkage, name, module);
 
+    create_aggregate_states_function->setAttributes(
+        llvm::AttributeList::get(context, {{1, llvm::Attribute::get(context, llvm::Attribute::AttrKind::NoAlias)}}));
+
     auto * arguments = create_aggregate_states_function->args().begin();
     llvm::Value * aggregate_data_place_arg = arguments++;
 
@@ -238,6 +244,11 @@ static void compileAddIntoAggregateStatesFunctions(llvm::Module & module,
 
     auto * add_into_aggregate_states_func_declaration = llvm::FunctionType::get(b.getVoidTy(), { size_type, size_type, column_type->getPointerTo(), places_type }, false);
     auto * add_into_aggregate_states_func = llvm::Function::Create(add_into_aggregate_states_func_declaration, llvm::Function::ExternalLinkage, name, module);
+
+    add_into_aggregate_states_func->setAttributes(llvm::AttributeList::get(
+        context,
+        {{3, llvm::Attribute::get(context, llvm::Attribute::AttrKind::NoAlias)},
+         {4, llvm::Attribute::get(context, llvm::Attribute::AttrKind::NoAlias)}}));
 
     auto * arguments = add_into_aggregate_states_func->args().begin();
     llvm::Value * row_start_arg = arguments++;
@@ -294,7 +305,7 @@ static void compileAddIntoAggregateStatesFunctions(llvm::Module & module,
     llvm::Value * aggregation_place = nullptr;
 
     if (places_argument_type == AddIntoAggregateStatesPlacesArgumentType::MultiplePlaces)
-        aggregation_place = b.CreateLoad(b.getInt8Ty()->getPointerTo(), b.CreateGEP(b.getInt8Ty()->getPointerTo(), places_arg, counter_phi));
+        aggregation_place = b.CreateLoad(b.getInt8Ty()->getPointerTo(), b.CreateInBoundsGEP(b.getInt8Ty()->getPointerTo(), places_arg, counter_phi));
     else
         aggregation_place = places_arg;
 
@@ -311,7 +322,7 @@ static void compileAddIntoAggregateStatesFunctions(llvm::Module & module,
             auto & column = columns[previous_columns_size + column_argument_index];
             auto & argument_type = arguments_types[column_argument_index];
 
-            auto * column_data_element = b.CreateLoad(column.data_element_type, b.CreateGEP(column.data_element_type, column.data_ptr, counter_phi));
+            auto * column_data_element = b.CreateLoad(column.data_element_type, b.CreateInBoundsGEP(column.data_element_type, column.data_ptr, counter_phi));
 
             if (!argument_type->isNullable())
             {
@@ -319,7 +330,7 @@ static void compileAddIntoAggregateStatesFunctions(llvm::Module & module,
                 continue;
             }
 
-            auto * column_null_data_with_offset = b.CreateGEP(b.getInt8Ty(), column.null_data_ptr, counter_phi);
+            auto * column_null_data_with_offset = b.CreateInBoundsGEP(b.getInt8Ty(), column.null_data_ptr, counter_phi);
             auto * is_null = b.CreateICmpNE(b.CreateLoad(b.getInt8Ty(), column_null_data_with_offset), b.getInt8(0));
             auto * nullable_unitialized = llvm::Constant::getNullValue(toNullableType(b, column.data_element_type));
             auto * first_insert = b.CreateInsertValue(nullable_unitialized, column_data_element, {0});
@@ -352,7 +363,8 @@ static void compileAddIntoAggregateStatesFunctions(llvm::Module & module,
 
 static void compileMergeAggregatesStates(llvm::Module & module, const std::vector<AggregateFunctionWithOffset> & functions, const std::string & name)
 {
-    llvm::IRBuilder<> b(module.getContext());
+    auto & context = module.getContext();
+    llvm::IRBuilder<> b(context);
 
     auto * aggregate_data_place_type = b.getInt8Ty()->getPointerTo();
     auto * aggregate_data_places_type = aggregate_data_place_type->getPointerTo();
@@ -362,6 +374,11 @@ static void compileMergeAggregatesStates(llvm::Module & module, const std::vecto
         = llvm::FunctionType::get(b.getVoidTy(), {aggregate_data_places_type, aggregate_data_places_type, size_type}, false);
     auto * merge_aggregates_states_func
         = llvm::Function::Create(merge_aggregates_states_func_declaration, llvm::Function::ExternalLinkage, name, module);
+
+    merge_aggregates_states_func->setAttributes(llvm::AttributeList::get(
+        context,
+        {{1, llvm::Attribute::get(context, llvm::Attribute::AttrKind::NoAlias)},
+         {2, llvm::Attribute::get(context, llvm::Attribute::AttrKind::NoAlias)}}));
 
     auto * arguments = merge_aggregates_states_func->args().begin();
     llvm::Value * aggregate_data_places_dst_arg = arguments++;
@@ -424,6 +441,11 @@ static void compileInsertAggregatesIntoResultColumns(llvm::Module & module, cons
     auto * insert_aggregates_into_result_func_declaration = llvm::FunctionType::get(b.getVoidTy(), { size_type, size_type, column_type->getPointerTo(), aggregate_data_places_type }, false);
     auto * insert_aggregates_into_result_func = llvm::Function::Create(insert_aggregates_into_result_func_declaration, llvm::Function::ExternalLinkage, name, module);
 
+    insert_aggregates_into_result_func->setAttributes(llvm::AttributeList::get(
+        context,
+        {{3, llvm::Attribute::get(context, llvm::Attribute::AttrKind::NoAlias)},
+         {4, llvm::Attribute::get(context, llvm::Attribute::AttrKind::NoAlias)}}));
+
     auto * arguments = insert_aggregates_into_result_func->args().begin();
     llvm::Value * row_start_arg = arguments++;
     llvm::Value * row_end_arg = arguments++;
@@ -458,7 +480,7 @@ static void compileInsertAggregatesIntoResultColumns(llvm::Module & module, cons
     auto * counter_phi = b.CreatePHI(row_start_arg->getType(), 2);
     counter_phi->addIncoming(row_start_arg, entry);
 
-    auto * aggregate_data_place = b.CreateLoad(b.getInt8Ty()->getPointerTo(), b.CreateGEP(b.getInt8Ty()->getPointerTo(), aggregate_data_places_arg, counter_phi));
+    auto * aggregate_data_place = b.CreateLoad(b.getInt8Ty()->getPointerTo(), b.CreateInBoundsGEP(b.getInt8Ty()->getPointerTo(), aggregate_data_places_arg, counter_phi));
 
     for (size_t i = 0; i < functions.size(); ++i)
     {
@@ -468,11 +490,11 @@ static void compileInsertAggregatesIntoResultColumns(llvm::Module & module, cons
         const auto * aggregate_function_ptr = functions[i].function;
         auto * final_value = aggregate_function_ptr->compileGetResult(b, aggregation_place_with_offset);
 
-        auto * result_column_data_element = b.CreateGEP(columns[i].data_element_type, columns[i].data_ptr, counter_phi);
+        auto * result_column_data_element = b.CreateInBoundsGEP(columns[i].data_element_type, columns[i].data_ptr, counter_phi);
         if (columns[i].null_data_ptr)
         {
             b.CreateStore(b.CreateExtractValue(final_value, {0}), result_column_data_element);
-            auto * result_column_is_null_element = b.CreateGEP(b.getInt8Ty(), columns[i].null_data_ptr, counter_phi);
+            auto * result_column_is_null_element = b.CreateInBoundsGEP(b.getInt8Ty(), columns[i].null_data_ptr, counter_phi);
             b.CreateStore(b.CreateSelect(b.CreateExtractValue(final_value, {1}), b.getInt8(1), b.getInt8(0)), result_column_is_null_element);
         }
         else
