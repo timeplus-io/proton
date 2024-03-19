@@ -940,6 +940,8 @@ public:
 
         size_t max_block_size;
 
+        bool enable_prefetch;
+
         struct StatsCollectingParams
         {
             StatsCollectingParams();
@@ -976,6 +978,7 @@ public:
             bool compile_aggregate_expressions_,
             size_t min_count_to_compile_aggregate_expression_,
             size_t max_block_size_,
+            bool enable_prefetch_,
             const Block & intermediate_header_ = {},
             const StatsCollectingParams & stats_collecting_params_ = {})
             : src_header(src_header_)
@@ -997,6 +1000,7 @@ public:
             , compile_aggregate_expressions(compile_aggregate_expressions_)
             , min_count_to_compile_aggregate_expression(min_count_to_compile_aggregate_expression_)
             , max_block_size(max_block_size_)
+            , enable_prefetch(enable_prefetch_)
             , stats_collecting_params(stats_collecting_params_)
         {
         }
@@ -1004,7 +1008,7 @@ public:
         /// Only parameters that matter during merge.
         Params(const Block & intermediate_header_,
             const ColumnNumbers & keys_, const AggregateDescriptions & aggregates_, bool overflow_row_, size_t max_threads_, size_t max_block_size_)
-            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, false, nullptr, max_threads_, 0, false, 0, max_block_size_)
+            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, false, nullptr, max_threads_, 0, false, 0, max_block_size_, false)
         {
             intermediate_header = intermediate_header_;
         }
@@ -1153,6 +1157,8 @@ private:
     /// For external aggregation.
     mutable TemporaryFiles temporary_files;
 
+    size_t min_bytes_for_prefetch = 0;
+
 #if USE_EMBEDDED_COMPILER
     std::shared_ptr<CompiledAggregateFunctionsHolder> compiled_aggregate_functions_holder;
 #endif
@@ -1217,7 +1223,7 @@ private:
         AggregateDataPtr overflow_row) const;
 
     /// Specialization for a particular value no_more_keys.
-    template <bool no_more_keys, bool use_compiled_functions, typename Method>
+    template <bool no_more_keys, bool use_compiled_functions, bool prefetch, typename Method>
     void executeImplBatch(
         Method & method,
         typename Method::State & state,
@@ -1261,11 +1267,8 @@ private:
             Arena * arena) const;
 
     /// Merge data from hash table `src` into `dst`.
-    template <typename Method, bool use_compiled_functions, typename Table>
-    void mergeDataImpl(
-        Table & table_dst,
-        Table & table_src,
-        Arena * arena) const;
+    template <typename Method, bool use_compiled_functions, bool prefetch, typename Table>
+    void mergeDataImpl(Table & table_dst, Table & table_src, Arena * arena) const;
 
     /// Merge data from hash table `src` into `dst`, but only for keys that already exist in dst. In other cases, merge the data into `overflows`.
     template <typename Method, typename Table>

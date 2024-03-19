@@ -38,6 +38,8 @@ struct HashMethodOneNumber
 
     static constexpr bool has_cheap_key_calculation = true;
 
+    static constexpr bool has_cheap_key_calculation = true;
+
     const char * vec;
 
     /// If the keys of a fixed length then key_sizes contains their lengths, empty otherwise.
@@ -85,6 +87,8 @@ struct HashMethodString
 
     static constexpr bool has_cheap_key_calculation = false;
 
+    static constexpr bool has_cheap_key_calculation = false;
+
     const IColumn::Offset * offsets;
     const UInt8 * chars;
 
@@ -123,6 +127,8 @@ struct HashMethodFixedString
 {
     using Self = HashMethodFixedString<Value, Mapped, place_string_to_arena, use_cache, need_offset>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache, need_offset>;
+
+    static constexpr bool has_cheap_key_calculation = false;
 
     static constexpr bool has_cheap_key_calculation = false;
 
