@@ -27,23 +27,26 @@ struct AggregatingTransformParams
     AggregatorListPtr aggregator_list_ptr;
     Aggregator & aggregator;
     bool final;
-    bool shuffled; /// When data is shuffled, we don't need do aggregation merge
+    /// Merge data for aggregate projections.
     bool only_merge = false;
+    bool shuffled; /// When data is shuffled, we don't need do aggregation merge
 
-    AggregatingTransformParams(const Aggregator::Params & params_, bool final_, bool shuffled_)
+    AggregatingTransformParams(const Aggregator::Params & params_, bool final_, bool only_merge_, bool shuffled_)
         : params(params_)
         , aggregator_list_ptr(std::make_shared<AggregatorList>())
         , aggregator(*aggregator_list_ptr->emplace(aggregator_list_ptr->end(), params))
         , final(final_)
+        , only_merge(only_merge_)
         , shuffled(shuffled_)
     {
     }
 
-    AggregatingTransformParams(const Aggregator::Params & params_, const AggregatorListPtr & aggregator_list_ptr_, bool final_, bool shuffled_)
+    AggregatingTransformParams(const Aggregator::Params & params_, const AggregatorListPtr & aggregator_list_ptr_, bool final_, bool only_merge_, bool shuffled_)
         : params(params_)
         , aggregator_list_ptr(aggregator_list_ptr_)
         , aggregator(*aggregator_list_ptr->emplace(aggregator_list_ptr->end(), params))
         , final(final_)
+        , only_merge(only_merge_)
         , shuffled(shuffled_)
     {
     }
