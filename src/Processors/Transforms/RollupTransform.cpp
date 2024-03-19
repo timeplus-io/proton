@@ -8,6 +8,7 @@ RollupTransform::RollupTransform(Block header, AggregatingTransformParamsPtr par
     : IAccumulatingTransform(std::move(header), params_->getHeader(), ProcessorID::RollupTransformID)
     , params(std::move(params_))
     , keys(params->params.keys)
+    , aggregates_mask(getAggregatesMask(params->getHeader(), params->params.aggregates))
 {
 }
 
@@ -64,7 +65,7 @@ Chunk RollupTransform::generate()
         rollup_chunk = merge(std::move(chunks), false);
     }
 
-    finalizeChunk(gen_chunk);
+    finalizeChunk(gen_chunk, aggregates_mask);
     return gen_chunk;
 }
 
