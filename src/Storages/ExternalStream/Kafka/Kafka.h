@@ -58,11 +58,9 @@ public:
     const ASTPtr & shardingExprAst() const { assert(!engine_args.empty()); return engine_args[0]; }
     bool hasCustomShardingExpr() const;
 
-    RdKafka::Producer & getProducer() const
-    {
-        assert(producer);
-        return *producer;
-    }
+    RdKafka::Producer & getProducer();
+    RdKafka::Topic & getProducerTopic();
+
     RdKafka::ConsumerPool::Entry getConsumer() const
     {
         assert(consumer_pool);
@@ -76,7 +74,7 @@ private:
     void cacheVirtualColumnNamesAndTypes();
     std::vector<Int64> getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const;
     void validateMessageKey(const String & message_key, IStorage * storage, const ContextPtr & context);
-    void validate(const std::vector<int32_t> & shards_to_query = {});
+    void validate();
     static std::vector<int32_t> parseShards(const std::string & shards_setting);
 
     StorageID storage_id;
@@ -86,15 +84,18 @@ private:
 
     NamesAndTypesList virtual_column_names_and_types;
 
-    std::mutex shards_mutex;
-    Int32 shards = 0;
-
     ASTPtr message_key_ast;
     Int32 topic_refresh_interval_ms = 0;
+    std::vector<Int32> shards_from_settings;
 
     ConfPtr conf;
-    RdKafka::ConsumerPoolPtr consumer_pool;
+    /// The Producer instance and Topic instance can be used by multiple sinks at the same time, thus we only need one of each.
+    std::mutex producer_mutex;
     std::unique_ptr<RdKafka::Producer> producer;
+    std::unique_ptr<RdKafka::Topic> producer_topic;
+    /// A Consumer can only be used by one source at the same time (technically speaking, it can be used by multple sources as long as each source read from a different topic,
+    /// but we will leave this as an enhancement later, probably when we introduce the `Connection` concept), thus we need a consumer pool.
+    RdKafka::ConsumerPoolPtr consumer_pool;
 
     Poco::Logger * logger;
 };

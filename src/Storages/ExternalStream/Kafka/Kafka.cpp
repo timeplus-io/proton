@@ -219,6 +219,9 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
         settings->set("one_message_per_row", true);
     }
 
+    if (!context->getSettingsRef().shards.value.empty())
+        shards_from_settings = parseShards(context->getSettingsRef().shards.value);
+
     size_t value_size = 8;
     char topic_refresh_interval_ms_value[8]{'\0'}; /// max: 3600000
     rd_kafka_conf_get(conf.get(), "topic.metadata.refresh.interval.ms", topic_refresh_interval_ms_value, &value_size);
@@ -233,11 +236,7 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     rd_kafka_conf_set_throttle_cb(conf.get(), &Kafka::onThrottle);
     rd_kafka_conf_set_dr_msg_cb(conf.get(), &KafkaSink::onMessageDelivery);
 
-    /// A Producer instance can be used by multiple sinks at the same time, thus we only need one.
-    producer = std::make_unique<RdKafka::Producer>(rd_kafka_conf_dup(conf.get()), logger);
-    /// A Consumer can only be used by one source at the same time (technically speaking, it can be used by multple sources as long as each source read from a different topic,
-    /// but we will leave this as an enhancement later, probably when we introduce the `Connection` concept), thus we need a consumer pool.
-    consumer_pool = std::make_shared<RdKafka::ConsumerPool>(/*size=*/100, storage_id, *conf.get(), logger);
+    consumer_pool = std::make_shared<RdKafka::ConsumerPool>(/*size=*/100, storage_id, *conf.get(), settings->poll_waittime_ms.value, logger);
 
     if (!attach)
         /// Only validate cluster / topic for external stream creation
@@ -366,34 +365,27 @@ void Kafka::validateMessageKey(const String & message_key_, IStorage * storage, 
 }
 
 /// Validate the topic still exists, specified partitions are still valid etc
-void Kafka::validate(const std::vector<int32_t> & shards_to_query)
+void Kafka::validate()
 {
-    if (shards == 0)
-    {
-        std::scoped_lock lock(shards_mutex);
-        /// Recheck again in case in-parallel query chimes in and init the shards already
-        if (shards == 0)
-        {
-            /// We haven't describe the topic yet
-            auto consumer = getConsumer();
-            RdKafka::Topic rkt {*consumer->getHandle(), topic()};
-            shards = rkt.describe();
-        }
-    }
+    auto consumer = getConsumer();
+    RdKafka::Topic rkt {*consumer->getHandle(), topic()};
+    auto parition_count = rkt.describe();
+    if (parition_count < 1)
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Topic has no paritions, topic={}", topic());
 
-    if (!shards_to_query.empty())
+    if (!shards_from_settings.empty())
     {
         /// User specified specific partitions to consume.
         /// Make sure they are valid.
-        for (auto shard : shards_to_query)
+        for (auto shard : shards_from_settings)
         {
-            if (shard >= shards)
+            if (shard >= parition_count)
                 throw Exception(
                     ErrorCodes::INVALID_SETTING_VALUE,
-                    "Invalid topic partition {} for topic {}, biggest partition is {}",
+                    "Invalid topic partition {} for topic {}, total number of partitions is {}",
                     shard,
                     settings->topic.value,
-                    shards);
+                    parition_count);
         }
     }
 }
@@ -407,25 +399,27 @@ Pipe Kafka::read(
     size_t max_block_size,
     size_t /*num_streams*/)
 {
+    auto consumer = getConsumer();
+    /// The topic_ptr can be shared between all the sources in the same pipe, because each source reads from a different partition.
+    auto topic_ptr = std::make_shared<RdKafka::Topic>(*consumer->getHandle(), topic());
+
+
     /// User can explicitly consume specific kafka partitions by specifying `shards=` setting
     /// `SELECT * FROM kafka_stream SETTINGS shards=0,3`
     std::vector<int32_t> shards_to_query;
-    if (!context->getSettingsRef().shards.value.empty())
-    {
-        shards_to_query = parseShards(context->getSettingsRef().shards.value);
-        validate(shards_to_query);
-        LOG_INFO(logger, "reading from partitions [{}] of topic {}", fmt::join(shards_to_query, ","), settings->topic.value);
-    }
+    if (!shards_from_settings.empty())
+        shards_to_query = shards_from_settings;
     else
     {
-        /// We still like to validate / describe the topic if we haven't yet
-        validate();
+        /// The number of paritions could have been changed, always query the number before
+        auto parition_count = topic_ptr->describe();
 
         /// Query all shards / partitions
-        shards_to_query.reserve(shards);
-        for (int32_t i = 0; i < shards; ++i)
+        shards_to_query.reserve(parition_count);
+        for (int32_t i = 0; i < parition_count; ++i)
             shards_to_query.push_back(i);
     }
+    LOG_INFO(logger, "Reading from partitions [{}] of topic {}", fmt::join(shards_to_query, ","), topic());
 
     assert(!shards_to_query.empty());
 
@@ -457,8 +451,6 @@ Pipe Kafka::read(
         auto offsets = getOffsets(query_info.seek_to_info, shards_to_query);
         assert(offsets.size() == shards_to_query.size());
 
-        auto consumer = getConsumer();
-        auto rkt = std::make_shared<RdKafka::Topic>(*consumer->getHandle(), topic());
         for (auto [shard, offset] : std::ranges::views::zip(shards_to_query, offsets))
             pipes.emplace_back(
                 std::make_shared<KafkaSource>(
@@ -466,7 +458,7 @@ Pipe Kafka::read(
                     header,
                     storage_snapshot,
                     consumer,
-                    rkt,
+                    topic_ptr,
                     shard,
                     offset,
                     max_block_size,
@@ -488,12 +480,44 @@ Pipe Kafka::read(
     return pipe;
 }
 
+RdKafka::Producer & Kafka::getProducer()
+{
+    if (producer)
+        return *producer;
+
+    std::scoped_lock lock(producer_mutex);
+    /// Check again in case of losing the race
+    if (producer)
+        return *producer;
+
+    auto producer_ptr = std::make_unique<RdKafka::Producer>(rd_kafka_conf_dup(conf.get()), settings->poll_waittime_ms.value, logger);
+    producer.swap(producer_ptr);
+
+    return *producer;
+}
+
+RdKafka::Topic & Kafka::getProducerTopic()
+{
+    if (producer_topic)
+        return *producer_topic;
+
+    std::scoped_lock lock(producer_mutex);
+    /// Check again in case of losing the race
+    if (producer_topic)
+        return *producer_topic;
+
+    auto topic_ptr = std::make_unique<RdKafka::Topic>(*getProducer().getHandle(), topic());
+    producer_topic.swap(topic_ptr);
+
+    return *producer_topic;
+}
+
 SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context)
 {
     /// always validate before actual use
     validate();
     return std::make_shared<KafkaSink>(
-        this, metadata_snapshot->getSampleBlock(), shards, message_key_ast, external_stream_counter, context);
+        *this, metadata_snapshot->getSampleBlock(), message_key_ast, external_stream_counter, context);
 }
 
 int Kafka::onStats(struct rd_kafka_s * rk, char * json, size_t json_len, void *  /*opaque*/)

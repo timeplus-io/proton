@@ -123,24 +123,24 @@ IColumn::Selector ChunkSharder::createSelector(Block block, Int32 shard_cnt) con
 }
 
 KafkaSink::KafkaSink(
-    const Kafka * kafka,
+    Kafka & kafka,
     const Block & header,
-    Int32 initial_partition_cnt,
     const ASTPtr & message_key_ast,
     ExternalStreamCounterPtr external_stream_counter_,
     ContextPtr context)
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
-    , producer(kafka->getProducer())
-    , topic(std::make_unique<RdKafka::Topic>(*producer.getHandle(), kafka->topic()))
-    , partition_cnt(initial_partition_cnt)
-    , one_message_per_row(kafka->produceOneMessagePerRow())
-    , topic_refresh_interval_ms(kafka->topicRefreshIntervalMs())
+    , producer(kafka.getProducer())
+    // , topic(std::make_unique<RdKafka::Topic>(*producer.getHandle(), kafka->topic()))
+    , topic(kafka.getProducerTopic())
+    , partition_cnt(topic.describe())
+    , one_message_per_row(kafka.produceOneMessagePerRow())
+    , topic_refresh_interval_ms(kafka.topicRefreshIntervalMs())
     , external_stream_counter(external_stream_counter_)
-    , logger(&Poco::Logger::get(fmt::format("{}(sink-{})", kafka->getLoggerName(), context->getInitialQueryId())))
+    , logger(&Poco::Logger::get(fmt::format("{}(sink-{})", kafka.getLoggerName(), context->getInitialQueryId())))
 {
     wb = std::make_unique<WriteBufferFromKafkaSink>([this](char * pos, size_t len) { addMessageToBatch(pos, len); });
 
-    const auto & data_format = kafka->dataFormat();
+    const auto & data_format = kafka.dataFormat();
     assert(!data_format.empty());
 
     if (message_key_ast)
@@ -155,19 +155,19 @@ KafkaSink::KafkaSink(
     {
         /// The callback allows `IRowOutputFormat` based formats produce one Kafka message per row.
         writer = FormatFactory::instance().getOutputFormat(
-            data_format, *wb, header, context, [this](auto & /*column*/, auto /*row*/) { wb->next(); }, kafka->getFormatSettings(context));
+            data_format, *wb, header, context, [this](auto & /*column*/, auto /*row*/) { wb->next(); }, kafka.getFormatSettings(context));
         if (!dynamic_cast<IRowOutputFormat*>(writer.get()))
             throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Data format `{}` is not a row-based foramt, it cannot be used with `one_message_per_row`", data_format);
     }
     else
     {
-        writer = FormatFactory::instance().getOutputFormat(data_format, *wb, header, context, {}, kafka->getFormatSettings(context));
+        writer = FormatFactory::instance().getOutputFormat(data_format, *wb, header, context, {}, kafka.getFormatSettings(context));
     }
     writer->setAutoFlush();
 
-    if (kafka->hasCustomShardingExpr())
+    if (kafka.hasCustomShardingExpr())
     {
-        const auto & ast = kafka->shardingExprAst();
+        const auto & ast = kafka.shardingExprAst();
         partitioner = std::make_unique<KafkaStream::ChunkSharder>(buildExpression(header, ast, context), ast->getColumnName());
     }
     else
@@ -176,14 +176,15 @@ KafkaSink::KafkaSink(
     /// Polling message deliveries.
     background_jobs.scheduleOrThrowOnError([this, refresh_interval_ms = static_cast<UInt64>(topic_refresh_interval_ms)]() {
         auto metadata_refresh_stopwatch = Stopwatch();
+        /// Use a small sleep interval to avoid blocking operation for a long just (in case refresh_interval_ms is big).
+        UInt64 sleep_ms = 500;
+        if (sleep_ms > refresh_interval_ms)
+            sleep_ms = refresh_interval_ms;
 
         while (!is_finished.test())
         {
-            /// Firstly, poll messages
-            if (auto n = rd_kafka_poll(producer.getHandle(), POLL_TIMEOUT_MS))
-                LOG_TRACE(logger, "polled {} events", n);
-
-            /// Then, fetch topic metadata for partition updates
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+            /// Fetch topic metadata for partition updates
             if (metadata_refresh_stopwatch.elapsedMilliseconds() < refresh_interval_ms)
                 continue;
 
@@ -191,7 +192,7 @@ KafkaSink::KafkaSink(
 
             try
             {
-                partition_cnt = topic->describe();
+                partition_cnt = topic.describe();
             }
             catch (...) /// do not break the loop until finished
             {
@@ -302,7 +303,7 @@ void KafkaSink::consume(Chunk chunk)
 
     /// With `wb->setAutoFlush()`, it makes sure that all messages are generated for the chunk at this point.
     rd_kafka_produce_batch(
-        topic->getHandle(),
+        topic.getHandle(),
         RD_KAFKA_PARTITION_UA,
         RD_KAFKA_MSG_F_FREE | RD_KAFKA_MSG_F_PARTITION | RD_KAFKA_MSG_F_BLOCK,
         current_batch.data(),

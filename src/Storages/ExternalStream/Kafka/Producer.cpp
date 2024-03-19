@@ -15,7 +15,7 @@ namespace RdKafka
 {
 
 /// Producer will take the ownership of `rk_conf`.
-Producer::Producer(rd_kafka_conf_t * rk_conf, Poco::Logger * logger_) : logger(logger_)
+Producer::Producer(rd_kafka_conf_t * rk_conf, UInt64 poll_timeout_ms, Poco::Logger * logger_) : logger(logger_)
 {
     char errstr[512];
     rk.reset(rd_kafka_new(RD_KAFKA_PRODUCER, rk_conf, errstr, sizeof(errstr)));
@@ -27,16 +27,16 @@ Producer::Producer(rd_kafka_conf_t * rk_conf, Poco::Logger * logger_) : logger(l
         throw Exception(klog::mapErrorCode(rd_kafka_last_error()), "Failed to create kafka handle: {}", errstr);
     }
 
-    poller.scheduleOrThrowOnError([this] { backgroundPoll(); });
+    poller.scheduleOrThrowOnError([this, poll_timeout_ms] { backgroundPoll(poll_timeout_ms); });
 }
 
-void Producer::backgroundPoll() const
+void Producer::backgroundPoll(UInt64 poll_timeout_ms) const
 {
     LOG_INFO(logger, "Start producer poll");
     setThreadName((name() + "-producer-poll").data());
 
     while (!stopped.test())
-        rd_kafka_poll(rk.get(), /*timeout_ms=*/100);
+        rd_kafka_poll(rk.get(), poll_timeout_ms);
 
     LOG_INFO(logger, "Producer poll stopped");
 }

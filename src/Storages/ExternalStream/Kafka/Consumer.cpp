@@ -15,7 +15,7 @@ namespace RdKafka
 {
 
 /// Consumer will take the ownership of `rk_conf`.
-Consumer::Consumer(rd_kafka_conf_t * rk_conf, Poco::Logger * logger_) : logger(logger_)
+Consumer::Consumer(rd_kafka_conf_t * rk_conf, UInt64 poll_timeout_ms, Poco::Logger * logger_) : logger(logger_)
 {
     char errstr[512];
     rk.reset(rd_kafka_new(RD_KAFKA_CONSUMER, rk_conf, errstr, sizeof(errstr)));
@@ -29,16 +29,16 @@ Consumer::Consumer(rd_kafka_conf_t * rk_conf, Poco::Logger * logger_) : logger(l
 
     LOG_INFO(logger, "Created consumer {}", name());
 
-    poller.scheduleOrThrowOnError([this] { backgroundPoll(); });
+    poller.scheduleOrThrowOnError([this, poll_timeout_ms] { backgroundPoll(poll_timeout_ms); });
 }
 
-void Consumer::backgroundPoll() const
+void Consumer::backgroundPoll(UInt64 poll_timeout_ms) const
 {
     setThreadName((name() + "-consumer-poll").data());
     LOG_INFO(logger, "Consumer poll starting");
 
     while (!stopped.test())
-        rd_kafka_poll(rk.get(), /*timeout_ms=*/100);
+        rd_kafka_poll(rk.get(), poll_timeout_ms);
 
     LOG_INFO(logger, "Consumer poll stopped");
 }

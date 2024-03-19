@@ -44,10 +44,11 @@ public:
     using Entry = IConsumerPool::Entry;
     using Base = PoolBase<Consumer>;
 
-    ConsumerPool(unsigned size, const StorageID & storage_id, rd_kafka_conf_t & conf, Poco::Logger * consumer_logger_)
+    ConsumerPool(unsigned size, const StorageID & storage_id, rd_kafka_conf_t & conf, UInt64 poll_timeout_ms_, Poco::Logger * consumer_logger_)
        : Base(size,
         &Poco::Logger::get("RdKafkaConsumerPool (" + storage_id.getFullNameNotQuoted() + ")"))
         , rd_conf(conf)
+        , poll_timeout_ms(poll_timeout_ms_)
         , consumer_logger(consumer_logger_)
     {
     }
@@ -70,11 +71,12 @@ protected:
     {
         /// Consumer will take ownership of `conf`, thus dup.
         auto * conf = rd_kafka_conf_dup(&rd_conf);
-        return std::make_shared<Consumer>(conf, consumer_logger);
+        return std::make_shared<Consumer>(conf, poll_timeout_ms, consumer_logger);
     }
 
 private:
     rd_kafka_conf_t & rd_conf;
+    UInt64 poll_timeout_ms {0};
     Poco::Logger * consumer_logger;
 };
 

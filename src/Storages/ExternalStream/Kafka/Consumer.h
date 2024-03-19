@@ -15,7 +15,7 @@ namespace RdKafka
 class Consumer : boost::noncopyable
 {
 public:
-    Consumer(rd_kafka_conf_t * rk_conf, Poco::Logger * logger_);
+    Consumer(rd_kafka_conf_t * rk_conf, UInt64 poll_timeout_ms, Poco::Logger * logger_);
     ~Consumer()
     {
         stopped.test_and_set();
@@ -35,7 +35,7 @@ public:
 
 private:
     std::string name() const { return rd_kafka_name(rk.get()); }
-    void backgroundPoll() const;
+    void backgroundPoll(UInt64 poll_timeout_ms) const;
 
     klog::KafkaPtr rk {nullptr, rd_kafka_destroy};
     ThreadPool poller;

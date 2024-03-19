@@ -48,9 +48,8 @@ public:
     static void onMessageDelivery(rd_kafka_t * /* producer */, const rd_kafka_message_t * msg, void *  /*opaque*/);
 
     KafkaSink(
-        const Kafka * kafka,
+        Kafka & kafka,
         const Block & header,
-        Int32 initial_partition_cnt,
         const ASTPtr & message_key,
         ExternalStreamCounterPtr external_stream_counter_,
         ContextPtr context);
@@ -82,7 +81,8 @@ private:
     static const int POLL_TIMEOUT_MS {500};
 
     RdKafka::Producer & producer;
-    std::unique_ptr<RdKafka::Topic> topic;
+    RdKafka::Topic & topic;
+    // std::unique_ptr<RdKafka::Topic> topic;
 
     Int32 partition_cnt {0};
     bool one_message_per_row {false};
