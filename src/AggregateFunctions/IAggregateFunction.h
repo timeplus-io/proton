@@ -319,16 +319,6 @@ public:
         ssize_t if_argument_pos = -1,
         const IColumn * delta_col = nullptr) const = 0;
 
-    virtual void addBatchSinglePlaceFromInterval( /// NOLINT
-        size_t row_begin,
-        size_t row_end,
-        AggregateDataPtr __restrict place,
-        const IColumn ** columns,
-        Arena * arena,
-        ssize_t if_argument_pos = -1,
-        const IColumn * delta_col = nullptr)
-        const = 0;
-
     /** In addition to addBatch, this method collects multiple rows of arguments into array "places"
       *  as long as they are between offsets[i-1] and offsets[i]. This is used for arrayReduce and
       *  -Array combinator. It might also be used generally to break data dependency when array
@@ -712,63 +702,6 @@ public:
             for (size_t i = row_begin; i < row_end; ++i)
             {
                 if (!null_map[i] && flags[i])
-                {
-                    if (delta_flags[i] >= 0)
-                        derived->add(place, columns, i, arena);
-                    else
-                        derived->negate(place, columns, i, arena);
-                }
-            }
-        }
-    }
-
-    void addBatchSinglePlaceFromInterval( /// NOLINT
-        size_t row_begin,
-        size_t row_end,
-        AggregateDataPtr __restrict place,
-        const IColumn ** columns,
-        Arena * arena,
-        ssize_t if_argument_pos = -1,
-        const IColumn * delta_col = nullptr)
-        const override
-    {
-        const auto * derived = static_cast<const Derived *>(this);
-        if (delta_col == nullptr && if_argument_pos < 0)
-        {
-            /// fast path
-            for (size_t i = row_begin; i < row_end; ++i)
-                derived->add(place, columns, i, arena);
-        }
-        else if (delta_col != nullptr && if_argument_pos < 0)
-        {
-            /// changelog
-            const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
-            for (size_t i = row_begin; i < row_end; ++i)
-             {
-                 if (delta_flags[i] >= 0)
-                     derived->add(place, columns, i, arena);
-                 else
-                     derived->negate(place, columns, i, arena);
-             }
-        }
-        else if (delta_col == nullptr && if_argument_pos >= 0)
-        {
-            /// combinator-if
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            for (size_t i = row_begin; i < row_end; ++i)
-            {
-                if (flags[i])
-                    derived->add(place, columns, i, arena);
-            }
-        }
-        else
-        {
-            /// changelog + combinator-if
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
-            for (size_t i = row_begin; i < row_end; ++i)
-            {
-                if (flags[i])
                 {
                     if (delta_flags[i] >= 0)
                         derived->add(place, columns, i, arena);
