@@ -23,6 +23,8 @@ public:
 
     String getName() const override { return "StreamingStoreSourceChannel"; }
 
+    String description() const override;
+
     UInt32 getID() const { return id; }
 
     void add(nlog::RecordPtrs records);

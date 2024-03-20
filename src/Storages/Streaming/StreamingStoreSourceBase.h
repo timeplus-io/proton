@@ -5,7 +5,7 @@
 #include <Checkpoint/CheckpointRequest.h>
 #include <Interpreters/Context_fwd.h>
 #include <NativeLog/Record/Record.h>
-#include <Processors/ISource.h>
+#include <Processors/Streaming/ISource.h>
 
 namespace DB
 {
@@ -13,7 +13,7 @@ namespace DB
 struct StorageSnapshot;
 using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
 
-class StreamingStoreSourceBase : public ISource
+class StreamingStoreSourceBase : public Streaming::ISource
 {
 public:
     StreamingStoreSourceBase(
@@ -21,15 +21,14 @@ public:
 
     Chunk generate() override;
 
-    void checkpoint(CheckpointContextPtr ckpt_ctx_) override;
-
-    void recover(CheckpointContextPtr ckpt_ctx_) override;
+    Int64 lastProcessedSN() const override { return last_sn; }
 
 private:
     virtual void readAndProcess() = 0;
     virtual std::pair<String, Int32> getStreamShard() const = 0;
 
-    Chunk doCheckpoint(CheckpointContextPtr ckpt_ctx_);
+    Chunk doCheckpoint(CheckpointContextPtr ckpt_ctx_) override;
+    void doRecover(CheckpointContextPtr ckpt_ctx_) override;
 
 protected:
     StorageSnapshotPtr storage_snapshot;
@@ -46,12 +45,9 @@ protected:
     ColumnPtr getSubcolumnFromBlock(const Block & block, size_t parent_column_pos, const NameAndTypePair & subcolumn_pair) const;
     void fillAndUpdateObjectsIfNecessary(Block & block);
 
-    std::vector<Chunk> result_chunks;
-    std::vector<Chunk>::iterator iter;
+    std::vector<std::pair<Chunk, Int64>> result_chunks_with_sns;
+    std::vector<std::pair<Chunk, Int64>>::iterator iter;
 
     Int64 last_sn = -1;
-    Int64 last_epoch = -1;
-    /// For checkpoint
-    CheckpointRequest ckpt_request;
 };
 }

@@ -23,15 +23,17 @@ public:
 
     ~StreamingStoreSource() override = default;
 
-    void recover(CheckpointContextPtr ckpt_ctx_) override;
-
     String getName() const override { return "StreamingStoreSource"; }
+
+    String description() const override;
 
     std::pair<String, Int32> getStreamShard() const override;
 
 private:
     inline nlog::RecordPtrs read();
     void readAndProcess() override;
+
+    void doResetStartSN(Int64 sn) override;
 
 private:
     std::unique_ptr<StreamingBlockReaderKafka> kafka_reader;

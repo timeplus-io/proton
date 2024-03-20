@@ -29,7 +29,7 @@ FileLogSource::FileLogSource(
     Int64 start_timestamp_,
     FileLogSource::FileContainer files_,
     Poco::Logger * log_)
-    : ISource(header_, true, ProcessorID::FileLogSourceID)
+    : Streaming::ISource(header_, true, ProcessorID::FileLogSourceID)
     , file_log(file_log_)
     , query_context(query_context_)
     , column_type(header_.getByPosition(0).type)
@@ -39,8 +39,6 @@ FileLogSource::FileLogSource(
     , files(std::move(files_))
     , log(log_)
 {
-    is_streaming = true;
-
     iter = files.begin();
 
     last_flush_ms = MonotonicMilliseconds::now();

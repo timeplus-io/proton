@@ -38,6 +38,11 @@ class ReadProgressCallback;
 struct ColumnWithTypeAndName;
 using ColumnsWithTypeAndName = std::vector<ColumnWithTypeAndName>;
 
+namespace Streaming
+{
+class ISource;
+}
+
 class QueryPipeline
 {
 public:
@@ -133,6 +138,8 @@ public:
 
     /// proton : starts
     void setExecuteMode(ExecuteMode exec_mode_) { exec_mode = exec_mode_; }
+
+    std::vector<std::shared_ptr<Streaming::ISource>> getStreamingSources() const;
     /// proton : ends
 
 private:

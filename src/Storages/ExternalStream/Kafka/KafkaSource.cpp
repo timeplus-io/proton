@@ -38,7 +38,7 @@ KafkaSource::KafkaSource(
     size_t max_block_size_,
     Poco::Logger * log_,
     ExternalStreamCounterPtr external_stream_counter_)
-    : ISource(header_, true, ProcessorID::KafkaSourceID)
+    : Streaming::ISource(header_, true, ProcessorID::KafkaSourceID)
     , storage_snapshot(storage_snapshot_)
     , query_context(std::move(query_context_))
     , max_block_size(max_block_size_)
@@ -53,8 +53,6 @@ KafkaSource::KafkaSource(
     , external_stream_counter(external_stream_counter_)
 {
     assert(external_stream_counter);
-
-    is_streaming = true;
 
     calculateColumnPositions();
     initConsumer(kafka);
@@ -77,9 +75,6 @@ Chunk KafkaSource::generate()
 {
     if (isCancelled())
         return {};
-
-    if (auto current_ckpt_ctx = ckpt_request.poll(); current_ckpt_ctx)
-        return doCheckpoint(std::move(current_ckpt_ctx));
 
     if (result_chunks.empty() || iter == result_chunks.end())
     {
@@ -335,16 +330,6 @@ void KafkaSource::calculateColumnPositions()
     }
 }
 
-
-/// It basically initiate a checkpoint
-/// Since the checkpoint method is called in a different thread (CheckpointCoordinator)
-/// We nee make sure it is thread safe
-void KafkaSource::checkpoint(CheckpointContextPtr ckpt_ctx_)
-{
-    /// We assume the previous ckpt is already done
-    ckpt_request.setCheckpointRequestCtx(ckpt_ctx_);
-}
-
 /// 1) Generate a checkpoint barrier
 /// 2) Checkpoint the sequence number just before the barrier
 Chunk KafkaSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
@@ -360,16 +345,18 @@ Chunk KafkaSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
     return result;
 }
 
-void KafkaSource::recover(CheckpointContextPtr ckpt_ctx_)
+void KafkaSource::doRecover(CheckpointContextPtr ckpt_ctx_)
 {
     ckpt_ctx_->coordinator->recover(
         getLogicID(), ckpt_ctx_, [&](VersionType version, ReadBuffer & rb) { ckpt_data.deserialize(version, rb); });
 
     LOG_INFO(log, "Recovered last_sn={}", ckpt_data.last_sn);
+}
 
-    /// Reset consume offset started from the next of last sn
-    if (ckpt_data.last_sn >= 0)
-        consume_ctx.offset = ckpt_data.last_sn + 1;
+void KafkaSource::doResetStartSN(Int64 sn)
+{
+    if (sn >= 0)
+        consume_ctx.offset = sn;
 }
 
 void KafkaSource::State::serialize(WriteBuffer & wb) const

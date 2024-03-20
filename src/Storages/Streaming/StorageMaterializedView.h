@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Core/RecoveryPolicy.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/IAST_fwd.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
@@ -115,6 +116,8 @@ private:
         String err_msg;
         std::atomic_int32_t err; /// != 0, background thread has exception
         std::atomic_bool is_cancelled;
+
+        RecoveryPolicy recovery_policy;
 
         ~State();
         void terminate();

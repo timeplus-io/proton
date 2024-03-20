@@ -3,7 +3,7 @@
 #include <KafkaLog/KafkaWALContext.h>
 #include <KafkaLog/KafkaWALSimpleConsumer.h>
 #include <IO/ReadBufferFromMemory.h>
-#include <Processors/ISource.h>
+#include <Processors/Streaming/ISource.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageSnapshot.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
@@ -21,7 +21,7 @@ namespace DB
 class Kafka;
 class StreamingFormatExecutor;
 
-class KafkaSource final : public ISource
+class KafkaSource final : public Streaming::ISource
 {
 public:
     KafkaSource(
@@ -39,11 +39,11 @@ public:
 
     String getName() const override { return "KafkaSource"; }
 
+    String description() const override { return fmt::format("topic={}, partition={}", consume_ctx.topic, consume_ctx.partition); }
+
     Chunk generate() override;
 
-    void checkpoint(CheckpointContextPtr ckpt_ctx_) override;
-
-    void recover(CheckpointContextPtr ckpt_ctx_) override;
+    Int64 lastProcessedSN() const override { return ckpt_data.last_sn; }
 
 private:
     void calculateColumnPositions();
@@ -56,7 +56,9 @@ private:
 
     inline void readAndProcess();
 
-    Chunk doCheckpoint(CheckpointContextPtr ckpt_ctx_);
+    Chunk doCheckpoint(CheckpointContextPtr ckpt_ctx_) override;
+    void doRecover(CheckpointContextPtr ckpt_ctx_) override;
+    void doResetStartSN(Int64 sn) override;
 
 private:
     StorageSnapshotPtr storage_snapshot;
@@ -91,7 +93,6 @@ private:
     Int32 record_consume_timeout_ms = 100;
 
     /// For checkpoint
-    CheckpointRequest ckpt_request;
     struct State
     {
         void serialize(WriteBuffer & wb) const;

@@ -21,6 +21,12 @@
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
 
+/// proton: starts.
+#include <Processors/Streaming/ISource.h>
+
+#include <ranges>
+/// proton: ends.
+
 namespace DB
 {
 
@@ -579,4 +585,16 @@ std::unique_ptr<ReadProgressCallback> QueryPipeline::getReadProgressCallback() c
     return callback;
 }
 
+/// proton: starts.
+std::vector<std::shared_ptr<Streaming::ISource>> QueryPipeline::getStreamingSources() const
+{
+    std::vector<std::shared_ptr<Streaming::ISource>> streaming_sources;
+    for (const auto & processor : processors)
+    {
+        if (processor->isSource() && processor->isStreaming())
+            streaming_sources.emplace_back(std::static_pointer_cast<Streaming::ISource>(processor));
+    }
+    return streaming_sources;
+}
+/// proton: ends.
 }
