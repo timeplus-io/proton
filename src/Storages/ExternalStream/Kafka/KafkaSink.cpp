@@ -130,7 +130,6 @@ KafkaSink::KafkaSink(
     ContextPtr context)
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
     , producer(kafka.getProducer())
-    // , topic(std::make_unique<RdKafka::Topic>(*producer.getHandle(), kafka->topic()))
     , topic(kafka.getProducerTopic())
     , partition_cnt(topic.describe())
     , one_message_per_row(kafka.produceOneMessagePerRow())

@@ -1,5 +1,4 @@
 #include <Common/logger_useful.h>
-#include <Common/setThreadName.h>
 #include <Poco/Logger.h>
 #include <Storages/ExternalStream/Kafka/Consumer.h>
 
@@ -34,7 +33,6 @@ Consumer::Consumer(rd_kafka_conf_t * rk_conf, UInt64 poll_timeout_ms, Poco::Logg
 
 void Consumer::backgroundPoll(UInt64 poll_timeout_ms) const
 {
-    // setThreadName((name() + "-consumer-poll").data());
     LOG_INFO(logger, "Start consumer poll");
 
     while (!stopped.test())

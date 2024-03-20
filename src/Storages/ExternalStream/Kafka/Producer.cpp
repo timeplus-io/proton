@@ -1,5 +1,4 @@
 #include <Common/logger_useful.h>
-#include <Common/setThreadName.h>
 #include <Storages/ExternalStream/Kafka/Producer.h>
 
 namespace DB
@@ -32,7 +31,6 @@ Producer::Producer(rd_kafka_conf_t * rk_conf, UInt64 poll_timeout_ms, Poco::Logg
 
 void Producer::backgroundPoll(UInt64 poll_timeout_ms) const
 {
-    // setThreadName((name() + "-producer-poll").data());
     LOG_INFO(logger, "Start producer poll");
 
     while (!stopped.test())

@@ -27,10 +27,8 @@ namespace DB
 
 namespace ErrorCodes
 {
-extern const int OK;
 extern const int INVALID_CONFIG_PARAMETER;
 extern const int INVALID_SETTING_VALUE;
-extern const int RESOURCE_NOT_FOUND;
 }
 
 namespace
@@ -402,7 +400,6 @@ Pipe Kafka::read(
     auto consumer = getConsumer();
     /// The topic_ptr can be shared between all the sources in the same pipe, because each source reads from a different partition.
     auto topic_ptr = std::make_shared<RdKafka::Topic>(*consumer->getHandle(), topic());
-
 
     /// User can explicitly consume specific kafka partitions by specifying `shards=` setting
     /// `SELECT * FROM kafka_stream SETTINGS shards=0,3`
