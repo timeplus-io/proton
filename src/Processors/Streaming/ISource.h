@@ -24,7 +24,7 @@ public:
     virtual String description() const { return ""; }
 
     /// \brief Get the last progressed sequence number of the source, it shouldn't be called during pipeline execution (thread-unsafe)
-    virtual Int64 lastSN() const { throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for lastSN() of {}", getName()); }
+    virtual Int64 lastProcessedSN() const { throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for lastProcessedSN() of {}", getName()); }
 
     /// \brief Reset the start sequence number of the source, it must be called before the pipeline execution (thread-unsafe)
     void resetStartSN(Int64 sn);
@@ -37,13 +37,13 @@ public:
 private:
     std::optional<Chunk> tryGenerate() override final;
 
-    /// \brief Checkpointing the source state (include lastSN())
+    /// \brief Checkpointing the source state (include lastProcessedSN())
     virtual Chunk doCheckpoint(CheckpointContextPtr)
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for checkpoting of {}", getName());
     }
 
-    /// \brief Recovering the source state (include lastSN())
+    /// \brief Recovering the source state (include lastProcessedSN())
     virtual void doRecover(CheckpointContextPtr)
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for recovering of {}", getName());
@@ -61,5 +61,8 @@ private:
     NO_SERDE std::optional<Int64> reseted_start_sn;
     NO_SERDE Int64 last_checkpointed_sn = -1;
 };
+
+using StreamingSourcePtr = std::shared_ptr<ISource>;
+using StreamingSourcePtrs = std::vector<StreamingSourcePtr>;
 }
 }

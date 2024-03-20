@@ -43,7 +43,7 @@ public:
 
     Chunk generate() override;
 
-    Int64 lastSN() const override { return ckpt_data.last_sn; }
+    Int64 lastProcessedSN() const override { return ckpt_data.last_sn; }
 
 private:
     void calculateColumnPositions();
@@ -93,7 +93,6 @@ private:
     Int32 record_consume_timeout_ms = 100;
 
     /// For checkpoint
-    CheckpointRequest ckpt_request;
     struct State
     {
         void serialize(WriteBuffer & wb) const;

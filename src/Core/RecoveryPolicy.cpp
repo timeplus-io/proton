@@ -11,7 +11,6 @@ IMPLEMENT_SETTING_ENUM(
     RecoveryPolicy,
     ErrorCodes::BAD_ARGUMENTS,
     {{"strict", RecoveryPolicy::Strict},
-    //  {"cautious", RecoveryPolicy::Cautious},
-     {"loose", RecoveryPolicy::Loose}})
+     {"best_effort", RecoveryPolicy::BestEffort}})
 
 }

@@ -21,7 +21,7 @@ public:
 
     Chunk generate() override;
 
-    Int64 lastSN() const override { return last_sn; }
+    Int64 lastProcessedSN() const override { return last_sn; }
 
 private:
     virtual void readAndProcess() = 0;

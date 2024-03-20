@@ -75,29 +75,39 @@ String generateInnerQueryID(const StorageID & view_id)
     return ".inner.query-id.from-" + view_id.getTableName();
 }
 
-void resetSNsOfStreamingSources(const auto & streaming_sources, const std::vector<Int64> & sns)
+void resetSNForStreamingSources(const Streaming::StreamingSourcePtrs & streaming_sources, const std::vector<Int64> & sns)
 {
-    if (sns.size() != streaming_sources.size()) [[unlikely]]
+    if (sns.size() != streaming_sources.size())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Number of sequence numbers doesn't match number of streaming sources");
 
-    for (auto [streaming_source, sn] : std::views::zip(streaming_sources, sns))
+    for (auto && [streaming_source, sn] : std::views::zip(streaming_sources, sns))
         streaming_source->resetStartSN(sn);
 }
 
-std::vector<Int64> getSNsOfStreamingSources(const auto & streaming_sources)
+std::vector<Int64> getProcessedSNOfStreamingSources(const Streaming::StreamingSourcePtrs & streaming_sources)
 {
     std::vector<Int64> sns;
     sns.reserve(streaming_sources.size());
     for (const auto & streaming_source : streaming_sources)
-        sns.emplace_back(streaming_source->lastSN());
+        sns.emplace_back(streaming_source->lastProcessedSN());
 
     return sns;
 }
 
-String dumpStreamingSourcesWithSNs(const auto & streaming_sources, const std::vector<Int64> & sns)
+std::vector<Int64> getCheckpointedSNOfStreamingSources(const Streaming::StreamingSourcePtrs & streaming_sources)
 {
-    WriteBufferFromOwnString wb;
+    std::vector<Int64> sns;
+    sns.reserve(streaming_sources.size());
+    for (const auto & streaming_source : streaming_sources)
+        sns.emplace_back(streaming_source->lastCheckpointedSN());
 
+    return sns;
+}
+
+String dumpStreamingSourcesWithSNs(const Streaming::StreamingSourcePtrs & streaming_sources, const std::vector<Int64> & sns)
+{
+    /// A example: "StreamingSource(uuid=xxx,shard=0,sn=1);KafkaSource(topic=xxx,partition=0,sn=2);"
+    WriteBufferFromOwnString wb;
     if (sns.empty())
     {
         for (const auto & streaming_source : streaming_sources)
@@ -106,15 +116,23 @@ String dumpStreamingSourcesWithSNs(const auto & streaming_sources, const std::ve
     }
     else
     {
-        if (sns.size() != streaming_sources.size()) [[unlikely]]
+        if (sns.size() != streaming_sources.size())
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Number of sequence numbers doesn't match number of streaming sources");
 
         /// Use last checkpointed sn instead of invalid sn
-        for (const auto & [streaming_source, sn] : std::views::zip(streaming_sources, sns))
-            wb << streaming_source->getName() << "(" + streaming_source->description()
+        for (auto && [streaming_source, sn] : std::views::zip(streaming_sources, sns))
+            wb << streaming_source->getName() << "(" << streaming_source->description()
                << ",sn=" << (sn >= 0 ? sn : streaming_source->lastCheckpointedSN()) << ");";
     }
 
+    return wb.str();
+}
+
+String dumpSNs(const std::vector<Int64> & sns)
+{
+    WriteBufferFromOwnString wb;
+    for (auto sn : sns)
+        wb << sn << ",";
     return wb.str();
 }
 }
@@ -390,7 +408,7 @@ void StorageMaterializedView::initBackgroundState()
             /// FIXME: limit retry times ?
             size_t retry_times = 0;
             /// Keep the last SNs of the stream source during the last retries.
-            std::deque<std::vector<Int64>> failed_sns_queue;
+            std::deque<std::vector<Int64>> failed_sn_queue;
             std::vector<Int64> recover_sns;
             while (1)
             {
@@ -407,14 +425,16 @@ void StorageMaterializedView::initBackgroundState()
                     {
                         case State::UNKNOWN:
                             [[fallthrough]];
-                        case State::CHECKING_DEPENDENCIES: {
+                        case State::CHECKING_DEPENDENCIES:
+                        {
                             background_state.updateStatus(State::CHECKING_DEPENDENCIES);
                             /// During server bootstrap, we shall startup all tables in parallel, so here
                             /// needs validity check underlying tables.
                             checkDependencies();
                             [[fallthrough]];
                         }
-                        case State::BUILDING_PIPELINE: {
+                        case State::BUILDING_PIPELINE:
+                        {
                             background_state.updateStatus(State::BUILDING_PIPELINE);
                             local_context->setSetting(
                                 "exec_mode", exec_mode == ExecuteMode::RECOVER ? String("recover") : String("subscribe"));
@@ -422,12 +442,13 @@ void StorageMaterializedView::initBackgroundState()
                             assert(io.pipeline.initialized());
                             [[fallthrough]];
                         }
-                        case State::EXECUTING_PIPELINE: {
+                        case State::EXECUTING_PIPELINE:
+                        {
                             background_state.updateStatus(State::EXECUTING_PIPELINE);
                             background_state.err = ErrorCodes::OK; /// Reset the status is ok after recovered
                             io.pipeline.setExecuteMode(exec_mode);
                             if (!recover_sns.empty())
-                                resetSNsOfStreamingSources(io.pipeline.getStreamingSources(), recover_sns);
+                                resetSNForStreamingSources(io.pipeline.getStreamingSources(), recover_sns);
 
                             executeBackgroundPipeline(io, local_context);
                             break;
@@ -458,7 +479,8 @@ void StorageMaterializedView::initBackgroundState()
                         /// Retry to wait for dependencies
                         /// The first check of dependencies will most likely fail, so we skip logging error once.
                         bool log_error = (retry_times > 1);
-                        background_state.setException(err_code, fmt::format("{}, {}th wait for ready", e.what(), retry_times), log_error);
+                        background_state.setException(
+                            err_code, fmt::format("{}, {}th wait for ready", getExceptionMessage(e, true), retry_times), log_error);
                         std::this_thread::sleep_for(recheck_dependencies_interval);
                     }
                     else if (err_code == ErrorCodes::DIRECTORY_DOESNT_EXIST)
@@ -470,59 +492,64 @@ void StorageMaterializedView::initBackgroundState()
                         background_state.setException(
                             err_code,
                             fmt::format(
-                                "Retry {}th re-subscribe to background pipeline. Background runtime error: {}", retry_times, e.what()));
+                                "Retry {}th re-subscribe to background pipeline. Background runtime error: {}",
+                                retry_times,
+                                getExceptionMessage(e, true)));
                     }
                     else
                     {
                         auto streaming_sources = io.pipeline.getStreamingSources();
                         switch (local_context->getSettingsRef().recovery_policy)
                         {
-                            case RecoveryPolicy::Strict: {
+                            case RecoveryPolicy::Strict:
+                            {
                                 background_state.setException(
                                     err_code,
                                     fmt::format(
-                                        "Wait for {}th recovering background pipeline. Background runtime error: {}, progressed: {}, "
-                                        "checkpointed: {}",
+                                        "Wait for {}th recovering background pipeline from {}. Background runtime error: {}. "
+                                        "processed_sns={} checkpointed_sns={}",
                                         retry_times,
-                                        e.what(),
-                                        dumpStreamingSourcesWithSNs(streaming_sources, getSNsOfStreamingSources(streaming_sources)),
-                                        dumpStreamingSourcesWithSNs(streaming_sources, /*use_default_checkpointed_sns*/ {})));
+                                        dumpStreamingSourcesWithSNs(streaming_sources, /*recover_from_checkpointed*/ {}),
+                                        getExceptionMessage(e, true),
+                                        dumpSNs(getProcessedSNOfStreamingSources(streaming_sources)),
+                                        dumpSNs(getCheckpointedSNOfStreamingSources(streaming_sources))));
 
                                 /// For some queries that always go wrong, we don’t want to recover too frequently. Now wait 5s, 10s, 15s, ... 30s, 30s for each time
                                 std::this_thread::sleep_for(recover_interval * std::min<size_t>(retry_times, 6));
                                 break;
                             }
-                            case RecoveryPolicy::Loose: {
-                                auto current_failed_sns = getSNsOfStreamingSources(streaming_sources);
+                            case RecoveryPolicy::BestEffort:
+                            {
+                                auto current_failed_sns = getProcessedSNOfStreamingSources(streaming_sources);
                                 recover_sns.clear();
                                 /// If the current SN fails three times in a row, we will skipping some SNs and recover from the next SN to avoid permanent recovery.
-                                if (failed_sns_queue.size() >= 2)
+                                if (failed_sn_queue.size() >= 2)
                                 {
                                     recover_sns.reserve(current_failed_sns.size());
                                     for (size_t i = 0; i < current_failed_sns.size(); ++i)
                                     {
                                         if (std::ranges::all_of(
-                                                failed_sns_queue, [&](const auto & sns) { return sns[i] == current_failed_sns[i]; }))
+                                                failed_sn_queue, [&](const auto & sns) { return sns[i] == current_failed_sns[i]; }))
                                             recover_sns.emplace_back(current_failed_sns[i] + 1);
                                         else
                                             recover_sns.emplace_back(-1); /// Invalid SN, indicates still recover from checkpointed
                                     }
 
-                                    failed_sns_queue.pop_front();
+                                    failed_sn_queue.pop_front();
                                 }
 
                                 background_state.setException(
                                     err_code,
                                     fmt::format(
-                                        "Wait for {}th recovering background pipeline from {}. Background runtime error: {}, progressed: "
-                                        "{}, checkpointed: {}",
+                                        "Wait for {}th recovering background pipeline from {}. Background runtime error: {}. "
+                                        "processed_sns={} checkpointed_sns={}",
                                         retry_times,
                                         dumpStreamingSourcesWithSNs(streaming_sources, recover_sns),
-                                        e.what(),
-                                        dumpStreamingSourcesWithSNs(streaming_sources, current_failed_sns),
-                                        dumpStreamingSourcesWithSNs(streaming_sources, /*use_default_checkpointed_sns*/ {})));
+                                        getExceptionMessage(e, true),
+                                        dumpSNs(current_failed_sns),
+                                        dumpSNs(getCheckpointedSNOfStreamingSources(streaming_sources))));
 
-                                failed_sns_queue.emplace_back(std::move(current_failed_sns));
+                                failed_sn_queue.emplace_back(std::move(current_failed_sns));
 
                                 std::this_thread::sleep_for(recover_interval);
                                 break;
@@ -544,7 +571,7 @@ void StorageMaterializedView::initBackgroundState()
         catch (...)
         {
             auto e = std::current_exception();
-            background_state.setException(getExceptionErrorCode(e), getExceptionMessage(e, false));
+            background_state.setException(getExceptionErrorCode(e), getExceptionMessage(e, true));
         }
     }};
 }
