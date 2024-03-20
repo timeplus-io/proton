@@ -33,8 +33,7 @@ public:
     virtual Entry get(Int64 max_wait_ms) = 0;
 };
 
-using ConsumerPoolPtr = std::shared_ptr<IConsumerPool>;
-using ConsumerPoolPtrs = std::vector<ConsumerPoolPtr>;
+using ConsumerPoolPtr = std::unique_ptr<IConsumerPool>;
 
 /** A common consumer pool.
   */

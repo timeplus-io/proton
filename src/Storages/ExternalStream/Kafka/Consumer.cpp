@@ -34,8 +34,8 @@ Consumer::Consumer(rd_kafka_conf_t * rk_conf, UInt64 poll_timeout_ms, Poco::Logg
 
 void Consumer::backgroundPoll(UInt64 poll_timeout_ms) const
 {
-    setThreadName((name() + "-consumer-poll").data());
-    LOG_INFO(logger, "Consumer poll starting");
+    // setThreadName((name() + "-consumer-poll").data());
+    LOG_INFO(logger, "Start consumer poll");
 
     while (!stopped.test())
         rd_kafka_poll(rk.get(), poll_timeout_ms);
@@ -90,13 +90,13 @@ void Consumer::consumeBatch(Topic & topic, Int32 partition, uint32_t count, int3
                 error_callback(rkmessage->err);
             else
                 callback(rkmessage, res, nullptr);
-        }
+            }
         catch (...)
         {
             /// just log the error to make sure the messages get destroyed
             LOG_ERROR(
                 logger,
-                "Failed to consume topic={} partition={} error={}",
+                "Uncaught exception during consuming topic={} partition={} error={}",
                 topic.name(), partition, DB::getCurrentExceptionMessage(true, true));
         }
 

@@ -76,7 +76,7 @@ private:
     rd_kafka_resp_err_t lastSeenError() const { return static_cast<rd_kafka_resp_err_t>(state.last_error_code.load()); }
     /// check if there are no more outstandings (i.e. delivery reports have been recieved
     /// for all out-go messages, regardless if a message is successfully delivered or not)
-    bool hasOutstandingMessages() const noexcept { return state.outstandings != state.acked + state.error_count; }
+    size_t outstandingMessages() const noexcept { return state.outstandings - (state.acked + state.error_count); }
 
     static const int POLL_TIMEOUT_MS {500};
 

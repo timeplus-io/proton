@@ -236,7 +236,7 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     rd_kafka_conf_set_throttle_cb(conf.get(), &Kafka::onThrottle);
     rd_kafka_conf_set_dr_msg_cb(conf.get(), &KafkaSink::onMessageDelivery);
 
-    consumer_pool = std::make_shared<RdKafka::ConsumerPool>(/*size=*/100, storage_id, *conf.get(), settings->poll_waittime_ms.value, logger);
+    consumer_pool = std::make_unique<RdKafka::ConsumerPool>(/*size=*/100, storage_id, *conf.get(), settings->poll_waittime_ms.value, logger);
 
     if (!attach)
         /// Only validate cluster / topic for external stream creation

@@ -50,7 +50,7 @@ KafkaSource::KafkaSource(
     , ckpt_data(kafka.topic(), shard)
     , external_stream_counter(external_stream_counter_)
     , query_context(std::move(query_context_))
-    , logger(&Poco::Logger::get(fmt::format("{}(source-{})", kafka.getLoggerName(), query_context->getInitialQueryId())))
+    , logger(&Poco::Logger::get(fmt::format("{}(source-{})", kafka.getLoggerName(), query_context->getCurrentQueryId())))
 {
     assert(external_stream_counter);
 
@@ -84,6 +84,7 @@ Chunk KafkaSource::generate()
 
     if (!consume_started)
     {
+        LOG_INFO(logger, "Start consuming from topic={} shard={} offset={}", topic->name(), shard, offset);
         consumer->startConsume(*topic, shard, offset);
         consume_started = true;
     }
@@ -337,6 +338,7 @@ Chunk KafkaSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
     result.setCheckpointContext(ckpt_ctx_);
 
     ckpt_ctx_->coordinator->checkpoint(State::VERSION, getLogicID(), ckpt_ctx_, [&](WriteBuffer & wb) { ckpt_data.serialize(wb); });
+    LOG_INFO(logger, "Saved checkpoint topic={} parition={} offset={}", ckpt_data.topic, ckpt_data.partition, ckpt_data.last_sn);
 
     /// FIXME, if commit failed ?
     /// Propagate checkpoint barriers

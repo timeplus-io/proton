@@ -33,8 +33,17 @@ public:
     Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach, ExternalStreamCounterPtr external_stream_counter_, ContextPtr context);
     ~Kafka() override = default;
 
-    void startup() override { }
-    void shutdown() override { }
+    void startup() override { LOG_INFO(logger, "Starting Kafka External Stream"); }
+    void shutdown() override {
+        LOG_INFO(logger, "Shutting down Kafka External Stream");
+        /// Must release all resources here rather than relying on the deconstructor.
+        /// Because the `Kafka` instance will not be destroyed immediately when the external stream gets dropped.
+        consumer_pool.reset();
+        if (producer_topic)
+            producer_topic.reset();
+        if (producer)
+            producer.reset();
+    }
     bool supportsSubcolumns() const override { return true; }
     NamesAndTypesList getVirtuals() const override;
     ExternalStreamCounterPtr getExternalStreamCounter() const override { return external_stream_counter; }

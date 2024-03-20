@@ -136,7 +136,7 @@ KafkaSink::KafkaSink(
     , one_message_per_row(kafka.produceOneMessagePerRow())
     , topic_refresh_interval_ms(kafka.topicRefreshIntervalMs())
     , external_stream_counter(external_stream_counter_)
-    , logger(&Poco::Logger::get(fmt::format("{}(sink-{})", kafka.getLoggerName(), context->getInitialQueryId())))
+    , logger(&Poco::Logger::get(fmt::format("{}(sink-{})", kafka.getLoggerName(), context->getCurrentQueryId())))
 {
     wb = std::make_unique<WriteBufferFromKafkaSink>([this](char * pos, size_t len) { addMessageToBatch(pos, len); });
 
@@ -230,8 +230,6 @@ void KafkaSink::consume(Chunk chunk)
         return;
 
     auto total_rows = chunk.rows();
-    LOG_INFO(logger, "consuming {} rows", total_rows);
-
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
     auto blocks = partitioner->shard(std::move(block), partition_cnt);
 
@@ -351,7 +349,7 @@ void KafkaSink::onFinish()
     background_jobs.wait();
 
     /// if there are no outstandings, no need to do flushing
-    if (!hasOutstandingMessages())
+    if (outstandingMessages() == 0)
         return;
 
     /// Make sure all outstanding requests are transmitted and handled.
@@ -364,7 +362,7 @@ void KafkaSink::onFinish()
         LOG_ERROR(logger, "Failed to send messages, last_seen_error={}", rd_kafka_err2str(err));
 
     /// if flush does not return an error, the delivery report queue should be empty
-    if (hasOutstandingMessages())
+    if (outstandingMessages() > 0)
         LOG_ERROR(logger, "Not all messsages are sent successfully, expected={} actual={}", outstandings(), acked());
 }
 
@@ -398,8 +396,11 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
             throw Exception(
                 klog::mapErrorCode(err), "Failed to send messages, error_cout={} last_error={}", errorCount(), rd_kafka_err2str(err));
 
-        if (!hasOutstandingMessages())
+        auto outstanding_msgs = outstandingMessages();
+        if (outstanding_msgs == 0)
             break;
+
+        LOG_INFO(logger, "Waiting for {} outstandings on checkpointing", outstanding_msgs);
 
         if (is_finished.test())
         {
@@ -414,7 +415,7 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
                     errorCount(),
                     rd_kafka_err2str(err));
 
-            if (hasOutstandingMessages())
+            if (outstandingMessages() > 0)
                 throw Exception(
                     ErrorCodes::CANNOT_WRITE_TO_KAFKA,
                     "Not all messsages are sent successfully, expected={} actual={}",

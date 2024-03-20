@@ -32,8 +32,8 @@ Producer::Producer(rd_kafka_conf_t * rk_conf, UInt64 poll_timeout_ms, Poco::Logg
 
 void Producer::backgroundPoll(UInt64 poll_timeout_ms) const
 {
+    // setThreadName((name() + "-producer-poll").data());
     LOG_INFO(logger, "Start producer poll");
-    setThreadName((name() + "-producer-poll").data());
 
     while (!stopped.test())
         rd_kafka_poll(rk.get(), poll_timeout_ms);
