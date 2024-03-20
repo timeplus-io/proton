@@ -156,7 +156,7 @@ bool prepareFilterBlockWithQuery(const ASTPtr & query, ContextPtr context, Block
     std::function<bool(const ASTPtr &)> is_constant = [&block, &context](const ASTPtr & node)
     {
         auto actions = std::make_shared<ActionsDAG>(block.getColumnsWithTypeAndName());
-        PreparedSets prepared_sets;
+        PreparedSetsPtr prepared_sets;
         const NamesAndTypesList source_columns;
         const NamesAndTypesList aggregation_keys;
         const ColumnNumbersList grouping_set_keys;

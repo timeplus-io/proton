@@ -43,8 +43,8 @@ ProcessorPtr addGroupingSetForTotals(const Block & header, const BuildQueryPipel
         {ColumnPtr(std::move(grouping_col)), std::make_shared<DataTypeUInt64>(), "__grouping_set"});
 
     grouping_node = &dag->materializeNode(*grouping_node);
-    auto & index = dag->getIndex();
-    index.insert(index.begin(), grouping_node);
+    auto & outputs = dag->getOutputs();
+    outputs.insert(outputs.begin(), grouping_node);
 
     auto expression = std::make_shared<ExpressionActions>(dag, settings.getActionsSettings());
     return std::make_shared<ExpressionTransform>(header, expression);

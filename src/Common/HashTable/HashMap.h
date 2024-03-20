@@ -234,21 +234,6 @@ public:
         }
     }
 
-    /// proton: starts.
-    template <typename Func, typename KeyHandler>
-    void ALWAYS_INLINE mergeToViaEmplace(Self & that, Func && func, KeyHandler && key_handler)
-    {
-        for (auto it = this->begin(), end = this->end(); it != end; ++it)
-        {
-            typename Self::LookupResult res_it;
-            bool inserted;
-            /// No reuse old hash
-            that.emplace(key_handler(Cell::getKey(it->getValue())), res_it, inserted/*, it.getHash()*/);
-            func(res_it->getMapped(), it->getMapped(), inserted);
-        }
-    }
-    /// proton: ends.
-
     /// Merge every cell's value of current map into the destination map via find.
     ///  Func should have signature void(Mapped & dst, Mapped & src, bool exist).
     ///  Each filled cell in current map will invoke func once. If that map doesn't

@@ -98,7 +98,7 @@ public:
     ///  have a key equals to the given cell, a new cell gets emplaced into that map,
     ///  and func is invoked with the third argument emplaced set to true. Otherwise
     ///  emplaced is set to false.
-    template <typename Func, bool>
+    template <typename Func, bool prefetch = false>
     void ALWAYS_INLINE mergeToViaEmplace(Self & that, Func && func)
     {
         if (this->m0.hasZero() && that.m0.hasZero())
@@ -108,10 +108,10 @@ public:
             that.m0.setHasZero();
             func(that.m0.zeroValue()->getMapped(), this->m0.zeroValue()->getMapped(), true);
         }
-        this->m1.mergeToViaEmplace(that.m1, func);
-        this->m2.mergeToViaEmplace(that.m2, func);
-        this->m3.mergeToViaEmplace(that.m3, func);
-        this->ms.mergeToViaEmplace(that.ms, func);
+        this->m1.template mergeToViaEmplace<Func, prefetch>(that.m1, std::move(func));
+        this->m2.template mergeToViaEmplace<Func, prefetch>(that.m2, std::move(func));
+        this->m3.template mergeToViaEmplace<Func, prefetch>(that.m3, std::move(func));
+        this->ms.template mergeToViaEmplace<Func, prefetch>(that.ms, std::move(func));
     }
 
     /// Merge every cell's value of current map into the destination map via find.

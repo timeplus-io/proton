@@ -2928,7 +2928,7 @@ void NO_INLINE Aggregator::mergeWithoutKeyStreamsImpl(
         res = place;
     }
 
-    ThreadPool thread_pool{AggregatorThreads, AggregatorThreadsActive, AggregatorThreadsScheduled, params.max_threads};
+    ThreadPool thread_pool{params.max_threads};
 
     for (size_t row = row_begin; row < row_end; ++row)
     {

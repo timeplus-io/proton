@@ -337,7 +337,7 @@ void AggregatingInOrderTransform::generate()
 }
 
 FinalizeAggregatedTransform::FinalizeAggregatedTransform(Block header, AggregatingTransformParamsPtr params_)
-    : ISimpleTransform({std::move(header)}, {params_->getHeader()}, true)
+    : ISimpleTransform({std::move(header)}, {params_->getHeader()}, true, ProcessorID::FinalizeAggregatedTransformID)
     , params(params_)
     , aggregates_mask(getAggregatesMask(params->getHeader(), params->params.aggregates))
 {

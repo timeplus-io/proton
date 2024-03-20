@@ -5,16 +5,14 @@
 #include <Interpreters/InDepthNodeVisitor.h>
 #include <Interpreters/PreparedSets.h>
 #include <Parsers/IAST.h>
-<<<<<<< HEAD
-#include <Core/ColumnWithTypeAndName.h>
-=======
 #include <Core/ColumnNumbers.h>
+#include <Core/ColumnWithTypeAndName.h>
 
->>>>>>> 77b07dd0a8e (Merge pull request #37163 from ClickHouse/grouping-function)
 
 namespace DB
 {
 
+class ASTExpressionList;
 class ASTFunction;
 
 class ExpressionActions;
@@ -84,9 +82,6 @@ class ASTIdentifier;
 class ASTFunction;
 class ASTLiteral;
 
-<<<<<<< HEAD
-/// Collect ExpressionAction from AST. Returns PreparedSets
-=======
 enum class GroupByKind
 {
     NONE,
@@ -124,7 +119,6 @@ struct AggregationKeysInfo
 };
 
 /// Collect ExpressionAction from AST. Returns PreparedSets and SubqueriesForSets too.
->>>>>>> 77b07dd0a8e (Merge pull request #37163 from ClickHouse/grouping-function)
 class ActionsMatcher
 {
 public:

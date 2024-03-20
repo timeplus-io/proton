@@ -1676,7 +1676,7 @@ Block Aggregator::prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_v
         return convertToBlockImpl(*data_variants.NAME, data_variants.NAME->data, data_variants.aggregates_pool, data_variants.aggregates_pools, final, rows, clear_states, type);
 
     if (false) {} // NOLINT
-    APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
+    APPLY_FOR_VARIANTS_SINGLE_LEVEL_STREAMING(M)
 #undef M
     else throw Exception(ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT, "Unknown aggregated data variant.");
 }
@@ -1835,9 +1835,17 @@ void NO_INLINE Aggregator::mergeDataImpl(
     };
 
     if constexpr (std::is_same_v<KeyHandler, EmptyKeyHandler>)
-        table_src.mergeToViaEmplace(table_dst, func);
+        table_src.template mergeToViaEmplace<decltype(func), false>(table_dst, std::move(func));
     else
-        table_src.mergeToViaEmplace(table_dst, func, std::move(key_handler));
+    {
+        table_src.forEachValue([&](const auto & key, auto & mapped)
+        {
+            typename Table::LookupResult res_it;
+            bool inserted;
+            table_dst.emplace(key_handler(key), res_it, inserted);
+            func(res_it->getMapped(), mapped, inserted);
+        });
+    }
 
     /// In order to release memory early.
     if (clear_states)

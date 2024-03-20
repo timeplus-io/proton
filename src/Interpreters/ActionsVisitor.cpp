@@ -492,7 +492,7 @@ ActionsMatcher::Data::Data(
     size_t subquery_depth_,
     std::reference_wrapper<const NamesAndTypesList> source_columns_,
     ActionsDAGPtr actions_dag,
-    PreparedSets & prepared_sets_,
+    PreparedSetsPtr prepared_sets_,
     bool no_subqueries_,
     bool no_makeset_,
     bool only_consts_,

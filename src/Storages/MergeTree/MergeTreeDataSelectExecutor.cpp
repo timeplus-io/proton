@@ -363,11 +363,11 @@ QueryPlanPtr MergeTreeDataSelectExecutor::doRead(
         if (ordinary_query_plan->isInitialized() && projection_plan->isInitialized())
         {
             auto projection_builder = projection_plan->buildQueryPipeline(
-                QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
+                QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context), context);
             projection_pipe = QueryPipelineBuilder::getPipe(std::move(*projection_builder), resources);
 
             auto ordinary_builder = ordinary_query_plan->buildQueryPipeline(
-                QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
+                QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context), context);
             ordinary_pipe = QueryPipelineBuilder::getPipe(std::move(*ordinary_builder), resources);
 
             /// Here we create shared ManyAggregatedData for both projection and ordinary data.
@@ -392,7 +392,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::doRead(
                 auto [params, only_merge] = make_aggregator_params(pipe.getHeader(), projection);
 
                 AggregatingTransformParamsPtr transform_params = std::make_shared<AggregatingTransformParams>(
-                    std::move(params), aggregator_list_ptr, query_info.projection->aggregate_final, only_merge);
+                    std::move(params), aggregator_list_ptr, query_info.projection->aggregate_final, only_merge, /*shuffled=*/false);
 
                 pipe.resize(pipe.numOutputPorts(), true, true);
 
@@ -446,6 +446,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::doRead(
                     merge_threads,
                     temporary_data_merge_threads,
                     /* storage_has_evenly_distributed_read_= */ false,
+                    /* shuffled= */ false,
                     std::move(group_by_info),
                     std::move(group_by_sort_description),
                     should_produce_results_in_order_of_bucket_number);
@@ -457,7 +458,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::doRead(
                 add_aggregating_step(projection_plan, true);
 
                 auto projection_builder = projection_plan->buildQueryPipeline(
-                    QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
+                    QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context), context);
                 projection_pipe = QueryPipelineBuilder::getPipe(std::move(*projection_builder), resources);
             }
             if (ordinary_query_plan->isInitialized())
@@ -465,7 +466,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::doRead(
                 add_aggregating_step(ordinary_query_plan, false);
 
                 auto ordinary_builder = ordinary_query_plan->buildQueryPipeline(
-                    QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
+                    QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context), context);
                 ordinary_pipe = QueryPipelineBuilder::getPipe(std::move(*ordinary_builder), resources);
             }
         }
@@ -475,14 +476,14 @@ QueryPlanPtr MergeTreeDataSelectExecutor::doRead(
         if (projection_plan->isInitialized())
         {
             auto projection_builder = projection_plan->buildQueryPipeline(
-                QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
+                QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context), context);
             projection_pipe = QueryPipelineBuilder::getPipe(std::move(*projection_builder), resources);
         }
 
         if (ordinary_query_plan->isInitialized())
         {
             auto ordinary_builder = ordinary_query_plan->buildQueryPipeline(
-                QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
+                QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context), context);
             ordinary_pipe = QueryPipelineBuilder::getPipe(std::move(*ordinary_builder), resources);
         }
     }
