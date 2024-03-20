@@ -47,7 +47,7 @@ KafkaSource::KafkaSource(
     , topic(topic_)
     , shard(shard_)
     , offset(offset_)
-    , ckpt_data(kafka.topic(), shard)
+    , ckpt_data(kafka.topicName(), shard)
     , external_stream_counter(external_stream_counter_)
     , query_context(std::move(query_context_))
     , logger(&Poco::Logger::get(fmt::format("{}(source-{})", kafka.getLoggerName(), query_context->getCurrentQueryId())))
@@ -72,9 +72,11 @@ KafkaSource::KafkaSource(
 
 KafkaSource::~KafkaSource()
 {
-    LOG_INFO(logger, "Stop consuming from topic={} shard={}", topic->name(), shard);
     if (consume_started)
+    {
+        LOG_INFO(logger, "Stop consuming from topic={} shard={}", topic->name(), shard);
         consumer->stopConsume(*topic, shard);
+    }
 }
 
 Chunk KafkaSource::generate()
@@ -356,7 +358,7 @@ void KafkaSource::doRecover(CheckpointContextPtr ckpt_ctx_)
 void KafkaSource::doResetStartSN(Int64 sn)
 {
     if (sn >= 0)
-        offset = sn + 1;
+        offset = sn;
 }
 
 void KafkaSource::State::serialize(WriteBuffer & wb) const

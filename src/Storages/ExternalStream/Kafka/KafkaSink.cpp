@@ -131,7 +131,7 @@ KafkaSink::KafkaSink(
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
     , producer(kafka.getProducer())
     , topic(kafka.getProducerTopic())
-    , partition_cnt(topic.describe())
+    , partition_cnt(topic.getPartitionCount())
     , one_message_per_row(kafka.produceOneMessagePerRow())
     , topic_refresh_interval_ms(kafka.topicRefreshIntervalMs())
     , external_stream_counter(external_stream_counter_)
@@ -176,10 +176,7 @@ KafkaSink::KafkaSink(
     background_jobs.scheduleOrThrowOnError([this, refresh_interval_ms = static_cast<UInt64>(topic_refresh_interval_ms)]() {
         auto metadata_refresh_stopwatch = Stopwatch();
         /// Use a small sleep interval to avoid blocking operation for a long just (in case refresh_interval_ms is big).
-        UInt64 sleep_ms = 500;
-        if (sleep_ms > refresh_interval_ms)
-            sleep_ms = refresh_interval_ms;
-
+        auto sleep_ms = std::min(UInt64(500), refresh_interval_ms);
         while (!is_finished.test())
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
@@ -191,7 +188,7 @@ KafkaSink::KafkaSink(
 
             try
             {
-                partition_cnt = topic.describe();
+                partition_cnt = topic.getPartitionCount();
             }
             catch (...) /// do not break the loop until finished
             {

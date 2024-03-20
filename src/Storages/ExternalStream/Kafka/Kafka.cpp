@@ -217,9 +217,6 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
         settings->set("one_message_per_row", true);
     }
 
-    if (!context->getSettingsRef().shards.value.empty())
-        shards_from_settings = parseShards(context->getSettingsRef().shards.value);
-
     size_t value_size = 8;
     char topic_refresh_interval_ms_value[8]{'\0'}; /// max: 3600000
     rd_kafka_conf_get(conf.get(), "topic.metadata.refresh.interval.ms", topic_refresh_interval_ms_value, &value_size);
@@ -308,8 +305,43 @@ void Kafka::calculateDataFormat(const IStorage * storage)
     data_format = "JSONEachRow";
 }
 
-/// FIXME, refactor out as util and unit test it
-std::vector<int32_t> Kafka::parseShards(const std::string & shards_setting)
+void Kafka::validateMessageKey(const String & message_key_, IStorage * storage, const ContextPtr & context)
+{
+    const auto & key = message_key_.c_str();
+    Tokens tokens(key, key + message_key_.size(), 0);
+    IParser::Pos pos(tokens, 0);
+    Expected expected;
+    ParserExpression p_id;
+    if (!p_id.parse(pos, message_key_ast, expected))
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "message_key was not a valid expression, parse failed at {}, expected {}", expected.max_parsed_pos, fmt::join(expected.variants, ", "));
+
+    if (!pos->isEnd())
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "message_key must be a single expression, got extra characters: {}", expected.max_parsed_pos);
+
+    auto syntax_result = TreeRewriter(context).analyze(message_key_ast, storage->getInMemoryMetadata().getColumns().getAllPhysical());
+    auto analyzer = ExpressionAnalyzer(message_key_ast, syntax_result, context).getActions(true);
+    const auto & block = analyzer->getSampleBlock();
+    if (block.columns() != 1)
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "message_key expression must return exactly one column");
+
+    auto type_id = block.getByPosition(0).type->getTypeId();
+    if (type_id != TypeIndex::String && type_id != TypeIndex::FixedString)
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "message_key must have type of string");
+}
+
+/// Validate the topic still exists, specified partitions are still valid etc
+void Kafka::validate() const
+{
+    auto consumer = getConsumer();
+    RdKafka::Topic topic {*consumer->getHandle(), topicName()};
+    auto parition_count = topic.getPartitionCount();
+    if (parition_count < 1)
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Topic has no paritions, topic={}", topicName());
+}
+
+namespace
+{
+std::vector<int32_t> parseShards(const std::string & shards_setting)
 {
     std::vector<String> shard_strings;
     boost::split(shard_strings, shards_setting, boost::is_any_of(","));
@@ -338,54 +370,30 @@ std::vector<int32_t> Kafka::parseShards(const std::string & shards_setting)
     return specified_shards;
 }
 
-void Kafka::validateMessageKey(const String & message_key_, IStorage * storage, const ContextPtr & context)
+std::vector<Int32> getShardsToQuery(const ContextPtr & context, Int32 parition_count)
 {
-    const auto & key = message_key_.c_str();
-    Tokens tokens(key, key + message_key_.size(), 0);
-    IParser::Pos pos(tokens, 0);
-    Expected expected;
-    ParserExpression p_id;
-    if (!p_id.parse(pos, message_key_ast, expected))
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "message_key was not a valid expression, parse failed at {}, expected {}", expected.max_parsed_pos, fmt::join(expected.variants, ", "));
-
-    if (!pos->isEnd())
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "message_key must be a single expression, got extra characters: {}", expected.max_parsed_pos);
-
-    auto syntax_result = TreeRewriter(context).analyze(message_key_ast, storage->getInMemoryMetadata().getColumns().getAllPhysical());
-    auto analyzer = ExpressionAnalyzer(message_key_ast, syntax_result, context).getActions(true);
-    const auto & block = analyzer->getSampleBlock();
-    if (block.columns() != 1)
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "message_key expression must return exactly one column");
-
-    auto type_id = block.getByPosition(0).type->getTypeId();
-    if (type_id != TypeIndex::String && type_id != TypeIndex::FixedString)
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "message_key must have type of string");
-}
-
-/// Validate the topic still exists, specified partitions are still valid etc
-void Kafka::validate()
-{
-    auto consumer = getConsumer();
-    RdKafka::Topic rkt {*consumer->getHandle(), topic()};
-    auto parition_count = rkt.describe();
-    if (parition_count < 1)
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Topic has no paritions, topic={}", topic());
-
-    if (!shards_from_settings.empty())
+    std::vector<Int32> ret;
+    if (const auto & shards_exp = context->getSettingsRef().shards.value; !shards_exp.empty())
     {
-        /// User specified specific partitions to consume.
+        ret = parseShards(shards_exp);
         /// Make sure they are valid.
-        for (auto shard : shards_from_settings)
+        for (auto shard : ret)
         {
             if (shard >= parition_count)
-                throw Exception(
-                    ErrorCodes::INVALID_SETTING_VALUE,
-                    "Invalid topic partition {} for topic {}, total number of partitions is {}",
-                    shard,
-                    settings->topic.value,
-                    parition_count);
+                throw Exception(ErrorCodes::INVALID_SETTING_VALUE,
+                    "Invalid topic partition {}, the topic has only {} partitions", shard, parition_count);
         }
     }
+    else
+    {
+        /// Query all available shards / partitions
+        ret.reserve(parition_count);
+        for (int32_t i = 0; i < parition_count; ++i)
+            ret.push_back(i);
+    }
+
+    return ret;
+}
 }
 
 Pipe Kafka::read(
@@ -399,26 +407,13 @@ Pipe Kafka::read(
 {
     auto consumer = getConsumer();
     /// The topic_ptr can be shared between all the sources in the same pipe, because each source reads from a different partition.
-    auto topic_ptr = std::make_shared<RdKafka::Topic>(*consumer->getHandle(), topic());
+    auto topic_ptr = std::make_shared<RdKafka::Topic>(*consumer->getHandle(), topicName());
 
     /// User can explicitly consume specific kafka partitions by specifying `shards=` setting
     /// `SELECT * FROM kafka_stream SETTINGS shards=0,3`
-    std::vector<int32_t> shards_to_query;
-    if (!shards_from_settings.empty())
-        shards_to_query = shards_from_settings;
-    else
-    {
-        /// The number of paritions could have been changed, always query the number before
-        auto parition_count = topic_ptr->describe();
-
-        /// Query all shards / partitions
-        shards_to_query.reserve(parition_count);
-        for (int32_t i = 0; i < parition_count; ++i)
-            shards_to_query.push_back(i);
-    }
-    LOG_INFO(logger, "Reading from partitions [{}] of topic {}", fmt::join(shards_to_query, ","), topic());
-
+    auto shards_to_query = getShardsToQuery(context, topic_ptr->getPartitionCount());
     assert(!shards_to_query.empty());
+    LOG_INFO(logger, "Reading from partitions [{}] of topic {}", fmt::join(shards_to_query, ","), topicName());
 
     Pipes pipes;
     pipes.reserve(shards_to_query.size());
@@ -503,7 +498,7 @@ RdKafka::Topic & Kafka::getProducerTopic()
     if (producer_topic)
         return *producer_topic;
 
-    auto topic_ptr = std::make_unique<RdKafka::Topic>(*getProducer().getHandle(), topic());
+    auto topic_ptr = std::make_unique<RdKafka::Topic>(*getProducer().getHandle(), topicName());
     producer_topic.swap(topic_ptr);
 
     return *producer_topic;

@@ -23,7 +23,7 @@ Topic::Topic(rd_kafka_t & rk, const std::string & name) : rdk(rk)
     }
 }
 
-int Topic::describe() const
+int Topic::getPartitionCount() const
 {
     const struct rd_kafka_metadata * metadata = nullptr;
 

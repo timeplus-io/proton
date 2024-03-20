@@ -63,7 +63,7 @@ public:
     Int32 topicRefreshIntervalMs() const { return topic_refresh_interval_ms; }
     const String & brokers() const { return settings->brokers.value; }
     const String & dataFormat() const override { return data_format; }
-    const String & topic() const { return settings->topic.value; }
+    const String & topicName() const { return settings->topic.value; }
     const ASTPtr & shardingExprAst() const { assert(!engine_args.empty()); return engine_args[0]; }
     bool hasCustomShardingExpr() const;
 
@@ -83,8 +83,7 @@ private:
     void cacheVirtualColumnNamesAndTypes();
     std::vector<Int64> getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const;
     void validateMessageKey(const String & message_key, IStorage * storage, const ContextPtr & context);
-    void validate();
-    static std::vector<int32_t> parseShards(const std::string & shards_setting);
+    void validate() const;
 
     StorageID storage_id;
     ASTs engine_args;

@@ -19,7 +19,7 @@ public:
 
     rd_kafka_topic_t * getHandle() const { return rkt.get(); }
     std::string name() const { return rd_kafka_topic_name(rkt.get()); }
-    int describe() const;
+    int getPartitionCount() const;
 
 private:
     rd_kafka_t & rdk;
