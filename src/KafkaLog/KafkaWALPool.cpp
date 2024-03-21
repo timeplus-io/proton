@@ -24,33 +24,6 @@ namespace
 /// Globals
 const std::string SYSTEM_WALS_KEY = "cluster_settings.logstore";
 const std::string SYSTEM_WALS_KEY_PREFIX = SYSTEM_WALS_KEY + ".";
-
-
-int32_t bucketFetchWaitMax(int32_t fetch_wait_max_ms)
-{
-    if (fetch_wait_max_ms <= 10)
-        return 10;
-    else if (fetch_wait_max_ms <= 20)
-        return 20;
-    else if (fetch_wait_max_ms <= 30)
-        return 30;
-    else if (fetch_wait_max_ms <= 40)
-        return 40;
-    else if (fetch_wait_max_ms <= 50)
-        return 50;
-    else if (fetch_wait_max_ms <= 100)
-        return 100;
-    else if (fetch_wait_max_ms <= 200)
-        return 200;
-    else if (fetch_wait_max_ms <= 300)
-        return 300;
-    else if (fetch_wait_max_ms <= 400)
-        return 400;
-    else if (fetch_wait_max_ms <= 500)
-        return 500;
-
-    return 500;
-}
 }
 
 KafkaWALPool & KafkaWALPool::instance(const DB::ContextPtr & global_context)
@@ -395,74 +368,6 @@ KafkaWALConsumerMultiplexerPtr KafkaWALPool::getOrCreateConsumerMultiplexer(cons
     }
 
     return *best_multiplexer;
-}
-
-KafkaWALSimpleConsumerPtr KafkaWALPool::getOrCreateStreamingExternal(const String & brokers, const KafkaWALAuth & auth, int32_t fetch_wait_max_ms)
-{
-    assert(!brokers.empty());
-
-    fetch_wait_max_ms = bucketFetchWaitMax(fetch_wait_max_ms);
-
-    std::lock_guard lock{external_streaming_lock};
-
-    if (!external_streaming_consumers.contains(brokers))
-        /// FIXME, configurable max cached consumers
-        external_streaming_consumers.emplace(brokers, std::pair<size_t, KafkaWALSimpleConsumerPtrs>(100, KafkaWALSimpleConsumerPtrs{}));
-
-    /// FIXME, remove cached cluster
-    if (external_streaming_consumers.size() > 1000)
-        throw DB::Exception("Too many external Kafka cluster registered", DB::ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES);
-
-    auto & consumers = external_streaming_consumers[brokers];
-
-    for (const auto & consumer : consumers.second)
-    {
-        const auto & consumer_settings = consumer->getSettings();
-        if (consumer.use_count() == 1 && consumer_settings.fetch_wait_max_ms == fetch_wait_max_ms && consumer_settings.auth == auth)
-        {
-            LOG_INFO(log, "Reusing external Kafka consume with settings={}", consumer_settings.string());
-            return consumer;
-        }
-    }
-
-    /// consumer is used up and if we didn't reach maximum
-    if (consumers.second.size() < consumers.first)
-    {
-        if (!boost::iequals(auth.security_protocol, "plaintext")
-            && !boost::iequals(auth.security_protocol, "sasl_plaintext")
-            && !boost::iequals(auth.security_protocol, "sasl_ssl"))
-            throw DB::Exception(
-                DB::ErrorCodes::NOT_IMPLEMENTED,
-                "Invalid logstore kafka settings security_protocol: {}. Only plaintext, sasl_plaintext or sasl_ssl are supported",
-                auth.security_protocol);
-
-        /// Create one
-        auto ksettings = std::make_unique<KafkaWALSettings>();
-
-        ksettings->fetch_wait_max_ms = fetch_wait_max_ms;
-
-        ksettings->brokers = brokers;
-
-        /// Streaming WALs have a different group ID
-        ksettings->group_id += "-tp-external-streaming-query-" + std::to_string(consumers.second.size() + 1);
-        ksettings->auth = auth;
-
-        /// We don't care offset checkpointing for WALs used for streaming processing,
-        /// No auto commit
-        ksettings->enable_auto_commit = false;
-
-        LOG_INFO(log, "Create new external Kafka consume with settings={{{}}}", ksettings->string());
-
-        auto consumer = std::make_shared<KafkaWALSimpleConsumer>(std::move(ksettings));
-        consumer->startup();
-        consumers.second.push_back(consumer);
-        return consumer;
-    }
-    else
-    {
-        LOG_ERROR(log, "External streaming processing pool in cluster={} is used up, size={}", brokers, consumers.first);
-        throw DB::Exception("Max external streaming processing pool size has been reached", DB::ErrorCodes::TOO_MANY_SIMULTANEOUS_QUERIES);
-    }
 }
 
 std::vector<KafkaWALClusterPtr> KafkaWALPool::clusters(const KafkaWALContext & ctx) const
