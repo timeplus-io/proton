@@ -1,22 +1,17 @@
-#include "KafkaSource.h"
-#include "Kafka.h"
-
 #include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
+#include <Common/ProtonCommon.h>
 #include <Formats/FormatFactory.h>
+#include <Interpreters/Context.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Interpreters/Context.h>
-#include <KafkaLog/KafkaWALPool.h>
-#include <KafkaLog/KafkaWALSettings.h>
 #include <Processors/Executors/StreamingFormatExecutor.h>
-#include <base/ClockUtils.h>
-#include <Common/ProtonCommon.h>
-#include <Common/logger_useful.h>
-#include <Common/parseIntStrict.h>
+#include <Storages/ExternalStream/Kafka/Kafka.h>
+#include <Storages/ExternalStream/Kafka/KafkaSource.h>
+#include <Storages/ExternalStream/Kafka/Topic.h>
 
-#include <librdkafka/rdkafka.h>
+#include <base/ClockUtils.h>
 
 namespace DB
 {
@@ -29,34 +24,44 @@ extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
 KafkaSource::KafkaSource(
-    Kafka * kafka,
+    Kafka & kafka_,
     const Block & header_,
     const StorageSnapshotPtr & storage_snapshot_,
-    ContextPtr query_context_,
-    Int32 shard,
-    Int64 offset,
+    RdKafka::ConsumerPool::Entry consumer_,
+    RdKafka::TopicPtr topic_,
+    Int32 shard_,
+    Int64 offset_,
     size_t max_block_size_,
-    Poco::Logger * log_,
-    ExternalStreamCounterPtr external_stream_counter_)
+    ExternalStreamCounterPtr external_stream_counter_,
+    ContextPtr query_context_)
     : Streaming::ISource(header_, true, ProcessorID::KafkaSourceID)
+    , kafka(kafka_)
     , storage_snapshot(storage_snapshot_)
-    , query_context(std::move(query_context_))
     , max_block_size(max_block_size_)
-    , log(log_)
     , header(header_)
     , non_virtual_header(storage_snapshot->metadata->getSampleBlockNonMaterialized())
-    , consume_ctx(kafka->topic(), shard, offset)
     , read_buffer("", 0)
     , virtual_col_value_functions(header.columns(), nullptr)
     , virtual_col_types(header.columns(), nullptr)
-    , ckpt_data(consume_ctx)
+    , consumer(consumer_)
+    , topic(topic_)
+    , shard(shard_)
+    , offset(offset_)
+    , ckpt_data(kafka.topicName(), shard)
     , external_stream_counter(external_stream_counter_)
+    , query_context(std::move(query_context_))
+    , logger(&Poco::Logger::get(fmt::format("{}(source-{})", kafka.getLoggerName(), query_context->getCurrentQueryId())))
 {
     assert(external_stream_counter);
 
+    if (auto batch_count = query_context->getSettingsRef().record_consume_batch_count; batch_count != 0)
+        record_consume_batch_count = static_cast<uint32_t>(batch_count.value);
+
+    if (auto consume_timeout = query_context->getSettingsRef().record_consume_timeout_ms; consume_timeout != 0)
+        record_consume_timeout_ms = static_cast<int32_t>(consume_timeout.value);
+
     calculateColumnPositions();
-    initConsumer(kafka);
-    initFormatExecutor(kafka);
+    initFormatExecutor();
 
     /// If there is no data format, physical headers shall always contain 1 column
     assert((physical_header.columns() == 1 && !format_executor) || format_executor);
@@ -67,14 +72,24 @@ KafkaSource::KafkaSource(
 
 KafkaSource::~KafkaSource()
 {
-    LOG_INFO(log, "Stop streaming reading from topic={} shard={}", consume_ctx.topic, consume_ctx.partition);
-    consumer->stopConsume(consume_ctx);
+    if (consume_started)
+    {
+        LOG_INFO(logger, "Stop consuming from topic={} shard={}", topic->name(), shard);
+        consumer->stopConsume(*topic, shard);
+    }
 }
 
 Chunk KafkaSource::generate()
 {
     if (isCancelled())
         return {};
+
+    if (!consume_started)
+    {
+        LOG_INFO(logger, "Start consuming from topic={} shard={} offset={}", topic->name(), shard, offset);
+        consumer->startConsume(*topic, shard, offset);
+        consume_started = true;
+    }
 
     if (result_chunks.empty() || iter == result_chunks.end())
     {
@@ -100,13 +115,18 @@ void KafkaSource::readAndProcess()
     current_batch.clear();
     current_batch.reserve(header.columns());
 
-    auto res = consumer->consume(&KafkaSource::parseMessage, this, record_consume_batch_count, record_consume_timeout_ms, consume_ctx);
-
-    if (res != ErrorCodes::OK)
+    auto callback = [this](void * rkmessage, size_t total_count, void * data)
     {
-        LOG_ERROR(log, "Failed to consume streaming, topic={} shard={} err={}", consume_ctx.topic, consume_ctx.partition, res);
+        parseMessage(rkmessage, total_count, data);
+    };
+
+    auto error_callback = [this](rd_kafka_resp_err_t err)
+    {
+        LOG_ERROR(logger, "Failed to consume topic={} shard={} err={}", topic->name(), shard, rd_kafka_err2str(err));
         external_stream_counter->addToReadFailed(1);
-    }
+    };
+
+    consumer->consumeBatch(*topic, shard, record_consume_batch_count, record_consume_timeout_ms, callback, error_callback);
 
     if (!current_batch.empty())
     {
@@ -117,16 +137,16 @@ void KafkaSource::readAndProcess()
     iter = result_chunks.begin();
 }
 
-void KafkaSource::parseMessage(void * kmessage, size_t total_count, void * data)
+void KafkaSource::parseMessage(void * rkmessage, size_t  /*total_count*/, void *  /*data*/)
 {
-    auto * kafka = static_cast<KafkaSource *>(data);
-    kafka->doParseMessage(static_cast<rd_kafka_message_t *>(kmessage), total_count);
-}
+    auto * message = static_cast<rd_kafka_message_t *>(rkmessage);
 
-void KafkaSource::doParseMessage(const rd_kafka_message_t * kmessage, size_t /*total_count*/)
-{
-    parseFormat(kmessage);
-    ckpt_data.last_sn = kmessage->offset;
+    if (unlikely(message->offset < offset))
+        /// Ignore the message which has lower offset than what clients like to have
+        return;
+
+    parseFormat(message);
+    ckpt_data.last_sn = message->offset;
 }
 
 void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
@@ -142,7 +162,8 @@ void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
 
     if (format_error)
     {
-        LOG_ERROR(log, "Failed to parse message at {}: {}", kmessage->offset, format_error.value());
+        LOG_ERROR(logger, "Failed to parse message at {}: {}", kmessage->offset, format_error.value());
+        external_stream_counter->addToReadFailed(1);
         format_error.reset();
     }
 
@@ -211,29 +232,9 @@ void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)
     }
 }
 
-void KafkaSource::initConsumer(const Kafka * kafka)
+void KafkaSource::initFormatExecutor()
 {
-    const auto & settings_ref = query_context->getSettingsRef();
-
-    if (settings_ref.record_consume_batch_count != 0)
-        record_consume_batch_count = static_cast<uint32_t>(settings_ref.record_consume_batch_count.value);
-
-    if (settings_ref.record_consume_timeout_ms != 0)
-        record_consume_timeout_ms = static_cast<int32_t>(settings_ref.record_consume_timeout_ms.value);
-
-    if (consume_ctx.offset == -1)
-        consume_ctx.auto_offset_reset = "latest";
-    else if (consume_ctx.offset == -2)
-        consume_ctx.auto_offset_reset = "earliest";
-
-    consume_ctx.enforce_offset = true;
-    consumer = kafka->getConsumer(record_consume_timeout_ms);
-    consumer->initTopicHandle(consume_ctx);
-}
-
-void KafkaSource::initFormatExecutor(const Kafka * kafka)
-{
-    const auto & data_format = kafka->dataFormat();
+    const auto & data_format = kafka.dataFormat();
 
     auto input_format = FormatFactory::instance().getInputFormat(
         data_format,
@@ -241,7 +242,7 @@ void KafkaSource::initFormatExecutor(const Kafka * kafka)
         non_virtual_header,
         query_context,
         max_block_size,
-        kafka->getFormatSettings(query_context));
+        kafka.getFormatSettings(query_context));
 
     format_executor = std::make_unique<StreamingFormatExecutor>(
         non_virtual_header,
@@ -339,6 +340,7 @@ Chunk KafkaSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
     result.setCheckpointContext(ckpt_ctx_);
 
     ckpt_ctx_->coordinator->checkpoint(State::VERSION, getLogicID(), ckpt_ctx_, [&](WriteBuffer & wb) { ckpt_data.serialize(wb); });
+    LOG_INFO(logger, "Saved checkpoint topic={} parition={} offset={}", ckpt_data.topic, ckpt_data.partition, ckpt_data.last_sn);
 
     /// FIXME, if commit failed ?
     /// Propagate checkpoint barriers
@@ -350,13 +352,13 @@ void KafkaSource::doRecover(CheckpointContextPtr ckpt_ctx_)
     ckpt_ctx_->coordinator->recover(
         getLogicID(), ckpt_ctx_, [&](VersionType version, ReadBuffer & rb) { ckpt_data.deserialize(version, rb); });
 
-    LOG_INFO(log, "Recovered last_sn={}", ckpt_data.last_sn);
+    LOG_INFO(logger, "Recovered last_sn={}", ckpt_data.last_sn);
 }
 
 void KafkaSource::doResetStartSN(Int64 sn)
 {
     if (sn >= 0)
-        consume_ctx.offset = sn;
+        offset = sn;
 }
 
 void KafkaSource::State::serialize(WriteBuffer & wb) const

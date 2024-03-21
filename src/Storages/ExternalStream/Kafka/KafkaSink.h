@@ -8,16 +8,12 @@
 #include <Storages/ExternalStream/Kafka/WriteBufferFromKafkaSink.h>
 #include <Common/ThreadPool.h>
 
-namespace Poco
-{
-class Logger;
-}
-
 namespace DB
 {
 
 namespace KafkaStream
 {
+
 /// Shard Chunk's to shards (or partitions in Kafka's term) by the sharding expression.
 class ChunkSharder
 {
@@ -42,19 +38,21 @@ private:
     String sharding_key_column_name;
     bool random_sharding = false;
 };
+
 }
 
 class KafkaSink final : public SinkToStorage
 {
 public:
+    /// Callback for Kafka message delivery report
+    static void onMessageDelivery(rd_kafka_t * /* producer */, const rd_kafka_message_t * msg, void *  /*opaque*/);
+
     KafkaSink(
-        const Kafka * kafka,
+        Kafka & kafka,
         const Block & header,
-        Int32 initial_partition_cnt,
         const ASTPtr & message_key,
-        ContextPtr context,
-        Poco::Logger * logger_,
-        ExternalStreamCounterPtr external_stream_counter_);
+        ExternalStreamCounterPtr external_stream_counter_,
+        ContextPtr context);
     ~KafkaSink() override;
 
     String getName() const override { return "KafkaSink"; }
@@ -64,10 +62,8 @@ public:
     void checkpoint(CheckpointContextPtr) override;
 
 private:
-    /// Callback for Kafka message delivery report
-    static void onMessageDelivery(rd_kafka_t * /* producer */, const rd_kafka_message_t * msg, void *  /*opaque*/);
-    void onMessageDelivery(const rd_kafka_message_t * msg);
-
+    // void onMessageDelivery(const rd_kafka_message_t * msg);
+    void onMessageDelivery(rd_kafka_resp_err_t err);
     void addMessageToBatch(char * pos, size_t len);
 
     /// the number of acknowledgement has been received so far for the current checkpoint period
@@ -80,17 +76,16 @@ private:
     rd_kafka_resp_err_t lastSeenError() const { return static_cast<rd_kafka_resp_err_t>(state.last_error_code.load()); }
     /// check if there are no more outstandings (i.e. delivery reports have been recieved
     /// for all out-go messages, regardless if a message is successfully delivered or not)
-    bool hasOutstandingMessages() const noexcept { return state.outstandings != state.acked + state.error_count; }
-    /// allows to reset the state after each checkpoint
-    void resetState() { state.reset(); }
+    size_t outstandingMessages() const noexcept { return state.outstandings - (state.acked + state.error_count); }
 
-    static const int POLL_TIMEOUT_MS {500};
+    RdKafka::Producer & producer;
+    RdKafka::Topic & topic;
+    // std::unique_ptr<RdKafka::Topic> topic;
 
     Int32 partition_cnt {0};
     bool one_message_per_row {false};
+    Int32 topic_refresh_interval_ms = 0;
 
-    klog::KafkaPtr producer {nullptr, rd_kafka_destroy};
-    klog::KTopicPtr topic {nullptr, rd_kafka_topic_destroy};
     ThreadPool background_jobs {1};
     std::atomic_flag is_finished {false};
 
@@ -113,14 +108,16 @@ private:
         std::atomic_size_t outstandings {0};
         std::atomic_size_t acked {0};
         std::atomic_size_t error_count {0};
-        std::atomic_int last_error_code {0};
+        std::atomic_int32_t last_error_code {0};
 
+        /// allows to reset the state after each checkpoint
         void reset();
     };
 
     State state;
 
-    Poco::Logger * logger;
     ExternalStreamCounterPtr external_stream_counter;
+    Poco::Logger * logger;
 };
+
 }

@@ -1,8 +1,8 @@
 #pragma once
 
 #include <boost/algorithm/string/join.hpp>
-
 #include <boost/algorithm/string/predicate.hpp>
+
 #include <fmt/format.h>
 
 namespace klog
