@@ -30,6 +30,7 @@ JoinTransform::JoinTransform(
     , output_header_chunk(outputs.front().getHeader().getColumns(), 0)
     , logger(&Poco::Logger::get("StreamingJoinTransform"))
     , input_ports_with_data{InputPortWithData{&inputs.front()}, InputPortWithData{&inputs.back()}}
+    , last_log_ts(MonotonicSeconds::now())
 {
     assert(join);
 
@@ -202,6 +203,12 @@ void JoinTransform::work()
         std::scoped_lock lock(mutex);
         assert(!output_chunks.empty());
         output_chunks.back().setCheckpointContext(std::move(requested_ckpt));
+    }
+
+    if (MonotonicSeconds::now() - last_log_ts > 60)
+    {
+        LOG_INFO(logger, "{}, watermark={}", join->metricsString(), watermark);
+        last_log_ts = MonotonicSeconds::now();
     }
 }
 
