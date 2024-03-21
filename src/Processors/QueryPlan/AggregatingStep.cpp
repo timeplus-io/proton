@@ -102,11 +102,6 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
     pipeline.dropTotalsAndExtremes();
 
     bool allow_to_use_two_level_group_by = pipeline.getNumStreams() > 1 || params.max_bytes_before_external_group_by != 0;
-    if (!allow_to_use_two_level_group_by)
-    {
-        params.group_by_two_level_threshold = 0;
-        params.group_by_two_level_threshold_bytes = 0;
-    }
 
     /// optimize_aggregation_in_order
     if (group_by_info)
@@ -116,6 +111,12 @@ void AggregatingStep::transformPipeline(QueryPipelineBuilder & pipeline, const B
 
         /// It is incorrect for in order aggregation.
         params.stats_collecting_params.disable();
+    }
+
+    if (!allow_to_use_two_level_group_by)
+    {
+        params.group_by_two_level_threshold = 0;
+        params.group_by_two_level_threshold_bytes = 0;
     }
 
     /** Two-level aggregation is useful in two cases:
