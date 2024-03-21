@@ -17,7 +17,7 @@ String constructSelectQuery(const String & database, const String & table, const
     auto query = "SELECT " + backQuoteIfNeed(col_names[0]);
     for (const auto & name : std::vector<String>(std::next(col_names.begin()), col_names.end()))
         query.append(", " + backQuoteIfNeed(name));
-    query.append(" FROM " + (database.empty() ? "" : backQuoteIfNeed(database) + ".") + table);
+    query.append(" FROM " + (database.empty() ? "" : backQuoteIfNeed(database) + ".") + backQuoteIfNeed(table));
 
     return query;
 }
