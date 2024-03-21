@@ -14,15 +14,16 @@ namespace RdKafka
 {
 
 /// Producer will take the ownership of `rk_conf`.
-Producer::Producer(rd_kafka_conf_t * rk_conf, UInt64 poll_timeout_ms, Poco::Logger * logger_) : logger(logger_)
+Producer::Producer(const rd_kafka_conf_t & rk_conf, UInt64 poll_timeout_ms, Poco::Logger * logger_) : logger(logger_)
 {
     char errstr[512];
-    rk.reset(rd_kafka_new(RD_KAFKA_PRODUCER, rk_conf, errstr, sizeof(errstr)));
+    auto * conf = rd_kafka_conf_dup(&rk_conf);
+    rk.reset(rd_kafka_new(RD_KAFKA_PRODUCER, conf, errstr, sizeof(errstr)));
     if (!rk)
     {
         /// librdkafka only take the ownership of `rk_conf` if `rd_kafka_new` succeeds,
         /// we need to free it otherwise.
-        rd_kafka_conf_destroy(rk_conf);
+        rd_kafka_conf_destroy(conf);
         throw Exception(klog::mapErrorCode(rd_kafka_last_error()), "Failed to create kafka handle: {}", errstr);
     }
 

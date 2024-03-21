@@ -14,15 +14,16 @@ namespace RdKafka
 {
 
 /// Consumer will take the ownership of `rk_conf`.
-Consumer::Consumer(rd_kafka_conf_t * rk_conf, UInt64 poll_timeout_ms, Poco::Logger * logger_) : logger(logger_)
+Consumer::Consumer(const rd_kafka_conf_t & rk_conf, UInt64 poll_timeout_ms, Poco::Logger * logger_) : logger(logger_)
 {
     char errstr[512];
-    rk.reset(rd_kafka_new(RD_KAFKA_CONSUMER, rk_conf, errstr, sizeof(errstr)));
+    auto * conf = rd_kafka_conf_dup(&rk_conf);
+    rk.reset(rd_kafka_new(RD_KAFKA_CONSUMER, conf, errstr, sizeof(errstr)));
     if (!rk)
     {
         /// librdkafka only take the ownership of `rk_conf` if `rd_kafka_new` succeeds,
         /// we need to free it otherwise.
-        rd_kafka_conf_destroy(rk_conf);
+        rd_kafka_conf_destroy(conf);
         throw Exception(klog::mapErrorCode(rd_kafka_last_error()), "Failed to create kafka handle: {}", errstr);
     }
 
@@ -68,8 +69,10 @@ void Consumer::stopConsume(Topic & topic, Int32 parition)
 
 void Consumer::consumeBatch(Topic & topic, Int32 partition, uint32_t count, int32_t timeout_ms, Consumer::Callback callback, ErrorCallback error_callback) const
 {
-    std::unique_ptr<rd_kafka_message_t *, decltype(free) *> rkmessages{
-        static_cast<rd_kafka_message_t **>(malloc(sizeof(*rkmessages) * count)), free}; /// NOLINT(bugprone-sizeof-expression)
+    std::unique_ptr<rd_kafka_message_t *, decltype(free) *> rkmessages
+    {
+        static_cast<rd_kafka_message_t **>(malloc(sizeof(rd_kafka_message_t *) * count)), free
+    };
 
     auto res = rd_kafka_consume_batch(topic.getHandle(), partition, timeout_ms, rkmessages.get(), count);
 
@@ -88,7 +91,7 @@ void Consumer::consumeBatch(Topic & topic, Int32 partition, uint32_t count, int3
                 error_callback(rkmessage->err);
             else
                 callback(rkmessage, res, nullptr);
-            }
+        }
         catch (...)
         {
             /// just log the error to make sure the messages get destroyed

@@ -14,7 +14,7 @@ namespace RdKafka
 class Producer : boost::noncopyable
 {
 public:
-    Producer(rd_kafka_conf_t * rk_conf, UInt64 poll_timeout_ms, Poco::Logger * logger_);
+    Producer(const rd_kafka_conf_t & rk_conf, UInt64 poll_timeout_ms, Poco::Logger * logger_);
     ~Producer()
     {
         stopped.test_and_set();

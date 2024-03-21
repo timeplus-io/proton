@@ -15,7 +15,7 @@ namespace RdKafka
 class Consumer : boost::noncopyable
 {
 public:
-    Consumer(rd_kafka_conf_t * rk_conf, UInt64 poll_timeout_ms, Poco::Logger * logger_);
+    Consumer(const rd_kafka_conf_t & rk_conf, UInt64 poll_timeout_ms, Poco::Logger * logger_);
     ~Consumer()
     {
         stopped.test_and_set();

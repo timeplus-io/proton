@@ -231,7 +231,7 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     rd_kafka_conf_set_throttle_cb(conf.get(), &Kafka::onThrottle);
     rd_kafka_conf_set_dr_msg_cb(conf.get(), &KafkaSink::onMessageDelivery);
 
-    consumer_pool = std::make_unique<RdKafka::ConsumerPool>(/*size=*/100, storage_id, *conf.get(), settings->poll_waittime_ms.value, logger);
+    consumer_pool = std::make_unique<RdKafka::ConsumerPool>(/*size=*/100, storage_id, *conf, settings->poll_waittime_ms.value, logger);
 
     if (!attach)
         /// Only validate cluster / topic for external stream creation
@@ -482,7 +482,7 @@ RdKafka::Producer & Kafka::getProducer()
     if (producer)
         return *producer;
 
-    auto producer_ptr = std::make_unique<RdKafka::Producer>(rd_kafka_conf_dup(conf.get()), settings->poll_waittime_ms.value, logger);
+    auto producer_ptr = std::make_unique<RdKafka::Producer>(*conf, settings->poll_waittime_ms.value, logger);
     producer.swap(producer_ptr);
 
     return *producer;

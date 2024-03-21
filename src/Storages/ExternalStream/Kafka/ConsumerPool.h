@@ -68,9 +68,7 @@ protected:
     /** Creates a new object to put in the pool. */
     std::shared_ptr<Consumer> allocObject() override
     {
-        /// Consumer will take ownership of `conf`, thus dup.
-        auto * conf = rd_kafka_conf_dup(&rd_conf);
-        return std::make_shared<Consumer>(conf, poll_timeout_ms, consumer_logger);
+        return std::make_shared<Consumer>(rd_conf, poll_timeout_ms, consumer_logger);
     }
 
 private:
