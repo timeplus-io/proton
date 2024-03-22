@@ -312,6 +312,11 @@ void KafkaSource::calculateColumnPositions()
             virtual_col_value_functions[pos] = [](const rd_kafka_message_t * kmessage) -> Int64 { return kmessage->offset; };
             virtual_col_types[pos] = column.type;
         }
+        else if (column.name == Kafka::VIRTUAL_COLUMN_MESSAGE_KEY)
+        {
+            virtual_col_value_functions[pos] = [](const rd_kafka_message_t * kmessage) -> String { return {static_cast<char *>(kmessage->key), kmessage->key_len}; };
+            virtual_col_types[pos] = column.type;
+        }
         else
         {
             physical_header.insert(column);

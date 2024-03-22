@@ -1,5 +1,6 @@
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/DataTypeString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/TreeRewriter.h>
@@ -192,6 +193,8 @@ Kafka::ConfPtr createConfFromSettings(const KafkaExternalStreamSettings & settin
 
 }
 
+const String Kafka::VIRTUAL_COLUMN_MESSAGE_KEY = "_message_key";
+
 Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach, ExternalStreamCounterPtr external_stream_counter_, ContextPtr context)
     : StorageExternalStreamImpl(std::move(settings_))
     , storage_id(storage->getStorageID())
@@ -260,6 +263,7 @@ void Kafka::cacheVirtualColumnNamesAndTypes()
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_PROCESS_TIME, std::make_shared<DataTypeDateTime64>(3, "UTC")));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_SHARD, std::make_shared<DataTypeInt32>()));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, std::make_shared<DataTypeInt64>()));
+    virtual_column_names_and_types.push_back(NameAndTypePair(VIRTUAL_COLUMN_MESSAGE_KEY, std::make_shared<DataTypeString>()));
 }
 
 std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const
