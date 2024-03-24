@@ -101,21 +101,25 @@ void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
         retractEnabled(substream_ctx) |= chunk.rows();
 
         chunk.setChunkContext(chunk_ctx);
-        setCurrentChunk(std::move(chunk), std::move(retracted_chunk));
+        setAggregatedResult(std::move(chunk), std::move(retracted_chunk));
     }
     else
     {
-        Chunk chunk;
+        ChunkList chunks;
         if (AggregatingHelper::onlyEmitUpdates(params->emit_mode))
-            chunk = AggregatingHelper::convertUpdatesToChunk(variants, *params);
+            chunks = AggregatingHelper::convertUpdatesToChunks(variants, *params);
         else
-            chunk = AggregatingHelper::convertToChunk(variants, *params);
+            chunks = AggregatingHelper::convertToChunks(variants, *params);
 
         if (params->final && params->emit_version)
-            emitVersion(chunk, substream_ctx);
+            emitVersion(chunks, substream_ctx);
 
-        chunk.setChunkContext(chunk_ctx);
-        setCurrentChunk(std::move(chunk));
+        if (chunks.empty()) [[unlikely]]
+            chunks.emplace_back(getOutputs().front().getHeader().getColumns(), 0);
+
+        chunks.back().setChunkContext(chunk_ctx); /// Set chunk context for the last chunk
+
+        setAggregatedResult(std::move(chunks));
     }
     auto end = MonotonicMilliseconds::now();
 

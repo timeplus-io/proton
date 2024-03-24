@@ -29,7 +29,7 @@ SERDE struct SubstreamContext
     /// are below this watermark can be safely GCed.
     SERDE Int64 finalized_watermark = INVALID_WATERMARK;
 
-    SERDE Int64 emited_version = 0;
+    SERDE Int64 emitted_version = 0;
 
     SERDE UInt64 rows_since_last_finalization = 0;
 
@@ -90,9 +90,12 @@ private:
 
 protected:
     void emitVersion(Chunk & chunk, const SubstreamContextPtr & substream_ctx);
+    void emitVersion(ChunkList & chunks, const SubstreamContextPtr & substream_ctx);
     /// return {should_abort, need_finalization} pair
     virtual std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, const SubstreamContextPtr & substream_ctx);
-    void setCurrentChunk(Chunk chunk, Chunk retracted_chunk = {});
+    void setAggregatedResult(Chunk chunk, Chunk retracted_chunk = {});
+    void setAggregatedResult(ChunkList chunks);
+    bool hasAggregatedResult() const { return !aggregated_chunks.empty(); }
 
     virtual SubstreamContextPtr getOrCreateSubstreamContext(const SubstreamID & id);
     bool removeSubstreamContext(const SubstreamID & id);
@@ -126,9 +129,7 @@ protected:
     bool read_current_chunk = false;
 
     /// Aggregated result which is pushed to downstream output
-    Chunk current_chunk_retracted;
-    Chunk current_chunk_aggregated;
-    bool has_input = false;
+    ChunkList aggregated_chunks;
 
     SubstreamHashMap<SubstreamContextPtr> substream_contexts;
 

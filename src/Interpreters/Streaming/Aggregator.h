@@ -644,6 +644,9 @@ public:
 
         bool compile_aggregate_expressions;
         size_t min_count_to_compile_aggregate_expression;
+
+        size_t max_block_size;
+
         /// proton: starts
         /// `keep_state` tell Aggregator if it needs to hold state in-memory for streaming
         /// processing. In normal case, it is true. However for global over global aggregation
@@ -678,15 +681,21 @@ public:
         /// proton: starts
         Params(
             const Block & src_header_,
-            const ColumnNumbers & keys_, const AggregateDescriptions & aggregates_,
-            bool overflow_row_, size_t max_rows_to_group_by_, OverflowMode group_by_overflow_mode_,
-            size_t group_by_two_level_threshold_, size_t group_by_two_level_threshold_bytes_,
+            const ColumnNumbers & keys_,
+            const AggregateDescriptions & aggregates_,
+            bool overflow_row_,
+            size_t max_rows_to_group_by_,
+            OverflowMode group_by_overflow_mode_,
+            size_t group_by_two_level_threshold_,
+            size_t group_by_two_level_threshold_bytes_,
             size_t max_bytes_before_external_group_by_,
             bool empty_result_for_aggregation_by_empty_set_,
-            VolumePtr tmp_volume_, size_t max_threads_,
+            VolumePtr tmp_volume_,
+            size_t max_threads_,
             size_t min_free_disk_space_,
             bool compile_aggregate_expressions_,
             size_t min_count_to_compile_aggregate_expression_,
+            size_t max_block_size_,
             const Block & intermediate_header_ = {},
             bool keep_state_ = true,
             size_t streaming_window_count_ = 0,
@@ -695,32 +704,40 @@ public:
             size_t window_keys_num_ = 0,
             WindowParamsPtr window_params_ = nullptr,
             TrackingUpdatesType tracking_updates_type_ = TrackingUpdatesType::None)
-        : src_header(src_header_),
-            intermediate_header(intermediate_header_),
-            keys(keys_), aggregates(aggregates_), keys_size(keys.size()), aggregates_size(aggregates.size()),
-            overflow_row(overflow_row_), max_rows_to_group_by(max_rows_to_group_by_), group_by_overflow_mode(group_by_overflow_mode_),
-            group_by_two_level_threshold(group_by_two_level_threshold_), group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_),
-            max_bytes_before_external_group_by(max_bytes_before_external_group_by_),
-            empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_),
-            tmp_volume(tmp_volume_), max_threads(max_threads_),
-            min_free_disk_space(min_free_disk_space_),
-            compile_aggregate_expressions(compile_aggregate_expressions_),
-            min_count_to_compile_aggregate_expression(min_count_to_compile_aggregate_expression_),
-            keep_state(keep_state_),
-            streaming_window_count(streaming_window_count_),
-            group_by(streaming_group_by_),
-            delta_col_pos(delta_col_pos_),
-            window_keys_num(window_keys_num_),
-            window_params(window_params_),
-            tracking_updates_type(tracking_updates_type_)
+            : src_header(src_header_)
+            , intermediate_header(intermediate_header_)
+            , keys(keys_)
+            , aggregates(aggregates_)
+            , keys_size(keys.size())
+            , aggregates_size(aggregates.size())
+            , overflow_row(overflow_row_)
+            , max_rows_to_group_by(max_rows_to_group_by_)
+            , group_by_overflow_mode(group_by_overflow_mode_)
+            , group_by_two_level_threshold(group_by_two_level_threshold_)
+            , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
+            , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
+            , empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_)
+            , tmp_volume(tmp_volume_)
+            , max_threads(max_threads_)
+            , min_free_disk_space(min_free_disk_space_)
+            , compile_aggregate_expressions(compile_aggregate_expressions_)
+            , min_count_to_compile_aggregate_expression(min_count_to_compile_aggregate_expression_)
+            , max_block_size(max_block_size_)
+            , keep_state(keep_state_)
+            , streaming_window_count(streaming_window_count_)
+            , group_by(streaming_group_by_)
+            , delta_col_pos(delta_col_pos_)
+            , window_keys_num(window_keys_num_)
+            , window_params(window_params_)
+            , tracking_updates_type(tracking_updates_type_)
         {
         }
         /// proton: ends
 
         /// Only parameters that matter during merge.
         Params(const Block & intermediate_header_,
-            const ColumnNumbers & keys_, const AggregateDescriptions & aggregates_, bool overflow_row_, size_t max_threads_)
-            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, false, nullptr, max_threads_, 0, false, 0)
+            const ColumnNumbers & keys_, const AggregateDescriptions & aggregates_, bool overflow_row_, size_t max_threads_, size_t max_block_size_)
+            : Params(Block(), keys_, aggregates_, overflow_row_, 0, OverflowMode::THROW, 0, 0, 0, false, nullptr, max_threads_, 0, false, 0, max_block_size_)
         {
             intermediate_header = intermediate_header_;
         }
@@ -1026,8 +1043,12 @@ private:
     template <typename Method>
     void mergeSingleLevelDataImpl(ManyAggregatedDataVariants & non_empty_data, bool clear_states) const;
 
-    template <typename Method, typename Table>
-    Block convertToBlockImpl(
+    template <bool return_single_block>
+    using ConvertToBlockRes = std::conditional_t<return_single_block, Block, BlocksList>;
+
+    template <bool return_single_block, typename Method, typename Table>
+    ConvertToBlockRes<return_single_block>
+    convertToBlockImpl(
         Method & method, Table & data, Arena * arena, Arenas & aggregates_pools, bool final, size_t rows, bool clear_states, ConvertType type) const;
 
     template <typename Mapped>
@@ -1040,12 +1061,14 @@ private:
     Block insertResultsIntoColumns(
         PaddedPODArray<AggregateDataPtr> & places, OutputBlockColumns && out_cols, Arena * arena, bool clear_states) const;
 
-    template <typename Method, typename Table>
-    Block convertToBlockImplFinal(
+    template <bool return_single_block, typename Method, typename Table>
+    ConvertToBlockRes<return_single_block>
+    convertToBlockImplFinal(
         Method & method, Table & data, Arena * arena, Arenas & aggregates_pools, size_t rows, bool clear_states, ConvertType type) const;
 
-    template <typename Method, typename Table>
-    Block convertToBlockImplNotFinal(Method & method, Table & data, Arenas & aggregates_pools, size_t rows) const;
+    template <bool return_single_block, typename Method, typename Table>
+    ConvertToBlockRes<return_single_block>
+    convertToBlockImplNotFinal(Method & method, Table & data, Arenas & aggregates_pools, size_t rows) const;
 
     template <typename Method>
     Block convertOneBucketToBlockImpl(
@@ -1091,9 +1114,9 @@ private:
     void mergeRetractGroupsImpl(ManyAggregatedDataVariants & non_empty_data, Arena * arena) const;
     /// proton: ends.
 
-    Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool clear_states, ConvertType type = ConvertType::Normal) const;
-    Block prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final, bool clear_states, ConvertType type = ConvertType::Normal) const;
-    BlocksList prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, bool clear_states, size_t max_threads, ConvertType type = ConvertType::Normal) const;
+    Block prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final, bool clear_states, ConvertType type) const;
+    BlocksList prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final, bool clear_states, ConvertType type) const;
+    BlocksList prepareBlocksAndFillTwoLevel(AggregatedDataVariants & data_variants, bool final, bool clear_states, size_t max_threads, ConvertType type) const;
 
     template <typename Method>
     BlocksList prepareBlocksAndFillTwoLevelImpl(
