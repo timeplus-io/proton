@@ -66,11 +66,12 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
 
     assert(data_variant.isTwoLevel());
 
-    Chunk merged_chunk;
     Chunk chunk;
 
     const auto & last_finalized_windows = getLastFinalizedWindow(substream_ctx);
     const auto & windows_with_buckets = getWindowsWithBuckets(substream_ctx);
+
+    ChunkList res_chunks;
     for (const auto & window_with_buckets : windows_with_buckets)
     {
         /// In case when some lagged events arrived after timeout, we skip the finalized windows
@@ -99,7 +100,7 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
         if (params->emit_version && params->final)
             emitVersion(chunk, substream_ctx);
 
-        merged_chunk.append(std::move(chunk));
+        res_chunks.emplace_back(std::move(chunk));
     }
 
     /// `spliceAndConvertUpdatesToChunk` only converts updates but doesn't reset updated flags,
@@ -110,17 +111,21 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
             params->aggregator.resetUpdatedForBuckets(data_variant, window_with_buckets.buckets);
     }
 
-    merged_chunk.setChunkContext(chunk_ctx);
+    if (res_chunks.empty()) [[unlikely]]
+        res_chunks.emplace_back(getOutputs().front().getHeader().getColumns(), 0);
+
+    auto & last_res_chunk = res_chunks.back();
+    last_res_chunk.setChunkContext(chunk_ctx);
     substream_ctx->finalized_watermark = watermark;
     /// If is timeout, we set watermark after actual finalized last window
     if (unlikely(watermark == TIMEOUT_WATERMARK && !windows_with_buckets.empty()))
     {
         substream_ctx->finalized_watermark = windows_with_buckets.back().window.end;
-        merged_chunk.setWatermark(substream_ctx->finalized_watermark);
+        last_res_chunk.setWatermark(substream_ctx->finalized_watermark);
     }
 
-    assert(merged_chunk.getWatermark() == substream_ctx->finalized_watermark);
-    setCurrentChunk(std::move(merged_chunk));
+    assert(last_res_chunk.getWatermark() == substream_ctx->finalized_watermark);
+    setAggregatedResult(std::move(res_chunks));
 }
 
 void WindowAggregatingTransformWithSubstream::clearExpiredState(Int64 finalized_watermark, const SubstreamContextPtr & substream_ctx)

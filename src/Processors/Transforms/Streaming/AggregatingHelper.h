@@ -4,6 +4,7 @@
 #include <base/defines.h>
 #include <base/types.h>
 
+#include <list>
 #include <vector>
 
 namespace DB
@@ -23,13 +24,14 @@ using RetractedDataVariantsPtr = std::shared_ptr<RetractedDataVariants>;
 using ManyRetractedDataVariants = ManyAggregatedDataVariants;
 
 using ChunkPair = std::pair<Chunk, Chunk>;
+using ChunkList = std::list<Chunk>;
 
 namespace AggregatingHelper
 {
 /// Convert aggregated state to chunk
-Chunk convertToChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params);
+ChunkList convertToChunks(AggregatedDataVariants & data, const AggregatingTransformParams & params);
 /// Merge many aggregated state and convert them to chunk
-Chunk mergeAndConvertToChunk(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params);
+ChunkList mergeAndConvertToChunks(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params);
 
 /// Only used for two level
 /// splice aggregatd state of multiple buckets and convert them to chunk
@@ -40,9 +42,9 @@ Chunk mergeAndSpliceAndConvertToChunk(
 
 /* for EMIT ON UPDATE */
 /// Convert aggregated state of update groups tracked to chunk
-Chunk convertUpdatesToChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params);
+ChunkList convertUpdatesToChunks(AggregatedDataVariants & data, const AggregatingTransformParams & params);
 /// Merge many aggregated state and convert them to chunk
-Chunk mergeAndConvertUpdatesToChunk(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params);
+ChunkList mergeAndConvertUpdatesToChunks(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params);
 
 /// Only used for two level
 /// splice aggregatd state of update groups tracked of multiple buckets and convert them to chunk

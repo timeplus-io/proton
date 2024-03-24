@@ -30,13 +30,17 @@ void UserDefinedEmitStrategyAggregatingTransformWithSubstream::finalize(const Su
     if (variants.empty())
         return;
 
-    Chunk chunk = AggregatingHelper::convertToChunk(variants, *params);
+    auto chunks = AggregatingHelper::convertToChunks(variants, *params);
 
     if (params->emit_version && params->final)
-        emitVersion(chunk, substream_ctx);
+        emitVersion(chunks, substream_ctx);
 
-    chunk.setChunkContext(chunk_ctx);
-    setCurrentChunk(std::move(chunk));
+    if (chunks.empty()) [[unlikely]]
+        chunks.emplace_back(getOutputs().front().getHeader().getColumns(), 0);
+
+    chunks.back().setChunkContext(chunk_ctx); /// Set chunk context for the last chunk
+
+    setAggregatedResult(std::move(chunks));
 }
 }
 }
