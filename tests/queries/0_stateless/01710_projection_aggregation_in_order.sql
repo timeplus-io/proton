@@ -31,11 +31,8 @@ SET allow_experimental_projection_optimization=1, optimize_aggregation_in_order=
 WITH toStartOfHour(ts) AS a SELECT sum(value) v FROM normal WHERE ts > '2021-12-06 22:00:00' GROUP BY a ORDER BY v LIMIT 5;
 WITH toStartOfHour(ts) AS a SELECT sum(value) v FROM normal WHERE ts > '2021-12-06 22:00:00' GROUP BY toStartOfHour(ts), a ORDER BY v LIMIT 5;
 
-<<<<<<< HEAD
 DROP TABLE normal;
 
-=======
->>>>>>> 0f7c0c72bd1 (Merge pull request #34305 from amosbird/projection-fix27)
 DROP TABLE IF EXISTS agg;
 
 CREATE TABLE agg
@@ -63,12 +60,7 @@ FROM numbers(100000);
 
 SET allow_experimental_projection_optimization=1, optimize_aggregation_in_order=1, force_optimize_projection = 1;
 
-<<<<<<< HEAD
 WITH toStartOfHour(ts) AS a SELECT sum(value) v FROM agg WHERE ts > '2021-12-06 22:00:00' GROUP BY a ORDER BY v LIMIT 5;
 WITH toStartOfHour(ts) AS a SELECT sum(value) v FROM agg WHERE ts > '2021-12-06 22:00:00' GROUP BY toStartOfHour(ts), a ORDER BY v LIMIT 5;
 
 DROP TABLE agg;
-=======
-WITH toStartOfHour(ts) AS a SELECT sum(value) v FROM normal WHERE ts > '2021-12-06 22:00:00' GROUP BY a ORDER BY v LIMIT 5;
-WITH toStartOfHour(ts) AS a SELECT sum(value) v FROM normal WHERE ts > '2021-12-06 22:00:00' GROUP BY toStartOfHour(ts), a ORDER BY v LIMIT 5;
->>>>>>> 0f7c0c72bd1 (Merge pull request #34305 from amosbird/projection-fix27)
