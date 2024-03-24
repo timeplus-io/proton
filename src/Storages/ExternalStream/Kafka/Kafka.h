@@ -21,6 +21,8 @@ class Kafka final : public StorageExternalStreamImpl
 public:
     using ConfPtr = std::unique_ptr<rd_kafka_conf_t, decltype(rd_kafka_conf_destroy) *>;
 
+    static const String VIRTUAL_COLUMN_MESSAGE_KEY;
+
     static Poco::Logger * cbLogger() {
         static Poco::Logger * logger { &Poco::Logger::get("KafkaExternalStream") };
         return logger;
