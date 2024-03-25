@@ -176,6 +176,8 @@ Kafka::ConfPtr createConfFromSettings(const KafkaExternalStreamSettings & settin
 
     /// 3. Handle the speicific settings have higher priority
     conf_set("bootstrap.servers", settings.brokers.value);
+    if (settings.skip_ssl_cert_check)
+        conf_set("enable.ssl.certificate.verification", "false");
 
     conf_set("security.protocol", settings.security_protocol.value);
     if (settings.usesSASL())
