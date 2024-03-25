@@ -4,6 +4,8 @@
 #include <Processors/Transforms/AggregatingInOrderTransform.h>
 #include <QueryPipeline/Pipe.h>
 
+#include <limits>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -367,7 +369,7 @@ SortingAggregatedTransform::SortingAggregatedTransform(size_t num_inputs_, Aggre
     : IProcessor(InputPorts(num_inputs_, params_->getHeader()), {params_->getHeader()}, ProcessorID::SortingAggregatedTransformID)
     , num_inputs(num_inputs_)
     , params(std::move(params_))
-    , last_bucket_number(num_inputs, -1)
+    , last_bucket_number(num_inputs, std::numeric_limits<Int32>::min())
     , is_input_finished(num_inputs, false)
 {
 }
@@ -462,7 +464,13 @@ IProcessor::Status SortingAggregatedTransform::prepare()
             continue;
         }
 
-        //all_finished = false;
+        /// We want to keep not more than `num_inputs` buckets in memory (and there will be only a single chunk with the given `bucket_id`).
+        const bool bucket_from_this_input_still_in_memory = chunks.contains(last_bucket_number[input_num]);
+        if (bucket_from_this_input_still_in_memory)
+        {
+            all_finished = false;
+            continue;
+        }
 
         in->setNeeded();
 

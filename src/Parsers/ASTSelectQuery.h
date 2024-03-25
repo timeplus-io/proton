@@ -109,28 +109,28 @@ public:
     ASTPtr & refWhere()     { return getExpression(Expression::WHERE); }
     ASTPtr & refHaving()    { return getExpression(Expression::HAVING); }
 
-    const ASTPtr with()           const { return getExpression(Expression::WITH); }
-    const ASTPtr select()         const { return getExpression(Expression::SELECT); }
-    const ASTPtr tables()         const { return getExpression(Expression::TABLES); }
-    const ASTPtr prewhere()       const { return getExpression(Expression::PREWHERE); }
-    const ASTPtr where()          const { return getExpression(Expression::WHERE); }
+    ASTPtr with()           const { return getExpression(Expression::WITH); }
+    ASTPtr select()         const { return getExpression(Expression::SELECT); }
+    ASTPtr tables()         const { return getExpression(Expression::TABLES); }
+    ASTPtr prewhere()       const { return getExpression(Expression::PREWHERE); }
+    ASTPtr where()          const { return getExpression(Expression::WHERE); }
     /// proton: starts
-    const ASTPtr partitionBy()    const { return getExpression(Expression::PARTITION_BY); }
-    const ASTPtr shuffleBy()      const { return getExpression(Expression::SHUFFLE_BY); }
+    ASTPtr partitionBy()    const { return getExpression(Expression::PARTITION_BY); }
+    ASTPtr shuffleBy()      const { return getExpression(Expression::SHUFFLE_BY); }
     /// proton: ends
-    const ASTPtr groupBy()        const { return getExpression(Expression::GROUP_BY); }
-    const ASTPtr having()         const { return getExpression(Expression::HAVING); }
-    const ASTPtr window() const { return getExpression(Expression::WINDOW); }
-    const ASTPtr orderBy()        const { return getExpression(Expression::ORDER_BY); }
-    const ASTPtr limitByOffset()  const { return getExpression(Expression::LIMIT_BY_OFFSET); }
-    const ASTPtr limitByLength()  const { return getExpression(Expression::LIMIT_BY_LENGTH); }
-    const ASTPtr limitBy()        const { return getExpression(Expression::LIMIT_BY); }
-    const ASTPtr limitOffset()    const { return getExpression(Expression::LIMIT_OFFSET); }
-    const ASTPtr limitLength()    const { return getExpression(Expression::LIMIT_LENGTH); }
+    ASTPtr groupBy()        const { return getExpression(Expression::GROUP_BY); }
+    ASTPtr having()         const { return getExpression(Expression::HAVING); }
+    ASTPtr window() const { return getExpression(Expression::WINDOW); }
+    ASTPtr orderBy()        const { return getExpression(Expression::ORDER_BY); }
+    ASTPtr limitByOffset()  const { return getExpression(Expression::LIMIT_BY_OFFSET); }
+    ASTPtr limitByLength()  const { return getExpression(Expression::LIMIT_BY_LENGTH); }
+    ASTPtr limitBy()        const { return getExpression(Expression::LIMIT_BY); }
+    ASTPtr limitOffset()    const { return getExpression(Expression::LIMIT_OFFSET); }
+    ASTPtr limitLength()    const { return getExpression(Expression::LIMIT_LENGTH); }
     /// proton: starts
-    const ASTPtr emit()           const { return getExpression(Expression::EMIT); }
+    ASTPtr emit()           const { return getExpression(Expression::EMIT); }
     /// proton: ends
-    const ASTPtr settings()       const { return getExpression(Expression::SETTINGS); }
+    ASTPtr settings()       const { return getExpression(Expression::SETTINGS); }
 
     bool hasFiltration() const { return where() || prewhere() || having(); }
 

@@ -49,6 +49,7 @@ using DataTypePtr = std::shared_ptr<const IDataType>;
 using DataTypes = std::vector<DataTypePtr>;
 
 using AggregateDataPtr = char *;
+using AggregateDataPtrs = std::vector<AggregateDataPtr>;
 using ConstAggregateDataPtr = const char *;
 
 class IAggregateFunction;
@@ -149,6 +150,13 @@ public:
     /// Default values must be a the 0-th positions in columns.
     virtual void addManyDefaults(AggregateDataPtr __restrict place, const IColumn ** columns, size_t length, Arena * arena) const = 0;
 
+    virtual bool isParallelizeMergePrepareNeeded() const { return false; }
+
+    virtual void parallelizeMergePrepare(AggregateDataPtrs & /*places*/, ThreadPool & /*thread_pool*/) const
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "parallelizeMergePrepare() with thread pool parameter isn't implemented for {} ", getName());
+    }
+
     /// Merges state (on which place points to) with other state of current aggregation function.
     virtual void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const = 0;
 
@@ -161,6 +169,10 @@ public:
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "merge() with thread pool parameter isn't implemented for {} ", getName());
     }
+
+    /// Merges states (on which src places points to) with other states (on which dst places points to) of current aggregation function
+    /// then destroy states (on which src places points to).
+    virtual void mergeAndDestroyBatch(AggregateDataPtr * dst_places, AggregateDataPtr * src_places, size_t size, size_t offset, Arena * arena) const = 0;
 
     /// proton : starts. for changelog processing, delete existing row from current aggregation result
     virtual void negate(AggregateDataPtr __restrict /*place*/, const IColumn ** /*columns*/, size_t /*row_num*/, Arena * /*arena*/) const
@@ -306,16 +318,6 @@ public:
         Arena * arena,
         ssize_t if_argument_pos = -1,
         const IColumn * delta_col = nullptr) const = 0;
-
-    virtual void addBatchSinglePlaceFromInterval( /// NOLINT
-        size_t row_begin,
-        size_t row_end,
-        AggregateDataPtr __restrict place,
-        const IColumn ** columns,
-        Arena * arena,
-        ssize_t if_argument_pos = -1,
-        const IColumn * delta_col = nullptr)
-        const = 0;
 
     /** In addition to addBatch, this method collects multiple rows of arguments into array "places"
       *  as long as they are between offsets[i-1] and offsets[i]. This is used for arrayReduce and
@@ -562,6 +564,15 @@ public:
                 static_cast<const Derived *>(this)->merge(places[i] + place_offset, rhs[i], arena);
     }
 
+    void mergeAndDestroyBatch(AggregateDataPtr * dst_places, AggregateDataPtr * rhs_places, size_t size, size_t offset, Arena * arena) const override
+    {
+        for (size_t i = 0; i < size; ++i)
+        {
+            static_cast<const Derived *>(this)->merge(dst_places[i] + offset, rhs_places[i] + offset, arena);
+            static_cast<const Derived *>(this)->destroy(rhs_places[i] + offset);
+        }
+    }
+
     /// proton : starts
     void addBatchSinglePlace( /// NOLINT
         size_t row_begin,
@@ -691,63 +702,6 @@ public:
             for (size_t i = row_begin; i < row_end; ++i)
             {
                 if (!null_map[i] && flags[i])
-                {
-                    if (delta_flags[i] >= 0)
-                        derived->add(place, columns, i, arena);
-                    else
-                        derived->negate(place, columns, i, arena);
-                }
-            }
-        }
-    }
-
-    void addBatchSinglePlaceFromInterval( /// NOLINT
-        size_t row_begin,
-        size_t row_end,
-        AggregateDataPtr __restrict place,
-        const IColumn ** columns,
-        Arena * arena,
-        ssize_t if_argument_pos = -1,
-        const IColumn * delta_col = nullptr)
-        const override
-    {
-        const auto * derived = static_cast<const Derived *>(this);
-        if (delta_col == nullptr && if_argument_pos < 0)
-        {
-            /// fast path
-            for (size_t i = row_begin; i < row_end; ++i)
-                derived->add(place, columns, i, arena);
-        }
-        else if (delta_col != nullptr && if_argument_pos < 0)
-        {
-            /// changelog
-            const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
-            for (size_t i = row_begin; i < row_end; ++i)
-             {
-                 if (delta_flags[i] >= 0)
-                     derived->add(place, columns, i, arena);
-                 else
-                     derived->negate(place, columns, i, arena);
-             }
-        }
-        else if (delta_col == nullptr && if_argument_pos >= 0)
-        {
-            /// combinator-if
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            for (size_t i = row_begin; i < row_end; ++i)
-            {
-                if (flags[i])
-                    derived->add(place, columns, i, arena);
-            }
-        }
-        else
-        {
-            /// changelog + combinator-if
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            const auto & delta_flags = assert_cast<const ColumnInt8 &>(*delta_col).getData();
-            for (size_t i = row_begin; i < row_end; ++i)
-            {
-                if (flags[i])
                 {
                     if (delta_flags[i] >= 0)
                         derived->add(place, columns, i, arena);

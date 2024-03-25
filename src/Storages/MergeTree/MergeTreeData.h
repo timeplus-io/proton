@@ -47,6 +47,7 @@ class MergeTreePartsMover;
 class MergeTreeDataMergerMutator;
 class MutationCommands;
 class Context;
+using PartitionIdToMaxBlock = std::unordered_map<String, Int64>;
 struct JobAndPool;
 class MergeTreeTransaction;
 
@@ -400,6 +401,7 @@ public:
         const SelectQueryInfo & query_info,
         const DataPartsVector & parts,
         DataPartsVector & normal_parts,
+        const PartitionIdToMaxBlock * max_block_numbers_to_read,
         ContextPtr query_context) const;
 
     std::optional<ProjectionCandidate> getQueryProcessingStageWithAggregateProjection(

@@ -22,6 +22,8 @@ struct GroupingSetsParams
 
 using GroupingSetsParamsList = std::vector<GroupingSetsParams>;
 
+Block appendGroupingSetColumn(Block header);
+
 /// Aggregation. See AggregatingTransform.
 class AggregatingStep : public ITransformingStep
 {
@@ -31,6 +33,7 @@ public:
         Aggregator::Params params_,
         GroupingSetsParamsList grouping_sets_params_,
         bool final_,
+        bool only_merge_,
         size_t max_block_size_,
         size_t aggregation_in_order_max_block_bytes_,
         size_t merge_threads_,
@@ -38,7 +41,8 @@ public:
         bool storage_has_evenly_distributed_read_,
         bool shuffled_,
         InputOrderInfoPtr group_by_info_,
-        SortDescription group_by_sort_description_);
+        SortDescription group_by_sort_description_,
+        bool should_produce_results_in_order_of_bucket_number_);
 
     String getName() const override { return "Aggregating"; }
 
@@ -55,6 +59,7 @@ private:
     Aggregator::Params params;
     GroupingSetsParamsList grouping_sets_params;
     bool final;
+    bool only_merge;
     size_t max_block_size;
     size_t aggregation_in_order_max_block_bytes;
     size_t merge_threads;
@@ -65,6 +70,10 @@ private:
 
     InputOrderInfoPtr group_by_info;
     SortDescription group_by_sort_description;
+
+    /// It determines if we should resize pipeline to 1 at the end.
+    /// Needed in case of distributed memory efficient aggregation.
+    const bool should_produce_results_in_order_of_bucket_number;
 
     Processors aggregating_in_order;
     Processors aggregating_sorted;
