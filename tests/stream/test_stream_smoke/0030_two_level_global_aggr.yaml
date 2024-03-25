@@ -300,7 +300,7 @@ tests:
       - "max blocksize"
       - "single level"
     name: global-aggr-with-max-blocksize
-    description: single level global aggregation query with max block size, convering stremaing and historical query
+    description: single level global aggregation query with max block size
     steps:
       - statements:
         - client: python
