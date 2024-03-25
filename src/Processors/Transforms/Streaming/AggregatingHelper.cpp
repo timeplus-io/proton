@@ -11,6 +11,22 @@ namespace Streaming
 {
 namespace
 {
+Chunk mergeChunks(ChunkList && chunks)
+{
+    size_t total_rows = 0;
+    for (auto & chunk : chunks)
+        total_rows += chunk.rows();
+
+    auto columns = chunks.front().cloneEmptyColumns();
+    for (auto & column : columns)
+        column->reserve(total_rows);
+
+    Chunk merged_chunk(std::move(columns), 0);
+    for (auto & chunk : chunks)
+        merged_chunk.append(std::move(chunk));
+    return merged_chunk;
+}
+
 ChunkList convertBlocksToChunks(BlocksList && blocks)
 {
     ChunkList chunks;
@@ -115,9 +131,7 @@ ChunkPair convertToChangelogChunk(AggregatedDataVariants & data, const Aggregati
     if (data.empty())
         return {};
 
-    auto retracted_chunks = convertToChunksImpl(data, params, ConvertType::Retract);
-    assert(retracted_chunks.size() == 1);
-    auto & retracted_chunk = retracted_chunks.front();
+    auto retracted_chunk = mergeChunks(convertToChunksImpl(data, params, ConvertType::Retract));
     if (retracted_chunk)
     {
         auto retracted_delta_col = ColumnInt8::create(retracted_chunk.rows(), Int8(-1));
@@ -125,9 +139,7 @@ ChunkPair convertToChangelogChunk(AggregatedDataVariants & data, const Aggregati
         retracted_chunk.setConsecutiveDataFlag();
     }
 
-    auto chunks = convertToChunksImpl(data, params, ConvertType::Updates);
-    assert(chunks.size() == 1);
-    auto & chunk = chunks.front();
+    auto chunk = mergeChunks(convertToChunksImpl(data, params, ConvertType::Updates));
     if (chunk)
     {
         auto delta_col = ColumnInt8::create(chunk.rows(), Int8(1));
@@ -147,9 +159,7 @@ ChunkPair mergeAndConvertToChangelogChunk(ManyAggregatedDataVariants & data, con
     auto merged_retracted_data = params.aggregator.mergeRetractGroups(data);
     if (merged_retracted_data)
     {
-        auto retracted_chunks = convertToChunksImpl(*merged_retracted_data, params, ConvertType::Normal);
-        assert(retracted_chunks.size() == 1);
-        retracted_chunk = std::move(retracted_chunks.front());
+        retracted_chunk = mergeChunks(convertToChunksImpl(*merged_retracted_data, params, ConvertType::Normal));
         if (retracted_chunk)
         {
             auto retracted_delta_col = ColumnInt8::create(retracted_chunk.rows(), Int8(-1));
@@ -161,9 +171,7 @@ ChunkPair mergeAndConvertToChangelogChunk(ManyAggregatedDataVariants & data, con
     auto merged_updated_data = params.aggregator.mergeUpdateGroups(data);
     if (merged_updated_data)
     {
-        auto chunks = convertToChunksImpl(*merged_updated_data, params, ConvertType::Normal);
-        assert(chunks.size() == 1);
-        chunk = std::move(chunks.front());
+        chunk = mergeChunks(convertToChunksImpl(*merged_updated_data, params, ConvertType::Normal));
         if (chunk)
         {
             auto delta_col = ColumnInt8::create(chunk.rows(), Int8(1));
