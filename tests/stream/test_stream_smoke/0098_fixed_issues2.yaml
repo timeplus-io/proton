@@ -78,9 +78,16 @@ tests:
             depends_on: fixed-issues2-2
             query_type: table
             wait: 1
-            kill: fixed-issues2-1,fixed-issues2-2
-            kill_wait: 2
             query: insert into fixed_issues2_stream(i) values(1);
+  
+          - client: python
+            query_type: table
+            wait: 3
+            query: unsubscribe to 'fixed-issues2-1';
+  
+          - client: python
+            query_type: table
+            query: unsubscribe to 'fixed-issues2-2';
 
     expected_results:
       - query_id: fixed-issues2-1
