@@ -676,30 +676,30 @@ std::unordered_map<String, size_t> Block::getNamesToIndexesMap() const
 
 bool blocksHaveEqualStructure(const Block & lhs, const Block & rhs)
 {
-    return checkBlockStructure<bool>(lhs, rhs, "", false, false);
+    return checkBlockStructure<bool>(lhs, rhs, "", false, /*ignore_name=*/false);
 }
 
 
 void assertBlocksHaveEqualStructure(const Block & lhs, const Block & rhs, std::string_view context_description)
 {
-    checkBlockStructure<void>(lhs, rhs, context_description, false, false);
+    checkBlockStructure<void>(lhs, rhs, context_description, false, /*ignore_name=*/false);
 }
 
 
 bool isCompatibleHeader(const Block & actual, const Block & desired)
 {
-    return checkBlockStructure<bool>(actual, desired, "", true, false);
+    return checkBlockStructure<bool>(actual, desired, "", true, /*ignore_name=*/false);
 }
 
 
 void assertCompatibleHeader(const Block & actual, const Block & desired, std::string_view context_description)
 {
-    checkBlockStructure<void>(actual, desired, context_description, true, false);
+    checkBlockStructure<void>(actual, desired, context_description, true, /*ignore_name=*/false);
 }
 
-bool isCompatibleHeaderForRecovery(const Block & actual, const Block & desired)
+bool isCompatibleHeaderWithoutComparingColumnNames(const Block & actual, const Block & desired)
 {
-    return checkBlockStructure<bool>(actual, desired, "", true, true);
+    return checkBlockStructure<bool>(actual, desired, "", true, /*ignore_name=*/true);
 }
 
 void getBlocksDifference(const Block & lhs, const Block & rhs, std::string & out_lhs_diff, std::string & out_rhs_diff)
