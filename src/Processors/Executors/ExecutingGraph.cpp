@@ -463,9 +463,11 @@ void ExecutingGraph::deserialize(ReadBuffer & rb) const
 
             for (; recovered_ports_iter != recovered_ports.end();)
             {
-                /// Use `isCompatibleHeader` instead of `blocksHaveEqualStructure`,
-                /// since the recovered columns are always non-const columns after serializing/deserializing for now
-                if (!isCompatibleHeader(new_ports_iter->getHeader(), recovered_ports_iter->getHeader()))
+                /// Use `isCompatibleHeaderForRecovery` instead of `blocksHaveEqualStructure`,
+                /// 1) It's allowed when column from actual header is constant, but in desired is not,
+                ///    since the recovered columns are always non-const columns after serializing/deserializing for now
+                /// 2) It shall ingore column names, since the names are volatile.
+                if (!isCompatibleHeaderForRecovery(new_ports_iter->getHeader(), recovered_ports_iter->getHeader()))
                     throw Exception(
                         ErrorCodes::RECOVER_CHECKPOINT_FAILED,
                         "Recovered streaming processor logic_id={} name={} doesn't have same input structure as the new planned processor. expected "

@@ -234,6 +234,9 @@ void assertBlocksHaveEqualStructure(const Block & lhs, const Block & rhs, std::s
 bool isCompatibleHeader(const Block & actual, const Block & desired);
 void assertCompatibleHeader(const Block & actual, const Block & desired, std::string_view context_description);
 
+/// Actual header is compatible to desired if block have equal structure except constants and column names
+bool isCompatibleHeaderForRecovery(const Block & actual, const Block & desired);
+
 /// Calculate difference in structure of blocks and write description into output strings. NOTE It doesn't compare values of constant columns.
 void getBlocksDifference(const Block & lhs, const Block & rhs, std::string & out_lhs_diff, std::string & out_rhs_diff);
 
