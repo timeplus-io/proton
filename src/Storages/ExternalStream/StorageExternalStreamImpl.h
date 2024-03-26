@@ -1,6 +1,8 @@
 #pragma once
 
+#include <Common/logger_useful.h>
 #include <Formats/FormatFactory.h>
+#include <Poco/Util/AbstractConfiguration.h>
 #include <QueryPipeline/Pipe.h>
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
@@ -12,7 +14,11 @@ namespace DB
 class StorageExternalStreamImpl : public std::enable_shared_from_this<StorageExternalStreamImpl>
 {
 public:
-    explicit StorageExternalStreamImpl(std::unique_ptr<ExternalStreamSettings> settings_): settings(std::move(settings_)) {
+    explicit StorageExternalStreamImpl(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ContextPtr & context)
+        : storage_id(storage->getStorageID())
+        , settings(std::move(settings_))
+        , tmpdir(fs::path(context->getConfigRef().getString("tmp_path", fs::temp_directory_path())) / "external_streams" / toString(storage_id.uuid))
+        {
         /// Make it easier for people to ingest data from external streams. A lot of times people didn't see data coming
         /// only because the external stream does not have all the fields.
         if (!settings->input_format_skip_unknown_fields.changed)
@@ -54,7 +60,13 @@ public:
     }
 
 protected:
+    /// Creates a temporary directory for the external stream to store temporary data.
+    void createTempDirIfNotExists() const;
+    void tryRemoveTempDir(Poco::Logger * logger) const;
+
+    StorageID storage_id;
     std::unique_ptr<ExternalStreamSettings> settings;
+    fs::path tmpdir;
 };
 
 }

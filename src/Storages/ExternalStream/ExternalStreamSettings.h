@@ -19,6 +19,7 @@ class ASTStorage;
     M(String, password, "", "The password of external logstore", 0) \
     M(String, sasl_mechanism, "PLAIN", "SASL mechanism to use for authentication. Supported: PLAIN, SCRAM-SHA-256, SCRAM-SHA-512. Default to PLAIN when SASL is enabled.", 0) \
     M(String, ssl_ca_cert_file, "", "The path of ssl ca cert file", 0) \
+    M(String, ssl_ca_pem, "", "CA certificate string (PEM format) for verifying the server's key.", 0) \
     M(Bool, skip_ssl_cert_check, false, "If set to true, the server's certification won't be verified.", 0) \
     M(String, properties, "", "A semi-colon-separated key-value pairs for configuring the kafka client used by the external stream. A key-value pair is separated by a equal sign. Example: 'client.id=my-client-id;group.id=my-group-id'. Note, not all properties are supported, please check the document for supported properties.", 0) \
     M(UInt64, poll_waittime_ms, 500, "How long (in milliseconds) should poll waits.", 0) \
