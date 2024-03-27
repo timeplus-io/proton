@@ -412,7 +412,7 @@ private:
 
     /// For two level conversion
     size_t num_buckets_processed = 0;
-    std::list<Chunk> shuffled_chunks;
+    ChunkList shuffled_chunks;
     /// proton : ends
 
     Chunks single_level_chunks;

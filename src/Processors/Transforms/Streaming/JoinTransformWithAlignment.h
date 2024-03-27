@@ -106,7 +106,7 @@ private:
     bool need_propagate_heartbeat = false;
 
     /// We always push output_chunks first, so we can assume no output_chunks when received request checkpoint
-    NO_SERDE std::list<Chunk> output_chunks;
+    NO_SERDE ChunkList output_chunks;
 
     struct AlignmentStats
     {

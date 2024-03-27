@@ -122,21 +122,25 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
         retractEnabled() |= chunk.rows();
 
         chunk.setChunkContext(chunk_ctx);
-        setCurrentChunk(std::move(chunk), std::move(retracted_chunk));
+        setAggregatedResult(std::move(chunk), std::move(retracted_chunk));
     }
     else
     {
-        Chunk chunk;
+        ChunkList chunks;
         if (AggregatingHelper::onlyEmitUpdates(params->emit_mode))
-            chunk = AggregatingHelper::mergeAndConvertUpdatesToChunk(many_data->variants, *params);
+            chunks = AggregatingHelper::mergeAndConvertUpdatesToChunks(many_data->variants, *params);
         else
-            chunk = AggregatingHelper::mergeAndConvertToChunk(many_data->variants, *params);
+            chunks = AggregatingHelper::mergeAndConvertToChunks(many_data->variants, *params);
 
         if (params->emit_version && params->final)
-            emitVersion(chunk);
+            emitVersion(chunks);
 
-        chunk.setChunkContext(chunk_ctx);
-        setCurrentChunk(std::move(chunk));
+        if (chunks.empty()) [[unlikely]]
+            chunks.emplace_back(getOutputs().front().getHeader().getColumns(), 0);
+
+        chunks.back().setChunkContext(chunk_ctx); /// Set chunk context for the last chunk
+
+        setAggregatedResult(std::move(chunks));
     }
 }
 

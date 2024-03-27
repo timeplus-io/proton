@@ -142,7 +142,7 @@ void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 
     /// FIXME, parallelization ? We simply don't know for now if parallelization makes sense since most of the time, we have only
     /// one project window for streaming processing
-    Chunk merged_chunk;
+    ChunkList res_chunks;
     Chunk chunk;
 
     assert(!prepared_windows_with_buckets.empty());
@@ -167,7 +167,7 @@ void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
         if (params->emit_version && params->final)
             emitVersion(chunk);
 
-        merged_chunk.append(std::move(chunk));
+        res_chunks.emplace_back(std::move(chunk));
     }
 
     /// `mergeAndSpliceAndConvertUpdatesToChunk` only converts updates but doesn't reset updated flags,
@@ -179,7 +179,11 @@ void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
                 params->aggregator.resetUpdatedForBuckets(*variants, window_with_buckets.buckets);
     }
 
-    merged_chunk.setChunkContext(chunk_ctx);
+    if (res_chunks.empty()) [[unlikely]]
+        res_chunks.emplace_back(getOutputs().front().getHeader().getColumns(), 0);
+
+    auto & last_res_chunk = res_chunks.back();
+    last_res_chunk.setChunkContext(chunk_ctx);
     auto finalized_watermark = chunk_ctx->getWatermark();
     for (const auto & window_with_buckets : prepared_windows_with_buckets | std::views::reverse)
     {
@@ -197,13 +201,13 @@ void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
     if (unlikely(finalized_watermark == TIMEOUT_WATERMARK))
     {
         finalized_watermark = many_data->finalized_window_end.load(std::memory_order_relaxed);
-        merged_chunk.setWatermark(finalized_watermark);
+        last_res_chunk.setWatermark(finalized_watermark);
     }
 
     many_data->finalized_watermark.store(finalized_watermark, std::memory_order_relaxed);
 
-    assert(merged_chunk.getWatermark() == finalized_watermark);
-    setCurrentChunk(std::move(merged_chunk));
+    assert(last_res_chunk.getWatermark() == finalized_watermark);
+    setAggregatedResult(std::move(res_chunks));
 }
 
 void WindowAggregatingTransform::clearExpiredState(Int64 finalized_watermark)

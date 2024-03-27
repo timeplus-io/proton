@@ -48,7 +48,7 @@ private:
     /// HashMap index;
 
     Port::Data input_data;
-    std::list<Chunk> output_chunks;
+    ChunkList output_chunks;
 
     /// int64_t last_log_ts = 0;
     /// Poco::Logger * logger;
