@@ -990,6 +990,8 @@ settings:
         logstore_replication_factor: 1
         storage_type: "hybrid"
         logstore_codec: none
+        logstore_retention_bytes: -1 # when this threshold reaches, streaming storage delete old data. -1 means no limit
+        logstore_retention_ms: 86400000 # when this threshold reaches, streaming storage delete old data. -1 means no limit
 
 cluster_settings:
     logstore:
