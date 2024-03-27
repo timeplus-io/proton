@@ -163,7 +163,8 @@ void ChangelogConvertTransform::work()
         const auto & columns = chunk.getColumns();
         for (auto key_col_pos : key_column_positions)
         {
-            materialized_columns.push_back(columns[key_col_pos]->convertToFullColumnIfConst());
+            /// Matierlize Sparse/Const/LowCardinality columns
+            materialized_columns.push_back(columns[key_col_pos]->convertToFullIfNeeded());
             key_columns.push_back(materialized_columns.back().get());
         }
 
@@ -433,8 +434,9 @@ void ChangelogConvertTransform::recover(CheckpointContextPtr ckpt_ctx)
         index.deserialize(
             /*MappedDeserializer*/
             [&](std::unique_ptr<RowRefWithRefCount<LightChunk>> & mapped_, Arena &, ReadBuffer & rb_) {
-                mapped_ = std::make_unique<RowRefWithRefCount<LightChunk>>();
-                mapped_->deserialize(&source_chunks, deserialized_indices_to_blocks, rb_);
+                auto new_mapped = std::make_unique<RowRefWithRefCount<LightChunk>>();
+                new_mapped->deserialize(&source_chunks, deserialized_indices_to_blocks, rb_);
+                mapped_ = std::move(new_mapped);
             },
             pool,
             rb);
