@@ -354,11 +354,12 @@ void JoinTransformWithAlignment::work()
 
     need_propagate_heartbeat = false;
 
-    if (DB::MonotonicSeconds::now() - last_stats_log_ts >= 5)
+    if (DB::MonotonicSeconds::now() - last_stats_log_ts >= 60)
     {
         LOG_INFO(
             log,
-            "left_watermark={} right_watermark={} left_input_muted={} right_input_muted={} left_quiesce_joins={} right_quiesce_joins={}",
+            "{}, left_watermark={} right_watermark={} left_input_muted={} right_input_muted={} left_quiesce_joins={} right_quiesce_joins={}",
+            join->metricsString(),
             left_input.watermark,
             right_input.watermark,
             stats.left_input_muted,

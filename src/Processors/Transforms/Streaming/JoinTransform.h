@@ -82,6 +82,8 @@ private:
     NO_SERDE std::list<Chunk> output_chunks;
 
     SERDE int64_t watermark = INVALID_WATERMARK;
+
+    NO_SERDE Int64 last_log_ts = 0;
 };
 }
 }

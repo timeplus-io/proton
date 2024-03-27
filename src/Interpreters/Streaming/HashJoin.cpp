@@ -866,14 +866,7 @@ HashJoin::HashJoin(
 
 HashJoin::~HashJoin() noexcept
 {
-    LOG_INFO(
-        logger,
-        "Left stream metrics: {{{}}}, right stream metrics: {{{}}}, global join metrics: {{{}}}, "
-        "retract buffer metrics: {{{}}}",
-        left_data.buffered_data->joinMetricsString(),
-        right_data.buffered_data->joinMetricsString(),
-        join_metrics.string(),
-        join_results ? join_results->joinMetricsString(this) : "");
+    LOG_INFO(logger, "{}", metricsString());
 }
 
 void HashJoin::init()
@@ -1712,6 +1705,17 @@ struct AdderNonJoined
         }
     }
 };
+
+String HashJoin::metricsString() const
+{
+    return fmt::format(
+        "Left stream metrics: {{{}}}, right stream metrics: {{{}}}, global join metrics: {{{}}}, "
+        "retract buffer metrics: {{{}}}",
+        left_data.buffered_data->joinMetricsString(),
+        right_data.buffered_data->joinMetricsString(),
+        join_metrics.string(),
+        join_results ? join_results->joinMetricsString(this) : "");
+}
 
 std::shared_ptr<NotJoinedBlocks>
 HashJoin::getNonJoinedBlocks(const Block & /*left_sample_block*/, const Block & /*result_sample_block*/, UInt64 /*max_block_size*/) const

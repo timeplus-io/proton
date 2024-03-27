@@ -37,6 +37,8 @@ public:
         bool include_asof_key_column = false) const
         = 0;
 
+    virtual String metricsString() const { return ""; }
+
     /// Whether hash join algorithm has buffer left/right data to align
     virtual bool leftStreamRequiresBufferingDataToAlign() const = 0;
     virtual bool rightStreamRequiresBufferingDataToAlign() const = 0;
