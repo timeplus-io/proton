@@ -363,7 +363,10 @@ void KafkaSource::doRecover(CheckpointContextPtr ckpt_ctx_)
 void KafkaSource::doResetStartSN(Int64 sn)
 {
     if (sn >= 0)
+    {
         offset = sn;
+        LOG_INFO(logger, "Reset start sn={}", offset);
+    }
 }
 
 void KafkaSource::State::serialize(WriteBuffer & wb) const

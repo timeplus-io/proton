@@ -1,0 +1,104 @@
+test_suite_name: fixed_issues2
+tag: smoke
+test_suite_config:
+  tests_2_run:
+    ids_2_run:
+      - all
+    tags_2_run: [ ]
+    tags_2_skip:
+      default:
+        - todo
+        - to_support
+        - change
+        - bug
+        - sample
+      cluster:
+        - view
+        - cluster_table_bug
+comments: Tests covering fixed issues smoke cases.
+
+tests:
+  - id: 0
+    tags:
+      - query state
+      - query state compatibility
+      - in subquery
+    name: recover the query with in subquery
+    description: recover the query with in subquery
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists fixed_issues2_stream;
+
+          - client: python
+            query_type: table
+            exists: fixed_issues2_stream
+            exists_wait: 2
+            wait: 1
+            query: create stream fixed_issues2_stream(i int);
+
+          - client: python
+            query_type: table
+            depends_on_stream: fixed_issues2_stream
+            wait: 1
+            query: insert into fixed_issues2_stream(i) values(1);
+
+          - client: python
+            query_id: fixed-issues2-1
+            query_type: stream
+            wait: 1
+            query: subscribe to select i in (select i from table(fixed_issues2_stream)), multi_if(i in (select i from table(fixed_issues2_stream)), 1, 0) as t from fixed_issues2_stream settings seek_to='earliest', checkpoint_interval=1;
+
+          - client: python
+            query_id: fixed-issues2-2
+            query_type: stream
+            wait: 1
+            query: subscribe to with cte as (select 1), cte2 as (select multi_if(i in (cte), '1', '2') as t from fixed_issues2_stream where t = '1') select t from cte2 settings seek_to='earliest', checkpoint_interval=1
+
+          - client: python
+            query_type: type
+            depends_on: fixed-issues2-2
+            wait: 3
+            query: kill query where query_id='fixed-issues2-1' or query_id='fixed-issues2-2';
+
+          - client: python
+            query_id: fixed-issues2-1-1
+            query_type: stream
+            wait: 1
+            query: recover from 'fixed-issues2-1';
+
+          - client: python
+            query_id: fixed-issues2-2-1
+            query_type: stream
+            wait: 1
+            query: recover from 'fixed-issues2-2';
+
+          - client: python
+            depends_on: fixed-issues2-2
+            query_type: table
+            wait: 1
+            query: insert into fixed_issues2_stream(i) values(1);
+  
+          - client: python
+            query_type: table
+            wait: 3
+            query: unsubscribe to 'fixed-issues2-1';
+  
+          - client: python
+            query_type: table
+            query: unsubscribe to 'fixed-issues2-2';
+
+    expected_results:
+      - query_id: fixed-issues2-1
+        expected_results:
+          - ['True', 1]
+      - query_id: fixed-issues2-1-1
+        expected_results:
+          - ['True', 1]
+      - query_id: fixed-issues2-2
+        expected_results:
+          - ['1']
+      - query_id: fixed-issues2-2-1
+        expected_results:
+          - ['1']
