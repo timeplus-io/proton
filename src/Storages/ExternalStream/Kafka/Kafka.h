@@ -45,6 +45,7 @@ public:
             producer_topic.reset();
         if (producer)
             producer.reset();
+        tryRemoveTempDir(logger);
     }
     bool supportsSubcolumns() const override { return true; }
     NamesAndTypesList getVirtuals() const override;
@@ -81,13 +82,13 @@ public:
     String getLoggerName() const { return storage_id.getDatabaseName() == "default" ? storage_id.getTableName() : storage_id.getFullNameNotQuoted(); }
 
 private:
+    Kafka::ConfPtr createRdConf(KafkaExternalStreamSettings settings_);
     void calculateDataFormat(const IStorage * storage);
     void cacheVirtualColumnNamesAndTypes();
     std::vector<Int64> getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const;
     void validateMessageKey(const String & message_key, IStorage * storage, const ContextPtr & context);
     void validate() const;
 
-    StorageID storage_id;
     ASTs engine_args;
     String data_format;
     ExternalStreamCounterPtr external_stream_counter;
@@ -97,6 +98,7 @@ private:
     ASTPtr message_key_ast;
     Int32 topic_refresh_interval_ms = 0;
     std::vector<Int32> shards_from_settings;
+    fs::path broker_ca_file;
 
     ConfPtr conf;
     /// The Producer instance and Topic instance can be used by multiple sinks at the same time, thus we only need one of each.

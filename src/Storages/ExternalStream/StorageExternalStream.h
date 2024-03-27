@@ -1,9 +1,10 @@
 #pragma once
 
 #include <Storages/IStorage.h>
-#include <base/shared_ptr_helper.h>
 #include <Common/SettingsChanges.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
+
+#include <base/shared_ptr_helper.h>
 
 namespace DB
 {

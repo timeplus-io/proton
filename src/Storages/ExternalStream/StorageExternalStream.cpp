@@ -24,9 +24,9 @@ namespace DB
 {
 namespace ErrorCodes
 {
-extern const int NOT_IMPLEMENTED;
 extern const int BAD_ARGUMENTS;
 extern const int INCORRECT_NUMBER_OF_COLUMNS;
+extern const int NOT_IMPLEMENTED;
 extern const int TYPE_MISMATCH;
 }
 
@@ -66,7 +66,7 @@ std::unique_ptr<StorageExternalStreamImpl> createExternalStream(
 
 #ifdef OS_LINUX
     else if (settings->type.value == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)
-        return std::make_unique<FileLog>(storage, std::move(settings));
+        return std::make_unique<FileLog>(storage, std::move(settings), std::move(context_));
     else
 #endif
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} external stream is not supported yet", settings->type.value);
@@ -144,7 +144,8 @@ StorageExternalStream::StorageExternalStream(
     std::unique_ptr<ExternalStreamSettings> external_stream_settings_,
     const String & comment,
     bool attach)
-    : IStorage(table_id_), WithContext(context_->getGlobalContext())
+    : IStorage(table_id_)
+    , WithContext(context_->getGlobalContext())
 {
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
