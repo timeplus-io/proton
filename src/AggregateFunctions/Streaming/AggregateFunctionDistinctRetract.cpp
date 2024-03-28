@@ -38,6 +38,25 @@ namespace
             const DataTypes & arguments,
             const Array & params) const override
         {
+            if (arguments.size() == 2)
+            {
+                /// means just one distinct key column
+                /// why 2? one is delta column, the other is the distinct key column
+                AggregateFunctionPtr res;
+                res.reset(createWithNumericType<AggregateFunctionDistinctRetract, AggregateFunctionDistinctRetractSingleNumericData>(
+                    *arguments[0], nested_function, arguments, params));
+                if (res)
+                    return res;
+
+                if (arguments[0]->isValueUnambiguouslyRepresentedInContiguousMemoryRegion())
+                    return std::make_shared<AggregateFunctionDistinctRetract<AggregateFunctionDistinctRetractSingleGenericData<true>>>(
+                        nested_function, arguments, params);
+                else
+                    return std::make_shared<AggregateFunctionDistinctRetract<AggregateFunctionDistinctRetractSingleGenericData<false>>>(
+                        nested_function, arguments, params);
+            }
+            /// atually, now it doesn't support multiple distinct key columns(it will throw an exception)
+            /// TODO: support multiple distinct key columns
             return std::make_shared<AggregateFunctionDistinctRetract<AggregateFunctionDistinctRetractMultipleGenericData>>(
                 nested_function, arguments, params);
         }

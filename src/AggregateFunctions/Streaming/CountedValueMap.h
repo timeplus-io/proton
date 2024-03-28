@@ -282,6 +282,13 @@ private:
             doMerge<copy>(src_iter);
         }
 
+        /**
+         * @brief 
+         * eg: self.m has key 4,5,6 and max_size is 5, and rhs.m has key 1, 2, 3, when merge 1, 2 in rhs.m to self.m,
+         * self.m will be 1, 2, 4, 5, 6, although it reaches max_size, it will still merge the reset key in rhs.m to self.m
+         * self.m will be 1, 2, 3, 4, 5.Then it will call eraseExtraElements() to remove the extra elements in the tail of self.m,
+         * then self.m will be 1, 2, 3, 4, 5
+         */
         eraseExtraElements();
     }
 
