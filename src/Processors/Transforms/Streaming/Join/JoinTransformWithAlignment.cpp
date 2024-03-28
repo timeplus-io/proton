@@ -262,7 +262,7 @@ void JoinTransformWithAlignment::work()
 
                 auto & chunk = right_input.input_chunks.front();
                 assert(chunk.rows());
-                processRightInputData(chunk.chunk);
+                processInputData<false>(chunk.chunk);
 
                 right_input.input_chunks.pop_front();
             } while (right_input.hasCompleteChunks());
@@ -294,7 +294,7 @@ void JoinTransformWithAlignment::work()
 
                 auto & chunk = left_input.input_chunks.front();
                 assert(chunk.rows());
-                processLeftInputData(chunk.chunk);
+                processInputData<true>(chunk.chunk);
 
                 left_input.input_chunks.pop_front();
             } while (left_input.hasCompleteChunks());
@@ -371,70 +371,26 @@ void JoinTransformWithAlignment::work()
     }
 }
 
-void JoinTransformWithAlignment::processLeftInputData(LightChunk & chunk)
+template <bool is_left_input>
+void JoinTransformWithAlignment::processInputData(LightChunk & chunk)
 {
-    /// FIXME: Provide a unified interface for different joins.
-    if (join->rangeBidirectionalHashJoin())
-    {
-        auto block = inputs.front().getHeader().cloneWithColumns(chunk.detachColumns());
-        auto joined_blocks = join->insertLeftBlockToRangeBucketsAndJoin(block);
-        for (size_t j = 0; j < joined_blocks.size(); ++j)
-            output_chunks.emplace_back(joined_blocks[j].getColumns(), joined_blocks[j].rows());
-    }
-    else if (join->bidirectionalHashJoin())
-    {
-        auto block = inputs.front().getHeader().cloneWithColumns(chunk.detachColumns());
-        auto retracted_block = join->insertLeftBlockAndJoin(block);
-        if (auto retracted_block_rows = retracted_block.rows(); retracted_block_rows > 0)
-        {
-            /// Don't watermark this block. We can concat retracted / result blocks or use avoid watermarking
-            auto chunk_ctx = ChunkContext::create();
-            chunk_ctx->setConsecutiveDataFlag();
-            output_chunks.emplace_back(retracted_block.getColumns(), retracted_block_rows, nullptr, std::move(chunk_ctx));
-        }
-
-        if (block.rows())
-            output_chunks.emplace_back(block.getColumns(), block.rows());
-    }
+    std::pair<LightChunk, LightChunk> result;
+    if constexpr (is_left_input)
+        result = join->insertLeftDataBlockAndJoin(std::move(chunk));
     else
-    {
-        auto joined_block = inputs.front().getHeader().cloneWithColumns(chunk.detachColumns());
-        join->joinLeftBlock(joined_block);
+        result = join->insertRightDataBlockAndJoin(std::move(chunk));
 
-        if (auto rows = joined_block.rows(); rows > 0)
-            output_chunks.emplace_back(joined_block.getColumns(), rows);
+    auto & [retracted_block, joined_block] = result;
+    if (auto retracted_block_rows = retracted_block.rows(); retracted_block_rows > 0)
+    {
+        /// Don't watermark this block. We can concat retracted / result blocks or use avoid watermarking
+        auto chunk_ctx = ChunkContext::create();
+        chunk_ctx->setConsecutiveDataFlag();
+        output_chunks.emplace_back(retracted_block.detachColumns(), retracted_block_rows, nullptr, std::move(chunk_ctx));
     }
-}
 
-void JoinTransformWithAlignment::processRightInputData(LightChunk & chunk)
-{
-    /// FIXME: Provide a unified interface for different joins.
-    if (join->rangeBidirectionalHashJoin())
-    {
-        auto block = inputs.back().getHeader().cloneWithColumns(chunk.detachColumns());
-        auto joined_blocks = join->insertRightBlockToRangeBucketsAndJoin(block);
-        for (size_t j = 0; j < joined_blocks.size(); ++j)
-            output_chunks.emplace_back(joined_blocks[j].getColumns(), joined_blocks[j].rows());
-    }
-    else if (join->bidirectionalHashJoin())
-    {
-        auto block = inputs.back().getHeader().cloneWithColumns(chunk.detachColumns());
-        auto retracted_block = join->insertRightBlockAndJoin(block);
-        if (auto retracted_block_rows = retracted_block.rows(); retracted_block_rows > 0)
-        {
-            /// Don't watermark this block. We can concat retracted / result blocks or use avoid watermarking
-            auto chunk_ctx = ChunkContext::create();
-            chunk_ctx->setConsecutiveDataFlag();
-            output_chunks.emplace_back(retracted_block.getColumns(), retracted_block_rows, nullptr, std::move(chunk_ctx));
-        }
-
-        if (block.rows())
-            output_chunks.emplace_back(block.getColumns(), block.rows());
-    }
-    else
-    {
-        join->insertRightBlock(inputs.back().getHeader().cloneWithColumns(chunk.detachColumns()));
-    }
+    if (auto rows = joined_block.rows(); rows > 0)
+        output_chunks.emplace_back(joined_block.detachColumns(), rows);
 }
 
 void JoinTransformWithAlignment::checkpoint(CheckpointContextPtr ckpt_ctx)

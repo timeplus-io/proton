@@ -2394,7 +2394,7 @@ std::shared_ptr<IJoin> SelectQueryExpressionAnalyzer::chooseJoinAlgorithmStreami
         return std::make_shared<Streaming::ConcurrentHashJoin>(
             analyzed_join, max_threads, std::move(left_join_stream_desc), std::move(right_join_stream_desc));
     else
-        return std::make_shared<Streaming::HashJoin>(analyzed_join, std::move(left_join_stream_desc), std::move(right_join_stream_desc));
+        return Streaming::HashJoin::create(analyzed_join, std::move(left_join_stream_desc), std::move(right_join_stream_desc));
 }
 /// proton : ends
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Core/BlockWithShard.h>
+#include <Core/DataBlockWithShard.h>
 #include <Interpreters/Streaming/IHashJoin.h>
 #include <Interpreters/Streaming/JoinStreamDescription.h>
 
@@ -30,19 +30,17 @@ public:
 
     void transformHeader(Block & header) override;
 
-    /// For non-bidirectional hash join
-    void insertRightBlock(Block right_block) override;
-    void joinLeftBlock(Block & left_block) override;
+    /// \returns <retracted_block, joined_block>
+    std::pair<LightChunk, LightChunk> insertLeftDataBlockAndJoin(LightChunk && chunk) override
+    {
+        return doInsertDataBlockAndJoin<true>(std::move(chunk));
+    }
+    std::pair<LightChunk, LightChunk> insertRightDataBlockAndJoin(LightChunk && chunk) override
+    {
+        return doInsertDataBlockAndJoin<false>(std::move(chunk));
+    }
 
-    /// For bidirectional hash join
-    /// There are 2 blocks returned : joined block via parameter and retracted block via returned-value if there is
-    Block insertLeftBlockAndJoin(Block & left_block) override;
-    Block insertRightBlockAndJoin(Block & right_block) override;
-
-    /// For bidirectional range hash join, there may be multiple joined blocks
-    std::vector<Block> insertLeftBlockToRangeBucketsAndJoin(Block left_block) override;
-    std::vector<Block> insertRightBlockToRangeBucketsAndJoin(Block right_block) override;
-
+    HashJoinType type() const override { return hash_joins[0]->data->type(); }
     bool emitChangeLog() const override { return hash_joins[0]->data->emitChangeLog(); }
     bool bidirectionalHashJoin() const override { return hash_joins[0]->data->bidirectionalHashJoin(); }
     bool rangeBidirectionalHashJoin() const override { return hash_joins[0]->data->rangeBidirectionalHashJoin(); }
@@ -82,6 +80,8 @@ public:
         return hash_joins[0]->data->rightJoinStreamDescription();
     }
 
+    const Block & getOutputHeader() const override { return hash_joins[0]->data->getOutputHeader(); }
+
     void serialize(WriteBuffer &, VersionType) const override;
     void deserialize(ReadBuffer &, VersionType) override;
 
@@ -89,13 +89,10 @@ public:
 
 private:
     template <bool is_left_block>
-    Block insertBlockAndJoin(Block & block);
+    std::pair<LightChunk, LightChunk> doInsertDataBlockAndJoin(LightChunk && chunk);
 
-    template <bool is_left_block>
-    std::vector<Block> insertBlockToRangeBucketAndJoin(Block block);
-
-    IColumn::Selector selectDispatchBlock(const std::vector<size_t> & key_column_positions, const Block & from_block);
-    BlocksWithShard dispatchBlock(const std::vector<size_t> & key_column_positions, Block && from_block);
+    IColumn::Selector selectDispatchBlock(const std::vector<size_t> & key_column_positions, const LightChunk & from_block);
+    LightChunksWithShard dispatchBlock(const std::vector<size_t> & key_column_positions, LightChunk && from_block);
 
     void doSerialize(WriteBuffer &) const;
     void doDeserialize(ReadBuffer &);
@@ -104,7 +101,7 @@ private:
     struct InternalHashJoin
     {
         std::mutex mutex;
-        std::unique_ptr<IHashJoin> data;
+        std::shared_ptr<IHashJoin> data;
     };
 
     std::shared_ptr<TableJoin> table_join;

@@ -20,7 +20,7 @@ namespace DB::Streaming
 ///                      JoinTransformWithAlignment
 ///                      /
 /// right stream -> ... ->
-class JoinTransformWithAlignment final : public IProcessor
+class JoinTransformWithAlignment : public IProcessor
 {
 public:
     JoinTransformWithAlignment(
@@ -70,8 +70,8 @@ private:
     Status prepareLeftInput();
     Status prepareRightInput();
 
-    void processLeftInputData(LightChunk & chunk);
-    void processRightInputData(LightChunk & chunk);
+    template <bool is_left_input>
+    void processInputData(LightChunk & chunk);
 
     bool isInputInQuiesce(const InputPortWithData & input_with_data) const noexcept
     {

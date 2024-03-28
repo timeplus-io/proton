@@ -13,8 +13,14 @@
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/JoinUtils.h>
 #include <Interpreters/NullableUtils.h>
+#include <Interpreters/Streaming/AsofHashJoin.h>
+#include <Interpreters/Streaming/BidirectionalAllHashJoin.h>
+#include <Interpreters/Streaming/BidirectionalChangelogHashJoin.h>
+#include <Interpreters/Streaming/BidirectionalRangeHashJoin.h>
 #include <Interpreters/Streaming/CalculateDataStreamSemantic.h>
+#include <Interpreters/Streaming/ChangelogHashJoin.h>
 #include <Interpreters/Streaming/ChooseHashMethod.h>
+#include <Interpreters/Streaming/LatestHashJoin.h>
 #include <Interpreters/TableJoin.h>
 #include <Common/ColumnsHashing.h>
 #include <Common/ProtonCommon.h>
@@ -585,13 +591,7 @@ struct Inserter
     }
 
     static ALWAYS_INLINE void insertMultiple(
-        const HashJoin & join,
-        Map & map,
-        KeyGetter & key_getter,
-        JoinDataBlockList * blocks,
-        size_t original_row,
-        size_t row,
-        Arena & pool)
+        const HashJoin & join, Map & map, KeyGetter & key_getter, JoinDataBlockList * blocks, size_t original_row, size_t row, Arena & pool)
     {
         auto emplace_result = key_getter.emplaceKey(map, original_row, pool);
         auto * mapped = &emplace_result.getMapped();
@@ -821,6 +821,68 @@ void HashJoin::validate(const JoinCombinationType & join_combination)
             toString(std::get<1>(join_combination)),
             toString(std::get<2>(join_combination)),
             magic_enum::enum_name(std::get<3>(join_combination)));
+}
+
+HashJoinPtr HashJoin::create(
+    std::shared_ptr<TableJoin> table_join_, JoinStreamDescriptionPtr left_join_stream_desc, JoinStreamDescriptionPtr right_join_stream_desc)
+{
+    if (!table_join_->oneDisjunct())
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Stream to Stream join only supports only one disjunct join clause");
+
+    /// For streaming join, we don't support inline JOIN ON predicate like `left.value > 10` in the following query example
+    /// since stream query will need buffer more additional non-joined data in-memory
+    /// SELECT * FROM left INNER JOIN right ON left.key = right.key AND left.value > 10 and right.value > 80;
+    /// User shall use WHERE predicate like
+    /// SELECT * FROM (SELECT * FROM left WHERE left.value > 10) as left INNER JOIN right ON left.key = right.key
+    for (const auto & on_expr : table_join_->getClauses())
+    {
+        const auto & on_expr_cond_column_names = on_expr.condColumnNames();
+        if (!on_expr_cond_column_names.first.empty() || !on_expr_cond_column_names.second.empty())
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED, "Streaming join doesn't support predicates in JOIN ON clause. Use WHERE predicate instead");
+    }
+
+    auto join_kind = table_join_->kind();
+    auto join_strictness = table_join_->strictness();
+    validate(
+        {left_join_stream_desc->data_stream_semantic.toStorageSemantic(),
+         join_kind,
+         join_strictness,
+         right_join_stream_desc->data_stream_semantic.toStorageSemantic()});
+
+    [[maybe_unused]] auto streaming_kind = Streaming::toJoinKind(join_kind);
+    auto streaming_strictness = Streaming::toJoinStrictness(join_strictness, table_join_->isRangeJoin());
+
+    /// We don't even care the left stream semantic since if right stream is versioned-kv or changelog-kv
+    /// we will use `Multiple` list to hold the values since users may use partial primary key to join
+    if (isChangelogDataStream(right_join_stream_desc->data_stream_semantic))
+        streaming_strictness = Streaming::Strictness::Multiple;
+
+    /// Choose join algorithm
+    switch (streaming_strictness)
+    {
+        case Strictness::Asof:
+            return std::make_shared<AsofHashJoin>(
+                std::move(table_join_), std::move(left_join_stream_desc), std::move(right_join_stream_desc));
+        case Strictness::Latest:
+            return std::make_shared<LatestHashJoin>(
+                std::move(table_join_), std::move(left_join_stream_desc), std::move(right_join_stream_desc));
+        case Strictness::All:
+            return std::make_shared<BidirectionalAllHashJoin>(
+                std::move(table_join_), std::move(left_join_stream_desc), std::move(right_join_stream_desc));
+        case Strictness::Range:
+            return std::make_shared<BidirectionalRangeHashJoin>(
+                std::move(table_join_), std::move(left_join_stream_desc), std::move(right_join_stream_desc));
+        case Strictness::Multiple: {
+            if (isChangelogDataStream(left_join_stream_desc->data_stream_semantic))
+                return std::make_shared<BidirectionalChangelogHashJoin>(
+                    std::move(table_join_), std::move(left_join_stream_desc), std::move(right_join_stream_desc));
+            else
+                return std::make_shared<ChangelogHashJoin>(
+                    std::move(table_join_), std::move(left_join_stream_desc), std::move(right_join_stream_desc));
+        }
+    }
+    UNREACHABLE();
 }
 
 HashJoin::HashJoin(
@@ -1311,10 +1373,60 @@ Block HashJoin::prepareBlock(const Block & block) const
         return prepareBlockToSave(block, savedRightBlockSample());
 }
 
-bool HashJoin::addJoinedBlock(const Block & block, bool /*check_limits*/)
+std::pair<LightChunk, LightChunk> HashJoin::insertLeftDataBlockAndJoin(LightChunk && chunk)
 {
-    doInsertBlock<false>(block, right_data.buffered_data->getCurrentHashBlocksPtr()); /// Copy the block
+    if (rangeBidirectionalHashJoin())
+    {
+        auto block = left_data.join_stream_desc->input_header.cloneWithColumns(chunk.detachColumns());
+        auto joined_block = concatenateBlocks(insertLeftBlockToRangeBucketsAndJoin(std::move(block)));
+        return {LightChunk{}, std::move(joined_block)};
+    }
+    else if (bidirectionalHashJoin())
+    {
+        auto block = left_data.join_stream_desc->input_header.cloneWithColumns(chunk.detachColumns());
+        auto retracted_block = insertLeftBlockAndJoin(block);
+        return {std::move(retracted_block), std::move(block)};
+    }
+    else
+    {
+        auto block = left_data.join_stream_desc->input_header.cloneWithColumns(chunk.detachColumns());
+        joinLeftBlock(block);
+        return {LightChunk{}, std::move(block)};
+    }
+}
+
+std::pair<LightChunk, LightChunk> HashJoin::insertRightDataBlockAndJoin(LightChunk && chunk)
+{
+    if (rangeBidirectionalHashJoin())
+    {
+        auto block = right_data.join_stream_desc->input_header.cloneWithColumns(chunk.detachColumns());
+        auto joined_block = concatenateBlocks(insertRightBlockToRangeBucketsAndJoin(std::move(block)));
+        return {LightChunk{}, std::move(joined_block)};
+    }
+    else if (bidirectionalHashJoin())
+    {
+        auto block = right_data.join_stream_desc->input_header.cloneWithColumns(chunk.detachColumns());
+        auto retracted_block = insertRightBlockAndJoin(block);
+        return {std::move(retracted_block), std::move(block)};
+    }
+    else
+    {
+        auto block = right_data.join_stream_desc->input_header.cloneWithColumns(chunk.detachColumns());
+        insertRightBlock(std::move(block));
+        return {};
+    }
+}
+
+bool HashJoin::addJoinedBlock(const Block & right_block, bool /*check_limits*/)
+{
+    insertRightDataBlockAndJoin(right_block);
     return true;
+}
+
+void HashJoin::joinBlock(Block & block, std::shared_ptr<ExtraBlock> & /*not_processed*/)
+{
+    auto joined_result = insertLeftDataBlockAndJoin(block);
+    block = left_data.join_stream_desc->input_header.cloneWithColumns(joined_result.second.detachColumns());
 }
 
 template <bool is_left_block>
@@ -1573,11 +1685,6 @@ void HashJoin::checkTypesOfKeys(const Block & block) const
 {
     for (const auto & onexpr : table_join->getClauses())
         JoinCommon::checkTypesOfKeys(block, onexpr.key_names_left, right_data.table_keys, onexpr.key_names_right);
-}
-
-void HashJoin::joinBlock(Block & block, ExtraBlockPtr & /*not_processed*/)
-{
-    joinLeftBlock(block);
 }
 
 template <bool is_left_block>

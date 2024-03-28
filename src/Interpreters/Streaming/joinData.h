@@ -15,6 +15,7 @@
 #include <Common/serde.h>
 #include <Common/Arena.h>
 #include <Common/HashMapSizes.h>
+#include <Common/HashMapsTemplate.h>
 
 #include <deque>
 #include <map>
@@ -229,5 +230,56 @@ private:
 using BucketBlocks = std::vector<BufferedStreamData::BucketBlock>;
 
 using BufferedStreamDataPtr = std::unique_ptr<BufferedStreamData>;
+
+template <typename JoinDataBlock, typename MappedRowRef>
+struct BufferedHashData
+{
+    using JoinDataBlockList = RefCountDataBlockList<JoinDataBlock>;
+    using HashMap = HashMapsTemplate<MappedRowRef>;
+
+    BufferedHashData(size_t data_block_size) : blocks(data_block_size, metrics) { }
+    ~BufferedHashData();
+
+    size_t totalBufferedBytes() const { return metrics.totalBytes() + map.getTotalByteCountImpl(); }
+
+    HashMapSizes hashMapSizes() const
+    {
+        return HashMapSizes{
+            .keys = map.getTotalRowCount(),
+            .buffer_size_in_bytes = map.getTotalByteCountImpl(),
+            .buffer_bytes_in_cells = map.getBufferSizeInCells(),
+        };
+    }
+
+    String getMetricsString() const
+    {
+        return fmt::format("cached block list: ({}), hash map: ({})", metrics.string(), hashMapSizes().string());
+    }
+
+    template <typename RowRefHandler>
+    void insert(Block && block, RowRefHandler && row_ref_handler)
+    {
+        auto rows = block.rows();
+        auto start_row = blocks.pushBackOrConcat(std::move(block));
+        right_buffered_hash_data->map.insert(std::move(block_to_save), key_columns, key_sizes, rows, right_buffered_hash_data->pool, std::move(row_ref_handler));
+    }
+
+    /// Buffered data
+    CachedBlockMetrics metrics;
+    JoinDataBlockList blocks;
+
+    /// Additional data - strings for string keys and continuation elements of single-linked lists of references to rows.
+    Arena pool;
+
+    /// Hash maps variants are attached to original source blocks, and will be garbage collected
+    /// automatically along with the source blocks. Hence put it here instead of BufferedStreamData
+    HashMap map;
+
+    /// FIXME: support nullable type
+    // using JoinDataBlockRawPtr = const JoinDataBlock *;
+    // using BlockNullmapList = std::deque<std::pair<JoinDataBlockRawPtr, ColumnPtr>>;
+    // BlockNullmapList blocks_nullmaps; /// Nullmaps for blocks of "right" table (if needed)
+};
+
 }
 }
