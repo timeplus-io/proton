@@ -444,19 +444,6 @@ Pipe Kafka::read(
     Pipes pipes;
     pipes.reserve(shards_to_query.size());
 
-    // const auto & settings_ref = context->getSettingsRef();
-    /*auto share_resource_group = (settings_ref.query_resource_group.value == "shared") && (settings_ref.seek_to.value == "latest");
-    if (share_resource_group)
-    {
-        for (Int32 i = 0; i < shards; ++i)
-        {
-            if (!column_names.empty())
-                pipes.emplace_back(source_multiplexers->createChannel(i, column_names, metadata_snapshot, context));
-            else
-                pipes.emplace_back(source_multiplexers->createChannel(i, {RESERVED_APPEND_TIME}, metadata_snapshot, context));
-        }
-    }
-    else*/
     {
         /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
         /// We will need add one
@@ -466,10 +453,21 @@ Pipe Kafka::read(
         else
             header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
 
-        auto offsets = getOffsets(*consumer, query_info.seek_to_info, shards_to_query);
+        auto streaming = query_info.syntax_analyzer_result->streaming;
+
+        auto seek_to_info = query_info.seek_to_info;
+        /// seek_to defaults to 'latest' for streaming. In non-streaming case, 'earliest' is preferred.
+        if (!streaming && seek_to_info->getSeekTo().empty())
+            seek_to_info = std::make_shared<SeekToInfo>("earliest");
+
+        auto offsets = getOffsets(*consumer, seek_to_info, shards_to_query);
         assert(offsets.size() == shards_to_query.size());
 
         for (auto [shard, offset] : std::ranges::views::zip(shards_to_query, offsets))
+        {
+            Int64 high_watermark = NO_WARTERMARK;
+            if (!streaming)
+                high_watermark = topic_ptr->queryWatermarks(shard).high;
             pipes.emplace_back(
                 std::make_shared<KafkaSource>(
                     *this,
@@ -479,9 +477,11 @@ Pipe Kafka::read(
                     topic_ptr,
                     shard,
                     offset,
+                    high_watermark,
                     max_block_size,
                     external_stream_counter,
                     context));
+        }
     }
 
     LOG_INFO(

@@ -11,6 +11,12 @@ namespace RdKafka
 
 using Properties = std::vector<std::pair<std::string, std::string>>;
 
+struct WatermarkOffsets
+{
+    int64_t low;
+    int64_t high;
+};
+
 class Topic : boost::noncopyable
 {
 public:
@@ -20,6 +26,8 @@ public:
     rd_kafka_topic_t * getHandle() const { return rkt.get(); }
     std::string name() const { return rd_kafka_topic_name(rkt.get()); }
     int getPartitionCount() const;
+    /// Get last known low (oldest/beginning) and high (newest/end) offsets for a partition.
+    WatermarkOffsets queryWatermarks(int32_t partition) const;
 
 private:
     rd_kafka_t & rdk;

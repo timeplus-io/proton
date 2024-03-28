@@ -28,6 +28,7 @@ KafkaSource::KafkaSource(
     RdKafka::TopicPtr topic_,
     Int32 shard_,
     Int64 offset_,
+    Int64 high_watermark_,
     size_t max_block_size_,
     ExternalStreamCounterPtr external_stream_counter_,
     ContextPtr query_context_)
@@ -44,6 +45,7 @@ KafkaSource::KafkaSource(
     , topic(topic_)
     , shard(shard_)
     , offset(offset_)
+    , high_watermark(high_watermark_)
     , external_stream_counter(external_stream_counter_)
     , query_context(std::move(query_context_))
     , logger(&Poco::Logger::get(fmt::format("{}.{}", kafka.getLoggerName(), consumer->name())))
@@ -98,7 +100,7 @@ Chunk KafkaSource::generate()
 
     if (!consume_started)
     {
-        LOG_INFO(logger, "Start consuming from topic={} shard={} offset={}", topic->name(), shard, offset);
+        LOG_INFO(logger, "Start consuming from topic={} shard={} offset={} high_watermark={}", topic->name(), shard, offset, high_watermark);
         consumer->startConsume(*topic, shard, offset);
         consume_started = true;
     }
@@ -112,11 +114,24 @@ Chunk KafkaSource::generate()
 
         /// After processing blocks, check again to see if there are new results
         if (result_chunks_with_sns.empty() || iter == result_chunks_with_sns.end())
+        {
+            /// For non-streaming queries, it has read all available messages at this moment, it can stop now.
+            if (high_watermark != Kafka::NO_WARTERMARK)
+                return {};
+
             /// Act as a heart beat
             return header_chunk.clone();
+        }
 
         /// result_blocks is not empty, fallthrough
     }
+
+    auto sn = iter->second;
+    /// For non-streaming queries, it is supposed to read the messages available up to the moment when the query was executed,
+    /// no need to read the messages pass that point.
+    /// `high_watermark` is the next available offset, i.e. the offset that will be assigned to the next message, thus it's exclusive.
+    if (high_watermark != Kafka::NO_WARTERMARK && sn >= high_watermark)
+        return {};
 
     setLastProcessedSN(iter->second);
     return std::move((iter++)->first);
