@@ -234,7 +234,7 @@ std::shared_ptr<TableJoin> initTableJoin(
     return table_join;
 }
 
-std::shared_ptr<Streaming::HashJoin> initHashJoin(
+Streaming::HashJoinPtr initHashJoin(
     std::shared_ptr<TableJoin> table_join, const Block & left_header, const Block & right_header, UInt64 keep_versions, ContextPtr context)
 {
     const auto & tables = table_join->getTablesWithColumns();
@@ -246,7 +246,7 @@ std::shared_ptr<Streaming::HashJoin> initHashJoin(
         tables[1], right_header, tables[1].output_data_stream_semantic, keep_versions, 0, 0);
     right_join_stream_desc->calculateColumnPositions(table_join->strictness());
 
-    auto join = std::make_shared<Streaming::HashJoin>(table_join, std::move(left_join_stream_desc), std::move(right_join_stream_desc));
+    auto join = Streaming::HashJoin::create(table_join, std::move(left_join_stream_desc), std::move(right_join_stream_desc));
 
     auto output_header
         = Streaming::JoinTransform::transformHeader(left_header.cloneEmpty(), std::dynamic_pointer_cast<Streaming::IHashJoin>(join));
@@ -255,7 +255,7 @@ std::shared_ptr<Streaming::HashJoin> initHashJoin(
     return join;
 }
 
-void serdeAndCheck(const Streaming::HashJoin & join, Streaming::HashJoin & recovered_join, std::string_view msg)
+void serdeAndCheck(const Streaming::IHashJoin & join, Streaming::IHashJoin & recovered_join, std::string_view msg)
 {
     WriteBufferFromOwnString wb;
     join.serialize(wb, ProtonRevision::getVersionRevision());
@@ -487,42 +487,25 @@ void commonTest(
         };
 
         auto join = initHashJoin(table_join, convert_left_block(left_header), convert_right_block(right_header), keep_versions, context);
+        auto output_header = join->getOutputHeader();
 
-        auto do_join_step = [&](Streaming::HashJoin & join_, ToJoinStep to_join_step) -> JoinResults {
+        auto do_join_step = [&](Streaming::IHashJoin & join_, ToJoinStep to_join_step) -> JoinResults {
             auto & [pos_, block_, _] = to_join_step;
-            if (join_.rangeBidirectionalHashJoin())
-            {
-                if (pos_ == ToJoinStep::LEFT)
-                    return {concatenateBlocks(join_.insertLeftBlockToRangeBucketsAndJoin(convert_left_block(block_))), Block{}};
-                else
-                    return {concatenateBlocks(join_.insertRightBlockToRangeBucketsAndJoin(convert_right_block(block_))), Block{}};
-            }
-            else if (join_.bidirectionalHashJoin())
-            {
-                if (pos_ == ToJoinStep::LEFT)
-                {
-                    auto retracted_block = join_.insertLeftBlockAndJoin(convert_left_block(block_));
-                    return {std::move(block_), retracted_block};
-                }
-                else
-                {
-                    auto retracted_block = join_.insertRightBlockAndJoin(convert_right_block(block_));
-                    return {std::move(block_), std::move(retracted_block)};
-                }
-            }
+            std::pair<LightChunk, LightChunk> join_result;
+            if (pos_ == ToJoinStep::LEFT)
+                join_result = join_.insertLeftDataBlockAndJoin(convert_left_block(block_));
             else
-            {
-                if (pos_ == ToJoinStep::LEFT)
-                {
-                    join_.joinLeftBlock(convert_left_block(block_));
-                    return {std::move(block_), Block{}};
-                }
-                else
-                {
-                    join_.insertRightBlock(convert_right_block(block_));
-                    return {Block{}, Block{}};
-                }
-            }
+                join_result = join_.insertRightDataBlockAndJoin(convert_right_block(block_));
+
+            auto & [retracted_block, block] = join_result;
+            JoinResults results;
+            if (join_result.second.rows() > 0)
+                results.block = output_header.cloneWithColumns(block.detachColumns());
+
+            if (retracted_block.rows() > 0)
+                results.retracted_block = output_header.cloneWithColumns(retracted_block.detachColumns());
+
+            return results;
         };
 
         /// Serde and check initiailized hash join

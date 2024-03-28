@@ -49,7 +49,7 @@ ConcurrentHashJoin::ConcurrentHashJoin(
     for (size_t i = 0; i < slots; ++i)
     {
         auto inner_hash_join = std::make_shared<InternalHashJoin>();
-        inner_hash_join->data = std::make_unique<HashJoin>(table_join, left_join_stream_desc, right_join_stream_desc);
+        inner_hash_join->data = Streaming::HashJoin::create(table_join, left_join_stream_desc, right_join_stream_desc);
         hash_joins.emplace_back(std::move(inner_hash_join));
     }
 }
@@ -74,7 +74,7 @@ void ConcurrentHashJoin::rescale(size_t slots_)
         for (; slots < new_slots; ++slots)
         {
             auto inner_hash_join = std::make_shared<InternalHashJoin>();
-            inner_hash_join->data = std::make_unique<HashJoin>(table_join, left_join_stream_desc, right_join_stream_desc);
+            inner_hash_join->data = Streaming::HashJoin::create(table_join, left_join_stream_desc, right_join_stream_desc);
             hash_joins.emplace_back(std::move(inner_hash_join));
         }
     }
@@ -97,108 +97,24 @@ void ConcurrentHashJoin::transformHeader(Block & header)
     hash_joins[0]->data->transformHeader(header);
 }
 
-void ConcurrentHashJoin::insertRightBlock(Block right_block)
-{
-    auto dispatched_blocks = dispatchBlock(right_key_column_positions, std::move(right_block));
-
-    size_t blocks_left = dispatched_blocks.size();
-
-    while (blocks_left > 0)
-    {
-        if (is_cancelled)
-            break;
-
-        /// insert blocks into corresponding HashJoin instances
-        for (auto & dispatched_block : dispatched_blocks)
-        {
-            if (dispatched_block.block)
-            {
-                if (dispatched_block.block.rows() > 0)
-                {
-                    auto & hash_join = hash_joins[dispatched_block.shard];
-
-                    /// if current hash_join is already processed by another thread, skip it and try later
-                    std::unique_lock<std::mutex> lock(hash_join->mutex, std::try_to_lock);
-                    if (!lock.owns_lock())
-                        continue;
-
-                    hash_join->data->insertRightBlock(std::move(dispatched_block.block));
-                }
-                else
-                    dispatched_block.block = {};
-
-                assert(!dispatched_block.block);
-                blocks_left--;
-            }
-        }
-    }
-}
-
-void ConcurrentHashJoin::joinLeftBlock(Block & left_block)
-{
-    auto dispatched_blocks = dispatchBlock(right_key_column_positions, std::move(left_block));
-    Blocks joined_blocks;
-    joined_blocks.reserve(dispatched_blocks.size());
-
-    left_block = {};
-
-    size_t blocks_left = dispatched_blocks.size();
-    while (blocks_left > 0)
-    {
-        if (is_cancelled)
-            break;
-
-        for (auto & dispatched_block : dispatched_blocks)
-        {
-            if (dispatched_block.block)
-            {
-                if (dispatched_block.block.rows() > 0)
-                {
-                    auto & hash_join = hash_joins[dispatched_block.shard];
-
-                    /// if current hash_join is already processed by another thread, skip it and try later
-                    std::unique_lock<std::mutex> lock(hash_join->mutex, std::try_to_lock);
-                    if (!lock.owns_lock())
-                        continue;
-
-                    hash_join->data->joinLeftBlock(dispatched_block.block);
-
-                    if (dispatched_block.block.rows() > 0)
-                        joined_blocks.emplace_back(std::move(dispatched_block.block));
-                    else
-                        dispatched_block.block = {};
-                }
-                else
-                    dispatched_block.block = {};
-
-                assert(!dispatched_block.block);
-                blocks_left--;
-            }
-        }
-    }
-
-    left_block = concatenateBlocks(joined_blocks);
-}
-
 template <bool is_left_block>
-Block ConcurrentHashJoin::insertBlockAndJoin(Block & block)
+std::pair<LightChunk, LightChunk> ConcurrentHashJoin::doInsertDataBlockAndJoin(LightChunk && chunk)
 {
-    const std::vector<size_t> * key_column_positions;
-    if constexpr (is_left_block)
-        key_column_positions = &left_key_column_positions;
-    else
-        key_column_positions = &right_key_column_positions;
+    auto rows = chunk.rows();
+    if (rows <= 0)
+        return {};
 
-    auto dispatched_blocks = dispatchBlock(*key_column_positions, std::move(block));
+    /// FIXME: Optmize hash join Block to LightChunk.
+    LightChunksWithShard dispatched_blocks;
+    if constexpr (is_left_block)
+        dispatched_blocks = dispatchBlock(left_key_column_positions, std::move(chunk));
+    else
+        dispatched_blocks = dispatchBlock(right_key_column_positions, std::move(chunk));
 
     size_t blocks_left = dispatched_blocks.size();
 
-    Blocks retracted_blocks;
-    if (emitChangeLog())
-        retracted_blocks.reserve(blocks_left);
-
-    Blocks joined_blocks;
-    joined_blocks.reserve(blocks_left);
+    std::pair<LightChunk, LightChunk> joined_result;
+    auto & [retracted_data, joined_data] = joined_result;
 
     while (blocks_left > 0)
     {
@@ -221,124 +137,37 @@ Block ConcurrentHashJoin::insertBlockAndJoin(Block & block)
 
                     if constexpr (is_left_block)
                     {
-                        auto retracted_block = hash_join->data->insertLeftBlockAndJoin(dispatched_block.block);
-                        if (retracted_block.rows() > 0)
-                            retracted_blocks.emplace_back(std::move(retracted_block));
+                        auto res = hash_join->data->insertLeftDataBlockAndJoin(std::move(dispatched_block.block));
+                        retracted_data.concat(std::move(res.first));
+                        joined_data.concat(std::move(res.second));
                     }
                     else
                     {
-                        auto retracted_block = hash_join->data->insertRightBlockAndJoin(dispatched_block.block);
-                        if (retracted_block.rows() > 0)
-                            retracted_blocks.emplace_back(std::move(retracted_block));
+                        auto res = hash_join->data->insertRightDataBlockAndJoin(std::move(dispatched_block.block));
+                        retracted_data.concat(std::move(res.first));
+                        joined_data.concat(std::move(res.second));
                     }
-
-                    if (dispatched_block.block.rows() > 0)
-                        joined_blocks.emplace_back(std::move(dispatched_block.block));
-                    else
-                        dispatched_block.block = {};
                 }
-                else
-                    dispatched_block.block = {};
 
-                assert(!dispatched_block.block);
+                dispatched_block.block = {};
                 blocks_left--;
             }
         }
     }
 
-    block = concatenateBlocks(joined_blocks);
-    return concatenateBlocks(retracted_blocks);
-}
-
-Block ConcurrentHashJoin::insertLeftBlockAndJoin(Block & left_block)
-{
-    return insertBlockAndJoin<true>(left_block);
-}
-
-Block ConcurrentHashJoin::insertRightBlockAndJoin(Block & right_block)
-{
-    return insertBlockAndJoin<false>(right_block);
-}
-
-template <bool is_left_block>
-std::vector<Block> ConcurrentHashJoin::insertBlockToRangeBucketAndJoin(Block block)
-{
-    const std::vector<size_t> * key_column_positions;
-    if constexpr (is_left_block)
-        key_column_positions = &left_key_column_positions;
-    else
-        key_column_positions = &right_key_column_positions;
-
-    auto dispatched_blocks = dispatchBlock(*key_column_positions, std::move(block));
-
-    size_t blocks_left = dispatched_blocks.size();
-
-    std::vector<Block> joined_results;
-    joined_results.reserve(blocks_left);
-
-    while (blocks_left > 0)
-    {
-        if (is_cancelled)
-            break;
-
-        /// insert blocks into corresponding HashJoin instances
-        for (auto & dispatched_block : dispatched_blocks)
-        {
-            if (dispatched_block.block)
-            {
-                if (dispatched_block.block.rows() > 0)
-                {
-                    auto & hash_join = hash_joins[dispatched_block.shard];
-
-                    /// if current hash_join is already processed by another thread, skip it and try later
-                    std::unique_lock<std::mutex> lock(hash_join->mutex, std::try_to_lock);
-                    if (!lock.owns_lock())
-                        continue;
-
-                    if constexpr (is_left_block)
-                    {
-                        auto joined_blocks = hash_join->data->insertLeftBlockToRangeBucketsAndJoin(std::move(dispatched_block.block));
-                        for (auto & joined_block : joined_blocks)
-                            joined_results.emplace_back(std::move(joined_block));
-                    }
-                    else
-                    {
-                        auto joined_blocks = hash_join->data->insertRightBlockToRangeBucketsAndJoin(std::move(dispatched_block.block));
-                        for (auto & joined_block : joined_blocks)
-                            joined_results.emplace_back(std::move(joined_block));
-                    }
-                }
-                else
-                    dispatched_block.block = {};
-
-                assert(!dispatched_block.block);
-                blocks_left--;
-            }
-        }
-    }
-
-    return joined_results;
-}
-
-std::vector<Block> ConcurrentHashJoin::insertLeftBlockToRangeBucketsAndJoin(Block left_block)
-{
-    return insertBlockToRangeBucketAndJoin<true>(std::move(left_block));
-}
-
-std::vector<Block> ConcurrentHashJoin::insertRightBlockToRangeBucketsAndJoin(Block right_block)
-{
-    return insertBlockToRangeBucketAndJoin<false>(std::move(right_block));
+    return joined_result;
 }
 
 bool ConcurrentHashJoin::addJoinedBlock(const Block & right_block, bool /*check_limits*/)
 {
-    insertRightBlock(right_block); /// We have a block copy here
+    insertRightDataBlockAndJoin(right_block);
     return true;
 }
 
 void ConcurrentHashJoin::joinBlock(Block & block, std::shared_ptr<ExtraBlock> & /*not_processed*/)
 {
-    joinLeftBlock(block);
+    auto joined_result = insertLeftDataBlockAndJoin(block);
+    block = left_join_stream_desc->input_header.cloneWithColumns(joined_result.second.detachColumns());
 }
 
 void ConcurrentHashJoin::checkTypesOfKeys(const Block & block) const
@@ -416,50 +245,51 @@ static ALWAYS_INLINE IColumn::Selector hashToSelector(const WeakHash32 & hash, s
     return selector;
 }
 
-IColumn::Selector ConcurrentHashJoin::selectDispatchBlock(const std::vector<size_t> & key_column_positions, const Block & from_block)
+IColumn::Selector ConcurrentHashJoin::selectDispatchBlock(const std::vector<size_t> & key_column_positions, const LightChunk & chunk)
 {
-    size_t num_rows = from_block.rows();
+    size_t num_rows = chunk.rows();
     size_t num_shards = hash_joins.size();
 
     WeakHash32 hash(num_rows);
     for (const auto & key_column_position : key_column_positions)
     {
-        const auto & key_col = from_block.getByPosition(key_column_position).column->convertToFullColumnIfConst();
+        const auto & key_col = chunk.data[key_column_position]->convertToFullColumnIfConst();
         const auto & key_col_no_lc = recursiveRemoveLowCardinality(recursiveRemoveSparse(key_col));
         key_col_no_lc->updateWeakHash32(hash);
     }
     return hashToSelector(hash, num_shards);
 }
 
-BlocksWithShard ConcurrentHashJoin::dispatchBlock(const std::vector<size_t> & key_column_positions, Block && from_block)
+LightChunksWithShard ConcurrentHashJoin::dispatchBlock(const std::vector<size_t> & key_column_positions, LightChunk && chunk)
 {
     size_t num_shards = hash_joins.size();
-    size_t num_cols = from_block.columns();
+    size_t num_cols = chunk.columns();
 
-    IColumn::Selector selector = selectDispatchBlock(key_column_positions, from_block);
+    IColumn::Selector selector = selectDispatchBlock(key_column_positions, chunk);
 
     /// Optimized for 1 row block
     if (selector.size() == 1)
-        return BlocksWithShard{{std::move(from_block), static_cast<int32_t>(selector[0])}};
+        return LightChunksWithShard{{std::move(chunk), static_cast<int32_t>(selector[0])}};
 
     std::vector<std::vector<MutableColumnPtr>> dispatched_columns;
     dispatched_columns.reserve(num_cols);
 
+    const auto & columns = chunk.getColumns();
     for (size_t i = 0; i < num_cols; ++i)
-        dispatched_columns.emplace_back(from_block.getByPosition(i).column->scatter(num_shards, selector));
+        dispatched_columns.emplace_back(columns[i]->scatter(num_shards, selector));
 
-    BlocksWithShard result;
+    LightChunksWithShard result;
     result.reserve(num_shards);
     for (size_t shard = 0; shard < num_shards; ++shard)
     {
         if (dispatched_columns[0][shard])
         {
-            result.emplace_back(from_block.cloneEmpty(), static_cast<int32_t>(shard));
-            auto & current_block = result.back().block;
+            result.emplace_back(chunk.cloneEmpty(), static_cast<int32_t>(shard));
+            auto & current_block_columns = result.back().block.getColumns();
 
             /// if dispatched column is not null at `shard`
             for (size_t col_pos = 0; col_pos < num_cols; ++col_pos)
-                current_block.getByPosition(col_pos).column = std::move(dispatched_columns[col_pos][shard]);
+                current_block_columns[col_pos] = std::move(dispatched_columns[col_pos][shard]);
         }
     }
 

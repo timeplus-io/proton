@@ -2,6 +2,7 @@
 
 #include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
+#include <Core/LightChunk.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Streaming/joinKind.h>
@@ -247,19 +248,18 @@ inline void JoinTransform::doJoin(Chunks chunks)
     {
         /// First insert right block to update the build-side hash table
         if (chunks[1].hasRows())
-            join->insertRightBlock(input_ports_with_data[1].input_port->getHeader().cloneWithColumns(chunks[1].detachColumns()));
+            join->insertRightDataBlockAndJoin(std::move(chunks[1]));
 
         /// Then use left block to join the right updated hash table
         /// Please note in this mode, right stream data only changes won't trigger join since left stream data is not buffered
         if (chunks[0].hasRows())
         {
-            auto joined_block = input_ports_with_data[0].input_port->getHeader().cloneWithColumns(chunks[0].detachColumns());
-            join->joinLeftBlock(joined_block);
+            auto [_, joined_block] = join->insertLeftDataBlockAndJoin(std::move(chunks[0]));
 
             if (auto rows = joined_block.rows(); rows > 0)
             {
                 std::scoped_lock lock(mutex);
-                output_chunks.emplace_back(joined_block.getColumns(), rows);
+                output_chunks.emplace_back(joined_block.detachColumns(), rows);
             }
         }
     }
@@ -267,16 +267,15 @@ inline void JoinTransform::doJoin(Chunks chunks)
 
 inline void JoinTransform::joinBidirectionally(Chunks chunks)
 {
-    std::array<decltype(&Streaming::IHashJoin::insertLeftBlockAndJoin), 2> join_funcs
-        = {&Streaming::IHashJoin::insertLeftBlockAndJoin, &Streaming::IHashJoin::insertRightBlockAndJoin};
+    std::array<decltype(&Streaming::IHashJoin::insertLeftDataBlockAndJoin), 2> join_funcs
+        = {&Streaming::IHashJoin::insertLeftDataBlockAndJoin, &Streaming::IHashJoin::insertRightDataBlockAndJoin};
 
     for (size_t i = 0; i < chunks.size(); ++i)
     {
         if (!chunks[i].hasRows())
             continue;
 
-        auto block = input_ports_with_data[i].input_port->getHeader().cloneWithColumns(chunks[i].detachColumns());
-        auto retracted_block = std::invoke(join_funcs[i], join.get(), block);
+        auto [retracted_block, block] = std::invoke(join_funcs[i], join.get(), LightChunk{std::move(chunks[i])});
 
         {
             std::scoped_lock lock(mutex);
@@ -287,32 +286,31 @@ inline void JoinTransform::joinBidirectionally(Chunks chunks)
                 /// Don't watermark this block. We can concat retracted / result blocks or use avoid watermarking
                 auto chunk_ctx = ChunkContext::create();
                 chunk_ctx->setConsecutiveDataFlag();
-                output_chunks.emplace_back(retracted_block.getColumns(), retracted_block_rows, nullptr, std::move(chunk_ctx));
+                output_chunks.emplace_back(retracted_block.detachColumns(), retracted_block_rows, nullptr, std::move(chunk_ctx));
             }
 
-            if (block.rows())
-                output_chunks.emplace_back(block.getColumns(), block.rows());
+            if (auto rows = block.rows(); rows > 0)
+                output_chunks.emplace_back(block.detachColumns(), rows);
         }
     }
 }
 
 inline void JoinTransform::rangeJoinBidirectionally(Chunks chunks)
 {
-    std::array<decltype(&Streaming::IHashJoin::insertLeftBlockToRangeBucketsAndJoin), 2> join_funcs
-        = {&Streaming::IHashJoin::insertLeftBlockToRangeBucketsAndJoin, &Streaming::IHashJoin::insertRightBlockToRangeBucketsAndJoin};
+    std::array<decltype(&Streaming::IHashJoin::insertLeftDataBlockAndJoin), 2> join_funcs
+        = {&Streaming::IHashJoin::insertLeftDataBlockAndJoin, &Streaming::IHashJoin::insertRightDataBlockAndJoin};
 
     for (size_t i = 0; i < chunks.size(); ++i)
     {
         if (!chunks[i].hasRows())
             continue;
 
-        auto block = input_ports_with_data[i].input_port->getHeader().cloneWithColumns(chunks[i].detachColumns());
-        auto joined_blocks = std::invoke(join_funcs[i], join.get(), block);
-
-        std::scoped_lock lock(mutex);
-
-        for (size_t j = 0; j < joined_blocks.size(); ++j)
-            output_chunks.emplace_back(joined_blocks[j].getColumns(), joined_blocks[j].rows());
+        auto [_, joined_block] = std::invoke(join_funcs[i], join.get(), LightChunk{std::move(chunks[i])});
+        if (auto rows = joined_block.rows(); rows > 0)
+        {
+            std::scoped_lock lock(mutex);
+            output_chunks.emplace_back(joined_block.detachColumns(), rows);
+        }
     }
 }
 

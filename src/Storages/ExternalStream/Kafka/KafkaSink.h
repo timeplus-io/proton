@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Core/BlockWithShard.h>
+#include <Core/DataBlockWithShard.h>
 #include <Formats/FormatFactory.h>
 #include <Processors/Sinks/SinkToStorage.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
