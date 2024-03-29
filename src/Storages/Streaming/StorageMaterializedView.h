@@ -87,6 +87,9 @@ private:
 
     void checkDependencies() const;
 
+    template <typename Duration>
+    void waitFor(Duration && duration);
+
 private:
     Poco::Logger * log;
 
@@ -97,6 +100,9 @@ private:
     bool is_virtual = false;
 
     std::atomic_flag shutdown_called;
+
+    std::condition_variable wait_cv;
+    std::mutex wait_cv_mutex;
 
     /// Background state
     struct State
