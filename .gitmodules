@@ -283,3 +283,6 @@
 [submodule "contrib/c-ares"]
 	path = contrib/c-ares
 	url = https://github.com/c-ares/c-ares.git
+[submodule "contrib/cpython-cmake/cpython"]
+	path = contrib/cpython-cmake/cpython
+	url = https://github.com/python/cpython.git
