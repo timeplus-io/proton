@@ -200,9 +200,9 @@ protected:
     void emitVersion(ChunkList & chunks);
     /// return {should_abort, need_finalization} pair
     virtual std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, size_t num_rows);
-    void setAggregatedResult(Chunk chunk, Chunk retracted_chunk = {});
-    void setAggregatedResult(ChunkList chunks);
-    bool hasAggregatedResult() const { return !aggregated_chunks.empty(); }
+    void setAggregatedResult(Chunk & chunk);
+    void setAggregatedResult(ChunkList & chunks);
+    bool hasAggregatedResult() const noexcept { return !aggregated_chunks.empty(); }
 
     /// Quickly check if need finalization
     virtual bool needFinalization(Int64 /*min_watermark*/) const { return true; }

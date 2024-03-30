@@ -93,9 +93,9 @@ protected:
     void emitVersion(ChunkList & chunks, const SubstreamContextPtr & substream_ctx);
     /// return {should_abort, need_finalization} pair
     virtual std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, const SubstreamContextPtr & substream_ctx);
-    void setAggregatedResult(Chunk chunk, Chunk retracted_chunk = {});
-    void setAggregatedResult(ChunkList chunks);
-    bool hasAggregatedResult() const { return !aggregated_chunks.empty(); }
+    void setAggregatedResult(Chunk & chunk);
+    void setAggregatedResult(ChunkList & chunks);
+    bool hasAggregatedResult() const noexcept { return !aggregated_chunks.empty(); }
 
     virtual SubstreamContextPtr getOrCreateSubstreamContext(const SubstreamID & id);
     bool removeSubstreamContext(const SubstreamID & id);

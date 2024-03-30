@@ -1492,7 +1492,7 @@ Aggregator::convertToBlockImplFinal(
     constexpr bool final = true;
     ConvertToBlockRes<return_single_block> res;
 
-    std::optional<OutputBlockColumns> out_cols;
+    OutputBlockColumns out_cols;
     std::optional<Sizes> shuffled_key_sizes;
     PaddedPODArray<AggregateDataPtr> places;
 
@@ -1505,29 +1505,37 @@ Aggregator::convertToBlockImplFinal(
             if (data.hasNullKeyData())
             {
                 assert(type == ConvertType::Normal);
-                out_cols->key_columns[0]->insertDefault();
-                insertAggregatesIntoColumns(data.getNullKeyData(), out_cols->final_aggregate_columns, arena, clear_states);
+                out_cols.key_columns[0]->insertDefault();
+                insertAggregatesIntoColumns(data.getNullKeyData(), out_cols.final_aggregate_columns, arena, clear_states);
                 data.hasNullKeyData() = false;
             }
         }
 
-        shuffled_key_sizes = method.shuffleKeyColumns(out_cols->raw_key_columns, key_sizes);
+        shuffled_key_sizes = method.shuffleKeyColumns(out_cols.raw_key_columns, key_sizes);
 
+        places.clear();
         places.reserve(max_block_size);
     };
 
     // should be invoked at least once, because null data might be the only content of the `data`
     init_out_cols();
 
+    const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
+
     bool only_updates = (type == ConvertType::Updates);
     bool only_retract = (type == ConvertType::Retract);
 
     data.forEachValue([&](const auto & key, auto & mapped)
     {
-        if (!out_cols.has_value())
-            init_out_cols();
-
-        const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
+        if constexpr (!return_single_block)
+        {
+            /// If reached max block size, finalize the block and start a new one
+            if (out_cols.key_columns[0]->size() >= max_block_size)
+            {
+                res.emplace_back(insertResultsIntoColumns(places, std::move(out_cols), arena, clear_states));
+                init_out_cols();
+            }
+        }
 
         if (only_updates)
         {
@@ -1564,7 +1572,7 @@ Aggregator::convertToBlockImplFinal(
         {
             /// duplicate key for each emit
             for (size_t i = 0; i < emit_times; i++)
-                method.insertKeyIntoColumns(key, out_cols->raw_key_columns, key_sizes_ref);
+                method.insertKeyIntoColumns(key, out_cols.raw_key_columns, key_sizes_ref);
 
             places.emplace_back(place);
 
@@ -1573,27 +1581,16 @@ Aggregator::convertToBlockImplFinal(
             /// case, we don't want aggregate function to destroy the places
             if (clear_states)
                 place = nullptr;
-
-            if constexpr (!return_single_block)
-            {
-                if (places.size() >= max_block_size)
-                {
-                    res.emplace_back(insertResultsIntoColumns(places, std::move(out_cols.value()), arena, clear_states));
-                    places.clear();
-                    out_cols.reset();
-                }
-            }
         }
     });
 
     if constexpr (return_single_block)
     {
-        return insertResultsIntoColumns(places, std::move(out_cols.value()), arena, clear_states);
+        return insertResultsIntoColumns(places, std::move(out_cols), arena, clear_states);
     }
     else
     {
-        if (out_cols.has_value())
-            res.emplace_back(insertResultsIntoColumns(places, std::move(out_cols.value()), arena, clear_states));
+        res.emplace_back(insertResultsIntoColumns(places, std::move(out_cols), arena, clear_states));
         return res;
     }
 }

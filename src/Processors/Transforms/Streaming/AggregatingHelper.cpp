@@ -126,17 +126,19 @@ Chunk mergeAndSpliceAndConvertUpdatesToChunk(
     return DB::convertToChunk(params.aggregator.mergeAndSpliceAndConvertUpdatesToBlock(data, buckets));
 }
 
-ChunkPair convertToChangelogChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params)
+ChunkList convertToChangelogChunks(AggregatedDataVariants & data, const AggregatingTransformParams & params)
 {
     if (data.empty())
         return {};
 
+    ChunkList results;
     auto retracted_chunk = mergeChunks(convertToChunksImpl(data, params, ConvertType::Retract));
     if (retracted_chunk)
     {
         auto retracted_delta_col = ColumnInt8::create(retracted_chunk.rows(), Int8(-1));
         retracted_chunk.addColumn(std::move(retracted_delta_col));
         retracted_chunk.setConsecutiveDataFlag();
+        results.push_back(std::move(retracted_chunk));
     }
 
     auto chunk = mergeChunks(convertToChunksImpl(data, params, ConvertType::Updates));
@@ -144,38 +146,39 @@ ChunkPair convertToChangelogChunk(AggregatedDataVariants & data, const Aggregati
     {
         auto delta_col = ColumnInt8::create(chunk.rows(), Int8(1));
         chunk.addColumn(std::move(delta_col));
+        results.push_back(std::move(chunk));
     }
-    return {std::move(retracted_chunk), std::move(chunk)};
+    return results;
 }
 
-ChunkPair mergeAndConvertToChangelogChunk(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params)
+ChunkList mergeAndConvertToChangelogChunks(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params)
 {
     if (data.size() == 1)
-        return convertToChangelogChunk(*data[0], params);
+        return convertToChangelogChunks(*data[0], params);
 
-    ChunkPair results;
-    auto & [retracted_chunk, chunk] = results;
-
+    ChunkList results;
     auto merged_retracted_data = params.aggregator.mergeRetractGroups(data);
     if (merged_retracted_data)
     {
-        retracted_chunk = mergeChunks(convertToChunksImpl(*merged_retracted_data, params, ConvertType::Normal));
+        auto retracted_chunk = mergeChunks(convertToChunksImpl(*merged_retracted_data, params, ConvertType::Normal));
         if (retracted_chunk)
         {
             auto retracted_delta_col = ColumnInt8::create(retracted_chunk.rows(), Int8(-1));
             retracted_chunk.addColumn(std::move(retracted_delta_col));
             retracted_chunk.setConsecutiveDataFlag();
+            results.push_back(std::move(retracted_chunk));
         }
     }
 
     auto merged_updated_data = params.aggregator.mergeUpdateGroups(data);
     if (merged_updated_data)
     {
-        chunk = mergeChunks(convertToChunksImpl(*merged_updated_data, params, ConvertType::Normal));
+        auto chunk = mergeChunks(convertToChunksImpl(*merged_updated_data, params, ConvertType::Normal));
         if (chunk)
         {
             auto delta_col = ColumnInt8::create(chunk.rows(), Int8(1));
             chunk.addColumn(std::move(delta_col));
+            results.push_back(std::move(chunk));
         }
     }
     return results;

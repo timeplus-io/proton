@@ -207,7 +207,7 @@ void WindowAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
     many_data->finalized_watermark.store(finalized_watermark, std::memory_order_relaxed);
 
     assert(last_res_chunk.getWatermark() == finalized_watermark);
-    setAggregatedResult(std::move(res_chunks));
+    setAggregatedResult(res_chunks);
 }
 
 void WindowAggregatingTransform::clearExpiredState(Int64 finalized_watermark)

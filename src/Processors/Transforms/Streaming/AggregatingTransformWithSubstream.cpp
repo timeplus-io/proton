@@ -78,7 +78,8 @@ void AggregatingTransformWithSubstream::work()
     auto num_rows = current_chunk.getNumRows();
     if (num_rows == 0 && !current_chunk.hasChunkContext())
     {
-        setAggregatedResult(Chunk{getOutputs().front().getHeader().getColumns(), 0});
+        Chunk res{getOutputs().front().getHeader().getColumns(), 0};
+        setAggregatedResult(res);
         /// Remember to reset `read_current_chunk`
         read_current_chunk = false;
         return;
@@ -139,7 +140,8 @@ void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamCont
     {
         checkpoint(chunk.getCheckpointContext());
         /// Propagate the checkpoint barrier to all down stream output ports
-        setAggregatedResult(Chunk{getOutputs().front().getHeader().getColumns(), 0, nullptr, chunk.getChunkContext()});
+        Chunk res{getOutputs().front().getHeader().getColumns(), 0, nullptr, chunk.getChunkContext()};
+        setAggregatedResult(res);
     }
 
     if (MonotonicMilliseconds::now() - last_log_ts > log_metrics_interval_ms)
@@ -170,7 +172,8 @@ void AggregatingTransformWithSubstream::propagateWatermarkAndClearExpiredStates(
         auto chunk_ctx = ChunkContext::create();
         chunk_ctx->setSubstreamID(substream_ctx->id);
         chunk_ctx->setWatermark(substream_ctx->finalized_watermark);
-        setAggregatedResult(Chunk{getOutputs().front().getHeader().getColumns(), 0, nullptr, std::move(chunk_ctx)});
+        Chunk res{getOutputs().front().getHeader().getColumns(), 0, nullptr, std::move(chunk_ctx)};
+        setAggregatedResult(res);
     }
     else
         assert(substream_ctx->finalized_watermark == aggregated_chunks.back().getWatermark());
@@ -226,24 +229,15 @@ void AggregatingTransformWithSubstream::emitVersion(ChunkList & chunks, const Su
     }
 }
 
-void AggregatingTransformWithSubstream::setAggregatedResult(Chunk chunk, Chunk retracted_chunk)
+void AggregatingTransformWithSubstream::setAggregatedResult(Chunk & chunk)
 {
     if (hasAggregatedResult())
         throw Exception("Aggregated chunks was already set.", ErrorCodes::LOGICAL_ERROR);
 
-    if (!chunk)
-        return;
-
-    if (retracted_chunk.rows())
-    {
-        retracted_chunk.setConsecutiveDataFlag();
-        aggregated_chunks.emplace_back(std::move(retracted_chunk));
-    }
-
     aggregated_chunks.emplace_back(std::move(chunk));
 }
 
-void AggregatingTransformWithSubstream::setAggregatedResult(ChunkList chunks)
+void AggregatingTransformWithSubstream::setAggregatedResult(ChunkList & chunks)
 {
     if (hasAggregatedResult())
         throw Exception("Aggregated chunks was already set.", ErrorCodes::LOGICAL_ERROR);

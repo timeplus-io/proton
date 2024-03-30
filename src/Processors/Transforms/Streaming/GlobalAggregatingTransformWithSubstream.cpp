@@ -94,18 +94,15 @@ void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
         return;
 
     auto start = MonotonicMilliseconds::now();
+    ChunkList chunks;
     if (params->emit_changelog)
     {
-        auto [retracted_chunk, chunk] = AggregatingHelper::convertToChangelogChunk(variants, *params);
+        chunks = AggregatingHelper::convertToChangelogChunks(variants, *params);
         /// Enable retract after first finalization
-        retractEnabled(substream_ctx) |= chunk.rows();
-
-        chunk.setChunkContext(chunk_ctx);
-        setAggregatedResult(std::move(chunk), std::move(retracted_chunk));
+        retractEnabled(substream_ctx) |= !chunks.empty();
     }
     else
     {
-        ChunkList chunks;
         if (AggregatingHelper::onlyEmitUpdates(params->emit_mode))
             chunks = AggregatingHelper::convertUpdatesToChunks(variants, *params);
         else
@@ -113,14 +110,15 @@ void GlobalAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
 
         if (params->final && params->emit_version)
             emitVersion(chunks, substream_ctx);
-
-        if (chunks.empty()) [[unlikely]]
-            chunks.emplace_back(getOutputs().front().getHeader().getColumns(), 0);
-
-        chunks.back().setChunkContext(chunk_ctx); /// Set chunk context for the last chunk
-
-        setAggregatedResult(std::move(chunks));
     }
+
+    if (chunks.empty()) [[unlikely]]
+        chunks.emplace_back(getOutputs().front().getHeader().getColumns(), 0);
+
+    /// Set chunk context for the last chunk
+    chunks.back().setChunkContext(chunk_ctx);
+    setAggregatedResult(chunks);
+
     auto end = MonotonicMilliseconds::now();
 
     LOG_INFO(log, "Took {} milliseconds to finalize aggregation", end - start);

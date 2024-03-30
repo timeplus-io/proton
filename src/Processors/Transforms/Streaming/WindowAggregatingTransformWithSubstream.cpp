@@ -125,7 +125,7 @@ void WindowAggregatingTransformWithSubstream::doFinalize(
     }
 
     assert(last_res_chunk.getWatermark() == substream_ctx->finalized_watermark);
-    setAggregatedResult(std::move(res_chunks));
+    setAggregatedResult(res_chunks);
 }
 
 void WindowAggregatingTransformWithSubstream::clearExpiredState(Int64 finalized_watermark, const SubstreamContextPtr & substream_ctx)

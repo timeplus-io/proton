@@ -38,9 +38,9 @@ void UserDefinedEmitStrategyAggregatingTransformWithSubstream::finalize(const Su
     if (chunks.empty()) [[unlikely]]
         chunks.emplace_back(getOutputs().front().getHeader().getColumns(), 0);
 
-    chunks.back().setChunkContext(chunk_ctx); /// Set chunk context for the last chunk
-
-    setAggregatedResult(std::move(chunks));
+    /// Set chunk context for the last chunk
+    chunks.back().setChunkContext(chunk_ctx);
+    setAggregatedResult(chunks);
 }
 }
 }

@@ -240,24 +240,15 @@ void AggregatingTransform::emitVersion(ChunkList & chunks)
     }
 }
 
-void AggregatingTransform::setAggregatedResult(Chunk chunk, Chunk retracted_chunk)
+void AggregatingTransform::setAggregatedResult(Chunk & chunk)
 {
     if (hasAggregatedResult())
         throw Exception("Aggregated chunks was already set.", ErrorCodes::LOGICAL_ERROR);
 
-    if (!chunk)
-        return;
-
-    if (retracted_chunk.rows())
-    {
-        retracted_chunk.setConsecutiveDataFlag();
-        aggregated_chunks.emplace_back(std::move(retracted_chunk));
-    }
-
     aggregated_chunks.emplace_back(std::move(chunk));
 }
 
-void AggregatingTransform::setAggregatedResult(ChunkList chunks)
+void AggregatingTransform::setAggregatedResult(ChunkList & chunks)
 {
     if (hasAggregatedResult())
         throw Exception("Aggregated chunks was already set.", ErrorCodes::LOGICAL_ERROR);
@@ -278,7 +269,8 @@ bool AggregatingTransform::propagateHeartbeatChunk()
     if (hasAggregatedResult())
         return false;
 
-    setAggregatedResult(Chunk{getOutputs().front().getHeader().getColumns(), 0});
+    Chunk res{getOutputs().front().getHeader().getColumns(), 0};
+    setAggregatedResult(res);
     return true;
 }
 
@@ -366,9 +358,9 @@ bool AggregatingTransform::propagateWatermarkAndClearExpiredStates()
     {
         if (!hasAggregatedResult())
         {
-            auto chunk_ctx = ChunkContext::create();
-            chunk_ctx->setWatermark(finalized_watermark);
-            setAggregatedResult(Chunk{getOutputs().front().getHeader().getColumns(), 0, nullptr, std::move(chunk_ctx)});
+            Chunk res{getOutputs().front().getHeader().getColumns(), 0};
+            res.setWatermark(finalized_watermark);
+            setAggregatedResult(res);
         }
         else
             assert(finalized_watermark == aggregated_chunks.back().getWatermark());
@@ -412,9 +404,9 @@ bool AggregatingTransform::propagateCheckpointAndReset()
     /// Only all checkpoints request done, then can reset and propagate current ckpt request
     if (many_data->ckpt_requested.load() == 0)
     {
-        auto chunk_ctx = ChunkContext::create();
-        chunk_ctx->setCheckpointContext(std::move(ckpt_request));
-        setAggregatedResult(Chunk{getOutputs().front().getHeader().getColumns(), 0, nullptr, std::move(chunk_ctx)});
+        Chunk res{getOutputs().front().getHeader().getColumns(), 0};
+        res.setCheckpointContext(std::move(ckpt_request));
+        setAggregatedResult(res);
         assert(!ckpt_request);
         return true;
     }

@@ -60,11 +60,11 @@ Chunk mergeAndSpliceAndConvertUpdatesToChunk(
 /// consecutively otherwise the down stream aggregation result may not be correct or emit incorrect
 /// intermediate results. To facilitate the downstream processing, we usually mark the `consecutive`
 /// flag bit for these chunks.
-/// \return {retract_chunk, update_chunk} pair, retract_chunk if not empty, contains retract data
+/// \return list {retract_chunk, update_chunk}, retract_chunk if not empty, contains retract data
 ///         because of the current updates; update_chunk if not empty, contains the result for the
 ///         latest update data
-ChunkPair convertToChangelogChunk(AggregatedDataVariants & data, const AggregatingTransformParams & params);
-ChunkPair mergeAndConvertToChangelogChunk(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params);
+ChunkList convertToChangelogChunks(AggregatedDataVariants & data, const AggregatingTransformParams & params);
+ChunkList mergeAndConvertToChangelogChunks(ManyAggregatedDataVariants & data, const AggregatingTransformParams & params);
 
 inline bool onlyEmitFinalizedWindows(EmitMode mode) noexcept
 {
