@@ -115,29 +115,30 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
         many_data->finalized_watermark.store(chunk_ctx->getWatermark(), std::memory_order_relaxed);
     });
 
+    ChunkList chunks;
     if (params->emit_changelog)
     {
-        auto [retracted_chunk, chunk] = AggregatingHelper::mergeAndConvertToChangelogChunk(many_data->variants, *params);
+        chunks = AggregatingHelper::mergeAndConvertToChangelogChunks(many_data->variants, *params);
         /// Enable retract after first finalization
-        retractEnabled() |= chunk.rows();
-
-        chunk.setChunkContext(chunk_ctx);
-        setCurrentChunk(std::move(chunk), std::move(retracted_chunk));
+        retractEnabled() |= !chunks.empty();
     }
     else
     {
-        Chunk chunk;
         if (AggregatingHelper::onlyEmitUpdates(params->emit_mode))
-            chunk = AggregatingHelper::mergeAndConvertUpdatesToChunk(many_data->variants, *params);
+            chunks = AggregatingHelper::mergeAndConvertUpdatesToChunks(many_data->variants, *params);
         else
-            chunk = AggregatingHelper::mergeAndConvertToChunk(many_data->variants, *params);
+            chunks = AggregatingHelper::mergeAndConvertToChunks(many_data->variants, *params);
 
         if (params->emit_version && params->final)
-            emitVersion(chunk);
-
-        chunk.setChunkContext(chunk_ctx);
-        setCurrentChunk(std::move(chunk));
+            emitVersion(chunks);
     }
+
+    if (chunks.empty()) [[unlikely]]
+        chunks.emplace_back(getOutputs().front().getHeader().getColumns(), 0);
+
+    /// Set chunk context for the last chunk
+    chunks.back().setChunkContext(chunk_ctx);
+    setAggregatedResult(chunks);
 }
 
 bool & GlobalAggregatingTransform::retractEnabled() const noexcept

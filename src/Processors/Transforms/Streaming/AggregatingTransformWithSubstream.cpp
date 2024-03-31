@@ -40,7 +40,7 @@ IProcessor::Status AggregatingTransformWithSubstream::prepare()
         return Status::PortFull;
     }
 
-    if (has_input)
+    if (hasAggregatedResult())
         return preparePushToOutput();
 
     /// Only possible while consuming.
@@ -78,7 +78,8 @@ void AggregatingTransformWithSubstream::work()
     auto num_rows = current_chunk.getNumRows();
     if (num_rows == 0 && !current_chunk.hasChunkContext())
     {
-        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0});
+        Chunk res{getOutputs().front().getHeader().getColumns(), 0};
+        setAggregatedResult(res);
         /// Remember to reset `read_current_chunk`
         read_current_chunk = false;
         return;
@@ -139,7 +140,8 @@ void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamCont
     {
         checkpoint(chunk.getCheckpointContext());
         /// Propagate the checkpoint barrier to all down stream output ports
-        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0, nullptr, chunk.getChunkContext()});
+        Chunk res{getOutputs().front().getHeader().getColumns(), 0, nullptr, chunk.getChunkContext()};
+        setAggregatedResult(res);
     }
 
     if (MonotonicMilliseconds::now() - last_log_ts > log_metrics_interval_ms)
@@ -165,15 +167,16 @@ void AggregatingTransformWithSubstream::consume(Chunk chunk, const SubstreamCont
 void AggregatingTransformWithSubstream::propagateWatermarkAndClearExpiredStates(const SubstreamContextPtr & substream_ctx)
 {
     assert(substream_ctx);
-    if (!has_input)
+    if (!hasAggregatedResult())
     {
         auto chunk_ctx = ChunkContext::create();
         chunk_ctx->setSubstreamID(substream_ctx->id);
         chunk_ctx->setWatermark(substream_ctx->finalized_watermark);
-        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0, nullptr, std::move(chunk_ctx)});
+        Chunk res{getOutputs().front().getHeader().getColumns(), 0, nullptr, std::move(chunk_ctx)};
+        setAggregatedResult(res);
     }
     else
-        assert(substream_ctx->finalized_watermark == current_chunk_aggregated.getWatermark());
+        assert(substream_ctx->finalized_watermark == aggregated_chunks.back().getWatermark());
 
     clearExpiredState(substream_ctx->finalized_watermark, substream_ctx);
 }
@@ -185,37 +188,61 @@ void AggregatingTransformWithSubstream::emitVersion(Chunk & chunk, const Substre
     size_t rows = chunk.rows();
     if (params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
     {
-        /// For UDA with own emit strategy, possibly a block can trigger multiple emits for a substream, each emit cause emited_version+1
+        /// For UDA with own emit strategy, possibly a block can trigger multiple emits for a substream, each emit cause emitted_version+1
         /// each emit only has one result, therefore we can count emit times by row number
         auto col = params->version_type->createColumn();
         col->reserve(rows);
         for (size_t i = 0; i < rows; i++)
-            col->insert(substream_ctx->emited_version++);
+            col->insert(substream_ctx->emitted_version++);
         chunk.addColumn(std::move(col));
     }
     else
     {
-        Int64 version = substream_ctx->emited_version++;
+        Int64 version = substream_ctx->emitted_version++;
         chunk.addColumn(params->version_type->createColumnConst(rows, version)->convertToFullColumnIfConst());
     }
 }
 
-void AggregatingTransformWithSubstream::setCurrentChunk(Chunk chunk, Chunk retracted_chunk)
+void AggregatingTransformWithSubstream::emitVersion(ChunkList & chunks, const SubstreamContextPtr & substream_ctx)
 {
-    if (has_input)
-        throw Exception("Current chunk was already set.", ErrorCodes::LOGICAL_ERROR);
+    assert(substream_ctx);
 
-    if (!chunk)
-        return;
-
-    has_input = true;
-    current_chunk_aggregated = std::move(chunk);
-
-    if (retracted_chunk.rows())
+    if (params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
     {
-        current_chunk_retracted = std::move(retracted_chunk);
-        current_chunk_retracted.setConsecutiveDataFlag();
+        for (auto & chunk : chunks)
+        {
+            auto rows = chunk.rows();
+            /// For UDA with own emit strategy, possibly a block can trigger multiple emits, each emit cause version+1
+            /// each emit only has one result, therefore we can count emit times by row number
+            auto col = params->version_type->createColumn();
+            col->reserve(rows);
+            for (size_t i = 0; i < rows; i++)
+                col->insert(substream_ctx->emitted_version++);
+            chunk.addColumn(std::move(col));
+        }
     }
+    else
+    {
+        Int64 version = substream_ctx->emitted_version++;
+        for (auto & chunk : chunks)
+            chunk.addColumn(params->version_type->createColumnConst(chunk.rows(), version)->convertToFullColumnIfConst());
+    }
+}
+
+void AggregatingTransformWithSubstream::setAggregatedResult(Chunk & chunk)
+{
+    if (hasAggregatedResult())
+        throw Exception("Aggregated chunks was already set.", ErrorCodes::LOGICAL_ERROR);
+
+    aggregated_chunks.emplace_back(std::move(chunk));
+}
+
+void AggregatingTransformWithSubstream::setAggregatedResult(ChunkList & chunks)
+{
+    if (hasAggregatedResult())
+        throw Exception("Aggregated chunks was already set.", ErrorCodes::LOGICAL_ERROR);
+
+    aggregated_chunks.swap(chunks);
 }
 
 std::pair<bool, bool> AggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, const SubstreamContextPtr & substream_ctx)
@@ -249,17 +276,8 @@ bool AggregatingTransformWithSubstream::removeSubstreamContext(const SubstreamID
 IProcessor::Status AggregatingTransformWithSubstream::preparePushToOutput()
 {
     auto & output = outputs.front();
-
-    /// At first, push retracted data, then push aggregated data
-    if (current_chunk_retracted)
-    {
-        output.push(std::move(current_chunk_retracted));
-        return Status::PortFull;
-    }
-
-    output.push(std::move(current_chunk_aggregated));
-    has_input = false;
-
+    output.push(std::move(aggregated_chunks.front()));
+    aggregated_chunks.pop_front();
     return Status::PortFull;
 }
 
@@ -298,7 +316,7 @@ void SubstreamContext::serialize(WriteBuffer & wb, VersionType version) const
 
     DB::writeIntBinary(finalized_watermark, wb);
 
-    DB::writeIntBinary(emited_version, wb);
+    DB::writeIntBinary(emitted_version, wb);
 
     DB::writeIntBinary(rows_since_last_finalization, wb);
 
@@ -316,7 +334,7 @@ void SubstreamContext::deserialize(ReadBuffer & rb, VersionType version)
 
     DB::readIntBinary(finalized_watermark, rb);
 
-    DB::readIntBinary(emited_version, rb);
+    DB::readIntBinary(emitted_version, rb);
 
     DB::readIntBinary(rows_since_last_finalization, rb);
 
