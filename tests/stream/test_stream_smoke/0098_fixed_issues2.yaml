@@ -47,13 +47,13 @@ tests:
           - client: python
             query_id: fixed-issues2-1
             query_type: stream
-            wait: 1
+            wait: 2
             query: subscribe to select i in (select i from table(fixed_issues2_stream)), multi_if(i in (select i from table(fixed_issues2_stream)), 1, 0) as t from fixed_issues2_stream settings seek_to='earliest', checkpoint_interval=1;
 
           - client: python
             query_id: fixed-issues2-2
             query_type: stream
-            wait: 1
+            wait: 2
             query: subscribe to with cte as (select 1), cte2 as (select multi_if(i in (cte), '1', '2') as t from fixed_issues2_stream where t = '1') select t from cte2 settings seek_to='earliest', checkpoint_interval=1
 
           - client: python
