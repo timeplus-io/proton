@@ -21,7 +21,7 @@
 
 #include <base/phdr_cache.h>
 #include <base/scope_guard.h>
-
+#include <Python.h>
 
 /// Universal executable for various clickhouse applications
 #if ENABLE_PROTON_SERVER
@@ -340,6 +340,7 @@ bool inside_main = true;
 #if !defined(FUZZING_MODE)
 int main(int argc_, char ** argv_)
 {
+    Py_Initialize();
     inside_main = true;
     SCOPE_EXIT({ inside_main = false; });
 

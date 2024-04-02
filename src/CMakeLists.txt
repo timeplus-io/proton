@@ -534,6 +534,28 @@ endif()
 if (TARGET ch_contrib::rapidjson)
     dbms_target_link_libraries(PRIVATE ch_contrib::rapidjson)
 endif()
+# if (TARGET libpython)
+#     message(STATUS "Link libpython to dbms")
+#     message(STATUS "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
+#     find_library(LIBPYTHON libpython3.13.a PATHS ${proton_SOURCE_DIR}/contrib/cpython-cmake/cpython)
+
+#     if (LIBPYTHON)
+#         message(STATUS "libpython3.13.a found")
+#         # execute_process(COMMAND stat -c %s ${LIBPYTHON} OUTPUT_VARIABLE LIBPYTHON_SIZE)
+#         # message(STATUS "libpython3.13.a size: ${LIBPYTHON_SIZE}")
+#         target_include_directories(dbms PRIVATE ${proton_SOURCE_DIR}/contrib/cpython-cmake/cpython/include)
+#         dbms_target_link_libraries(PRIVATE ${LIBPYTHON})
+#         # dbms_target_link_libraries(PRIVATE ch_contrib::python)
+#     else()
+#         message(FATAL_ERROR "libpython3.13.a not found")
+#     endif()
+# endif()
+
+if (TARGET ch_contrib::python)
+    message(STATUS "Link libpython to dbms")
+    dbms_target_link_libraries(PRIVATE ch_contrib::python)
+endif()
+
 
 dbms_target_link_libraries(PUBLIC ch_contrib::consistent_hashing)
 
