@@ -553,7 +553,7 @@ endif()
 
 if (TARGET ch_contrib::python)
     message(STATUS "Link libpython to dbms")
-    dbms_target_link_libraries(PRIVATE ch_contrib::python)
+    dbms_target_link_libraries(PUBLIC ch_contrib::python)
 endif()
 
 
