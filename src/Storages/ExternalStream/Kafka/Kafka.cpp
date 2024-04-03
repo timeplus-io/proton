@@ -247,12 +247,13 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
 
     cacheVirtualColumnNamesAndTypes();
 
+    rd_kafka_conf_set_log_cb(conf.get(), &Kafka::onLog);
     rd_kafka_conf_set_error_cb(conf.get(), &Kafka::onError);
     rd_kafka_conf_set_stats_cb(conf.get(), &Kafka::onStats);
     rd_kafka_conf_set_throttle_cb(conf.get(), &Kafka::onThrottle);
     rd_kafka_conf_set_dr_msg_cb(conf.get(), &KafkaSink::onMessageDelivery);
 
-    consumer_pool = std::make_unique<RdKafka::ConsumerPool>(/*size=*/100, storage_id, *conf, settings->poll_waittime_ms.value, logger);
+    consumer_pool = std::make_unique<RdKafka::ConsumerPool>(/*size=*/100, storage_id, *conf, settings->poll_waittime_ms.value, getLoggerName());
 
     if (!attach)
         /// Only validate cluster / topic for external stream creation
@@ -482,9 +483,11 @@ Pipe Kafka::read(
 
     LOG_INFO(
         logger,
-        "Starting reading {} streams by seeking to {} in dedicated resource group",
+        "Starting reading {} streams by seeking to {} with {} in dedicated resource group",
         pipes.size(),
-        query_info.seek_to_info->getSeekTo());
+        query_info.seek_to_info->getSeekTo(),
+        consumer->name()
+    );
 
     auto pipe = Pipe::unitePipes(std::move(pipes));
     auto min_threads = context->getSettingsRef().min_threads.value;
@@ -504,7 +507,7 @@ RdKafka::Producer & Kafka::getProducer()
     if (producer)
         return *producer;
 
-    auto producer_ptr = std::make_unique<RdKafka::Producer>(*conf, settings->poll_waittime_ms.value, logger);
+    auto producer_ptr = std::make_unique<RdKafka::Producer>(*conf, settings->poll_waittime_ms.value, getLoggerName());
     producer.swap(producer_ptr);
 
     return *producer;
@@ -540,6 +543,16 @@ int Kafka::onStats(struct rd_kafka_s * rk, char * json, size_t json_len, void * 
     /// controlled by the `statistics.interval.ms` property, which by default is `0`, meaning no stats
     LOG_INFO(cbLogger(), "stats of {}: {}", rd_kafka_name(rk), s);
     return 0;
+}
+
+void Kafka::onLog(const struct rd_kafka_s * rk, int level, const char * fac, const char * buf)
+{
+    if (level < 4)
+        LOG_ERROR(cbLogger(), "{}|{} buf={}", rd_kafka_name(rk), fac, buf);
+    else if (level == 4)
+        LOG_WARNING(cbLogger(), "{}|{} buf={}", rd_kafka_name(rk), fac, buf);
+    else
+        LOG_INFO(cbLogger(), "{}|{} buf={}", rd_kafka_name(rk), fac, buf);
 }
 
 void Kafka::onError(struct rd_kafka_s * rk, int err, const char * reason, void *  /*opaque*/)

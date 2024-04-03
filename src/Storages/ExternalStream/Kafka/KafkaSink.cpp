@@ -135,7 +135,7 @@ KafkaSink::KafkaSink(
     , one_message_per_row(kafka.produceOneMessagePerRow())
     , topic_refresh_interval_ms(kafka.topicRefreshIntervalMs())
     , external_stream_counter(external_stream_counter_)
-    , logger(&Poco::Logger::get(fmt::format("{}(sink-{})", kafka.getLoggerName(), context->getCurrentQueryId())))
+    , logger(&Poco::Logger::get(fmt::format("{}.{}", kafka.getLoggerName(), producer.name())))
 {
     wb = std::make_unique<WriteBufferFromKafkaSink>([this](char * pos, size_t len) { addMessageToBatch(pos, len); });
 
@@ -174,6 +174,7 @@ KafkaSink::KafkaSink(
 
     /// Polling message deliveries.
     background_jobs.scheduleOrThrowOnError([this, refresh_interval_ms = static_cast<UInt64>(topic_refresh_interval_ms)]() {
+        LOG_INFO(logger, "Start topic partition count refreshing job");
         auto metadata_refresh_stopwatch = Stopwatch();
         /// Use a small sleep interval to avoid blocking operation for a long just (in case refresh_interval_ms is big).
         auto sleep_ms = std::min(UInt64(500), refresh_interval_ms);
@@ -195,6 +196,7 @@ KafkaSink::KafkaSink(
                 LOG_WARNING(logger, "Failed to describe topic, error code: {}", getCurrentExceptionMessage(true, true));
             }
         }
+        LOG_INFO(logger, "Stopped topic partition count refreshing job");
     });
 }
 
@@ -341,6 +343,8 @@ void KafkaSink::onFinish()
 {
     if (is_finished.test_and_set())
         return;
+
+    LOG_INFO(logger, "Stopping producing messages");
 
     background_jobs.wait();
 

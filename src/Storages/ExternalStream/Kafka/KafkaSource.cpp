@@ -27,7 +27,7 @@ KafkaSource::KafkaSource(
     Kafka & kafka_,
     const Block & header_,
     const StorageSnapshotPtr & storage_snapshot_,
-    RdKafka::ConsumerPool::Entry consumer_,
+    const RdKafka::ConsumerPool::Entry & consumer_,
     RdKafka::TopicPtr topic_,
     Int32 shard_,
     Int64 offset_,
@@ -50,7 +50,7 @@ KafkaSource::KafkaSource(
     , ckpt_data(kafka.topicName(), shard)
     , external_stream_counter(external_stream_counter_)
     , query_context(std::move(query_context_))
-    , logger(&Poco::Logger::get(fmt::format("{}(source-{})", kafka.getLoggerName(), query_context->getCurrentQueryId())))
+    , logger(&Poco::Logger::get(fmt::format("{}.{}", kafka.getLoggerName(), consumer->name())))
 {
     assert(external_stream_counter);
 
