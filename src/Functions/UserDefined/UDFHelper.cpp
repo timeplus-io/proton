@@ -5,6 +5,7 @@
 #include <Functions/UserDefined/IUserDefinedSQLObjectsLoader.h>
 #include <Functions/UserDefined/UserDefinedExecutableFunction.h>
 #include <Functions/UserDefined/UserDefinedFunctionFactory.h>
+#include <Functions/UserDefined/PythonUserDefinedFunction.h>
 #include <Functions/UserDefined/UserDefinedSQLObjectType.h>
 #include <Interpreters/FunctionNameNormalizer.h>
 #include <Parsers/ASTFunction.h>
@@ -70,6 +71,8 @@ UserDefinedFunctionConfiguration::FuncType getFuncType(String type_name)
         func_type = UserDefinedFunctionConfiguration::FuncType::REMOTE;
     else if (type_name == "javascript")
         func_type = UserDefinedFunctionConfiguration::FuncType::JAVASCRIPT;
+    else if (type_name == "python")
+        func_type = UserDefinedFunctionConfiguration::FuncType::PYTHON;
     else
         throw Exception(
             ErrorCodes::BAD_ARGUMENTS, "Wrong user defined function type expected 'executable' or 'remote' actual {}", type_name);
@@ -278,6 +281,14 @@ createUserDefinedExecutableFunction(ContextPtr context, const std::string & name
             udf_config->source = std::move(source);
             return std::make_shared<UserDefinedExecutableFunction>(std::move(udf_config), lifetime);
         }
+        case UserDefinedFunctionConfiguration::FuncType::PYTHON: {
+            auto udf_config = std::make_shared<PythonUserDefinedFunctionConfiguration>();
+            init_config(udf_config);
+            String source = get_or_throw("source");
+            udf_config->source = std::move(source);
+            return std::make_shared<UserDefinedExecutableFunction>(std::move(udf_config), lifetime);
+        }
+
         case UserDefinedFunctionConfiguration::FuncType::UNKNOWN:
             throw Exception(
                 ErrorCodes::BAD_ARGUMENTS,

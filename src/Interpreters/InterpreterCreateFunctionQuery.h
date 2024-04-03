@@ -23,6 +23,7 @@ private:
 
     /// proton: starts
     BlockIO handleJavaScriptUDF(bool throw_if_exists, bool replace_if_exists);
+    BlockIO handlePythonUDF(bool throw_if_exists, bool replace_if_exists);
     /// proton: ends
 };
 

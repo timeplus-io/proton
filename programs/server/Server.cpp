@@ -562,6 +562,23 @@ void Server::disposeV8()
     v8::V8::Dispose();
     v8::V8::DisposePlatform();
 }
+
+void Server::initPythonInterpreter()
+{
+    std::string executablePath = Poco::Path::current();
+    setenv("PYTHONPATH", "/usr/lib/python3.10", 1);
+    setenv("PYTHONHOME", "/usr/lib/python3.10", 1);
+    Py_Initialize();
+    /// release GIL, since the main thread won't execute python code
+    mainstate = PyEval_SaveThread();
+}
+
+void Server::finalizePythonInterpreter()
+{
+    /// restore GIL, and finalize python interpreter
+    PyEval_RestoreThread(mainstate);
+    Py_Finalize();
+}
 /// proton: ends
 
 void Server::defineOptions(Poco::Util::OptionSet & options)
@@ -1509,6 +1526,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// proton: start.
     /// initialize v8 engine
     initV8();
+
+    initPythonInterpreter();
     /// init Distributed metadata services for Stream table engine
     initGlobalSingletons(global_context);
     global_context->setupNodeIdentity();
@@ -1737,6 +1756,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             deinitGlobalSingletons(global_context);
 
             disposeV8();
+
+            finalizePythonInterpreter();
             /// proton: end.
 
             dns_cache_updater.reset();
