@@ -17,9 +17,10 @@ struct UserDefinedFunctionConfiguration : public TypePromotion<UserDefinedFuncti
         EXECUTABLE = 0,
         REMOTE = 1,
         JAVASCRIPT = 2,
+        PYTHON = 3,
         UNKNOWN = 999
     };
-    /// 'type' can be 'executable', 'remote' or 'javascript'
+    /// 'type' can be 'executable', 'remote', 'javascript', 'python'
     FuncType type;
     struct Argument
     {
@@ -104,6 +105,13 @@ struct JavaScriptUserDefinedFunctionConfiguration : public UserDefinedFunctionCo
     std::string source;
 };
 
+struct PythonUserDefinedFunctionConfiguration : public UserDefinedFunctionConfiguration
+{
+    /// source code of function, only available when 'type' is 'python'
+    std::string source;
+};
+
 using UserDefinedFunctionConfigurationPtr = std::shared_ptr<UserDefinedFunctionConfiguration>;
 using JavaScriptUserDefinedFunctionConfigurationPtr = std::shared_ptr<JavaScriptUserDefinedFunctionConfiguration>;
+using PythonUserDefinedFunctionConfigurationPtr = std::shared_ptr<PythonUserDefinedFunctionConfiguration>;
 }

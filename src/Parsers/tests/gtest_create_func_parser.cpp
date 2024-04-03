@@ -33,7 +33,7 @@ TEST(ParserCreateFunctionQuery, UDFFunction)
     ASTPtr ast = parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0);
     ASTCreateFunctionQuery * create = ast->as<ASTCreateFunctionQuery>();
     EXPECT_EQ(create->getFunctionName(), "add_five");
-    EXPECT_EQ(create->lang, "JavaScript");
+    EXPECT_EQ(create->lang, ASTCreateFunctionQuery::Language::JavaScript);
     EXPECT_NE(create->function_core, nullptr);
     EXPECT_NE(create->arguments, nullptr);
 

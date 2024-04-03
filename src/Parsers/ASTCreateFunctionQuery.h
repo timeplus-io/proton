@@ -19,12 +19,35 @@ public:
     bool or_replace = false;
     bool if_not_exists = false;
 
+    enum class Language
+    {
+        SQL,
+        JavaScript,
+        Python,
+        Null
+    };
+    const char * getLanguageName() const
+    {
+        switch (lang)
+        {
+            case Language::SQL:
+                return "sql";
+            case Language::JavaScript:
+                return "javascript";
+            case Language::Python:
+                return "python";
+            default:
+                return "unknown";
+        }
+    }
+
     /// proton: starts
     bool is_aggregation = false;
-    String lang = "SQL";
+    Language lang = Language::Null;
     ASTPtr arguments;
     ASTPtr return_type;
     /// proton: ends
+
 
     String getID(char delim) const override { return "CreateFunctionQuery" + (delim + getFunctionName()); }
 
@@ -40,7 +63,11 @@ public:
     Poco::JSON::Object::Ptr toJSON() const;
 
     /// If it is a JavaScript UDF
-    bool isJavaScript() const noexcept { return lang == "JavaScript"; }
+    bool isJavaScript() const noexcept { return lang == Language::JavaScript; }
+    /// If it is a Python UDF
+    bool isPython() const noexcept { return lang == Language::Python; }
+    /// If it is a SQL UDF
+    bool isSQL() const noexcept { return lang == Language::SQL; }
     /// proton: ends
 };
 

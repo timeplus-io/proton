@@ -56,6 +56,8 @@ BlockIO InterpreterCreateFunctionQuery::execute()
     /// proton: starts. Handle javascript UDF
     if (create_function_query.isJavaScript())
         return handleJavaScriptUDF(throw_if_exists, replace_if_exists);
+    else if (create_function_query.isPython())
+        return handlePythonUDF(throw_if_exists, replace_if_exists);
     /// proton: ends
 
     UserDefinedSQLFunctionFactory::instance().registerFunction(current_context, function_name, query_ptr, throw_if_exists, replace_if_exists);
@@ -75,5 +77,18 @@ BlockIO InterpreterCreateFunctionQuery::handleJavaScriptUDF(bool throw_if_exists
 
     return {};
 }
+
+BlockIO InterpreterCreateFunctionQuery::handlePythonUDF(bool throw_if_exists, bool replace_if_exists)
+{
+    ASTCreateFunctionQuery & create = query_ptr->as<ASTCreateFunctionQuery &>();
+    assert(create.isPython());
+
+    const auto func_name = create.getFunctionName();
+    Poco::JSON::Object::Ptr func = create.toJSON();
+    UserDefinedFunctionFactory::instance().registerFunction(getContext(), func_name, func, throw_if_exists, replace_if_exists);
+    // pass
+    return {};
+}
+
 /// proton: ends
 }

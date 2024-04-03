@@ -22,7 +22,6 @@
 #include <base/phdr_cache.h>
 #include <base/scope_guard.h>
 
-
 /// Universal executable for various clickhouse applications
 #if ENABLE_PROTON_SERVER
 int mainServer(int argc, char ** argv);
@@ -342,9 +341,9 @@ int main(int argc_, char ** argv_)
 {
     inside_main = true;
     SCOPE_EXIT({ inside_main = false; });
-
     /// Reset new handler to default (that throws std::bad_alloc)
     /// It is needed because LLVM library clobbers it.
+
     std::set_new_handler(nullptr);
 
     /// PHDR cache is required for query profiler to work reliably

@@ -535,6 +535,21 @@ if (TARGET ch_contrib::rapidjson)
     dbms_target_link_libraries(PRIVATE ch_contrib::rapidjson)
 endif()
 
+if (TARGET ch_contrib::python)
+    add_subdirectory(CPython)
+    # workaround for libutil.a
+    find_library(LIBUTIL libutil.a PATHS ${proton_SOURCE_DIR}/contrib/sysroot/linux-x86_64/x86_64-linux-gnu)
+    if (LIBUTIL)
+        message(STATUS "libutil.a found ${LIBUTIL}")
+        dbms_target_link_libraries(PUBLIC ${LIBUTIL})
+    else()
+        message(FATAL_ERROR "libutil.a not found")
+    endif()
+    dbms_target_link_libraries(PUBLIC ch_contrib::python)
+    dbms_target_link_libraries(PUBLIC cpython_util)
+    # dbms_target_link_libraries(PUBLIC ch_contrib::numpy)
+endif()
+
 dbms_target_link_libraries(PUBLIC ch_contrib::consistent_hashing)
 
 include ("${proton_SOURCE_DIR}/cmake/add_check.cmake")

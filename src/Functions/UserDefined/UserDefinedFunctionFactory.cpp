@@ -3,11 +3,13 @@
 /// proton: starts
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionJavaScriptAdapter.h>
+#include <AggregateFunctions/AggregateFunctionPythonAdapter.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/UserDefined/ExecutableUserDefinedFunction.h>
 #include <Functions/UserDefined/ExternalUserDefinedFunctionsLoader.h>
 #include <Functions/UserDefined/JavaScriptUserDefinedFunction.h>
+#include <Functions/UserDefined/PythonUserDefinedFunction.h>
 #include <Functions/UserDefined/RemoteUserDefinedFunction.h>
 #include <Functions/UserDefined/UDFHelper.h>
 #include <Functions/UserDefined/UserDefinedSQLFunctionFactory.h>
@@ -15,6 +17,7 @@
 #include <Interpreters/Streaming/MetaStoreJSONConfigRepository.h>
 #include <V8/Utils.h>
 
+#include <CPython/validatePython.h>
 #include <Poco/Util/JSONConfiguration.h>
 /// proton: ends
 
@@ -57,6 +60,10 @@ FunctionOverloadResolverPtr UserDefinedFunctionFactory::get(const String & funct
             auto function = std::make_shared<JavaScriptUserDefinedFunction>(std::move(executable_function), std::move(context));
             return std::make_unique<FunctionToOverloadResolverAdaptor>(std::move(function));
         }
+        case UserDefinedFunctionConfiguration::FuncType::PYTHON: {
+            auto function = std::make_shared<PythonUserDefinedFunction>(std::move(executable_function), std::move(context));
+            return std::make_unique<FunctionToOverloadResolverAdaptor>(std::move(function));
+        }
         default:
             throw DB::Exception(ErrorCodes::NOT_IMPLEMENTED, "UDF type {} does not support yet.", configuration->type);
     }
@@ -76,8 +83,8 @@ AggregateFunctionPtr UserDefinedFunctionFactory::getAggregateFunction(
     if (load_result.object)
     {
         auto executable_function = std::static_pointer_cast<const UserDefinedExecutableFunction>(load_result.object);
-        const auto config = std::dynamic_pointer_cast<JavaScriptUserDefinedFunctionConfiguration>(executable_function->getConfiguration());
-
+        UserDefinedFunctionConfigurationPtr config = nullptr;
+        config = executable_function->getConfiguration();
         if (!config || !config->is_aggregation)
             return nullptr;
 
@@ -116,9 +123,18 @@ AggregateFunctionPtr UserDefinedFunctionFactory::getAggregateFunction(
             LOG_ERROR(&Poco::Logger::get("UserDefinedFunctionFactory"), "query_context is invalid");
             return nullptr;
         }
-
-        return std::make_shared<AggregateFunctionJavaScriptAdapter>(
-            config, types, parameters, is_changelog_input, query_context->getSettingsRef().javascript_max_memory_bytes);
+        if (config->type == UserDefinedFunctionConfiguration::FuncType::JAVASCRIPT)
+        {
+            return std::make_shared<AggregateFunctionJavaScriptAdapter>(
+                std::dynamic_pointer_cast<JavaScriptUserDefinedFunctionConfiguration>(config), types, parameters, is_changelog_input, query_context->getSettingsRef().javascript_max_memory_bytes);
+        }
+        else if (config->type == UserDefinedFunctionConfiguration::FuncType::PYTHON)
+        {
+            return std::make_shared<AggregateFunctionPythonAdapter>(
+                std::dynamic_pointer_cast<PythonUserDefinedFunctionConfiguration>(config), types, parameters, is_changelog_input);
+        }
+        else
+            return nullptr;
     }
 
     return nullptr;
@@ -208,48 +224,11 @@ bool UserDefinedFunctionFactory::registerFunction(
     Poco::JSON::Object::Ptr config = json_func->getObject("function");
     assert(config);
 
+    assert(config->has("type"));
     if (config->get("type") == "javascript")
-    {
-        if (!config->has("source"))
-            throw Exception(
-                ErrorCodes::FUNCTION_ALREADY_EXISTS, "Missing 'source' property of JavaScript function '{}' already exists", function_name);
-
-        /// check whether the source can be compiled
-        if (config->has("is_aggregation") && config->getValue<bool>("is_aggregation"))
-        {
-            /// UDA
-            V8::validateAggregationFunctionSource(function_name, {"initialize", "process", "finalize"}, config->get("source"));
-
-            /// add _tp_delta column as the last argument
-            assert(config->has("arguments"));
-            assert(config->isArray("arguments"));
-
-            bool has_delta_column = false;
-            /// Below is a workaround, because Poco::JSON::Object::getArray cannot work well
-            Poco::JSON::Array::Ptr json_arguments = config->get("arguments").extract<Poco::JSON::Array::Ptr>();
-            for (size_t i = 0; i < json_arguments->size(); i++)
-            {
-                const auto & arg = json_arguments->getObject(i);
-                if (arg->has("name") && arg->get("name") == "_tp_delta")
-                {
-                    has_delta_column = true;
-                    break;
-                }
-            }
-
-            if (!has_delta_column)
-            {
-                Poco::JSON::Object delta_col;
-                delta_col.set("name", "_tp_delta");
-                delta_col.set("type", "int8");
-                json_arguments->add(delta_col);
-                config->set("arguments", json_arguments);
-            }
-        }
-        else
-            /// UDF
-            V8::validateStatelessFunctionSource(function_name, config->get("source"));
-    }
+        validateJavaScriptFunction(config);
+    else if (config->get("type") == "python")
+        validatePythonFunction(config);
 
     /// Create the UserDefinedExecutableFunction, it also validates the json configuration and throws exception if invalid
     auto udf = Streaming::createUserDefinedExecutableFunction(context, function_name, Poco::Util::JSONConfiguration(json_func));
@@ -284,6 +263,91 @@ bool UserDefinedFunctionFactory::registerFunction(
     return true;
 }
 
+void UserDefinedFunctionFactory::validateJavaScriptFunction(Poco::JSON::Object::Ptr config)
+{
+    const String & function_name = config->getValue<String>("name");
+    if (!config->has("source"))
+        throw Exception(
+            ErrorCodes::FUNCTION_ALREADY_EXISTS, "Missing 'source' property of JavaScript function '{}' already exists", function_name);
+
+    /// check whether the source can be compiled
+    if (config->has("is_aggregation") && config->getValue<bool>("is_aggregation"))
+    {
+        /// UDA V8::validateStatelessFunctionSource(function_name, config->get("source"));
+        V8::validateAggregationFunctionSource(function_name, {"initialize", "process", "finalize"}, config->get("source"));
+
+        /// add _tp_delta column as the last argument
+        assert(config->has("arguments"));
+        assert(config->isArray("arguments"));
+
+        bool has_delta_column = false;
+        /// Below is a workaround, because Poco::JSON::Object::getArray cannot work well
+        Poco::JSON::Array::Ptr json_arguments = config->get("arguments").extract<Poco::JSON::Array::Ptr>();
+        for (size_t i = 0; i < json_arguments->size(); i++)
+        {
+            const auto & arg = json_arguments->getObject(i);
+            if (arg->has("name") && arg->get("name") == "_tp_delta")
+            {
+                has_delta_column = true;
+                break;
+            }
+        }
+
+        if (!has_delta_column)
+        {
+            Poco::JSON::Object delta_col;
+            delta_col.set("name", "_tp_delta");
+            delta_col.set("type", "int8");
+            json_arguments->add(delta_col);
+            config->set("arguments", json_arguments);
+        }
+    }
+    else
+        /// UDF
+        V8::validateStatelessFunctionSource(function_name, config->get("source"));
+}
+
+void UserDefinedFunctionFactory::validatePythonFunction(Poco::JSON::Object::Ptr config)
+{
+    const String & function_name = config->getValue<String>("name");
+    if (!config->has("source"))
+        throw Exception(
+            ErrorCodes::FUNCTION_ALREADY_EXISTS, "Missing 'source' property of Python function '{}'", function_name);
+
+    /// check whether the source can be compiled
+    if (config->has("is_aggregation") && config->getValue<bool>("is_aggregation"))
+    {
+        cpython::validateAggregationFunctionSource({"initialize", "process", "finalize"}, config->get("source"));
+        assert(config->has("arguments"));
+        assert(config->isArray("arguments"));
+
+        [[maybe_unused]] bool has_delta_column = false;
+        Poco::JSON::Array::Ptr json_arguments = config->get("arguments").extract<Poco::JSON::Array::Ptr>();
+
+        for (size_t i = 0; i < json_arguments->size(); i++)
+        {
+            const auto & arg = json_arguments->getObject(i);
+            if (arg->has("name") && arg->get("name") == "_tp_delta")
+            {
+                has_delta_column = true;
+                break;
+            }
+        }
+
+        if (!has_delta_column)
+        {
+            Poco::JSON::Object delta_col;
+            delta_col.set("name", "_tp_delta");
+            delta_col.set("type", "int8");
+            json_arguments->add(delta_col);
+            config->set("arguments", json_arguments);
+        }
+    }
+    else
+        cpython::validateStatelessFunctionSource(config->get("source"));
+}
+
+
 bool UserDefinedFunctionFactory::unregisterFunction(
     const ContextMutablePtr & context, const String & function_name, bool throw_if_not_exists)
 {
@@ -309,5 +373,7 @@ bool UserDefinedFunctionFactory::unregisterFunction(
 
     return true;
 }
+
+
 /// proton: ends
 }

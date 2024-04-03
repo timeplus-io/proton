@@ -3,6 +3,7 @@
 #include <Server/IServer.h>
 
 #include <Daemon/BaseDaemon.h>
+#include <Python.h>
 
 
 /** Server provides three interfaces:
@@ -64,6 +65,10 @@ public:
     void initV8();
 
     void disposeV8();
+
+    void initPythonInterpreter();
+
+    void finalizePythonInterpreter();
     /// proton: ends
 
 protected:
@@ -82,6 +87,8 @@ private:
 
     /// proton: starts
     std::unique_ptr<v8::Platform> platform;
+
+    PyThreadState *mainstate = nullptr;
     /// proton: ends
 
     Poco::Net::SocketAddress socketBindListen(Poco::Net::ServerSocket & socket, const std::string & host, UInt16 port, [[maybe_unused]] bool secure = false) const;

@@ -89,7 +89,7 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     Poco::JSON::Object::Ptr func = new Poco::JSON::Object(Poco::JSON_PRESERVE_KEY_ORDER);
     Poco::JSON::Object::Ptr inner_func = new Poco::JSON::Object(Poco::JSON_PRESERVE_KEY_ORDER);
     inner_func->set("name", getFunctionName());
-    if (!isJavaScript())
+    if (isSQL())
     {
         WriteBufferFromOwnString source_buf;
         formatAST(*function_core, source_buf, false);
@@ -116,7 +116,7 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     inner_func->set("arguments", json_args);
 
     /// type
-    inner_func->set("type", "javascript");
+    inner_func->set("type", getLanguageName());
 
     /// is_aggregation
     inner_func->set("is_aggregation", is_aggregation);

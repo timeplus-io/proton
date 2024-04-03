@@ -443,8 +443,10 @@ macro (proton_add_executable target)
     # if GLIBC_COMPATIBILITY is ON and ENABLE_THINLTO is on than provide memcpy symbol explicitly to neutrialize thinlto's libcall generation.
     if (ARCH_AMD64 AND GLIBC_COMPATIBILITY AND ENABLE_THINLTO)
         add_executable (${ARGV} $<TARGET_OBJECTS:clickhouse_malloc> $<TARGET_OBJECTS:memcpy>)
+        target_compile_options(${target} PRIVATE -rdynamic)
     else ()
         add_executable (${ARGV} $<TARGET_OBJECTS:clickhouse_malloc>)
+        target_compile_options(${target} PRIVATE -rdynamic)
     endif ()
 
     get_target_property (type ${target} TYPE)
@@ -475,6 +477,9 @@ endmacro()
 
 set(CONFIG_INCLUDE_PATH ${CMAKE_CURRENT_BINARY_DIR}/includes/configs CACHE INTERNAL "Path to generated configuration files.")
 include_directories(${CONFIG_INCLUDE_PATH})
+include_directories(SYSTEM ${proton_SOURCE_DIR}/contrib/cpython-cmake/cpython)
+include_directories(SYSTEM ${proton_SOURCE_DIR}/contrib/cpython-cmake/cpython/Include)
+include_directories(SYSTEM ${proton_SOURCE_DIR}/contrib/numpy-cmake//numpy/build-install/usr/lib/python3/dist-packages/numpy/_core/include)
 
 # Add as many warnings as possible for our own code.
 include (cmake/warnings.cmake)
