@@ -1,6 +1,7 @@
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeString.h>
+#include <IO/WriteBufferFromFile.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/TreeRewriter.h>
@@ -21,6 +22,7 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
 
+#include <filesystem>
 #include <ranges>
 
 namespace DB
@@ -185,8 +187,12 @@ Kafka::ConfPtr createConfFromSettings(const KafkaExternalStreamSettings & settin
         conf_set("sasl.password", settings.password.value);
     }
 
-    if (settings.usesSecureConnection() && !settings.ssl_ca_cert_file.value.empty())
-        conf_set("ssl.ca.location", settings.ssl_ca_cert_file.value);
+    if (settings.usesSecureConnection())
+    {
+        conf_set("enable.ssl.certificate.verification", settings.skip_ssl_cert_check ? "false" : "true");
+        if (!settings.ssl_ca_cert_file.value.empty())
+            conf_set("ssl.ca.location", settings.ssl_ca_cert_file.value);
+    }
 
     return conf;
 }
@@ -195,13 +201,25 @@ Kafka::ConfPtr createConfFromSettings(const KafkaExternalStreamSettings & settin
 
 const String Kafka::VIRTUAL_COLUMN_MESSAGE_KEY = "_message_key";
 
+Kafka::ConfPtr Kafka::createRdConf(KafkaExternalStreamSettings settings_)
+{
+    if (const auto & ca_pem = settings_.ssl_ca_pem.value; !ca_pem.empty())
+    {
+        createTempDirIfNotExists();
+        broker_ca_file = tmpdir / "broker_ca.pem";
+        WriteBufferFromFile wb {broker_ca_file};
+        wb.write(ca_pem.data(), ca_pem.size());
+        settings_.ssl_ca_cert_file = broker_ca_file;
+    }
+    return createConfFromSettings(settings_);
+}
+
 Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach, ExternalStreamCounterPtr external_stream_counter_, ContextPtr context)
-    : StorageExternalStreamImpl(std::move(settings_))
-    , storage_id(storage->getStorageID())
+    : StorageExternalStreamImpl(storage, std::move(settings_), context)
     , engine_args(engine_args_)
     , data_format(StorageExternalStreamImpl::dataFormat())
     , external_stream_counter(external_stream_counter_)
-    , conf(createConfFromSettings(settings->getKafkaSettings()))
+    , conf(createRdConf(settings->getKafkaSettings()))
     , logger(&Poco::Logger::get(getLoggerName()))
 {
     assert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);

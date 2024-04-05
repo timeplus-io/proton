@@ -1,11 +1,10 @@
-#include "FileLog.h"
-#include "FileLogSource.h"
-#include "fileLastModifiedTime.h"
-
 #include <Interpreters/Context.h>
 #include <NativeLog/Base/Stds.h>
 #include <NativeLog/Record/Record.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
+#include <Storages/ExternalStream/Log/FileLog.h>
+#include <Storages/ExternalStream/Log/FileLogSource.h>
+#include <Storages/ExternalStream/Log/fileLastModifiedTime.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/Streaming/storageUtil.h>
@@ -22,9 +21,8 @@ extern const int INVALID_SETTING_VALUE;
 extern const int CANNOT_FSTAT;
 }
 
-FileLog::FileLog(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_)
-    : StorageExternalStreamImpl(std::move(settings_))
-    , storage_id(storage->getStorageID())
+FileLog::FileLog(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context)
+    : StorageExternalStreamImpl(storage, std::move(settings_), context)
     , timestamp_regex(std::make_unique<re2::RE2>(settings->timestamp_regex.value))
     , linebreaker_regex(std::make_unique<re2::RE2>(settings->row_delimiter.value))
     , log(&Poco::Logger::get("External-FileLog"))
