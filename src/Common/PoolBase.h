@@ -171,39 +171,24 @@ public:
     }
 
     /// proton: starts
-    void waitForNoMoreInUse(UInt64 timeout_ms)
+    void waitForNoMoreInUse()
     {
         std::unique_lock lock(mutex);
-        auto timeout_stopwatch = Stopwatch();
         while (true)
         {
-            bool all_freed_up = true;
-            for (auto & item : items)
+            bool all_freed = true;
+            for (const auto & item : items)
             {
                 if (item->in_use)
                 {
-                    all_freed_up = false;
+                    all_freed = false;
                     break;
                 }
             }
-            if (all_freed_up)
+            if (all_freed)
                 return;
 
-            if (timeout_stopwatch.elapsedMilliseconds() > timeout_ms)
-            {
-                LOG_ERROR(log, "The waiting for pool items to be freed up timed out");
-                return;
-            }
-
-            LOG_INFO(log, "Waiting for in use pool items to be freed up");
-            try
-            {
-                available.wait_for(lock, std::chrono::milliseconds(timeout_ms));
-            } catch (...)
-            {
-                LOG_ERROR(log, "The waiting for pool items to be freed up timed out");
-                return;
-            }
+            available.wait(lock);
         }
     }
     /// proton: ends
