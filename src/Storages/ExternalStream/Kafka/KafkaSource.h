@@ -23,7 +23,7 @@ public:
         Kafka & kafka_,
         const Block & header_,
         const StorageSnapshotPtr & storage_snapshot_,
-        RdKafka::ConsumerPool::Entry consumer_,
+        const RdKafka::ConsumerPool::Entry & consumer_,
         RdKafka::TopicPtr topic_,
         Int32 shard_,
         Int64 offset_,

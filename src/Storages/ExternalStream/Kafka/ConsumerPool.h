@@ -43,12 +43,12 @@ public:
     using Entry = IConsumerPool::Entry;
     using Base = PoolBase<Consumer>;
 
-    ConsumerPool(unsigned size, const StorageID & storage_id, rd_kafka_conf_t & conf, UInt64 poll_timeout_ms_, Poco::Logger * consumer_logger_)
+    ConsumerPool(unsigned size, const StorageID & storage_id, rd_kafka_conf_t & conf, UInt64 poll_timeout_ms_, const String & consumer_logger_name_prefix_)
        : Base(size,
         &Poco::Logger::get("RdKafkaConsumerPool (" + storage_id.getFullNameNotQuoted() + ")"))
         , rd_conf(conf)
         , poll_timeout_ms(poll_timeout_ms_)
-        , consumer_logger(consumer_logger_)
+        , consumer_logger_name_prefix(consumer_logger_name_prefix_)
     {
     }
 
@@ -68,13 +68,13 @@ protected:
     /** Creates a new object to put in the pool. */
     std::shared_ptr<Consumer> allocObject() override
     {
-        return std::make_shared<Consumer>(rd_conf, poll_timeout_ms, consumer_logger);
+        return std::make_shared<Consumer>(rd_conf, poll_timeout_ms, consumer_logger_name_prefix);
     }
 
 private:
     rd_kafka_conf_t & rd_conf;
     UInt64 poll_timeout_ms {0};
-    Poco::Logger * consumer_logger;
+    String consumer_logger_name_prefix;
 };
 
 }

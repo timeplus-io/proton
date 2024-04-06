@@ -31,6 +31,7 @@ public:
     static int onStats(struct rd_kafka_s * rk, char * json, size_t json_len, void * opaque);
     static void onError(struct rd_kafka_s * rk, int err, const char * reason, void * opaque);
     static void onThrottle(struct rd_kafka_s * rk, const char * broker_name, int32_t broker_id, int throttle_time_ms, void * opaque);
+    static void onLog(const struct rd_kafka_s * rk, int level, const char * fac, const char * buf);
 
     Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach, ExternalStreamCounterPtr external_stream_counter_, ContextPtr context);
     ~Kafka() override = default;

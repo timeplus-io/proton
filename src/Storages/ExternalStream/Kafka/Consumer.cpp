@@ -14,7 +14,7 @@ namespace RdKafka
 {
 
 /// Consumer will take the ownership of `rk_conf`.
-Consumer::Consumer(const rd_kafka_conf_t & rk_conf, UInt64 poll_timeout_ms, Poco::Logger * logger_) : logger(logger_)
+Consumer::Consumer(const rd_kafka_conf_t & rk_conf, UInt64 poll_timeout_ms, const String & logger_name_prefix)
 {
     char errstr[512];
     auto * conf = rd_kafka_conf_dup(&rk_conf);
@@ -27,7 +27,8 @@ Consumer::Consumer(const rd_kafka_conf_t & rk_conf, UInt64 poll_timeout_ms, Poco
         throw Exception(klog::mapErrorCode(rd_kafka_last_error()), "Failed to create kafka handle: {}", errstr);
     }
 
-    LOG_INFO(logger, "Created consumer {}", name());
+    logger = &Poco::Logger::get(fmt::format("{}.{}", logger_name_prefix, name()));
+    LOG_INFO(logger, "Created consumer");
 
     poller.scheduleOrThrowOnError([this, poll_timeout_ms] { backgroundPoll(poll_timeout_ms); });
 }
