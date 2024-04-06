@@ -8,6 +8,9 @@
 #include <Common/logger_useful.h>
 #include <Common/Exception.h>
 
+/// proton: starts
+#include <Common/Stopwatch.h>
+/// proton: ends
 
 namespace DB
 {
@@ -166,6 +169,44 @@ public:
         std::lock_guard lock(mutex);
         return items.size();
     }
+
+    /// proton: starts
+    void waitForNoMoreInUse(UInt64 timeout_ms)
+    {
+        std::unique_lock lock(mutex);
+        auto timeout_stopwatch = Stopwatch();
+        while (true)
+        {
+            bool all_freed_up = true;
+            for (auto & item : items)
+            {
+                if (item->in_use)
+                {
+                    all_freed_up = false;
+                    break;
+                }
+            }
+            if (all_freed_up)
+                return;
+
+            if (timeout_stopwatch.elapsedMilliseconds() > timeout_ms)
+            {
+                LOG_ERROR(log, "The waiting for pool items to be freed up timed out");
+                return;
+            }
+
+            LOG_INFO(log, "Waiting for in use pool items to be freed up");
+            try
+            {
+                available.wait_for(lock, std::chrono::milliseconds(timeout_ms));
+            } catch (...)
+            {
+                LOG_ERROR(log, "The waiting for pool items to be freed up timed out");
+                return;
+            }
+        }
+    }
+    /// proton: ends
 
 private:
     /** The maximum size of the pool. */

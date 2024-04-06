@@ -52,6 +52,12 @@ public:
     {
     }
 
+    ~ConsumerPool() override
+    {
+        LOG_INFO(log, "Waiting for all consumers to be freed");
+        waitForNoMoreInUse(/*timeout_ms=*/5000);
+    }
+
     Entry get(Int64 max_wait_ms) override
     {
         Entry entry;
