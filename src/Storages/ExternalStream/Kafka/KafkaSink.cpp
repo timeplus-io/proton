@@ -20,7 +20,7 @@ namespace ErrorCodes
 {
 extern const int CANNOT_WRITE_TO_KAFKA;
 extern const int INVALID_SETTING_VALUE;
-extern const int NO_AVAILABLE_KAFKA_PRODUCER;
+extern const int KAFKA_PRODUCER_STOPPED;
 extern const int TYPE_MISMATCH;
 }
 
@@ -229,7 +229,7 @@ void KafkaSink::consume(Chunk chunk)
         return;
 
     if (producer->isStopped())
-        throw Exception(ErrorCodes::NO_AVAILABLE_KAFKA_PRODUCER, "Cannot produce messages to a stopped producer");
+        throw Exception(ErrorCodes::KAFKA_PRODUCER_STOPPED, "Cannot produce messages to a stopped producer");
 
     auto total_rows = chunk.rows();
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
