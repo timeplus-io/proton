@@ -31,6 +31,8 @@ public:
 
     /// Selects the consumer to work. If `max_wait_ms` equals -1, it's a blocking call.
     virtual Entry get(Int64 max_wait_ms) = 0;
+
+    virtual void shutdown() {}
 };
 
 using ConsumerPoolPtr = std::unique_ptr<IConsumerPool>;
@@ -52,16 +54,25 @@ public:
     {
     }
 
+    void shutdown() override
+    {
+        if (stopped.test_and_set())
+            return;
+
+        LOG_INFO(log, "Shutting down consumer pool, waiting for all consumers to be freed");
+        waitForNoMoreInUse();
+        LOG_INFO(log, "All consumers are freed");
+    }
+
     Entry get(Int64 max_wait_ms) override
     {
-        Entry entry;
+        if (stopped.test())
+            return Entry();
 
         if (max_wait_ms < 0)
-            entry = Base::get(-1);
+            return Base::get(-1);
         else
-            entry = Base::get(Poco::Timespan(max_wait_ms).totalMilliseconds());
-
-        return entry;
+            return Base::get(Poco::Timespan(max_wait_ms).totalMilliseconds());
     }
 
 protected:
@@ -75,6 +86,8 @@ private:
     rd_kafka_conf_t & rd_conf;
     UInt64 poll_timeout_ms {0};
     String consumer_logger_name_prefix;
+
+    std::atomic_flag stopped {false};
 };
 
 }

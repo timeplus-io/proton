@@ -15,6 +15,10 @@ namespace DB
 
 class IStorage;
 
+namespace ErrorCodes
+{
+extern const int NO_AVAILABLE_KAFKA_CONSUMER;
+}
 
 class Kafka final : public StorageExternalStreamImpl
 {
@@ -39,6 +43,7 @@ public:
     void startup() override { LOG_INFO(logger, "Starting Kafka External Stream"); }
     void shutdown() override {
         LOG_INFO(logger, "Shutting down Kafka External Stream");
+        consumer_pool->shutdown();
         /// Must release all resources here rather than relying on the deconstructor.
         /// Because the `Kafka` instance will not be destroyed immediately when the external stream gets dropped.
         consumer_pool.reset();
@@ -77,7 +82,10 @@ public:
     RdKafka::ConsumerPool::Entry getConsumer() const
     {
         assert(consumer_pool);
-        return consumer_pool->get(/*max_wait_ms=*/1000);
+        auto entry = consumer_pool->get(/*max_wait_ms=*/ 1000);
+        if (entry.isNull())
+            throw Exception(ErrorCodes::NO_AVAILABLE_KAFKA_CONSUMER, "No consumers were available");
+        return entry;
     }
 
     String getLoggerName() const { return storage_id.getDatabaseName() == "default" ? storage_id.getTableName() : storage_id.getFullNameNotQuoted(); }
