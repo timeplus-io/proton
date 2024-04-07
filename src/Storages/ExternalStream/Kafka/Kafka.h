@@ -43,14 +43,26 @@ public:
     void startup() override { LOG_INFO(logger, "Starting Kafka External Stream"); }
     void shutdown() override {
         LOG_INFO(logger, "Shutting down Kafka External Stream");
+
         consumer_pool->shutdown();
+        if (producer)
+            producer->shutdown();
+
         /// Must release all resources here rather than relying on the deconstructor.
         /// Because the `Kafka` instance will not be destroyed immediately when the external stream gets dropped.
         consumer_pool.reset();
         if (producer_topic)
-            producer_topic.reset();
+        {
+            // producer_topic.reset();
+            std::shared_ptr<RdKafka::Topic> empty_topic_ptr;
+            producer_topic.swap(empty_topic_ptr);
+        }
         if (producer)
-            producer.reset();
+        {
+            // producer.reset();
+            std::shared_ptr<RdKafka::Producer> empty_producer_ptr;
+            producer.swap(empty_producer_ptr);
+        }
         tryRemoveTempDir(logger);
     }
     bool supportsSubcolumns() const override { return true; }
@@ -76,8 +88,8 @@ public:
     const ASTPtr & shardingExprAst() const { assert(!engine_args.empty()); return engine_args[0]; }
     bool hasCustomShardingExpr() const;
 
-    RdKafka::Producer & getProducer();
-    RdKafka::Topic & getProducerTopic();
+    std::shared_ptr<RdKafka::Producer> getProducer();
+    std::shared_ptr<RdKafka::Topic> getProducerTopic();
 
     RdKafka::ConsumerPool::Entry getConsumer() const
     {
@@ -112,8 +124,8 @@ private:
     ConfPtr conf;
     /// The Producer instance and Topic instance can be used by multiple sinks at the same time, thus we only need one of each.
     std::mutex producer_mutex;
-    std::unique_ptr<RdKafka::Producer> producer;
-    std::unique_ptr<RdKafka::Topic> producer_topic;
+    std::shared_ptr<RdKafka::Producer> producer;
+    std::shared_ptr<RdKafka::Topic> producer_topic;
     /// A Consumer can only be used by one source at the same time (technically speaking, it can be used by multple sources as long as each source read from a different topic,
     /// but we will leave this as an enhancement later, probably when we introduce the `Connection` concept), thus we need a consumer pool.
     RdKafka::ConsumerPoolPtr consumer_pool;

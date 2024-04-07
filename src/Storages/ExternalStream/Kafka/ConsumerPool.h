@@ -59,6 +59,9 @@ public:
         if (stopped.test_and_set())
             return;
 
+        for (const auto & pooled_consumer : items)
+            pooled_consumer->object->shutdown();
+
         LOG_INFO(log, "Shutting down consumer pool, waiting for all consumers to be freed");
         waitForNoMoreInUse();
         LOG_INFO(log, "All consumers are freed");

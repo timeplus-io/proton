@@ -78,9 +78,8 @@ private:
     /// for all out-go messages, regardless if a message is successfully delivered or not)
     size_t outstandingMessages() const noexcept { return state.outstandings - (state.acked + state.error_count); }
 
-    RdKafka::Producer & producer;
-    RdKafka::Topic & topic;
-    // std::unique_ptr<RdKafka::Topic> topic;
+    std::shared_ptr<RdKafka::Producer> producer;
+    std::shared_ptr<RdKafka::Topic> topic;
 
     Int32 partition_cnt {0};
     bool one_message_per_row {false};

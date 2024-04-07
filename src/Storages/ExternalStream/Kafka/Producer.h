@@ -15,21 +15,22 @@ class Producer : boost::noncopyable
 {
 public:
     Producer(const rd_kafka_conf_t & rk_conf, UInt64 poll_timeout_ms, const String & logger_name_prefix);
-    ~Producer()
-    {
-        stopped.test_and_set();
-    }
+    ~Producer() { shutdown(); }
 
     rd_kafka_t * getHandle() const { return rk.get(); }
 
     std::string name() const { return rd_kafka_name(rk.get()); }
+
+    void shutdown() { stopped = true; }
+
+    bool isStopped() const { return stopped; }
 
 private:
     void backgroundPoll(UInt64 poll_timeout_ms) const;
 
     klog::KafkaPtr rk {nullptr, rd_kafka_destroy};
     ThreadPool poller;
-    std::atomic_flag stopped;
+    bool stopped;
     Poco::Logger * logger;
 };
 

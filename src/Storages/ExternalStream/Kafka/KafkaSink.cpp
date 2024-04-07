@@ -19,8 +19,9 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int CANNOT_WRITE_TO_KAFKA;
-extern const int TYPE_MISMATCH;
 extern const int INVALID_SETTING_VALUE;
+extern const int NO_AVAILABLE_KAFKA_PRODUCER;
+extern const int TYPE_MISMATCH;
 }
 
 namespace
@@ -131,11 +132,11 @@ KafkaSink::KafkaSink(
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
     , producer(kafka.getProducer())
     , topic(kafka.getProducerTopic())
-    , partition_cnt(topic.getPartitionCount())
+    , partition_cnt(topic->getPartitionCount())
     , one_message_per_row(kafka.produceOneMessagePerRow())
     , topic_refresh_interval_ms(kafka.topicRefreshIntervalMs())
     , external_stream_counter(external_stream_counter_)
-    , logger(&Poco::Logger::get(fmt::format("{}.{}", kafka.getLoggerName(), producer.name())))
+    , logger(&Poco::Logger::get(fmt::format("{}.{}", kafka.getLoggerName(), producer->name())))
 {
     wb = std::make_unique<WriteBufferFromKafkaSink>([this](char * pos, size_t len) { addMessageToBatch(pos, len); });
 
@@ -178,7 +179,7 @@ KafkaSink::KafkaSink(
         auto metadata_refresh_stopwatch = Stopwatch();
         /// Use a small sleep interval to avoid blocking operation for a long just (in case refresh_interval_ms is big).
         auto sleep_ms = std::min(UInt64(500), refresh_interval_ms);
-        while (!is_finished.test())
+        while (!producer->isStopped() && !is_finished.test())
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
             /// Fetch topic metadata for partition updates
@@ -189,7 +190,7 @@ KafkaSink::KafkaSink(
 
             try
             {
-                partition_cnt = topic.getPartitionCount();
+                partition_cnt = topic->getPartitionCount();
             }
             catch (...) /// do not break the loop until finished
             {
@@ -226,6 +227,9 @@ void KafkaSink::consume(Chunk chunk)
 {
     if (!chunk.hasRows())
         return;
+
+    if (producer->isStopped())
+        throw Exception(ErrorCodes::NO_AVAILABLE_KAFKA_PRODUCER, "Cannot produce messages to a stopped producer");
 
     auto total_rows = chunk.rows();
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
@@ -299,7 +303,7 @@ void KafkaSink::consume(Chunk chunk)
 
     /// With `wb->setAutoFlush()`, it makes sure that all messages are generated for the chunk at this point.
     rd_kafka_produce_batch(
-        topic.getHandle(),
+        topic->getHandle(),
         RD_KAFKA_PARTITION_UA,
         RD_KAFKA_MSG_F_FREE | RD_KAFKA_MSG_F_PARTITION | RD_KAFKA_MSG_F_BLOCK,
         current_batch.data(),
@@ -355,7 +359,7 @@ void KafkaSink::onFinish()
     /// Make sure all outstanding requests are transmitted and handled.
     /// It should not block for ever here, otherwise, it will block proton from stopping the job
     /// or block proton from terminating.
-    if (auto err = rd_kafka_flush(producer.getHandle(), 15000 /* time_ms */); err)
+    if (auto err = rd_kafka_flush(producer->getHandle(), 15000 /* time_ms */); err)
         LOG_ERROR(logger, "Failed to flush kafka producer, error={}", rd_kafka_err2str(err));
 
     if (auto err = lastSeenError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
@@ -405,7 +409,7 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
         if (is_finished.test())
         {
             /// for a final check, it should not wait for too long
-            if (auto err = rd_kafka_flush(producer.getHandle(), 15000 /* time_ms */); err)
+            if (auto err = rd_kafka_flush(producer->getHandle(), 15000 /* time_ms */); err)
                 throw Exception(klog::mapErrorCode(err), "Failed to flush kafka producer, error={}", rd_kafka_err2str(err));
 
             if (auto err = lastSeenError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
