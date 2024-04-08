@@ -20,7 +20,8 @@ void StorageExternalStreamImpl::tryRemoveTempDir(Poco::Logger * logger) const
 {
     LOG_INFO(logger, "Trying to remove external stream temproary directory {}", tmpdir.string());
     std::error_code err;
-    if (!fs::remove_all(tmpdir, err))
+    fs::remove_all(tmpdir, err);
+    if (err)
         LOG_ERROR(logger, "Failed to remove the temporary directory, error_code={}, error_message={}", err.value(), err.message());
 }
 
