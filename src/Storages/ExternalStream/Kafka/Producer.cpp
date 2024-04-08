@@ -1,3 +1,4 @@
+#include <Common/logger_useful.h>
 #include <Storages/ExternalStream/Kafka/Producer.h>
 
 namespace DB
