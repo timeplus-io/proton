@@ -21,17 +21,18 @@ public:
 
     std::string name() const { return rd_kafka_name(rk.get()); }
 
-    void shutdown() { stopped = true; }
+    void shutdown() { stopped.test_and_set(); }
 
-    bool isStopped() const { return stopped; }
+    bool isStopped() const { return stopped.test(); }
 
 private:
     void backgroundPoll(UInt64 poll_timeout_ms) const;
 
     klog::KafkaPtr rk {nullptr, rd_kafka_destroy};
     ThreadPool poller;
-    bool stopped;
     Poco::Logger * logger;
+
+    std::atomic_flag stopped = ATOMIC_FLAG_INIT;
 };
 
 }

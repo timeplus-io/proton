@@ -37,7 +37,7 @@ void Producer::backgroundPoll(UInt64 poll_timeout_ms) const
 {
     LOG_INFO(logger, "Start producer poll");
 
-    while (!stopped)
+    while (!stopped.test())
         rd_kafka_poll(rk.get(), poll_timeout_ms);
 
     LOG_INFO(logger, "Producer poll stopped");

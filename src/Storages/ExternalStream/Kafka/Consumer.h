@@ -30,7 +30,7 @@ public:
 
     void consumeBatch(Topic & topic, Int32 partition, uint32_t count, int32_t timeout_ms, Callback callback, ErrorCallback error_callback) const;
 
-    void shutdown() { stopped = true; }
+    void shutdown() { stopped.test_and_set(); }
 
     std::string name() const { return rd_kafka_name(rk.get()); }
 
@@ -39,8 +39,9 @@ private:
 
     klog::KafkaPtr rk {nullptr, rd_kafka_destroy};
     ThreadPool poller;
-    bool stopped {false};
     Poco::Logger * logger;
+
+    std::atomic_flag stopped = ATOMIC_FLAG_INIT;
 };
 
 }

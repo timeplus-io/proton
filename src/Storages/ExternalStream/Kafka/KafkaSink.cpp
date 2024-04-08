@@ -179,8 +179,17 @@ KafkaSink::KafkaSink(
         auto metadata_refresh_stopwatch = Stopwatch();
         /// Use a small sleep interval to avoid blocking operation for a long just (in case refresh_interval_ms is big).
         auto sleep_ms = std::min(UInt64(500), refresh_interval_ms);
-        while (!producer->isStopped() && !is_finished.test())
+        while (true)
         {
+            if (unlikely(producer->isStopped()))
+            {
+                is_finished.test_and_set();
+                LOG_WARNING(logger, "Producer {} has stopped, stopping sink", producer->name());
+            }
+
+            if (is_finished.test())
+                break;
+
             std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
             /// Fetch topic metadata for partition updates
             if (metadata_refresh_stopwatch.elapsedMilliseconds() < refresh_interval_ms)
@@ -228,8 +237,8 @@ void KafkaSink::consume(Chunk chunk)
     if (!chunk.hasRows())
         return;
 
-    if (producer->isStopped())
-        throw Exception(ErrorCodes::KAFKA_PRODUCER_STOPPED, "Cannot produce messages to a stopped producer {}", producer->name());
+    if (unlikely(is_finished.test()))
+        throw Exception(ErrorCodes::KAFKA_PRODUCER_STOPPED, "KafkaSink cannot consume data because producer has stopped, likely the underlying external stream is gone");
 
     auto total_rows = chunk.rows();
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
