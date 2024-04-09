@@ -45,7 +45,8 @@ private:
     void calculateColumnPositions();
     void initFormatExecutor();
 
-    void parseMessage(void * kmessage, size_t total_count, void * data);
+    /// \brief Parse a Kafka message and return the offset of current message. (return nullopt if it is not a valid message)
+    std::optional<Int64> parseMessage(void * kmessage, size_t total_count, void * data);
     void parseFormat(const rd_kafka_message_s * kmessage);
 
     inline void readAndProcess();
@@ -74,8 +75,8 @@ private:
     bool request_virtual_columns = false;
 
     std::optional<String> format_error;
-    std::vector<Chunk> result_chunks;
-    std::vector<Chunk>::iterator iter;
+    std::vector<std::pair<Chunk, Int64>> result_chunks_with_sns;
+    std::vector<std::pair<Chunk, Int64>>::iterator iter;
     MutableColumns current_batch;
 
     UInt32 record_consume_batch_count = 1000;

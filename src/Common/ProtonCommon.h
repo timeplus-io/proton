@@ -9,6 +9,8 @@ namespace DB
 {
 namespace ProtonConsts
 {
+constexpr int64_t LogStartSN = 0;
+
 /// Reserved column names / aliases for streaming processing
 const String STREAMING_WINDOW_START = "window_start";
 const String STREAMING_WINDOW_END = "window_end";

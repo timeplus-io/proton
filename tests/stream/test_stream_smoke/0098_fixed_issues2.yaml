@@ -102,3 +102,62 @@ tests:
       - query_id: fixed-issues2-2-1
         expected_results:
           - ['1']
+
+  - id: 1
+    tags:
+      - query state
+    name: issue 646
+    description: recover the query with incorrect start sn (0) if there is no checkpointed sn (-1)
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists fixed_issues2_stream;
+
+          - client: python
+            query_type: table
+            exists: fixed_issues2_stream
+            exists_wait: 2
+            wait: 1
+            query: create stream fixed_issues2_stream(i int);
+
+          - client: python
+            query_type: table
+            depends_on_stream: fixed_issues2_stream
+            wait: 1
+            query: insert into fixed_issues2_stream(i) values(1)(2)(3);
+
+          - client: python
+            query_id: fixed-issues2-1
+            query_type: stream
+            wait: 2
+            query: subscribe to select count() from fixed_issues2_stream emit periodic 1s;
+
+          - client: python
+            query_type: type
+            depends_on: fixed-issues2-1
+            wait: 3
+            query: kill query where query_id='fixed-issues2-1';
+
+          - client: python
+            query_id: fixed-issues2-1-1
+            query_type: stream
+            wait: 1
+            query: recover from 'fixed-issues2-1';
+
+          - client: python
+            query_type: table
+            depends_on: fixed-issues2-1
+            query: insert into fixed_issues2_stream(i) values(4);
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: unsubscribe to 'fixed-issues2-1';
+
+    expected_results:
+      - query_id: fixed-issues2-1
+        expected_results: []
+      - query_id: fixed-issues2-1-1
+        expected_results:
+          - [1]

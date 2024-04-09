@@ -5,6 +5,7 @@
 
 #include <Interpreters/inplaceBlockConversions.h>
 #include <KafkaLog/KafkaWALPool.h>
+#include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
 
 namespace DB
@@ -18,7 +19,7 @@ StreamingStoreSource::StreamingStoreSource(
     Poco::Logger * log_)
     : StreamingStoreSourceBase(header, storage_snapshot_, std::move(context_), log_, ProcessorID::StreamingStoreSourceID)
 {
-    if (sn > 0)
+    if (sn >= ProtonConsts::LogStartSN)
         last_sn = sn - 1;
 
     const auto & settings = query_context->getSettingsRef();
@@ -144,7 +145,7 @@ std::pair<String, Int32> StreamingStoreSource::getStreamShard() const
 
 void StreamingStoreSource::doResetStartSN(Int64 sn)
 {
-    if (sn >= 0)
+    if (sn >= ProtonConsts::LogStartSN)
     {
         if (nativelog_reader)
             nativelog_reader->resetSequenceNumber(sn);
