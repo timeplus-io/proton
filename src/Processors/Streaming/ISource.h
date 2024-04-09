@@ -24,8 +24,8 @@ public:
     virtual String description() const { return ""; }
 
     /// \brief Get/Set the last progressed sequence number of the source
-    Int64 lastProcessedSN() const { return last_processed_sn.load(std::memory_order_relaxed); }
-    void setLastProcessedSN(Int64 sn) { last_processed_sn.store(sn, std::memory_order_relaxed); }
+    Int64 lastProcessedSN() const noexcept { return last_processed_sn.load(std::memory_order_relaxed); }
+    void setLastProcessedSN(Int64 sn) noexcept { last_processed_sn.store(sn, std::memory_order_relaxed); }
 
     /// \brief Reset the start sequence number of the source, it must be called before the pipeline execution (thread-unsafe)
     void resetStartSN(Int64 sn);
