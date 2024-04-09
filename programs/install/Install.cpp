@@ -40,7 +40,7 @@
   *
   * The following steps are performed:
   *
-  * - copying the binary to binary directory (/usr/bin).
+  * - copying the binary to binary directory (/usr/local/bin).
   * - creation of symlinks for tools.
   * - creation of proton user and group.
   * - creation of config directory (/etc/proton-server).
@@ -214,7 +214,7 @@ int mainInstall(int argc, char ** argv)
         desc.add_options()
             ("help,h", "produce help message")
             ("prefix", po::value<std::string>()->default_value("/"), "prefix for all paths")
-            ("binary-path", po::value<std::string>()->default_value("usr/bin"), "where to install binaries")
+            ("binary-path", po::value<std::string>()->default_value("usr/local/bin"), "where to install binaries")
             ("config-path", po::value<std::string>()->default_value("etc/proton-server"), "where to install configs")
             ("log-path", po::value<std::string>()->default_value("var/log/proton-server"), "where to create log directory")
             ("data-path", po::value<std::string>()->default_value("var/lib/proton"), "directory for data")
