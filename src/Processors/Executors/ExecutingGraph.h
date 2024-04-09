@@ -173,7 +173,7 @@ public:
     /// Init Checkpoint trigger nodes and ack nodes
     void initCheckpointNodes();
 
-    bool hasProcessedToCheckpoint() const;
+    bool hasProcessedNewDataSinceLastCheckpoint() const noexcept;
 
     void triggerCheckpoint(CheckpointContextPtr ckpt_ctx);
 

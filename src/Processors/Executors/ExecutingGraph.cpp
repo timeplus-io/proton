@@ -544,12 +544,12 @@ void ExecutingGraph::initCheckpointNodes()
     assert(!checkpoint_trigger_nodes.empty() && !checkpoint_ack_nodes.empty());
 }
 
-bool ExecutingGraph::hasProcessedToCheckpoint() const
+bool ExecutingGraph::hasProcessedNewDataSinceLastCheckpoint() const noexcept
 {
     for (auto * node : checkpoint_trigger_nodes)
     {
         const auto * streaming_source = dynamic_cast<const Streaming::ISource *>(node->processor);
-        if (streaming_source->lastProcessedSN() > streaming_source->lastCheckpointedSN())
+        if (streaming_source->lastProcessedSN() > streaming_source->lastCheckpointSN())
             return true;
     }
     return false;

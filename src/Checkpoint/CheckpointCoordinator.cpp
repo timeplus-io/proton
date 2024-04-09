@@ -387,9 +387,6 @@ void CheckpointCoordinator::removeExpiredCheckpoints(bool delete_marked)
 
 bool CheckpointCoordinator::doTriggerCheckpoint(const std::weak_ptr<PipelineExecutor> & executor, CheckpointContextPtr ckpt_ctx)
 {
-    const auto & qid = ckpt_ctx->qid;
-    auto next_epoch = ckpt_ctx->epoch;
-
     /// Create directory before hand. Then all other processors don't need
     /// check and create target epoch ckpt directory.
     try
@@ -401,14 +398,14 @@ bool CheckpointCoordinator::doTriggerCheckpoint(const std::weak_ptr<PipelineExec
                 logger,
                 "Failed to trigger checkpointing state for query={} epoch={}, since prev checkpoint is still in-progress or it was "
                 "already cancelled",
-                qid,
-                next_epoch);
+                ckpt_ctx->qid,
+                ckpt_ctx->epoch);
             return false;
         }
 
-        if (!exec->hasProcessedToCheckpoint())
+        if (!exec->hasProcessedNewDataSinceLastCheckpoint())
         {
-            LOG_INFO(logger, "Skiped checkpointing state for query={} epoch={}, since there is no new data processed", qid, next_epoch);
+            LOG_INFO(logger, "Skipped checkpointing state for query={} epoch={}, since there is no new data processed", ckpt_ctx->qid, ckpt_ctx->epoch);
             return false;
         }
 
@@ -416,20 +413,20 @@ bool CheckpointCoordinator::doTriggerCheckpoint(const std::weak_ptr<PipelineExec
 
         exec->triggerCheckpoint(std::move(ckpt_ctx));
 
-        LOG_INFO(logger, "Triggered checkpointing state for query={} epoch={}", qid, next_epoch);
+        LOG_INFO(logger, "Triggered checkpointing state for query={} epoch={}", ckpt_ctx->qid, ckpt_ctx->epoch);
         return true;
     }
     catch (const Exception & e)
     {
-        LOG_ERROR(logger, "Failed to trigger checkpointing state for query={} epoch={} error={}", qid, next_epoch, e.message());
+        LOG_ERROR(logger, "Failed to trigger checkpointing state for query={} epoch={} error={}", ckpt_ctx->qid, ckpt_ctx->epoch, e.message());
     }
     catch (const std::exception & ex)
     {
-        LOG_ERROR(logger, "Failed to trigger checkpointing state for query={} epoch={} error={}", qid, next_epoch, ex.what());
+        LOG_ERROR(logger, "Failed to trigger checkpointing state for query={} epoch={} error={}", ckpt_ctx->qid, ckpt_ctx->epoch, ex.what());
     }
     catch (...)
     {
-        tryLogCurrentException(logger, fmt::format("Failed to trigger checkpointing state for query={} epoch={}", qid, next_epoch));
+        tryLogCurrentException(logger, fmt::format("Failed to trigger checkpointing state for query={} epoch={}", ckpt_ctx->qid, ckpt_ctx->epoch));
     }
     return false;
 }
