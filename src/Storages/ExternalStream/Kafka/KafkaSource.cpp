@@ -52,6 +52,9 @@ KafkaSource::KafkaSource(
     , query_context(std::move(query_context_))
     , logger(&Poco::Logger::get(fmt::format("{}.{}", kafka.getLoggerName(), consumer->name())))
 {
+    if (offset > 0)
+        ckpt_data.last_sn = offset - 1;
+
     assert(external_stream_counter);
 
     if (auto batch_count = query_context->getSettingsRef().record_consume_batch_count; batch_count != 0)
@@ -67,7 +70,7 @@ KafkaSource::KafkaSource(
     assert((physical_header.columns() == 1 && !format_executor) || format_executor);
 
     header_chunk = Chunk(header.getColumns(), 0);
-    iter = result_chunks.begin();
+    iter = result_chunks_with_sns.begin();
 }
 
 KafkaSource::~KafkaSource()
@@ -91,7 +94,7 @@ Chunk KafkaSource::generate()
         consume_started = true;
     }
 
-    if (result_chunks.empty() || iter == result_chunks.end())
+    if (result_chunks_with_sns.empty() || iter == result_chunks_with_sns.end())
     {
         readAndProcess();
 
@@ -99,25 +102,29 @@ Chunk KafkaSource::generate()
             return {};
 
         /// After processing blocks, check again to see if there are new results
-        if (result_chunks.empty() || iter == result_chunks.end())
+        if (result_chunks_with_sns.empty() || iter == result_chunks_with_sns.end())
             /// Act as a heart beat
             return header_chunk.clone();
 
         /// result_blocks is not empty, fallthrough
     }
 
-    return std::move(*iter++);
+    ckpt_data.last_sn = iter->second;
+    return std::move((iter++)->first);
 }
 
 void KafkaSource::readAndProcess()
 {
-    result_chunks.clear();
+    result_chunks_with_sns.clear();
     current_batch.clear();
     current_batch.reserve(header.columns());
 
-    auto callback = [this](void * rkmessage, size_t total_count, void * data)
+    Int64 current_batch_last_sn = -1;
+    auto callback = [&current_batch_last_sn, this](void * rkmessage, size_t total_count, void * data)
     {
-        parseMessage(rkmessage, total_count, data);
+        auto current_offset = parseMessage(rkmessage, total_count, data);
+        if (current_offset.has_value()) [[likely]]
+            current_batch_last_sn = *current_offset;
     };
 
     auto error_callback = [this](rd_kafka_resp_err_t err)
@@ -131,22 +138,23 @@ void KafkaSource::readAndProcess()
     if (!current_batch.empty())
     {
         auto rows = current_batch[0]->size();
-        result_chunks.emplace_back(std::move(current_batch), rows);
+        assert(current_batch_last_sn >= 0);
+        result_chunks_with_sns.emplace_back(Chunk{std::move(current_batch), rows}, current_batch_last_sn);
     }
 
-    iter = result_chunks.begin();
+    iter = result_chunks_with_sns.begin();
 }
 
-void KafkaSource::parseMessage(void * rkmessage, size_t  /*total_count*/, void *  /*data*/)
+std::optional<Int64> KafkaSource::parseMessage(void * rkmessage, size_t  /*total_count*/, void *  /*data*/)
 {
     auto * message = static_cast<rd_kafka_message_t *>(rkmessage);
 
     if (unlikely(message->offset < offset))
         /// Ignore the message which has lower offset than what clients like to have
-        return;
+        return {};
 
     parseFormat(message);
-    ckpt_data.last_sn = message->offset;
+    return message->offset;
 }
 
 void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)

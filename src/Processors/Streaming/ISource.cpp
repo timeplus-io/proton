@@ -17,7 +17,7 @@ void ISource::recover(CheckpointContextPtr ckpt_ctx_)
     last_checkpointed_sn = lastProcessedSN();
 
     /// Reset consume offset started from the next of last checkpointed sn (if not manually reset before recovery)
-    if (!reseted_start_sn.has_value())
+    if (!reseted_start_sn.has_value() && last_checkpointed_sn >= 0)
         doResetStartSN(last_checkpointed_sn + 1);
 }
 
