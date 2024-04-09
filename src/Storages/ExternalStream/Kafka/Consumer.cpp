@@ -7,6 +7,7 @@ namespace DB
 
 namespace ErrorCodes
 {
+extern const int KAFKA_CONSUMER_STOPPED;
 extern const int RESOURCE_NOT_FOUND;
 }
 
@@ -70,6 +71,9 @@ void Consumer::stopConsume(Topic & topic, Int32 parition)
 
 void Consumer::consumeBatch(Topic & topic, Int32 partition, uint32_t count, int32_t timeout_ms, Consumer::Callback callback, ErrorCallback error_callback) const
 {
+    if (unlikely(stopped.test()))
+        throw Exception(ErrorCodes::KAFKA_CONSUMER_STOPPED, "Cannot consume from stopped consummer");
+
     std::unique_ptr<rd_kafka_message_t *, decltype(free) *> rkmessages
     {
         static_cast<rd_kafka_message_t **>(malloc(sizeof(rd_kafka_message_t *) * count)), free

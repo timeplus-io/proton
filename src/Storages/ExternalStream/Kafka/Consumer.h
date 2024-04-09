@@ -16,10 +16,7 @@ class Consumer : boost::noncopyable
 {
 public:
     Consumer(const rd_kafka_conf_t & rk_conf, UInt64 poll_timeout_ms, const String & logger_name_prefix);
-    ~Consumer()
-    {
-        stopped.test_and_set();
-    }
+    ~Consumer() { shutdown(); }
 
     rd_kafka_t * getHandle() const { return rk.get(); }
 
@@ -33,6 +30,8 @@ public:
 
     void consumeBatch(Topic & topic, Int32 partition, uint32_t count, int32_t timeout_ms, Callback callback, ErrorCallback error_callback) const;
 
+    void shutdown() { stopped.test_and_set(); }
+
     std::string name() const { return rd_kafka_name(rk.get()); }
 
 private:
@@ -40,8 +39,9 @@ private:
 
     klog::KafkaPtr rk {nullptr, rd_kafka_destroy};
     ThreadPool poller;
-    std::atomic_flag stopped;
     Poco::Logger * logger;
+
+    std::atomic_flag stopped = ATOMIC_FLAG_INIT;
 };
 
 }

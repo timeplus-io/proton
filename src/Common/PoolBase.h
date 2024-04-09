@@ -197,14 +197,14 @@ private:
     /** The maximum size of the pool. */
     unsigned max_items;
 
-    /** Pool. */
-    Objects items;
-
     /** Lock to access the pool. */
     std::mutex mutex;
     std::condition_variable available;
 
 protected:
+
+    /** Pool. */
+    Objects items; /// proton: updated
 
     Poco::Logger * log;
 

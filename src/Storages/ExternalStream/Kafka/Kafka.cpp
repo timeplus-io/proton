@@ -497,36 +497,36 @@ Pipe Kafka::read(
     return pipe;
 }
 
-RdKafka::Producer & Kafka::getProducer()
+std::shared_ptr<RdKafka::Producer> Kafka::getProducer()
 {
     if (producer)
-        return *producer;
+        return producer;
 
     std::scoped_lock lock(producer_mutex);
     /// Check again in case of losing the race
     if (producer)
-        return *producer;
+        return producer;
 
-    auto producer_ptr = std::make_unique<RdKafka::Producer>(*conf, settings->poll_waittime_ms.value, getLoggerName());
+    auto producer_ptr = std::make_shared<RdKafka::Producer>(*conf, settings->poll_waittime_ms.value, getLoggerName());
     producer.swap(producer_ptr);
 
-    return *producer;
+    return producer;
 }
 
-RdKafka::Topic & Kafka::getProducerTopic()
+std::shared_ptr<RdKafka::Topic> Kafka::getProducerTopic()
 {
     if (producer_topic)
-        return *producer_topic;
+        return producer_topic;
 
     std::scoped_lock lock(producer_mutex);
     /// Check again in case of losing the race
     if (producer_topic)
-        return *producer_topic;
+        return producer_topic;
 
-    auto topic_ptr = std::make_unique<RdKafka::Topic>(*getProducer().getHandle(), topicName());
+    auto topic_ptr = std::make_shared<RdKafka::Topic>(*getProducer()->getHandle(), topicName());
     producer_topic.swap(topic_ptr);
 
-    return *producer_topic;
+    return producer_topic;
 }
 
 SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context)
