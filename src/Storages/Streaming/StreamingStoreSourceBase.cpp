@@ -151,7 +151,7 @@ Chunk StreamingStoreSourceBase::generate()
         /// result_blocks is not empty, fallthrough
     }
 
-    last_sn = iter->second;
+    setLastProcessedSN(iter->second);
     return std::move((iter++)->first);
 }
 
@@ -172,7 +172,7 @@ Chunk StreamingStoreSourceBase::doCheckpoint(CheckpointContextPtr current_ckpt_c
         writeIntBinary(processor_id, wb);
         writeStringBinary(stream_shard.first, wb);
         writeIntBinary(stream_shard.second, wb);
-        writeIntBinary(last_sn, wb);
+        writeIntBinary(lastProcessedSN(), wb);
     });
 
     /// FIXME, if commit failed ?
@@ -206,10 +206,12 @@ void StreamingStoreSourceBase::doRecover(CheckpointContextPtr ckpt_ctx_)
                 current_stream_shard.first,
                 current_stream_shard.second);
 
-        readIntBinary(last_sn, rb);
+        Int64 recovered_last_sn = 0;
+        readIntBinary(recovered_last_sn, rb);
+        setLastProcessedSN(recovered_last_sn);
     });
 
-    LOG_INFO(log, "Recovered last_sn={}", last_sn);
+    LOG_INFO(log, "Recovered last_sn={}", lastProcessedSN());
 }
 
 }

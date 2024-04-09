@@ -19,8 +19,8 @@ StreamingStoreSource::StreamingStoreSource(
     Poco::Logger * log_)
     : StreamingStoreSourceBase(header, storage_snapshot_, std::move(context_), log_, ProcessorID::StreamingStoreSourceID)
 {
-    if (sn >= ProtonConsts::LogStartSN)
-        last_sn = sn - 1;
+    if (sn > 0)
+        setLastProcessedSN(sn - 1);
 
     const auto & settings = query_context->getSettingsRef();
     if (settings.record_consume_batch_count.value != 0)

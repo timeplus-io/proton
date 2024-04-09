@@ -396,23 +396,28 @@ bool CheckpointCoordinator::doTriggerCheckpoint(
         /// check and create target epoch ckpt directory.
         try
         {
+            auto exec = executor.value().lock();
+            if (!exec)
+            {
+                LOG_ERROR(
+                    logger,
+                    "Failed to trigger checkpointing state for query={} epoch={}, since it's already cancelled",
+                    qid,
+                    next_epoch);
+                return false;
+            }
+
+            /// Skip checkpointing if there is no new processed data
+            if (!exec->hasProcessedToCheckpoint())
+            {
+                LOG_INFO(logger, "There is no new data processed, so skip checkpointing state for query={} epoch={}", qid, next_epoch);
+                return false;
+            }
+
             auto ckpt_ctx = std::make_shared<CheckpointContext>(next_epoch, qid, this);
             preCheckpoint(ckpt_ctx);
 
-            {
-                auto exec = executor.value().lock();
-                if (!exec)
-                {
-                    LOG_ERROR(
-                        logger,
-                        "Failed to trigger checkpointing state for query={} epoch={}, since it's already cancelled",
-                        qid,
-                        next_epoch);
-                    return false;
-                }
-
-                exec->triggerCheckpoint(std::move(ckpt_ctx));
-            }
+            exec->triggerCheckpoint(std::move(ckpt_ctx));
 
             LOG_INFO(logger, "Triggered checkpointing state for query={} epoch={}", qid, next_epoch);
             return true;

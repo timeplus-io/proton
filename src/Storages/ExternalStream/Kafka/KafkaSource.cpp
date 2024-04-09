@@ -47,14 +47,10 @@ KafkaSource::KafkaSource(
     , topic(topic_)
     , shard(shard_)
     , offset(offset_)
-    , ckpt_data(kafka.topicName(), shard)
     , external_stream_counter(external_stream_counter_)
     , query_context(std::move(query_context_))
     , logger(&Poco::Logger::get(fmt::format("{}.{}", kafka.getLoggerName(), consumer->name())))
 {
-    if (offset > 0)
-        ckpt_data.last_sn = offset - 1;
-
     assert(external_stream_counter);
 
     if (auto batch_count = query_context->getSettingsRef().record_consume_batch_count; batch_count != 0)
@@ -109,7 +105,6 @@ Chunk KafkaSource::generate()
         /// result_blocks is not empty, fallthrough
     }
 
-    ckpt_data.last_sn = iter->second;
     return std::move((iter++)->first);
 }
 
@@ -154,6 +149,7 @@ std::optional<Int64> KafkaSource::parseMessage(void * rkmessage, size_t  /*total
         return {};
 
     parseFormat(message);
+    setLastProcessedSN(message->offset);
     return message->offset;
 }
 
@@ -352,8 +348,13 @@ Chunk KafkaSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
     auto result = header_chunk.clone();
     result.setCheckpointContext(ckpt_ctx_);
 
-    ckpt_ctx_->coordinator->checkpoint(State::VERSION, getLogicID(), ckpt_ctx_, [&](WriteBuffer & wb) { ckpt_data.serialize(wb); });
-    LOG_INFO(logger, "Saved checkpoint topic={} parition={} offset={}", ckpt_data.topic, ckpt_data.partition, ckpt_data.last_sn);
+    ckpt_ctx_->coordinator->checkpoint(getVersion(), getLogicID(), ckpt_ctx_, [&](WriteBuffer & wb) {
+        writeStringBinary(kafka.topicName(), wb);
+        writeIntBinary(shard, wb);
+        writeIntBinary(lastProcessedSN(), wb);
+    });
+
+    LOG_INFO(logger, "Saved checkpoint topic={} parition={} offset={}", kafka.topicName(), shard, lastProcessedSN());
 
     /// FIXME, if commit failed ?
     /// Propagate checkpoint barriers
@@ -362,10 +363,27 @@ Chunk KafkaSource::doCheckpoint(CheckpointContextPtr ckpt_ctx_)
 
 void KafkaSource::doRecover(CheckpointContextPtr ckpt_ctx_)
 {
-    ckpt_ctx_->coordinator->recover(
-        getLogicID(), ckpt_ctx_, [&](VersionType version, ReadBuffer & rb) { ckpt_data.deserialize(version, rb); });
+    ckpt_ctx_->coordinator->recover(getLogicID(), ckpt_ctx_, [&](VersionType, ReadBuffer & rb) {
+        String recovered_topic;
+        Int32 recovered_partition;
+        readStringBinary(recovered_topic, rb);
+        readIntBinary(recovered_partition, rb);
 
-    LOG_INFO(logger, "Recovered last_sn={}", ckpt_data.last_sn);
+        if (recovered_topic != kafka.topicName() || recovered_partition != shard)
+            throw Exception(
+                ErrorCodes::RECOVER_CHECKPOINT_FAILED,
+                "Found mismatched kafka topic-partition. recovered={}-{}, current={}-{}",
+                recovered_topic,
+                recovered_partition,
+                kafka.topicName(),
+                shard);
+
+        Int64 recovered_last_sn;
+        readIntBinary(recovered_last_sn, rb);
+        setLastProcessedSN(recovered_last_sn);
+    });
+
+    LOG_INFO(logger, "Recovered last_sn={}", lastProcessedSN());
 }
 
 void KafkaSource::doResetStartSN(Int64 sn)
@@ -375,32 +393,6 @@ void KafkaSource::doResetStartSN(Int64 sn)
         offset = sn;
         LOG_INFO(logger, "Reset start sn={}", offset);
     }
-}
-
-void KafkaSource::State::serialize(WriteBuffer & wb) const
-{
-    writeStringBinary(topic, wb);
-    writeIntBinary(partition, wb);
-    writeIntBinary(last_sn, wb);
-}
-
-void KafkaSource::State::deserialize(VersionType /*version*/, ReadBuffer & rb)
-{
-    String recovered_topic;
-    Int32 recovered_partition;
-    readStringBinary(recovered_topic, rb);
-    readIntBinary(recovered_partition, rb);
-
-    if (recovered_topic != topic || recovered_partition != partition)
-        throw Exception(
-            ErrorCodes::RECOVER_CHECKPOINT_FAILED,
-            "Found mismatched kafka topic-partition. recovered={}-{}, current={}-{}",
-            recovered_topic,
-            recovered_partition,
-            topic,
-            partition);
-
-    readIntBinary(last_sn, rb);
 }
 
 }
