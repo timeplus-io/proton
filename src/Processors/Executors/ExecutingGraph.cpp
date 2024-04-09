@@ -546,10 +546,10 @@ void ExecutingGraph::initCheckpointNodes()
 
 bool ExecutingGraph::hasProcessedNewDataSinceLastCheckpoint() const noexcept
 {
-    for (auto * node : checkpoint_trigger_nodes)
+    for (const auto * node : checkpoint_trigger_nodes)
     {
         const auto * streaming_source = dynamic_cast<const Streaming::ISource *>(node->processor);
-        if (streaming_source->lastProcessedSN() > streaming_source->lastCheckpointSN())
+        if (streaming_source->hasProcessedNewDataSinceLastCheckpoint())
             return true;
     }
     return false;
