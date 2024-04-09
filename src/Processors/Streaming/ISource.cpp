@@ -14,12 +14,11 @@ void ISource::checkpoint(CheckpointContextPtr ckpt_ctx_)
 void ISource::recover(CheckpointContextPtr ckpt_ctx_)
 {
     doRecover(std::move(ckpt_ctx_));
-    auto last_sn = lastProcessedSN();
-    last_ckpt_sn.store(last_sn, std::memory_order_relaxed);
+    setLastCheckpointSN(lastProcessedSN());
 
-    /// Reset consume offset started from the next of last checkpointed sn (if not manually reset before recovery)
+    /// Reset consume offset started from the next of last checkpoint sn (if not manually reset before recovery)
     if (!reset_start_sn.has_value())
-        doResetStartSN(last_ckpt_sn + 1);
+        doResetStartSN(lastCheckpointSN() + 1);
 }
 
 void ISource::resetStartSN(Int64 sn)
@@ -33,7 +32,7 @@ std::optional<Chunk> ISource::tryGenerate()
     if (auto current_ckpt_ctx = ckpt_request.poll(); current_ckpt_ctx)
     {
         auto chunk = doCheckpoint(std::move(current_ckpt_ctx));
-        last_ckpt_sn.store(lastProcessedSN(), std::memory_order_relaxed);
+        setLastCheckpointSN(lastProcessedSN());
         return std::move(chunk);
     }
 

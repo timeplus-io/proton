@@ -31,12 +31,14 @@ public:
     void resetStartSN(Int64 sn);
 
     /// \brief Get the last checkpoint sequence number of the source
-    Int64 lastCheckpointSN() const noexcept { return last_checkpoint_sn.load(std::memory_order_relaxed); }
+    Int64 lastCheckpointSN() const noexcept { return last_ckpt_sn.load(std::memory_order_relaxed); }
 
     void checkpoint(CheckpointContextPtr ckpt_ctx_) override final;
     void recover(CheckpointContextPtr ckpt_ctx_) override final;
 
 private:
+    void setLastCheckpointSN(Int64 ckpt_sn) noexcept { last_ckpt_sn.store(ckpt_sn, std::memory_order_relaxed); }
+
     std::optional<Chunk> tryGenerate() override final;
 
     /// \brief Checkpointing the source state (include lastProcessedSN())
