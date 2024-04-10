@@ -75,6 +75,8 @@ private:
 
     bool doTriggerCheckpoint(const std::weak_ptr<PipelineExecutor> & executor, CheckpointContextPtr ckpt_ctx);
 
+    void resetCurrentCheckpointEpoch(const String & qid);
+
 private:
     std::unique_ptr<CheckpointStorage> ckpt;
 

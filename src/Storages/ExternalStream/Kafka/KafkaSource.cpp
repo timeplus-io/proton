@@ -51,6 +51,9 @@ KafkaSource::KafkaSource(
     , query_context(std::move(query_context_))
     , logger(&Poco::Logger::get(fmt::format("{}.{}", kafka.getLoggerName(), consumer->name())))
 {
+    if (offset > 0)
+        setLastProcessedSN(offset - 1);
+
     assert(external_stream_counter);
 
     if (auto batch_count = query_context->getSettingsRef().record_consume_batch_count; batch_count != 0)
@@ -105,6 +108,7 @@ Chunk KafkaSource::generate()
         /// result_blocks is not empty, fallthrough
     }
 
+    setLastProcessedSN(iter->second);
     return std::move((iter++)->first);
 }
 
@@ -149,7 +153,6 @@ std::optional<Int64> KafkaSource::parseMessage(void * rkmessage, size_t  /*total
         return {};
 
     parseFormat(message);
-    setLastProcessedSN(message->offset);
     return message->offset;
 }
 

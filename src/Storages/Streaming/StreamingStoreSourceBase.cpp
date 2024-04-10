@@ -16,12 +16,12 @@ extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
 StreamingStoreSourceBase::StreamingStoreSourceBase(
-    const Block & header, const StorageSnapshotPtr & storage_snapshot_, ContextPtr query_context_, Poco::Logger * log_, ProcessorID pid_)
+    const Block & header, const StorageSnapshotPtr & storage_snapshot_, ContextPtr query_context_, Poco::Logger * logger_, ProcessorID pid_)
     : Streaming::ISource(header, true, pid_)
     , storage_snapshot(
           std::make_shared<StorageSnapshot>(*storage_snapshot_)) /// We like to make a copy of it since we will mutate the snapshot
     , query_context(std::move(query_context_))
-    , log(log_)
+    , logger(logger_)
     , header_chunk(header.getColumns(), 0)
     , columns_desc(header.getNames(), storage_snapshot)
 {
@@ -175,6 +175,8 @@ Chunk StreamingStoreSourceBase::doCheckpoint(CheckpointContextPtr current_ckpt_c
         writeIntBinary(lastProcessedSN(), wb);
     });
 
+    LOG_INFO(logger, "Saved checkpoint sn={}", lastProcessedSN());
+
     /// FIXME, if commit failed ?
     /// Propagate checkpoint barriers
     return result;
@@ -211,7 +213,7 @@ void StreamingStoreSourceBase::doRecover(CheckpointContextPtr ckpt_ctx_)
         setLastProcessedSN(recovered_last_sn);
     });
 
-    LOG_INFO(log, "Recovered last_sn={}", lastProcessedSN());
+    LOG_INFO(logger, "Recovered last_sn={}", lastProcessedSN());
 }
 
 }

@@ -33,7 +33,7 @@ protected:
 
     ContextPtr query_context;
 
-    Poco::Logger * log;
+    Poco::Logger * logger;
 
     Chunk header_chunk;
 
