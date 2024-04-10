@@ -85,7 +85,7 @@
         },
         {
             "id": 102,
-            "tags": ["query_state"],
+            "tags": ["query_state", "bug"],
             "name": "multiple_recover_global_aggr_in_substream",
             "description": "multiple recover global aggregation in substream from state checkpoint",
             "steps":[
