@@ -21,8 +21,6 @@ public:
 
     Chunk generate() override;
 
-    Int64 lastProcessedSN() const override { return last_sn; }
-
 private:
     virtual void readAndProcess() = 0;
     virtual std::pair<String, Int32> getStreamShard() const = 0;
@@ -35,7 +33,7 @@ protected:
 
     ContextPtr query_context;
 
-    Poco::Logger * log;
+    Poco::Logger * logger;
 
     Chunk header_chunk;
 
@@ -47,7 +45,5 @@ protected:
 
     std::vector<std::pair<Chunk, Int64>> result_chunks_with_sns;
     std::vector<std::pair<Chunk, Int64>>::iterator iter;
-
-    Int64 last_sn = -1;
 };
 }

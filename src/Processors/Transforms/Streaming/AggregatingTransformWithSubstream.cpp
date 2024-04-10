@@ -303,6 +303,15 @@ void AggregatingTransformWithSubstream::recover(CheckpointContextPtr ckpt_ctx)
         {
             auto substream_ctx = std::make_shared<SubstreamContext>(this);
             substream_ctx->deserialize(rb, version_);
+
+            /// In case when for we had global aggregated some data, but done checkpoint request before finializing
+            if (substream_ctx->rows_since_last_finalization > 0) [[unlikely]]
+                LOG_WARNING(
+                    log,
+                    "Last checkpoint state don't be finalized in substream id={}, rows_since_last_finalization={}",
+                    substream_ctx->id,
+                    substream_ctx->rows_since_last_finalization);
+
             substream_contexts.emplace(substream_ctx->id, std::move(substream_ctx));
         }
     });

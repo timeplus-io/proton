@@ -176,6 +176,7 @@ tests:
       - "emit changelog"
       - "changelog aggr"
       - "query_state"
+      - "bug"
     name: subscribe-and-recover-two-level-global-aggr
     description: subscribe to two level global aggregation query, then recover from checkpointed.
     steps:

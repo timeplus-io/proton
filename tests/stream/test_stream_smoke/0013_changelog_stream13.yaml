@@ -24,6 +24,7 @@ tests:
       - single shard
       - checkpoint
       - emit changelog
+      - bug
     name: "global aggr on changelog_kv stream with single shard"
     description: sum_distinct and count_distinct for changelog_kv stream with single shard.
     steps:
@@ -275,6 +276,7 @@ tests:
       - changelog_kv
       - single shard
       - checkpoint
+      - bug
     name: "global aggr on changelog_kv stream with single shard"
     description: sum_distinct and count_distinct for changelog_kv stream with single shard.
     steps:

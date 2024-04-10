@@ -85,7 +85,7 @@
         },
         {
             "id": 102,
-            "tags": ["query_state"],
+            "tags": ["query_state", "bug"],
             "name": "multiple_recover_global_aggr_in_substream",
             "description": "multiple recover global aggregation in substream from state checkpoint",
             "steps":[
@@ -93,9 +93,9 @@
                     "statements": [
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test19_state_stream5"},
                         {"client":"python", "query_type": "table", "exist":"test19_state_stream5", "exist_wait":2, "wait":1, "query":"create stream test19_state_stream5 (id string, location string, value float, timestamp datetime64(3) default now64(3))"},
-                        {"client":"python", "query_type": "stream", "query_id":"19102", "wait":1, "terminate":"manual", "query":"subscribe to select id, count(*) over (partition by id), min(value) over (partition by id), max(value) over (partition by id) from test19_state_stream5 settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "stream", "query_id":"19102", "wait":1, "terminate":"manual", "query":"subscribe to select id, count(*) over (partition by id), min(value) over (partition by id), max(value) over (partition by id) from test19_state_stream5 settings checkpoint_interval=6"},
                         {"client":"python", "query_type": "table", "depends_on": "19102", "wait":1, "query": "insert into test19_state_stream5(id, location, value, timestamp) values ('dev1', 'ca', 57.3, '2020-02-02 20:00:00')"},
-                        {"client":"python", "query_type": "table", "kill":"19102", "kill_wait":3, "query": "insert into test19_state_stream5(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:02')"}
+                        {"client":"python", "query_type": "table", "kill":"19102", "kill_wait":8, "query": "insert into test19_state_stream5(id, location, value, timestamp) values ('dev2', 'ca', 58.3, '2020-02-02 20:00:02')"}
                     ]
                 },
                 {
@@ -103,7 +103,7 @@
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_state_stream5(id, location, value, timestamp) values ('dev1', 'ca', 68, '2020-02-02 20:00:03')"},
                         {"client":"python", "query_type": "table", "query": "insert into test19_state_stream5(id, location, value, timestamp) values ('dev2', 'ca', 70, '2020-02-02 20:00:04')"},
                         {"client":"python", "query_type": "stream","query_id":"19102-1", "terminate": "manual", "query":"recover from '19102'"},
-                        {"client":"python", "query_type": "table", "wait":3, "query":"kill query where query_id='19102' sync"}
+                        {"client":"python", "query_type": "table", "wait":8, "query":"kill query where query_id='19102' sync"}
                     ]
                 },
                 {

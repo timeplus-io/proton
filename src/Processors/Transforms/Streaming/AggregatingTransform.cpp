@@ -549,6 +549,10 @@ void AggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
             {
                 UInt64 last_rows = 0;
                 DB::readIntBinary<UInt64>(last_rows, rb);
+                /// In case when for we had global aggregated some data, but done checkpoint request before finializing
+                if (last_rows > 0) [[unlikely]]
+                    LOG_WARNING(log, "Last checkpoint state don't be finalized, rows_since_last_finalization={}", last_rows);
+
                 *rows_since_last_finalization = last_rows;
             }
 

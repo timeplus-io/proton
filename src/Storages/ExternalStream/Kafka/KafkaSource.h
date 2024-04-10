@@ -39,8 +39,6 @@ public:
 
     Chunk generate() override;
 
-    Int64 lastProcessedSN() const override { return ckpt_data.last_sn; }
-
 private:
     void calculateColumnPositions();
     void initFormatExecutor();
@@ -88,22 +86,6 @@ private:
     Int64 offset;
 
     bool consume_started = false;
-
-    /// For checkpoint
-    struct State
-    {
-        void serialize(WriteBuffer & wb) const;
-        void deserialize(VersionType version, ReadBuffer & rb);
-
-        static constexpr VersionType VERSION = 0; /// Current State Version
-
-        /// For VERSION-0
-        const String & topic;
-        Int32 partition;
-        Int64 last_sn = -1;
-
-        State(const String & topic_, Int32 partition_) : topic(topic_), partition(partition_) { }
-    } ckpt_data;
 
     ExternalStreamCounterPtr external_stream_counter;
 
