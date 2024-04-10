@@ -40,7 +40,7 @@
   *
   * The following steps are performed:
   *
-  * - copying the binary to binary directory (on OS_DARWIN: /usr/local/bin ON OS_LINUX: /usr/bin).
+  * - copying the binary to binary directory (/usr/local/bin (Apple macOS) or /usr/bin (Others)).
   * - creation of symlinks for tools.
   * - creation of proton user and group.
   * - creation of config directory (/etc/proton-server).
@@ -216,7 +216,7 @@ int mainInstall(int argc, char ** argv)
             ("prefix", po::value<std::string>()->default_value("/"), "prefix for all paths")
 #if defined (OS_DARWIN)
             ("binary-path", po::value<std::string>()->default_value("usr/local/bin"), "where to install binaries")
-#elif defined (OS_LINUX)
+#else
             ("binary-path", po::value<std::string>()->default_value("usr/bin"), "where to install binaries")
 #endif
             ("config-path", po::value<std::string>()->default_value("etc/proton-server"), "where to install configs")
@@ -1163,7 +1163,7 @@ int mainStart(int argc, char ** argv)
             ("prefix", po::value<std::string>()->default_value("/"), "prefix for all paths")
 #if defined (OS_DARWIN)
             ("binary-path", po::value<std::string>()->default_value("usr/local/bin"), "directory with binary")
-#elif defined (OS_LINUX)
+#else
             ("binary-path", po::value<std::string>()->default_value("usr/bin"), "directory with binary")
 #endif
             ("config-path", po::value<std::string>()->default_value("etc/proton-server"), "directory with configs")
@@ -1285,7 +1285,7 @@ int mainRestart(int argc, char ** argv)
             ("prefix", po::value<std::string>()->default_value("/"), "prefix for all paths")
 #if defined (OS_DARWIN)
             ("binary-path", po::value<std::string>()->default_value("usr/local/bin"), "directory with binary")
-#elif defined (OS_LINUX)
+#else
             ("binary-path", po::value<std::string>()->default_value("usr/bin"), "directory with binary")
 #endif
             ("config-path", po::value<std::string>()->default_value("etc/proton-server"), "directory with configs")
