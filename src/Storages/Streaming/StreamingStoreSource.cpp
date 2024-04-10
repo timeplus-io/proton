@@ -19,8 +19,8 @@ StreamingStoreSource::StreamingStoreSource(
     Poco::Logger * log_)
     : StreamingStoreSourceBase(header, storage_snapshot_, std::move(context_), log_, ProcessorID::StreamingStoreSourceID)
 {
-    if (sn >= ProtonConsts::LogStartSN)
-        last_sn = sn - 1;
+    if (sn > 0)
+        setLastProcessedSN(sn - 1);
 
     const auto & settings = query_context->getSettingsRef();
     if (settings.record_consume_batch_count.value != 0)
@@ -36,7 +36,7 @@ StreamingStoreSource::StreamingStoreSource(
         auto consumer = kpool.getOrCreateStreaming(stream_shard_->logStoreClusterId());
         assert(consumer);
         kafka_reader = std::make_unique<StreamingBlockReaderKafka>(
-            std::move(stream_shard_), sn, columns_desc.physical_column_positions_to_read, std::move(consumer), log);
+            std::move(stream_shard_), sn, columns_desc.physical_column_positions_to_read, std::move(consumer), logger);
     }
     else
     {
@@ -50,7 +50,7 @@ StreamingStoreSource::StreamingStoreSource(
             /*schema_provider*/ nullptr,
             /*schema_version*/ 0,
             columns_desc.physical_column_positions_to_read,
-            log);
+            logger);
     }
 }
 
@@ -152,7 +152,7 @@ void StreamingStoreSource::doResetStartSN(Int64 sn)
         else
             kafka_reader->resetOffset(sn);
 
-        LOG_INFO(log, "Reset start sn={}", sn);
+        LOG_INFO(logger, "Reset start sn={}", sn);
     }
 }
 }

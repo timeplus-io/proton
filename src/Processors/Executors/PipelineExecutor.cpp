@@ -497,6 +497,11 @@ void PipelineExecutor::serialize(CheckpointContextPtr ckpt_ctx) const
     }
 }
 
+bool PipelineExecutor::hasProcessedNewDataSinceLastCheckpoint() const noexcept
+{
+    return graph->hasProcessedNewDataSinceLastCheckpoint();
+}
+
 void PipelineExecutor::triggerCheckpoint(CheckpointContextPtr ckpt_ctx)
 {
     graph->triggerCheckpoint(std::move(ckpt_ctx));

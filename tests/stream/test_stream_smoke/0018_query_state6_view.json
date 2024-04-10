@@ -500,8 +500,8 @@
                         {"client":"python", "query_type": "table", "wait":1, "query":"drop stream if exists test19_state_stream6"},
                         {"client":"python", "query_type": "table", "exist":"test19_state_stream6", "exist_wait":2, "wait":1, "query":"create stream test19_state_stream6 (id string, value_str string)"},
                         {"client":"python", "query_type": "table", "exist":"test19_state_view6", "exist_wait":2, "wait":1, "query":"create view if not exists test19_state_view6 as select emit_version(), group_array(id) as ids, group_array(latest_value_str) as latest_value_strs, map_cast(ids, latest_value_strs) as id_value_strs, id_value_strs['a'] as id_value_a, to_float(id_value_a) from (select id, latest(value_str) as latest_value_str from test19_state_stream6 group by id order by id)"},
-                        {"client":"python", "query_type": "stream", "query_id":"19163",  "wait":1, "terminate":"manual", "query":"subscribe to select * from test19_state_view6 limit 2 settings checkpoint_interval=1"},
-                        {"client":"python", "query_type": "table", "depends_on":"19163", "kill":"19163", "kill_wait":3, "wait":1,"query":"insert into test19_state_stream6 (id, value_str) values ('a', '100.1') ('b', '200.1') ('c', '300.1')"}
+                        {"client":"python", "query_type": "stream", "query_id":"19163",  "wait":1, "terminate":"manual", "query":"subscribe to select * from test19_state_view6 limit 2 settings checkpoint_interval=6"},
+                        {"client":"python", "query_type": "table", "depends_on":"19163", "kill":"19163", "kill_wait":8, "wait":1,"query":"insert into test19_state_stream6 (id, value_str) values ('a', '100.1') ('b', '200.1') ('c', '300.1')"}
                     ]
                 },
                 {

@@ -23,18 +23,24 @@ public:
 
     virtual String description() const { return ""; }
 
-    /// \brief Get the last progressed sequence number of the source, it shouldn't be called during pipeline execution (thread-unsafe)
-    virtual Int64 lastProcessedSN() const { throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for lastProcessedSN() of {}", getName()); }
+    /// \brief Get/Set the last progressed sequence number of the source
+    Int64 lastProcessedSN() const noexcept { return last_processed_sn.load(std::memory_order_relaxed); }
+    void setLastProcessedSN(Int64 sn) noexcept { last_processed_sn.store(sn, std::memory_order_relaxed); }
 
     /// \brief Reset the start sequence number of the source, it must be called before the pipeline execution (thread-unsafe)
     void resetStartSN(Int64 sn);
 
-    Int64 lastCheckpointedSN() const noexcept { return last_checkpointed_sn; }
+    /// \brief Get the last checkpoint sequence number of the source
+    Int64 lastCheckpointSN() const noexcept { return last_ckpt_sn.load(std::memory_order_relaxed); }
+
+    bool hasProcessedNewDataSinceLastCheckpoint() const noexcept { return lastProcessedSN() > lastCheckpointSN(); }
 
     void checkpoint(CheckpointContextPtr ckpt_ctx_) override final;
     void recover(CheckpointContextPtr ckpt_ctx_) override final;
 
 private:
+    void setLastCheckpointSN(Int64 ckpt_sn) noexcept { last_ckpt_sn.store(ckpt_sn, std::memory_order_relaxed); }
+
     std::optional<Chunk> tryGenerate() override final;
 
     /// \brief Checkpointing the source state (include lastProcessedSN())
@@ -58,8 +64,9 @@ private:
 private:
     /// For checkpoint
     CheckpointRequest ckpt_request;
-    NO_SERDE std::optional<Int64> reseted_start_sn;
-    NO_SERDE Int64 last_checkpointed_sn = -1;
+    NO_SERDE std::optional<Int64> reset_start_sn;
+    NO_SERDE std::atomic<Int64> last_ckpt_sn = -1;
+    SERDE std::atomic<Int64> last_processed_sn = -1;
 };
 
 using StreamingSourcePtr = std::shared_ptr<ISource>;

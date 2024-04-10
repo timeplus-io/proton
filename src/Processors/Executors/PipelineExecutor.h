@@ -68,6 +68,8 @@ public:
 
     String getStats() const;
 
+    bool hasProcessedNewDataSinceLastCheckpoint() const noexcept;
+
     /// Trigger checkpointing the states of operators in the graph
     void triggerCheckpoint(CheckpointContextPtr ckpt_ctx);
 

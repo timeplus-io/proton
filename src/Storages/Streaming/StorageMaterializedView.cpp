@@ -99,7 +99,7 @@ std::vector<Int64> getCheckpointedSNOfStreamingSources(const Streaming::Streamin
     std::vector<Int64> sns;
     sns.reserve(streaming_sources.size());
     for (const auto & streaming_source : streaming_sources)
-        sns.emplace_back(streaming_source->lastCheckpointedSN());
+        sns.emplace_back(streaming_source->lastCheckpointSN());
 
     return sns;
 }
@@ -111,7 +111,7 @@ String dumpStreamingSourcesWithSNs(const Streaming::StreamingSourcePtrs & stream
     if (sns.empty())
     {
         for (const auto & streaming_source : streaming_sources)
-            wb << streaming_source->getName() << "(" << streaming_source->description() << ",sn=" << streaming_source->lastCheckpointedSN()
+            wb << streaming_source->getName() << "(" << streaming_source->description() << ",sn=" << streaming_source->lastCheckpointSN()
                << ");";
     }
     else
@@ -122,7 +122,7 @@ String dumpStreamingSourcesWithSNs(const Streaming::StreamingSourcePtrs & stream
         /// Use last checkpointed sn instead of invalid sn
         for (auto && [streaming_source, sn] : std::views::zip(streaming_sources, sns))
             wb << streaming_source->getName() << "(" << streaming_source->description()
-               << ",sn=" << (sn >= 0 ? sn : streaming_source->lastCheckpointedSN()) << ");";
+               << ",sn=" << (sn >= 0 ? sn : streaming_source->lastCheckpointSN()) << ");";
     }
 
     return wb.str();

@@ -173,6 +173,8 @@ public:
     /// Init Checkpoint trigger nodes and ack nodes
     void initCheckpointNodes();
 
+    bool hasProcessedNewDataSinceLastCheckpoint() const noexcept;
+
     void triggerCheckpoint(CheckpointContextPtr ckpt_ctx);
 
     template<typename Iterator>

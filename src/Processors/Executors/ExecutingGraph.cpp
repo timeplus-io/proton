@@ -6,6 +6,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Processors/PlaceholdProcessor.h>
+#include <Processors/Streaming/ISource.h>
 
 #include <Poco/JSON/Object.h>
 #include <Poco/JSON/Array.h>
@@ -541,6 +542,17 @@ void ExecutingGraph::initCheckpointNodes()
     }
 
     assert(!checkpoint_trigger_nodes.empty() && !checkpoint_ack_nodes.empty());
+}
+
+bool ExecutingGraph::hasProcessedNewDataSinceLastCheckpoint() const noexcept
+{
+    for (const auto * node : checkpoint_trigger_nodes)
+    {
+        const auto * streaming_source = dynamic_cast<const Streaming::ISource *>(node->processor);
+        if (streaming_source->hasProcessedNewDataSinceLastCheckpoint())
+            return true;
+    }
+    return false;
 }
 
 void ExecutingGraph::triggerCheckpoint(CheckpointContextPtr ckpt_ctx)

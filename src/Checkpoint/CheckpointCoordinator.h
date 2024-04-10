@@ -73,11 +73,9 @@ private:
     void triggerCheckpoint(const String & qid, UInt64 checkpoint_interval);
     void removeExpiredCheckpoints(bool delete_marked);
 
-    bool doTriggerCheckpoint(
-        const std::optional<std::weak_ptr<PipelineExecutor>> & executor,
-        std::string_view qid,
-        Int64 next_epoch,
-        std::string_view node_desc);
+    bool doTriggerCheckpoint(const std::weak_ptr<PipelineExecutor> & executor, CheckpointContextPtr ckpt_ctx);
+
+    void resetCurrentCheckpointEpoch(const String & qid);
 
 private:
     std::unique_ptr<CheckpointStorage> ckpt;
