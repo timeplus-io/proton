@@ -40,7 +40,7 @@
   *
   * The following steps are performed:
   *
-  * - copying the binary to binary directory (/usr/local/bin).
+  * - copying the binary to binary directory (on OS_DARWIN: /usr/local/bin ON OS_LINUX: /usr/bin).
   * - creation of symlinks for tools.
   * - creation of proton user and group.
   * - creation of config directory (/etc/proton-server).
@@ -214,7 +214,11 @@ int mainInstall(int argc, char ** argv)
         desc.add_options()
             ("help,h", "produce help message")
             ("prefix", po::value<std::string>()->default_value("/"), "prefix for all paths")
+#if defined (OS_DARWIN)
             ("binary-path", po::value<std::string>()->default_value("usr/local/bin"), "where to install binaries")
+#elif defined (OS_LINUX)
+            ("binary-path", po::value<std::string>()->default_value("usr/bin"), "where to install binaries")
+#endif
             ("config-path", po::value<std::string>()->default_value("etc/proton-server"), "where to install configs")
             ("log-path", po::value<std::string>()->default_value("var/log/proton-server"), "where to create log directory")
             ("data-path", po::value<std::string>()->default_value("var/lib/proton"), "directory for data")
@@ -1157,7 +1161,11 @@ int mainStart(int argc, char ** argv)
         desc.add_options()
             ("help,h", "produce help message")
             ("prefix", po::value<std::string>()->default_value("/"), "prefix for all paths")
+#if defined (OS_DARWIN)
             ("binary-path", po::value<std::string>()->default_value("usr/local/bin"), "directory with binary")
+#elif defined (OS_LINUX)
+            ("binary-path", po::value<std::string>()->default_value("usr/bin"), "directory with binary")
+#endif
             ("config-path", po::value<std::string>()->default_value("etc/proton-server"), "directory with configs")
             ("pid-path", po::value<std::string>()->default_value("var/run/proton-server"), "directory for pid file")
             ("user", po::value<std::string>()->default_value(DEFAULT_CLICKHOUSE_SERVER_USER), "proton user")
@@ -1275,7 +1283,11 @@ int mainRestart(int argc, char ** argv)
         desc.add_options()
             ("help,h", "produce help message")
             ("prefix", po::value<std::string>()->default_value("/"), "prefix for all paths")
+#if defined (OS_DARWIN)
             ("binary-path", po::value<std::string>()->default_value("usr/local/bin"), "directory with binary")
+#elif defined (OS_LINUX)
+            ("binary-path", po::value<std::string>()->default_value("usr/bin"), "directory with binary")
+#endif
             ("config-path", po::value<std::string>()->default_value("etc/proton-server"), "directory with configs")
             ("pid-path", po::value<std::string>()->default_value("var/run/proton-server"), "directory for pid file")
             ("user", po::value<std::string>()->default_value(DEFAULT_CLICKHOUSE_SERVER_USER), "proton user")
