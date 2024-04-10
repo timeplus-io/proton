@@ -193,8 +193,6 @@ void WatermarkTransformWithSubstream::work()
             output_chunks.emplace_back(std::move(process_chunk));
         }
     }
-
-    output_iter = output_chunks.begin(); /// need to output chunks
 }
 
 WatermarkStamper & WatermarkTransformWithSubstream::getOrCreateSubstreamWatermark(const SubstreamID & id)
