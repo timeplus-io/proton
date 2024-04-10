@@ -240,12 +240,12 @@ int mainInstall(int argc, char ** argv)
         uint32_t path_length = 0;
         _NSGetExecutablePath(nullptr, &path_length);
         if (path_length <= 1)
-            Exception(ErrorCodes::FILE_DOESNT_EXIST, "Cannot obtain path to the binary");
+            throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "Cannot obtain path to the binary");
 
         std::string path(path_length, std::string::value_type());
         auto res = _NSGetExecutablePath(&path[0], &path_length);
         if (res != 0)
-            Exception(ErrorCodes::FILE_DOESNT_EXIST, "Cannot obtain path to the binary");
+            throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "Cannot obtain path to the binary");
 
         if (path.back() == '\0')
             path.pop_back();
@@ -322,15 +322,22 @@ int mainInstall(int argc, char ** argv)
 
             try
             {
-                ReadBufferFromFile in(binary_self_path.string());
-                WriteBufferFromFile out(main_bin_tmp_path.string());
-                copyData(in, out);
-                out.sync();
+                String source = binary_self_path.string();
+                String destination = main_bin_tmp_path.string();
 
-                if (0 != fchmod(out.getFD(), S_IRUSR | S_IRGRP | S_IROTH | S_IXUSR | S_IXGRP | S_IXOTH))
+                /// Try to make a hard link first, as an optimization.
+                /// It is possible if the source and the destination are on the same filesystems.
+                if (0 != link(source.c_str(), destination.c_str()))
+                {
+                    ReadBufferFromFile in(binary_self_path.string());
+                    WriteBufferFromFile out(main_bin_tmp_path.string());
+                    copyData(in, out);
+                    out.sync();
+                    out.finalize();
+                }
+
+                if (0 != chmod(destination.c_str(), S_IRUSR | S_IRGRP | S_IROTH | S_IXUSR | S_IXGRP | S_IXOTH))
                     throwFromErrno(fmt::format("Cannot chmod {}", main_bin_tmp_path.string()), ErrorCodes::SYSTEM_ERROR);
-
-                out.finalize();
             }
             catch (const Exception & e)
             {
@@ -354,7 +361,7 @@ int mainInstall(int argc, char ** argv)
 
         /// Create symlinks.
 
-        std::initializer_list<const char *> tools
+        std::initializer_list<std::string_view> tools
         {
             "proton-server",
             "proton-client",
@@ -435,8 +442,8 @@ int mainInstall(int argc, char ** argv)
                 fs::path ulimits_file = ulimits_dir / fmt::format("{}.conf", user);
                 fmt::print("Will set ulimits for {} user in {}.\n", user, ulimits_file.string());
                 std::string ulimits_content = fmt::format(
-                    "{0}\tsoft\tnofile\t262144\n"
-                    "{0}\thard\tnofile\t262144\n", user);
+                    "{0}\tsoft\tnofile\t1048576\n"
+                    "{0}\thard\tnofile\t1048576\n", user);
 
                 fs::create_directories(ulimits_dir);
 
@@ -1162,8 +1169,10 @@ int mainStart(int argc, char ** argv)
 
         if (options.count("help"))
         {
-            std::cout << "Usage: " << formatWithSudo(std::string(argv[0]) + " start", getuid() != 0) << '\n';
-            return 1;
+            std::cout << "Install Proton without .deb/.rpm/.tgz packages (having the binary only)\n\n";
+            std::cout << "Usage: " << formatWithSudo(std::string(argv[0]) + " install [options]", getuid() != 0) << '\n';
+            std::cout << desc << '\n';
+            return 0;
         }
 
         std::string user = options["user"].as<std::string>();
