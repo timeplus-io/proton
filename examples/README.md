@@ -19,3 +19,5 @@ This folder lists some examples to run Proton in various use cases. For more rea
 - hackernews: just two containers: Proton and [a bytewax-based data loader](https://github.com/timeplus-io/proton-python-driver/tree/develop/example/bytewax). Inspired by https://bytewax.io/blog/polling-hacker-news, you can call Hacker News HTTP API with Bytewax and send latest news to Proton for SQL-based analysis.
 
 - jdbc: demonstrates how to connect to Proton via JDBC using DBeaver or Metabase.
+
+- onebrc: Proton is based on ClickHouse, which is an OLAP workhorse, and query processing of 1 billion rows (of historical data) from the [1 billion row challenge](https://github.com/gunnarmorling/1brc) is fast, out-of-the-box.
