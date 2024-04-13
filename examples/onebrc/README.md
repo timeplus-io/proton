@@ -85,20 +85,20 @@ curl -s "https://get.sdkman.io" | bash
 source "/home/ubuntu/.sdkman/bin/sdkman-init.sh"
 ```
 
-2. Install a JDK based on OpenJDK that supports Java 21 using `sdkman`:
+2. Using `sdkman`, install a JDK based on OpenJDK that supports Java 21:
 ```bash
 sdk install java 21.0.1-open
 ```
 
 3. Clone the [`1brc`](https://github.com/gunnarmorling/1brc) repository locally:
 ```bash
-cd /data
+cd /demo
 git clone https://github.com/gunnarmorling/1brc
 ```
 
 4. Build the generator for the test data 
 ```bash
-cd 1brc
+cd /demo/1brc
 ./mvnw verify 
 ```
 
@@ -108,7 +108,7 @@ time ./create_measurements.sh 1000000000
 ```
 
 <details>
-<summary>The generator generated `measurements.txt` (a 13GB CSV file) in about 12 minutes.</summary>
+<summary>The generator generated <code>measurements.txt</code> (a 13GB CSV file) in about 12 minutes.</summary>
 <pre>
 time ./create_measurements.sh 1000000000
 Wrote 50,000,000 measurements in 16122 ms
@@ -142,7 +142,7 @@ sys 0m16.623s
 ## Proton
 1. Install Proton on your machine:
 ```bash
-cd /data
+cd /demo
 curl https://install.timeplus.com | sh
 ```
 
@@ -153,7 +153,7 @@ curl https://install.timeplus.com | sh
 
 3. Once the Proton server is started successfully, it will create a folder named `proton-data/` in the current directory which contains multiple subfolders. We will copy the test data we generated earlier (`measurements.txt`) into the `proton-data/user_files` subfolder created by the Proton server.
 ```bash
-cp /data/1brc/measurements.txt /data/proton-data/user_files
+cp /demo/1brc/measurements.txt /demo/proton-data/user_files
 ```
 
 4. Start the Proton client in another terminal:
