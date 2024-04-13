@@ -53,11 +53,14 @@ FROM (
 The Proton docs covers the [minor differences](https://docs.timeplus.com/proton-faq/#if-im-familiar-with-clickhouse-how-easy-is-it-for-me-to-use-proton) between the ClickHouse SQL dialect and the Proton SQL dialect. 
 
 In all, the changes were minimal to make the SQL work on Proton:
-* change `arrayStringConcat()` => `array_string_concat()`;
-* change `groupArray()` => `groupArray()`;
-* change `toDecimalString()` => `to_string(to_decimal(...))`;
-* change `city String` => `city string`;
-* change `temperature Float32` => `temperature float32`.
+* convert column types from title case to lower case:
+  * in `city String`, change `String` => `string`;
+  * in `temperature Float32`, change `Float32` => `float32`;
+* convert function names from camel case to snake case:
+  * change `arrayStringConcat()` => `array_string_concat()`;
+  * change `groupArray()` => `group_array()`;
+* in the absence of a single function, compose multiple functions to obtain the same result: 
+  * change `toDecimalString()` => `to_string(to_decimal(...))`.
 
 The SQL code that we will be using on Proton:
 ```sql
