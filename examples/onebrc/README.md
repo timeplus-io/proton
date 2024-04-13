@@ -6,21 +6,22 @@ Back in January, Gunnar Morling kicked off a challenge to optimise the aggregati
 
 `1brc` was intended to raise awareness within the Java community about new language features that many Java developers may not be aware of. But, the optimisation task at the core of challenge turned out to be sufficiently challenging on its own, making it hugely popular amongst developers of all stripes.
 
-## Programming Language Shootout
-There was plenty of interest from other programming language communities. It wasn't long before the challenge turned into a programming language shootout: to see which programming language could produce the fastest solution, even though only solutions written in Java would be accepted for judging.
+## Language Shootout
+There was plenty of interest from other language communities. It wasn't long before the challenge turned into a language shootout: to see which language could produce the fastest solution, even though only solutions written in Java would be accepted for judging.
 
-Highly optimized solutions for the challenge were written in a wide variety of languages including C, C++, C#, Dart, Elixir, Erlang, Go, Haskell, JavaScript, Kotlin, Lua, Perl, Python, R, Ruby, Rust, Scala, Swift, Zig and even less popular programming languages like COBOL, Crystal and Fortran. 
+### Programming Languages
+Highly optimized solutions for the challenge were written in a wide variety of programming languages including C, C++, C#, Dart, Elixir, Erlang, Go, Haskell, JavaScript, Kotlin, Lua, Perl, Python, R, Ruby, Rust, Scala, Swift, Zig and even less popular programming languages like COBOL, Crystal and Fortran. 
 
-## Query Languages Shootout
+### Query Languages
 Query languages were not left out. Solutions were shared in multiple SQL dialects, including:
-* ClickHouse SQL[^a][^2]
-* Databend Cloud SQL[^7]
-* DuckDB SQL[^1]
-* MySQL SQL[^6]
-* Oracle SQL[^5a][^5b]
-* Postgres SQL[^2]
-* Snowflake SQL[^4a][^4b]
-* TinyBird SQL[^3]
+* ClickHouse SQL[^a][^2];
+* Databend Cloud SQL[^7];
+* DuckDB SQL[^1];
+* MySQL SQL[^6];
+* Oracle SQL[^5a][^5b];
+* Postgres SQL[^2];
+* Snowflake SQL[^4a][^4b];
+* TinyBird SQL[^3].
 
 There was also an attempt written in KDB/Q[^8]—an SQL-like, general-purpose programming language built on top of KDB+. This isn't surprising since query languages shine really well in data aggregation tasks. 
 
