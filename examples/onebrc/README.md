@@ -1,12 +1,26 @@
 # The One Billion Row Challenge with Proton
 
-Back in January, Gunnar Morling kicked off the `1brc` ([One Billion Row Challenge](https://www.morling.dev/blog/one-billion-row-challenge/)) to generate interest in the new language features that many Java developers may not be aware of.
+Back in January, Gunnar Morling kicked off a data aggregation task involving up to a billion rows nicknamed the `1brc` ([One Billion Row Challenge](https://www.morling.dev/blog/one-billion-row-challenge/)):
 
 > “Your mission, should you decide to accept it, is deceptively simple: write a Java program for retrieving temperature measurement values from a text file and calculating the min, mean, and max temperature per weather station. There’s just one caveat: the file has 1,000,000,000 rows!”
 
-Even though the primary language for the data aggregation challenge was Java, the challenge still garnered a lot of interest from other programming languages. Solutions for the aggregation task were written in a variety of languages like C, Go, Python, R, Rust and .NET. 
+`1brc` was intended to generate interest in the new language features that many Java developers may not be aware of and it turned out to be hugely popular amongst developers of all stripes.
 
-Not surprisingly, there were quite a few solutions that used plain old SQL since it was expressly designed as a general purpose language for data aggregation. Robin Moffat shared an SQL-based solution based on DuckDB[^1], while Francesco Tisiot shared another SQL-based solution based on Postgres and ClickHouse[^2].
+The aggregation task garnered a lot of interest from other programming languages even though solutions were to be written in Java. Solutions for the challenge were written in a wide variety of languages including C, C++, C#, Dart, Elixir, Erlang, Go, JavaScript, Lua, Perl, Python, R, Rust, Scala, Swift, Zig and even less popular languages like COBOL, Crystal and KDB/Q. 
+
+There were multiple solutions written in SQL for different SQL dialects. This isn't surprising since SQL is a general purpose language for data aggregation. 
+
+Solutions were shared in the following SQL dialects:
+* ClickHouse SQL
+* Databend Cloud SQL
+* DuckDB SQL
+* MySQL SQL
+* Postgres SQL
+* Snowflake SQL
+
+
+
+Robin Moffat shared an SQL-based solution based on DuckDB[^1], while Francesco Tisiot shared another SQL-based solution based on Postgres and ClickHouse[^2].
 
 This article will undertake the challenge using SQL written for the open-source Proton database engine.
 
