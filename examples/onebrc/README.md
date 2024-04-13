@@ -160,14 +160,31 @@ curl https://install.timeplus.com | sh
 ./proton server start
 ```
 
-3. Once the Proton server is started successfully, it will create a folder named `proton-data/` in the current directory which contains multiple subfolders. We will copy the test data we generated earlier (`measurements.txt`) into the `proton-data/user_files` subfolder created by the Proton server.
+3. Once the Proton server is started successfully, it will create a folder named `proton-data/` in the current directory which contains multiple subfolders. We will create a symbolic link to the test data we generated earlier (`measurements.txt`) from the `proton-data/user_files` subfolder created by the Proton server.
 ```bash
-cp /demo/1brc/measurements.txt /demo/proton-data/user_files
+ln -s /demo/1brc/measurements.txt /demo/proton-data/user_files
 ```
 
-4. Start the Proton client in another terminal:
+4. Now put the query we will be executing against the Proton server in a file named `1brc.sql`:
 ```bash
-./proton client --host 127.0.0.1
+cat <<EOF > /demo/1brc.sql
+SET format_csv_delimiter = ';';
+
+SELECT 
+    concat('{', array_string_concat(group_array(formatted_result), ', '), '}') AS final_output
+FROM (
+    SELECT 
+        format('{}={}/{}/{}', city, to_string(to_decimal(min(temperature), 1)), to_string(to_decimal(avg(temperature), 1)), to_string(to_decimal(max(temperature), 1))) AS formatted_result
+    FROM file('measurements.txt', 'CSV', 'city string, temperature float32')
+    GROUP BY city
+    ORDER BY city
+)
+EOF
+```
+
+5. Next, from another terminal, start the Proton client with the `1brc.sql` file as input:
+```bash
+time ./proton client --host 127.0.0.1 --multiquery < /demo/1brc.sql
 ```
 
 
