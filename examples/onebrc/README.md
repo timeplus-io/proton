@@ -4,9 +4,9 @@ Back in January, Gunnar Morling kicked off the `1brc` ([One Billion Row Challeng
 
 > “Your mission, should you decide to accept it, is deceptively simple: write a Java program for retrieving temperature measurement values from a text file and calculating the min, mean, and max temperature per weather station. There’s just one caveat: the file has 1,000,000,000 rows!”
 
-Even though the primary language for the data aggregation challenge was Java, the challenge still garnered a lot of interest from other programming languages. Solutions for the aggregation task were written in a variety of languages like C, Go, R, Rust and .NET. 
+Even though the primary language for the data aggregation challenge was Java, the challenge still garnered a lot of interest from other programming languages. Solutions for the aggregation task were written in a variety of languages like C, Go, Python, R, Rust and .NET. 
 
-Not surprisingly, there were quite a few solutions that used plain old SQL since it was expressly designed as a general purpose language for data aggregation. Robin Moffat shared an SQL-based solution based on DuckDB, while Francesco Tisiot shared another SQL-based solution based on Postgres and ClickHouse.
+Not surprisingly, there were quite a few solutions that used plain old SQL since it was expressly designed as a general purpose language for data aggregation. Robin Moffat shared an SQL-based solution based on DuckDB[^1], while Francesco Tisiot shared another SQL-based solution based on Postgres and ClickHouse[^2].
 
 This article will undertake the challenge using SQL written for the open-source Proton database engine.
 
@@ -19,3 +19,10 @@ Because Proton is a purpose-built streaming analytics engine, its actually comes
 Note that the input data for the `1brc` is not a streaming data source. It is a static 13GB CSV file that we will query using the ClickHouse data store. 
 
 
+
+
+
+
+
+[^1]: [1️⃣🐝🏎️🦆 (1BRC in SQL with DuckDB)](https://rmoff.net/2024/01/03/1%EF%B8%8F%E2%83%A3%EF%B8%8F-1brc-in-sql-with-duckdb/) 
+[^2]: [1 billion rows challenge in PostgreSQL and ClickHouse](https://ftisiot.net/posts/1brows/)
