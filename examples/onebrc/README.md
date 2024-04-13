@@ -148,7 +148,7 @@ du -shL measurements.txt
 </details>
 
 
-## Proton
+## `1brc` Demo using Proton
 1. Install Proton on your machine:
 ```bash
 cd /demo
