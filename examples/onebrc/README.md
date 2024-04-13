@@ -79,62 +79,71 @@ FROM (
 
 ## Local Setup
 ### Setup the Test Data
-1. The official test data generator was written for Java 21. We will first install [`sdkman`](https://sdkman.io/jdks) to allow us manage multiple Java versions:
+1. Make a separate folder for this demo to make it easy to clean up after we are done:
+```bash
+sudo mkdir -p /demo
+sudo chown -R ubuntu:ubuntu /demo
+```
+
+2. The official test data generator was written for Java 21. We will first install [`sdkman`](https://sdkman.io/jdks) to allow us manage multiple Java versions:
 ```bash
 curl -s "https://get.sdkman.io" | bash
 source "/home/ubuntu/.sdkman/bin/sdkman-init.sh"
 ```
 
-2. Using `sdkman`, install a JDK based on OpenJDK that supports Java 21:
+3. Using `sdkman`, install a JDK based on OpenJDK that supports Java 21:
 ```bash
 sdk install java 21.0.1-open
 ```
 
-3. Clone the [`1brc`](https://github.com/gunnarmorling/1brc) repository locally:
+4. Clone the [`1brc`](https://github.com/gunnarmorling/1brc) repository locally:
 ```bash
 cd /demo
 git clone https://github.com/gunnarmorling/1brc
 ```
 
-4. Build the generator for the test data 
+5. Build the generator for the test data 
 ```bash
 cd /demo/1brc
 ./mvnw verify 
 ```
 
-5. Use the generator to create 1 billion rows of test data
+6. Use the generator to create 1 billion rows of test data
 ```bash
 time ./create_measurements.sh 1000000000
 ```
 
 <details>
-<summary>The generator generated <code>measurements.txt</code> (a 13GB CSV file) in about 12 minutes.</summary>
+<summary>The generator generated <code>measurements.txt</code> (a 13GB CSV file) in about 10 minutes.</summary>
 <pre>
 time ./create_measurements.sh 1000000000
-Wrote 50,000,000 measurements in 16122 ms
-Wrote 100,000,000 measurements in 55385 ms
-Wrote 150,000,000 measurements in 94465 ms
-Wrote 200,000,000 measurements in 133557 ms
-Wrote 250,000,000 measurements in 172660 ms
-Wrote 300,000,000 measurements in 211746 ms
-Wrote 350,000,000 measurements in 250862 ms
-Wrote 400,000,000 measurements in 290035 ms
-Wrote 450,000,000 measurements in 329179 ms
-Wrote 500,000,000 measurements in 368350 ms
-Wrote 550,000,000 measurements in 407489 ms
-Wrote 600,000,000 measurements in 446671 ms
-Wrote 650,000,000 measurements in 485740 ms
-Wrote 700,000,000 measurements in 524930 ms
-Wrote 750,000,000 measurements in 564045 ms
-Wrote 800,000,000 measurements in 603177 ms
-Wrote 850,000,000 measurements in 642245 ms
-Wrote 900,000,000 measurements in 681340 ms
-Wrote 950,000,000 measurements in 720459 ms
-Created file with 1,000,000,000 measurements in 759563 ms
+Wrote 50,000,000 measurements in 15007 ms
+Wrote 100,000,000 measurements in 46490 ms
+Wrote 150,000,000 measurements in 77952 ms
+Wrote 200,000,000 measurements in 109410 ms
+Wrote 250,000,000 measurements in 140847 ms
+Wrote 300,000,000 measurements in 172254 ms
+Wrote 350,000,000 measurements in 203742 ms
+Wrote 400,000,000 measurements in 235155 ms
+Wrote 450,000,000 measurements in 266711 ms
+Wrote 500,000,000 measurements in 298319 ms
+Wrote 550,000,000 measurements in 329901 ms
+Wrote 600,000,000 measurements in 361338 ms
+Wrote 650,000,000 measurements in 392873 ms
+Wrote 700,000,000 measurements in 424411 ms
+Wrote 750,000,000 measurements in 455838 ms
+Wrote 800,000,000 measurements in 487368 ms
+Wrote 850,000,000 measurements in 518836 ms
+Wrote 900,000,000 measurements in 550312 ms
+Wrote 950,000,000 measurements in 582063 ms
+Created file with 1,000,000,000 measurements in 613590 ms
 
-real    12m39.673s
-user    12m24.649s
-sys 0m16.623s
+real    10m13.660s
+user    9m54.950s
+sys     0m18.579s
+
+du -shL measurements.txt 
+13G     measurements.txt
 </pre>
 </details>
 
