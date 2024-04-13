@@ -4,7 +4,7 @@ Back in January, Gunnar Morling kicked off a challenge to optimise the aggregati
 
 > “Your mission, should you decide to accept it, is deceptively simple: write a Java program for retrieving temperature measurement values from a text file and calculating the min, mean, and max temperature per weather station. There’s just one caveat: the file has 1,000,000,000 rows!”
 
-`1brc` was intended to raise awareness within the Java community about new language features that many Java developers may not be aware of. But, the optimisation task at the core of challenge turned out to be sufficiently challenging on its own, making it hugely popular amongst developers of all stripes.
+The constraints of the [`1brc`](https://github.com/gunnarmorling/1brc) were carefully selected to raise awareness, within the Java community, of new language features that many professional Java developers are not aware of. But, the optimisation task at the core of challenge turned out to be sufficiently challenging on its own, making it hugely popular amongst developers of all stripes.
 
 ## Language Shootout
 There was plenty of interest from other language communities. It wasn't long before the challenge turned into a language shootout: to see which language could produce the fastest solution, even though only solutions written in Java would be accepted for judging.
