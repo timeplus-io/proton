@@ -30,7 +30,7 @@ This article will share a solution for the challenge in the Timeplus SQL dialect
 ## Timeplus Proton
 Timeplus Proton is a purpose-built streaming analytics engine that comes bundled with [two data stores](https://docs.timeplus.com/proton-architecture#data-storage): 
 - Timeplus NativeLog data store for real-time streaming queries and;
-- ClickHouse data store for historical queries.
+- A historical data store, powered by ClickHouse, for fast batch queries.
 
 Since the input data for the `1brc` is a static 13GB CSV file and not a streaming data source, we will simply adapt the solution written in the ClickHouse SQL dialect so it can work inside Timeplus Proton for this demo. 
 
@@ -93,7 +93,7 @@ source "/home/ubuntu/.sdkman/bin/sdkman-init.sh"
 
 3. Using `sdkman`, install a JDK based on OpenJDK that supports Java 21:
 ```bash
-sdk install java 21.0.1-open
+sdk install java 21.0.2-open
 ```
 
 4. Clone the [`1brc`](https://github.com/gunnarmorling/1brc) repository locally:
@@ -155,7 +155,7 @@ cd /demo
 curl https://install.timeplus.com | sh
 ```
 
-2. Start the Timeplus Proton server:
+2. Make sure your current working directory remains `demo`. Start the Timeplus Proton server in this directory:
 ```bash
 ./proton server
 ```
