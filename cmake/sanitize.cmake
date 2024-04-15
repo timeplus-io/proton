@@ -42,8 +42,6 @@ if (SANITIZE)
         # keep the binary size down.
         # TODO: try compiling with -Og and with ld.gold.
 
-        # > Looks like -fsanitize-blacklist broke with the upgrade to Clang 16.
-        # https://github.com/ClickHouse/ClickHouse/pull/49829
         set (MSAN_FLAGS "-fsanitize=memory -fsanitize-memory-use-after-dtor -fsanitize-memory-track-origins -fno-optimize-sibling-calls -fPIC -fpie -fsanitize-blacklist=${PROJECT_SOURCE_DIR}/tests/msan_suppressions.txt")
 
         set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SAN_FLAGS} ${MSAN_FLAGS}")
@@ -60,9 +58,7 @@ if (SANITIZE)
         # https://github.com/llvm/llvm-project/issues/59007
         set (TSAN_FLAGS "-fsanitize=thread -lresolv")
         if (COMPILER_CLANG)
-        # > Looks like -fsanitize-blacklist broke with the upgrade to Clang 16.
-        # https://github.com/ClickHouse/ClickHouse/pull/49829
-            set (TSAN_FLAGS "${TSAN_FLAGS} -fsanitize-blacklist=${PROJECT_SOURCE_DIR}/tests/tsan_suppressions.txt")
+            set (TSAN_FLAGS "${TSAN_FLAGS} -fsanitize-ignorelist=${PROJECT_SOURCE_DIR}/tests/tsan_ignorelist.txt")
         endif()
 
 
@@ -87,7 +83,7 @@ if (SANITIZE)
             set(UBSAN_FLAGS "${UBSAN_FLAGS} -fno-sanitize=unsigned-integer-overflow")
         endif()
         if (COMPILER_CLANG)
-            set (UBSAN_FLAGS "${UBSAN_FLAGS} -fsanitize-blacklist=${PROJECT_SOURCE_DIR}/tests/ubsan_suppressions.txt")
+            set (UBSAN_FLAGS "${UBSAN_FLAGS} -fsanitize-ignorelist=${PROJECT_SOURCE_DIR}/tests/ubsan_ignorelist.txt")
         endif()
 
         set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SAN_FLAGS} ${UBSAN_FLAGS}")
