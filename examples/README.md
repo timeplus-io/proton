@@ -20,4 +20,4 @@ This folder lists some examples to run Proton in various use cases. For more rea
 
 - jdbc: demonstrates how to connect to Proton via JDBC using DBeaver or Metabase.
 
-- onebrc: Proton is based on ClickHouse, which is an OLAP workhorse, and query processing of 1 billion rows (of historical data) from the [1 billion row challenge](https://github.com/gunnarmorling/1brc) is fast, out-of-the-box.
+- onebrc: Aggregation of 1 billion rows (of historical data) from the [1 billion row challenge](https://github.com/gunnarmorling/1brc) is fast, out-of-the-box. This is because Proton is based on ClickHouse, an open-source column-oriented DBMS for OLAP workloads. 
