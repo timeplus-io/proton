@@ -15,13 +15,13 @@ class Producer : boost::noncopyable
 {
 public:
     Producer(const rd_kafka_conf_t & rk_conf, UInt64 poll_timeout_ms, const String & logger_name_prefix);
-    ~Producer() { shutdown(); }
+    ~Producer();
 
     rd_kafka_t * getHandle() const { return rk.get(); }
 
     std::string name() const { return rd_kafka_name(rk.get()); }
 
-    void shutdown() { stopped.test_and_set(); }
+    void setStopped() { stopped.test_and_set(); }
 
     bool isStopped() const { return stopped.test(); }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/logger_useful.h>
 #include <Common/ThreadPool.h>
 #include <KafkaLog/KafkaWALCommon.h>
 #include <Storages/ExternalStream/Kafka/Topic.h>
@@ -16,7 +17,7 @@ class Consumer : boost::noncopyable
 {
 public:
     Consumer(const rd_kafka_conf_t & rk_conf, UInt64 poll_timeout_ms, const String & logger_name_prefix);
-    ~Consumer() { shutdown(); }
+    ~Consumer();
 
     rd_kafka_t * getHandle() const { return rk.get(); }
 
@@ -30,17 +31,24 @@ public:
 
     void consumeBatch(Topic & topic, Int32 partition, uint32_t count, int32_t timeout_ms, Callback callback, ErrorCallback error_callback) const;
 
-    void shutdown() { stopped.test_and_set(); }
+    void setStopped() {
+        stopped.test_and_set();
+        LOG_INFO(logger, "Stopped");
+    }
+
+    bool isStopped() const { return stopped.test(); }
 
     std::string name() const { return rd_kafka_name(rk.get()); }
 
 private:
-    void backgroundPoll(UInt64 poll_timeout_ms) const;
+    void backgroundPoll() const;
 
+    UInt64 poll_timeout_ms {0};
     klog::KafkaPtr rk {nullptr, rd_kafka_destroy};
     ThreadPool poller;
     Poco::Logger * logger;
 
+    std::atomic_flag started = ATOMIC_FLAG_INIT;
     std::atomic_flag stopped = ATOMIC_FLAG_INIT;
 };
 

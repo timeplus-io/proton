@@ -5,7 +5,6 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/TreeRewriter.h>
-#include <KafkaLog/KafkaWALPool.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/ExternalStream/Kafka/Kafka.h>
@@ -220,6 +219,7 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     , data_format(StorageExternalStreamImpl::dataFormat())
     , external_stream_counter(external_stream_counter_)
     , conf(createRdConf(settings->getKafkaSettings()))
+    , poll_timeout_ms(settings->poll_waittime_ms.value)
     , logger(&Poco::Logger::get(getLoggerName()))
 {
     assert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);
@@ -253,8 +253,6 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     rd_kafka_conf_set_throttle_cb(conf.get(), &Kafka::onThrottle);
     rd_kafka_conf_set_dr_msg_cb(conf.get(), &KafkaSink::onMessageDelivery);
 
-    consumer_pool = std::make_unique<RdKafka::ConsumerPool>(/*size=*/100, storage_id, *conf, settings->poll_waittime_ms.value, getLoggerName());
-
     if (!attach)
         /// Only validate cluster / topic for external stream creation
         validate();
@@ -285,7 +283,7 @@ void Kafka::cacheVirtualColumnNamesAndTypes()
     virtual_column_names_and_types.push_back(NameAndTypePair(VIRTUAL_COLUMN_MESSAGE_KEY, std::make_shared<DataTypeString>()));
 }
 
-std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const
+std::vector<Int64> Kafka::getOffsets(const RdKafka::Consumer & consumer, const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const
 {
     assert(seek_to_info);
     seek_to_info->replicateForShards(shards_to_query.size());
@@ -303,8 +301,7 @@ std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info, const s
         for (auto [shard, timestamp] : std::ranges::views::zip(shards_to_query, seek_timestamps))
             partition_timestamps.emplace_back(shard, timestamp);
 
-        auto consumer = getConsumer();
-        return consumer->getOffsetsForTimestamps(settings->topic.value, partition_timestamps);
+        return consumer.getOffsetsForTimestamps(settings->topic.value, partition_timestamps);
     }
 }
 
@@ -353,7 +350,7 @@ void Kafka::validateMessageKey(const String & message_key_, IStorage * storage, 
 }
 
 /// Validate the topic still exists, specified partitions are still valid etc
-void Kafka::validate() const
+void Kafka::validate()
 {
     auto consumer = getConsumer();
     RdKafka::Topic topic {*consumer->getHandle(), topicName()};
@@ -463,7 +460,7 @@ Pipe Kafka::read(
         else
             header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
 
-        auto offsets = getOffsets(query_info.seek_to_info, shards_to_query);
+        auto offsets = getOffsets(*consumer, query_info.seek_to_info, shards_to_query);
         assert(offsets.size() == shards_to_query.size());
 
         for (auto [shard, offset] : std::ranges::views::zip(shards_to_query, offsets))
@@ -495,6 +492,25 @@ Pipe Kafka::read(
         pipe.resize(min_threads);
 
     return pipe;
+}
+
+std::shared_ptr<RdKafka::Consumer> Kafka::getConsumer()
+{
+    auto new_consumer = std::make_shared<RdKafka::Consumer>(*conf, poll_timeout_ms, getLoggerName());
+    std::weak_ptr<RdKafka::Consumer> ref = new_consumer;
+
+    std::lock_guard<std::mutex> lock(consumer_mutex);
+    for (auto & consumer : consumers)
+    {
+        /// if a consumer is gone, replace it with the new one, so that `consumers` won't keep growing forever.
+        if (consumer.expired())
+        {
+            consumer.swap(ref);
+            return new_consumer;
+        }
+    }
+    consumers.push_back(ref);
+    return new_consumer;
 }
 
 std::shared_ptr<RdKafka::Producer> Kafka::getProducer()

@@ -6,7 +6,6 @@
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
 #include <Storages/ExternalStream/Kafka/Consumer.h>
-#include <Storages/ExternalStream/Kafka/ConsumerPool.h>
 #include <Storages/ExternalStream/Kafka/Producer.h>
 #include <Storages/Streaming/SeekToInfo.h>
 
@@ -44,13 +43,21 @@ public:
     void shutdown() override {
         LOG_INFO(logger, "Shutting down Kafka External Stream");
 
-        consumer_pool->shutdown();
-        if (producer)
-            producer->shutdown();
-
         /// Must release all resources here rather than relying on the deconstructor.
         /// Because the `Kafka` instance will not be destroyed immediately when the external stream gets dropped.
-        consumer_pool.reset();
+        {
+            std::lock_guard<std::mutex> lock(consumer_mutex);
+            for (auto & consumer_ptr : consumers)
+                /// if the consumer is still running, mark it stopped
+                if (auto consumer = consumer_ptr.lock())
+                    consumer->setStopped();
+
+            std::vector<std::weak_ptr<RdKafka::Consumer>> empty_consumers;
+            consumers.swap(empty_consumers);
+        }
+
+        if (producer)
+            producer->setStopped();
         if (producer_topic)
         {
             // producer_topic.reset();
@@ -90,15 +97,7 @@ public:
 
     std::shared_ptr<RdKafka::Producer> getProducer();
     std::shared_ptr<RdKafka::Topic> getProducerTopic();
-
-    RdKafka::ConsumerPool::Entry getConsumer() const
-    {
-        assert(consumer_pool);
-        auto entry = consumer_pool->get(/*max_wait_ms=*/ 1000);
-        if (entry.isNull())
-            throw Exception(ErrorCodes::NO_AVAILABLE_KAFKA_CONSUMER, "No consumers were available");
-        return entry;
-    }
+    std::shared_ptr<RdKafka::Consumer> getConsumer();
 
     String getLoggerName() const { return storage_id.getDatabaseName() == "default" ? storage_id.getTableName() : storage_id.getFullNameNotQuoted(); }
 
@@ -106,9 +105,9 @@ private:
     Kafka::ConfPtr createRdConf(KafkaExternalStreamSettings settings_);
     void calculateDataFormat(const IStorage * storage);
     void cacheVirtualColumnNamesAndTypes();
-    std::vector<Int64> getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const;
+    std::vector<Int64> getOffsets(const RdKafka::Consumer & consumer, const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const;
     void validateMessageKey(const String & message_key, IStorage * storage, const ContextPtr & context);
-    void validate() const;
+    void validate();
 
     ASTs engine_args;
     String data_format;
@@ -122,13 +121,17 @@ private:
     fs::path broker_ca_file;
 
     ConfPtr conf;
+    UInt64 poll_timeout_ms = 0;
+
     /// The Producer instance and Topic instance can be used by multiple sinks at the same time, thus we only need one of each.
     std::mutex producer_mutex;
     std::shared_ptr<RdKafka::Producer> producer;
     std::shared_ptr<RdKafka::Topic> producer_topic;
+
     /// A Consumer can only be used by one source at the same time (technically speaking, it can be used by multple sources as long as each source read from a different topic,
     /// but we will leave this as an enhancement later, probably when we introduce the `Connection` concept), thus we need a consumer pool.
-    RdKafka::ConsumerPoolPtr consumer_pool;
+    std::mutex consumer_mutex;
+    std::vector<std::weak_ptr<RdKafka::Consumer>> consumers;
 
     Poco::Logger * logger;
 };

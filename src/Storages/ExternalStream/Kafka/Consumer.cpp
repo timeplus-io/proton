@@ -1,21 +1,15 @@
-#include <Common/logger_useful.h>
 #include <Poco/Logger.h>
 #include <Storages/ExternalStream/Kafka/Consumer.h>
 
 namespace DB
 {
 
-namespace ErrorCodes
-{
-extern const int KAFKA_CONSUMER_STOPPED;
-extern const int RESOURCE_NOT_FOUND;
-}
-
 namespace RdKafka
 {
 
 /// Consumer will take the ownership of `rk_conf`.
-Consumer::Consumer(const rd_kafka_conf_t & rk_conf, UInt64 poll_timeout_ms, const String & logger_name_prefix)
+Consumer::Consumer(const rd_kafka_conf_t & rk_conf, UInt64 poll_timeout_ms_, const String & logger_name_prefix)
+: poll_timeout_ms(poll_timeout_ms_)
 {
     char errstr[512];
     auto * conf = rd_kafka_conf_dup(&rk_conf);
@@ -31,10 +25,16 @@ Consumer::Consumer(const rd_kafka_conf_t & rk_conf, UInt64 poll_timeout_ms, cons
     logger = &Poco::Logger::get(fmt::format("{}.{}", logger_name_prefix, name()));
     LOG_INFO(logger, "Created consumer");
 
-    poller.scheduleOrThrowOnError([this, poll_timeout_ms] { backgroundPoll(poll_timeout_ms); });
+    poller.scheduleOrThrowOnError([this] { backgroundPoll(); });
 }
 
-void Consumer::backgroundPoll(UInt64 poll_timeout_ms) const
+Consumer::~Consumer()
+{
+    setStopped();
+    poller.wait();
+}
+
+void Consumer::backgroundPoll() const
 {
     LOG_INFO(logger, "Start consumer poll");
 
@@ -71,9 +71,6 @@ void Consumer::stopConsume(Topic & topic, Int32 parition)
 
 void Consumer::consumeBatch(Topic & topic, Int32 partition, uint32_t count, int32_t timeout_ms, Consumer::Callback callback, ErrorCallback error_callback) const
 {
-    if (unlikely(stopped.test()))
-        throw Exception(ErrorCodes::KAFKA_CONSUMER_STOPPED, "Cannot consume from stopped consummer");
-
     std::unique_ptr<rd_kafka_message_t *, decltype(free) *> rkmessages
     {
         static_cast<rd_kafka_message_t **>(malloc(sizeof(rd_kafka_message_t *) * count)), free
