@@ -24,8 +24,6 @@ Consumer::Consumer(const rd_kafka_conf_t & rk_conf, UInt64 poll_timeout_ms_, con
 
     logger = &Poco::Logger::get(fmt::format("{}.{}", logger_name_prefix, name()));
     LOG_INFO(logger, "Created consumer");
-
-    poller.scheduleOrThrowOnError([this] { backgroundPoll(); });
 }
 
 Consumer::~Consumer()
@@ -51,6 +49,9 @@ std::vector<Int64> Consumer::getOffsetsForTimestamps(const std::string & topic, 
 
 void Consumer::startConsume(Topic & topic, Int32 parition, Int64 offset)
 {
+    if (!started.test_and_set())
+        poller.scheduleOrThrowOnError([this] { backgroundPoll(); });
+
     auto res = rd_kafka_consume_start(topic.getHandle(), parition, offset);
     if (res == -1)
     {
