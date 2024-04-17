@@ -1055,40 +1055,41 @@ void HashJoin::postInit(const Block & left_header, const Block & output_header_,
             join_results.emplace(output_header);
             initHashMaps(join_results->maps->map_variants);
         }
+    }
 
-        if (emitChangeLog())
+    if (left_data.join_stream_desc->hasDeltaColumn() || right_data.join_stream_desc->hasDeltaColumn())
+    {
+        /// If it is not bidirectional hash join, we don't care `right join left`
+        if (bidirectional_hash_join)
         {
-            /// We'd like to compute some reserved column positions for `the right block join left block` case
+            /// 1) We'd like to compute some reserved column positions for `the right block join left block` case
             /// since we will need swap them before project the join results
-            if (left_data.join_stream_desc->hasDeltaColumn() && right_data.join_stream_desc->hasDeltaColumn())
+            Block right_join_left_header = right_data.join_stream_desc->input_header;
+            doJoinBlockWithHashTable<false>(right_join_left_header, left_data.buffered_data->getCurrentHashBlocksPtr());
+
+            for (size_t i = 0; const auto & col : right_join_left_header)
             {
-                Block right_join_left_header = right_data.join_stream_desc->input_header;
-                doJoinBlockWithHashTable<false>(right_join_left_header, left_data.buffered_data->getCurrentHashBlocksPtr());
+                if (col.name == ProtonConsts::RESERVED_DELTA_FLAG)
+                    left_delta_column_position_rlj = i;
+                else if (col.name.ends_with(ProtonConsts::RESERVED_DELTA_FLAG))
+                    right_delta_column_position_rlj = i;
 
-                for (size_t i = 0; const auto & col : right_join_left_header)
-                {
-                    if (col.name == ProtonConsts::RESERVED_DELTA_FLAG)
-                        left_delta_column_position_rlj = i;
-                    else if (col.name.ends_with(ProtonConsts::RESERVED_DELTA_FLAG))
-                        right_delta_column_position_rlj = i;
-
-                    ++i;
-                }
-
-                /// We'd like to compute some reserved column positions for `the left block join right block` case
-                /// since we will need swap them before project the join results
-                Block left_join_right_header = left_data.join_stream_desc->input_header;
-                doJoinBlockWithHashTable<true>(left_join_right_header, right_data.buffered_data->getCurrentHashBlocksPtr());
-                for (size_t i = 0; const auto & col : left_join_right_header)
-                {
-                    if (col.name == ProtonConsts::RESERVED_DELTA_FLAG)
-                        left_delta_column_position_lrj = i;
-                    else if (col.name.ends_with(ProtonConsts::RESERVED_DELTA_FLAG))
-                        right_delta_column_position_lrj = i;
-
-                    ++i;
-                }
+                ++i;
             }
+        }
+
+        /// 2) We'd like to compute some reserved column positions for `the left block join right block` case
+        /// since we will need swap them before project the join results
+        Block left_join_right_header = left_data.join_stream_desc->input_header;
+        doJoinBlockWithHashTable<true>(left_join_right_header, right_data.buffered_data->getCurrentHashBlocksPtr());
+        for (size_t i = 0; const auto & col : left_join_right_header)
+        {
+            if (col.name == ProtonConsts::RESERVED_DELTA_FLAG)
+                left_delta_column_position_lrj = i;
+            else if (col.name.ends_with(ProtonConsts::RESERVED_DELTA_FLAG))
+                right_delta_column_position_lrj = i;
+
+            ++i;
         }
     }
 }
