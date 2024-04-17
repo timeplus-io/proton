@@ -438,6 +438,7 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<const
                 else if constexpr ((jf.is_latest_join) && jf.right)
                 {
                     /// FIXME
+                    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented path in joinColumns().");
                 }
                 else if constexpr (jf.is_latest_join && (jf.inner || jf.left))
                 {
@@ -448,6 +449,7 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<const
                 else /// ANY LEFT
                 {
                     /// FIXME
+                    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented path in joinColumns().");
                 }
             }
         }
@@ -466,7 +468,8 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<const
             }
         }
 
-        if (!right_row_found)
+        /// Not add missing for 'right join left'
+        if (!right_row_found && added_columns.is_left_block)
             addNotFoundRow<jf.add_missing, jf.need_replication>(added_columns, current_offset);
 
         if constexpr (jf.need_replication)
@@ -591,13 +594,18 @@ struct Inserter
         JoinDataBlockList * blocks,
         size_t original_row,
         size_t row,
-        Arena & pool)
+        Arena & pool,
+        IColumn::Filter * new_keys_filter)
     {
         auto emplace_result = key_getter.emplaceKey(map, original_row, pool);
         auto * mapped = &emplace_result.getMapped();
 
         if (emplace_result.isInserted())
+        {
             mapped = new (mapped) typename Map::mapped_type(std::make_unique<HashJoin::RefListMultiple>());
+            if (new_keys_filter)
+                (*new_keys_filter)[original_row] = 1;
+        }
 
         [[maybe_unused]] auto iter = (*mapped)->insert(blocks, row);
     }
@@ -653,7 +661,8 @@ size_t NO_INLINE insertFromBlockImplTypeCase(
     JoinDataBlockList * blocks,
     size_t start_row,
     ConstNullMapPtr null_map,
-    Arena & pool)
+    Arena & pool,
+    IColumn::Filter * new_keys_filter)
 {
     [[maybe_unused]] constexpr bool mapped_one = std::is_same_v<typename Map::mapped_type, typename HashJoin::MapsOne::MappedType>;
     [[maybe_unused]] constexpr bool mapped_multiple
@@ -681,7 +690,8 @@ size_t NO_INLINE insertFromBlockImplTypeCase(
         else if constexpr (mapped_one)
             Inserter<Map, KeyGetter>::insertOne(join, map, key_getter, blocks, i - start_row, i, pool);
         else if constexpr (mapped_multiple)
-            Inserter<Map, KeyGetter>::insertMultiple(join, map, key_getter, blocks, i - start_row, i, pool);
+            /// So far \new_keys_filter is just used in multiple map for bidirectional join
+            Inserter<Map, KeyGetter>::insertMultiple(join, map, key_getter, blocks, i - start_row, i, pool, new_keys_filter);
         else
             Inserter<Map, KeyGetter>::insertAll(join, map, key_getter, &blocks->lastDataBlock(), i - start_row, i, pool);
     }
@@ -698,14 +708,15 @@ size_t insertFromBlockImplType(
     JoinDataBlockList * blocks,
     size_t start_row,
     ConstNullMapPtr null_map,
-    Arena & pool)
+    Arena & pool,
+    IColumn::Filter * new_keys_filter)
 {
     if (null_map)
         return insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, true>(
-            join, map, rows, key_columns, key_sizes, blocks, start_row, null_map, pool);
+            join, map, rows, key_columns, key_sizes, blocks, start_row, null_map, pool, new_keys_filter);
     else
         return insertFromBlockImplTypeCase<STRICTNESS, KeyGetter, Map, false>(
-            join, map, rows, key_columns, key_sizes, blocks, start_row, null_map, pool);
+            join, map, rows, key_columns, key_sizes, blocks, start_row, null_map, pool, new_keys_filter);
 }
 
 template <Strictness STRICTNESS, typename Maps>
@@ -719,7 +730,8 @@ size_t insertFromBlockImpl(
     JoinDataBlockList * blocks,
     size_t start_row,
     ConstNullMapPtr null_map,
-    Arena & pool)
+    Arena & pool,
+    IColumn::Filter * new_keys_filter)
 {
     switch (type)
     {
@@ -728,7 +740,7 @@ size_t insertFromBlockImpl(
         return insertFromBlockImplType< \
             STRICTNESS, \
             typename KeyGetterForType<HashType::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type>( \
-            join, *maps.TYPE, rows, key_columns, key_sizes, blocks, start_row, null_map, pool); \
+            join, *maps.TYPE, rows, key_columns, key_sizes, blocks, start_row, null_map, pool, new_keys_filter); \
         break;
         APPLY_FOR_HASH_KEY_VARIANTS(M)
 #undef M
@@ -795,19 +807,51 @@ const HashJoin::SupportMatrix HashJoin::support_matrix = {
     {{StorageSemantic::Append, JoinKind::Inner, JoinStrictness::Any, StorageSemantic::VersionedKV}, true},
 
     /// Changelog ...
+    /* <=> Changelog inner all join Changelog */
     {{StorageSemantic::Changelog, JoinKind::Inner, JoinStrictness::All, StorageSemantic::ChangelogKV}, true},
     {{StorageSemantic::Changelog, JoinKind::Inner, JoinStrictness::All, StorageSemantic::VersionedKV}, true},
     {{StorageSemantic::Changelog, JoinKind::Inner, JoinStrictness::All, StorageSemantic::Changelog}, true},
+    /* <=> Changelog left all join Changelog */
+    {{StorageSemantic::Changelog, JoinKind::Left, JoinStrictness::All, StorageSemantic::ChangelogKV}, true},
+    {{StorageSemantic::Changelog, JoinKind::Left, JoinStrictness::All, StorageSemantic::VersionedKV}, true},
+    {{StorageSemantic::Changelog, JoinKind::Left, JoinStrictness::All, StorageSemantic::Changelog}, true},
 
     /// ChangelogKV ...
+    /* <=> Changelog inner all join Changelog */
     {{StorageSemantic::ChangelogKV, JoinKind::Inner, JoinStrictness::All, StorageSemantic::ChangelogKV}, true},
     {{StorageSemantic::ChangelogKV, JoinKind::Inner, JoinStrictness::All, StorageSemantic::VersionedKV}, true},
     {{StorageSemantic::ChangelogKV, JoinKind::Inner, JoinStrictness::All, StorageSemantic::Changelog}, true},
+    /* <=> Changelog left all join Changelog */
+    {{StorageSemantic::ChangelogKV, JoinKind::Left, JoinStrictness::All, StorageSemantic::ChangelogKV}, true},
+    {{StorageSemantic::ChangelogKV, JoinKind::Left, JoinStrictness::All, StorageSemantic::VersionedKV}, true},
+    {{StorageSemantic::ChangelogKV, JoinKind::Left, JoinStrictness::All, StorageSemantic::Changelog}, true},
 
     /// VersionedKV ...
+    /* <=> Changelog inner all join Changelog */
     {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::All, StorageSemantic::ChangelogKV}, true},
     {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::All, StorageSemantic::VersionedKV}, true},
     {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::All, StorageSemantic::Changelog}, true},
+    /* <=> Changelog left all join Changelog */
+    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::All, StorageSemantic::ChangelogKV}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::All, StorageSemantic::VersionedKV}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::All, StorageSemantic::Changelog}, true},
+
+    /* <=> Append inner asof join Changelog */
+    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Asof, StorageSemantic::ChangelogKV}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Asof, StorageSemantic::VersionedKV}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Asof, StorageSemantic::Changelog}, true},
+    /* <=> Append inner latest join Changelog */
+    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Any, StorageSemantic::ChangelogKV}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Any, StorageSemantic::VersionedKV}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Any, StorageSemantic::Changelog}, true},
+    /* <=> Append left asof join Changelog */
+    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Asof, StorageSemantic::ChangelogKV}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Asof, StorageSemantic::VersionedKV}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Asof, StorageSemantic::Changelog}, true},
+    /* <=> Append left latest join Changelog */
+    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Any, StorageSemantic::ChangelogKV}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Any, StorageSemantic::VersionedKV}, true},
+    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Any, StorageSemantic::Changelog}, true},
 };
 
 void HashJoin::validate(const JoinCombinationType & join_combination)
@@ -904,8 +948,9 @@ void HashJoin::init()
     /// In case when emitChangeLog()
     if (streaming_strictness == Strictness::Range
         && (left_data.join_stream_desc->data_stream_semantic != DataStreamSemantic::Append
-            || right_data.join_stream_desc->data_stream_semantic != DataStreamSemantic::Append))
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Stream range join only support append-only streams");
+            || right_data.join_stream_desc->data_stream_semantic != DataStreamSemantic::Append
+            || streaming_kind != Kind::Inner))
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Only support inner range join append-only streams");
 
     range_bidirectional_hash_join = bidirectional_hash_join && (streaming_strictness == Strictness::Range);
 
@@ -1068,36 +1113,29 @@ void HashJoin::postInit(const Block & left_header, const Block & output_header_,
 void HashJoin::transformHeader(Block & header)
 {
     if (range_bidirectional_hash_join)
-    {
         joinBlockWithHashTable<true>(header, right_data.buffered_data->getCurrentHashBlocksPtr());
-    }
     else if (bidirectional_hash_join)
-    {
         joinBlockWithHashTable<true>(header, right_data.buffered_data->getCurrentHashBlocksPtr());
-
-        /// Fix the emit changelog header, remove left/right delta, then append joined delta
-        if (emitChangeLog())
-        {
-            {
-                std::set<size_t> delta_pos;
-                for (size_t pos = 0; auto & col_with_type_name : header)
-                {
-                    if (col_with_type_name.name.ends_with(ProtonConsts::RESERVED_DELTA_FLAG))
-                        delta_pos.emplace(pos);
-
-                    ++pos;
-                }
-                header.erase(delta_pos);
-            }
-
-            if (!header.has(ProtonConsts::RESERVED_DELTA_FLAG))
-                header.insert({DataTypeFactory::instance().get(TypeIndex::Int8), ProtonConsts::RESERVED_DELTA_FLAG});
-        }
-    }
     else
-    {
         joinLeftBlock(header);
+
+    /// Remove internal left/right delta column
+    {
+        std::set<size_t> delta_pos;
+        for (size_t pos = 0; auto & col_with_type_name : header)
+        {
+            if (col_with_type_name.name.ends_with(ProtonConsts::RESERVED_DELTA_FLAG))
+                delta_pos.emplace(pos);
+
+            ++pos;
+        }
+        header.erase(delta_pos);
     }
+    assert(!header.has(ProtonConsts::RESERVED_DELTA_FLAG));
+
+    /// Apppend joined delta column
+    if (emitChangeLog())
+        header.insert({DataTypeFactory::instance().get(TypeIndex::Int8), ProtonConsts::RESERVED_DELTA_FLAG});
 }
 
 void HashJoin::chooseHashMethod()
@@ -1318,7 +1356,7 @@ bool HashJoin::addJoinedBlock(const Block & block, bool /*check_limits*/)
 }
 
 template <bool is_left_block>
-void HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks)
+void HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, IColumn::Filter * new_keys_filter)
 {
     /// FIXME, there are quite some block copies
     /// FIXME, all_key_columns shall hold shared_ptr to columns instead of raw ptr
@@ -1394,7 +1432,8 @@ void HashJoin::doInsertBlock(Block block, HashBlocksPtr target_hash_blocks)
                 &target_hash_blocks->blocks,
                 start_row,
                 null_map,
-                target_hash_blocks->pool);
+                target_hash_blocks->pool,
+                new_keys_filter);
         });
 
     if (save_nullmap)
@@ -1638,6 +1677,7 @@ void HashJoin::joinLeftBlock(Block & left_block)
     std::scoped_lock lock(right_data.buffered_data->mutex);
 
     doJoinBlockWithHashTable<true>(left_block, right_data.buffered_data->getCurrentHashBlocksPtr());
+    transformToOutputBlock<true>(left_block);
 }
 
 template <bool is_left_block>
@@ -1776,9 +1816,22 @@ Block HashJoin::insertLeftBlockAndJoin(Block & left_block)
     /// For bidirectional join, process one stream at a time
     std::scoped_lock lock(left_data.buffered_data->mutex, right_data.buffered_data->mutex);
 
-    /// If this is a retract block which contains _tp_delta with -1 as it value
-    if (auto joined_retracted_block = eraseExistingKeysAndRetractJoin<true>(left_block); joined_retracted_block)
-        return std::move(*joined_retracted_block);
+    if (emitChangeLog())
+    {
+        /// If this is a retract block which contains _tp_delta with -1 as it value
+        if (auto joined_retracted_block = eraseExistingKeysAndRetractJoin<true>(left_block); joined_retracted_block)
+            return std::move(*joined_retracted_block);
+    }
+    else
+    {
+        /// Just erase the existing keys from hash map on left side, no need retract join
+        if (isRetractBlock(left_block, *left_data.join_stream_desc))
+        {
+            eraseExistingKeys<true>(left_block, left_data);
+            left_block.clear();
+            return {};
+        }
+    }
 
     doInsertBlock<true>(left_block, left_data.buffered_data->getCurrentHashBlocksPtr());
 
@@ -1792,11 +1845,88 @@ Block HashJoin::insertRightBlockAndJoin(Block & right_block)
 
     std::scoped_lock lock(left_data.buffered_data->mutex, right_data.buffered_data->mutex);
 
-    /// If this is a retract block which contains _tp_delta with -1 as it value
-    if (auto joined_retracted_block = eraseExistingKeysAndRetractJoin<false>(right_block); joined_retracted_block)
-        return std::move(*joined_retracted_block);
+    if (emitChangeLog())
+    {
+        /// If this is a retract block which contains _tp_delta with -1 as it value
+        if (auto joined_retracted_block = eraseExistingKeysAndRetractJoin<false>(right_block); joined_retracted_block)
+            return std::move(*joined_retracted_block);
+    }
+    else
+    {
+        /// Just erase the existing keys from hash map on right side, no need retract join
+        if (isRetractBlock(right_block, *right_data.join_stream_desc))
+        {
+            eraseExistingKeys<false>(right_block, right_data);
+            right_block.clear();
+            return {};
+        }
+    }
 
-    doInsertBlock<false>(right_block, right_data.buffered_data->getCurrentHashBlocksPtr());
+    /// For left join, if right data have new join keys, we need delete prev joined result (join key + left_cols + right_cols<empty>),
+    /// for example: `lkv left join rkv on lkv.key = rkv.key`
+    ///         (lkv)           (rkv)               (output)
+    /// (s1)    k1,v1,+1                    >>      k1, v1, (rkv.defaults), +1
+    /// (s2)                    k1,v2,+1    >>      k1, v1, (rkv.defaults), -1
+    ///                                             k1, v1, rkv.k1, rkv.v2, +1
+    /// So, at (s2): we need to do right join left with `k1,(other defaults),-1` and `k1,v2,+1` 
+    std::unique_ptr<IColumn::Filter> new_keys_filter;
+    if (streaming_kind == Kind::Left && emitChangeLog())
+        new_keys_filter = std::make_unique<IColumn::Filter>(right_block.rows(), 0);
+
+    doInsertBlock<false>(right_block, right_data.buffered_data->getCurrentHashBlocksPtr(), new_keys_filter.get());
+    if (new_keys_filter)
+    {
+        assert(right_data.join_stream_desc->hasDeltaColumn());
+        /// 1) Generate an block with new keys and default values (such as `k1, (other defaults), -1`)
+        MutableColumns columns;
+        columns.reserve(right_block.columns());
+        /// FIXME, multiple disjuncts OR clause
+        const auto & key_names = table_join->getClauses().front().key_names_right;
+        size_t new_keys_rows = std::accumulate(new_keys_filter->begin(), new_keys_filter->end(), static_cast<size_t>(0));
+        for (auto & col_with_type_name : right_block)
+        {
+            if (std::ranges::any_of(key_names, [&](const auto & name) { return name == col_with_type_name.name; }))
+                columns.emplace_back(IColumn::mutate(col_with_type_name.column->filter(*new_keys_filter, new_keys_rows)));
+            else if (col_with_type_name.name == right_data.join_stream_desc->deltaColumnName())
+            {
+                columns.emplace_back(col_with_type_name.column->cloneEmpty());
+                columns.back()->reserve(new_keys_rows);
+                columns.back()->insertMany(-1, new_keys_rows);
+            }
+            else
+            {
+                columns.emplace_back(col_with_type_name.column->cloneEmpty());
+                columns.back()->reserve(new_keys_rows);
+                columns.back()->insertManyDefaults(new_keys_rows);
+            }
+        }
+
+        /// 2) Do retract right <left join> left (such as `k1, v1, (rkv.defaults), -1`)
+        Block retracted_block = right_block.cloneWithColumns(std::move(columns));
+        auto pushdown_retracted = joinBlockWithHashTable<false>(retracted_block, left_data.buffered_data->getCurrentHashBlocksPtr());
+        assert(!pushdown_retracted);
+        /// NOTE: Reset the right join key columns to default values after joined, for example:
+        /// `k1, v1, rkv.k1, (rkv.other_defaults), -1`  =>  `k1, v1, (rkv.defaults), -1`
+        if (retracted_block.rows())
+        {
+            for (auto & col_with_type_name : retracted_block)
+            {
+                if (std::ranges::any_of(key_names, [&](const auto & name) { return name == col_with_type_name.name; }))
+                {
+                    auto key_col = IColumn::mutate(col_with_type_name.column->cloneEmpty());
+                    key_col->reserve(right_block.rows());
+                    key_col->insertManyDefaults(right_block.rows());
+                    col_with_type_name.column = std::move(key_col);
+                }
+            }
+        }
+
+        /// 3) Do right <left join> left (such as `k1, v1, v2, +1`)
+        pushdown_retracted = joinBlockWithHashTable<false>(right_block, left_data.buffered_data->getCurrentHashBlocksPtr());
+        assert(!pushdown_retracted);
+
+        return retracted_block;
+    }
 
     return joinBlockWithHashTable<false>(right_block, left_data.buffered_data->getCurrentHashBlocksPtr());
 }
@@ -2165,10 +2295,10 @@ void HashJoin::transformToOutputBlock(Block & joined_block) const
         /// For exmaple: c1(i, v, _tp_delta) join c2(i, v, _tp_delta)
         /// (left join right)
         /// joined block:   "i, v, _tp_delta, c2.i, c2.v, c2._tp_delta"
-        /// output header:  "i, v, c2.i, c2.v, _tp_delta"
-        if (right_delta_column_position_lrj)
+        if (emitChangeLog())
         {
-            assert(left_delta_column_position_lrj);
+            /// output header:  "i, v, c2.i, c2.v, _tp_delta"
+            assert(left_delta_column_position_lrj && right_delta_column_position_lrj);
 
             /// At first, remove right delta column (from back to front)
             assert(*right_delta_column_position_lrj > *left_delta_column_position_lrj);
@@ -2179,18 +2309,27 @@ void HashJoin::transformToOutputBlock(Block & joined_block) const
             joined_block.erase(*left_delta_column_position_lrj);
             joined_block.insert(std::move(left_delta_col));
         }
+        else
+        {
+            /// output header:  "i, v, c2.i, c2.v"
+            if (right_delta_column_position_lrj)
+                joined_block.erase(*right_delta_column_position_lrj);
+
+            if (left_delta_column_position_lrj)
+                joined_block.erase(*left_delta_column_position_lrj);
+        }
     }
     else
     {
         /// For exmaple: c1(i, v, _tp_delta) join c2(i, v, _tp_delta)
         /// (right join left)
         /// joined block:   "c2.i, c2.v, c2._tp_delta, i, v, _tp_delta"
-        /// output header:  "i, v, c2.i, c2.v, _tp_delta"
 
         /// Fix the delta column by swapping since the right block has the retract value but got renamed
-        if (right_delta_column_position_rlj)
+        if (emitChangeLog())
         {
-            assert(left_delta_column_position_rlj);
+            /// output header:  "i, v, c2.i, c2.v, _tp_delta"
+            assert(left_delta_column_position_rlj && right_delta_column_position_rlj);
 
             /// At first, move right delta column to left delta column
             auto & right_retract_delta_col = joined_block.getByPosition(*right_delta_column_position_rlj);
@@ -2199,6 +2338,16 @@ void HashJoin::transformToOutputBlock(Block & joined_block) const
 
             /// Then remove right delta column, skip this operation since next reordering will ignore it
             // joined_block.erase(*right_delta_column_position_rlj);
+        }
+        else
+        {
+            /// output header:  "c2.i, c2.v, i, v"
+            /// Skip this operation since next reordering will ignore it
+            // if (right_delta_column_position_lrj)
+            //     joined_block.erase(*right_delta_column_position_lrj);
+
+            // if (left_delta_column_position_lrj)
+            //     joined_block.erase(*left_delta_column_position_lrj);
         }
 
         joined_block.reorderColumnsInplace(output_header);

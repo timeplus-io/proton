@@ -43,8 +43,6 @@ JoinTransform::JoinTransform(
 
 IProcessor::Status JoinTransform::prepare()
 {
-    std::scoped_lock lock(mutex);
-
     auto & output = outputs.front();
 
     /// Check can output.
@@ -125,8 +123,6 @@ void JoinTransform::work()
     Chunks chunks;
     {
         /// Move out the input chunks
-        std::scoped_lock lock(mutex);
-
         assert(input_ports_with_data[0].input_chunk || input_ports_with_data[1].input_chunk);
 
         for (size_t i = 0; i < input_ports_with_data.size(); ++i)
@@ -188,7 +184,6 @@ void JoinTransform::work()
     /// We only do this piggy-back once for the last output chunk if there is
     if (has_watermark)
     {
-        std::scoped_lock lock(mutex);
         if (!output_chunks.empty())
             setupWatermark(output_chunks.back(), local_watermark);
         else
@@ -200,7 +195,6 @@ void JoinTransform::work()
         checkpoint(requested_ckpt);
 
         /// Propagate request checkpoint
-        std::scoped_lock lock(mutex);
         assert(!output_chunks.empty());
         output_chunks.back().setCheckpointContext(std::move(requested_ckpt));
     }
@@ -257,10 +251,7 @@ inline void JoinTransform::doJoin(Chunks chunks)
             join->joinLeftBlock(joined_block);
 
             if (auto rows = joined_block.rows(); rows > 0)
-            {
-                std::scoped_lock lock(mutex);
                 output_chunks.emplace_back(joined_block.getColumns(), rows);
-            }
         }
     }
 }
@@ -278,21 +269,18 @@ inline void JoinTransform::joinBidirectionally(Chunks chunks)
         auto block = input_ports_with_data[i].input_port->getHeader().cloneWithColumns(chunks[i].detachColumns());
         auto retracted_block = std::invoke(join_funcs[i], join.get(), block);
 
+        /// First emit retracted block
+        auto retracted_block_rows = retracted_block.rows();
+        if (retracted_block_rows)
         {
-            std::scoped_lock lock(mutex);
-            /// First emit retracted block
-            auto retracted_block_rows = retracted_block.rows();
-            if (retracted_block_rows)
-            {
-                /// Don't watermark this block. We can concat retracted / result blocks or use avoid watermarking
-                auto chunk_ctx = ChunkContext::create();
-                chunk_ctx->setConsecutiveDataFlag();
-                output_chunks.emplace_back(retracted_block.getColumns(), retracted_block_rows, nullptr, std::move(chunk_ctx));
-            }
-
-            if (block.rows())
-                output_chunks.emplace_back(block.getColumns(), block.rows());
+            /// Don't watermark this block. We can concat retracted / result blocks or use avoid watermarking
+            auto chunk_ctx = ChunkContext::create();
+            chunk_ctx->setConsecutiveDataFlag();
+            output_chunks.emplace_back(retracted_block.getColumns(), retracted_block_rows, nullptr, std::move(chunk_ctx));
         }
+
+        if (block.rows())
+            output_chunks.emplace_back(block.getColumns(), block.rows());
     }
 }
 
@@ -309,10 +297,11 @@ inline void JoinTransform::rangeJoinBidirectionally(Chunks chunks)
         auto block = input_ports_with_data[i].input_port->getHeader().cloneWithColumns(chunks[i].detachColumns());
         auto joined_blocks = std::invoke(join_funcs[i], join.get(), block);
 
-        std::scoped_lock lock(mutex);
-
-        for (size_t j = 0; j < joined_blocks.size(); ++j)
-            output_chunks.emplace_back(joined_blocks[j].getColumns(), joined_blocks[j].rows());
+        for (auto & joined_block : joined_blocks)
+        {
+            if (joined_block.rows())
+                output_chunks.emplace_back(joined_block.getColumns(), joined_block.rows());
+        }
     }
 }
 
