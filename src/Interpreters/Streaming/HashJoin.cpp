@@ -835,23 +835,6 @@ const HashJoin::SupportMatrix HashJoin::support_matrix = {
     {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::All, StorageSemantic::ChangelogKV}, true},
     {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::All, StorageSemantic::VersionedKV}, true},
     {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::All, StorageSemantic::Changelog}, true},
-
-    /* <=> Append inner asof join Changelog */
-    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Asof, StorageSemantic::ChangelogKV}, true},
-    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Asof, StorageSemantic::VersionedKV}, true},
-    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Asof, StorageSemantic::Changelog}, true},
-    /* <=> Append inner latest join Changelog */
-    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Any, StorageSemantic::ChangelogKV}, true},
-    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Any, StorageSemantic::VersionedKV}, true},
-    {{StorageSemantic::VersionedKV, JoinKind::Inner, JoinStrictness::Any, StorageSemantic::Changelog}, true},
-    /* <=> Append left asof join Changelog */
-    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Asof, StorageSemantic::ChangelogKV}, true},
-    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Asof, StorageSemantic::VersionedKV}, true},
-    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Asof, StorageSemantic::Changelog}, true},
-    /* <=> Append left latest join Changelog */
-    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Any, StorageSemantic::ChangelogKV}, true},
-    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Any, StorageSemantic::VersionedKV}, true},
-    {{StorageSemantic::VersionedKV, JoinKind::Left, JoinStrictness::Any, StorageSemantic::Changelog}, true},
 };
 
 void HashJoin::validate(const JoinCombinationType & join_combination)
