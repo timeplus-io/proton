@@ -386,12 +386,6 @@ void CheckpointCoordinator::removeExpiredCheckpoints(bool delete_marked)
 
 bool CheckpointCoordinator::doTriggerCheckpoint(const std::weak_ptr<PipelineExecutor> & executor, CheckpointContextPtr ckpt_ctx)
 {
-    bool triggered = false;
-    SCOPE_EXIT({
-        if (!triggered)
-            resetCurrentCheckpointEpoch(ckpt_ctx->qid);
-    });
-
     /// Create directory before hand. Then all other processors don't need
     /// check and create target epoch ckpt directory.
     try
@@ -405,6 +399,9 @@ bool CheckpointCoordinator::doTriggerCheckpoint(const std::weak_ptr<PipelineExec
                 "already cancelled",
                 ckpt_ctx->qid,
                 ckpt_ctx->epoch);
+
+            /// Not reset current_epoch here, since the query may be still in progress
+            /// resetCurrentCheckpointEpoch(ckpt_ctx->qid);
             return false;
         }
 
@@ -415,14 +412,14 @@ bool CheckpointCoordinator::doTriggerCheckpoint(const std::weak_ptr<PipelineExec
                 "Skipped checkpointing state for query={} epoch={}, since there is no new data processed",
                 ckpt_ctx->qid,
                 ckpt_ctx->epoch);
+
+            resetCurrentCheckpointEpoch(ckpt_ctx->qid);
             return false;
         }
 
         preCheckpoint(ckpt_ctx);
 
         exec->triggerCheckpoint(ckpt_ctx);
-
-        triggered = true;
     
         LOG_INFO(logger, "Triggered checkpointing state for query={} epoch={}", ckpt_ctx->qid, ckpt_ctx->epoch);
         return true;
@@ -439,6 +436,8 @@ bool CheckpointCoordinator::doTriggerCheckpoint(const std::weak_ptr<PipelineExec
     {
         tryLogCurrentException(logger, fmt::format("Failed to trigger checkpointing state for query={} epoch={}", ckpt_ctx->qid, ckpt_ctx->epoch));
     }
+
+    resetCurrentCheckpointEpoch(ckpt_ctx->qid);
     return false;
 }
 
