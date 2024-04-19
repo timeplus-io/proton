@@ -3,10 +3,10 @@
 #include "config.h"
 
 #if USE_PROTOBUF
-#    include <Formats/FormatSchemaInfo.h>
-#    include <Processors/Formats/IRowInputFormat.h>
-#    include <Processors/Formats/ISchemaReader.h>
-#    include <Processors/Formats/ISchemaWriter.h>
+#   include <Processors/Formats/IRowInputFormat.h>
+#   include <Processors/Formats/ISchemaReader.h>
+#   include <Processors/Formats/ISchemaWriter.h>
+#   include <Formats/FormatSchemaInfo.h>
 
 /// proton: starts
 #    include <Formats/KafkaSchemaRegistry.h>
@@ -15,10 +15,9 @@
 namespace DB
 {
 class Block;
-class FormatSchemaInfo;
 class ProtobufReader;
 class ProtobufSerializer;
-
+class ReadBuffer;
 
 /** Stream designed to deserialize data from the google protobuf format.
   * One Protobuf message is parsed as one row of data.
@@ -39,8 +38,8 @@ public:
         const Block & header_,
         const Params & params_,
         const FormatSchemaInfo & schema_info_,
-        bool with_length_delimiter_);
-    ~ProtobufRowInputFormat() override;
+        bool with_length_delimiter_,
+        bool flatten_google_wrappers_);
 
     String getName() const override { return "ProtobufRowInputFormat"; }
 
@@ -49,7 +48,7 @@ public:
     /// proton: ends
 
 private:
-    bool readRow(MutableColumns & columns, RowReadExtension &) override;
+    bool readRow(MutableColumns & columns, RowReadExtension & row_read_extension) override;
     bool allowSyncAfterError() const override;
     void syncAfterError() override;
 
@@ -66,7 +65,8 @@ public:
     NamesAndTypesList readSchema() override;
 
 private:
-    FormatSchemaInfo schema_info;
+    const FormatSchemaInfo schema_info;
+    bool skip_unsupported_fields;
 };
 
 /// proton: starts
@@ -89,6 +89,7 @@ public:
 private:
     bool readRow(MutableColumns & columns, RowReadExtension & row_read_extension) override;
 
+    bool flatten_google_wrappers {false};
     std::shared_ptr<SchemaRegistryWithCache> registry;
     std::vector<size_t> missing_column_indices;
     std::unique_ptr<ProtobufSerializer> serializer;

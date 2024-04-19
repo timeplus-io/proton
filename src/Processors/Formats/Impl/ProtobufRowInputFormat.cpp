@@ -3,13 +3,10 @@
 #if USE_PROTOBUF
 #   include <Core/Block.h>
 #   include <Formats/FormatFactory.h>
-#   include <Formats/FormatSchemaInfo.h>
 #   include <Formats/ProtobufReader.h>
 #   include <Formats/ProtobufSchemas.h>
 #   include <Formats/ProtobufSerializer.h>
 #   include <IO/WriteBufferFromFile.h>
-#   include <Interpreters/Context.h>
-#   include <base/range.h>
 
 /// proton: starts
 #   include <Common/LRUCache.h>
@@ -33,21 +30,21 @@ extern const int INVALID_SETTING_VALUE;
 }
 /// proton: ends
 
-ProtobufRowInputFormat::ProtobufRowInputFormat(
-    ReadBuffer & in_, const Block & header_, const Params & params_, const FormatSchemaInfo & schema_info_, bool with_length_delimiter_)
+ProtobufRowInputFormat::ProtobufRowInputFormat(ReadBuffer & in_, const Block & header_, const Params & params_,
+    const FormatSchemaInfo & schema_info_, bool with_length_delimiter_, bool flatten_google_wrappers_)
     : IRowInputFormat(header_, in_, params_, ProcessorID::ProtobufRowInputFormatID)
     , reader(std::make_unique<ProtobufReader>(in_))
     , serializer(ProtobufSerializer::create(
           header_.getNames(),
           header_.getDataTypes(),
           missing_column_indices,
-          *ProtobufSchemas::instance().getMessageTypeForFormatSchema(schema_info_),
+          *ProtobufSchemas::instance().getMessageTypeForFormatSchema(schema_info_, ProtobufSchemas::WithEnvelope::No),
           with_length_delimiter_,
-          *reader))
+          /* with_envelope = */ false,
+          flatten_google_wrappers_,
+         *reader))
 {
 }
-
-ProtobufRowInputFormat::~ProtobufRowInputFormat() = default;
 
 /// proton: starts
 void ProtobufRowInputFormat::setReadBuffer(ReadBuffer & buf)
@@ -105,8 +102,10 @@ void registerInputFormatProtobuf(FormatFactory & factory)
             -> std::shared_ptr<IInputFormat>
         {
             if (settings.kafka_schema_registry.url.empty())
-                return std::make_shared<ProtobufRowInputFormat>(
-                    buf, sample, std::move(params), FormatSchemaInfo(settings, "Protobuf", true), /*with_length_delimiter=*/false);
+                return std::make_shared<ProtobufRowInputFormat>(buf, sample, std::move(params),
+                    FormatSchemaInfo(settings, "Protobuf", true),
+                    /*with_length_delimiter=*/false,
+                    settings.protobuf.input_flatten_google_wrappers);
 
             if (!settings.schema.format_schema.empty())
                 throw Exception(
@@ -118,8 +117,10 @@ void registerInputFormatProtobuf(FormatFactory & factory)
     factory.registerInputFormat(
         "Protobuf", [](ReadBuffer & buf, const Block & sample, IRowInputFormat::Params params, const FormatSettings & settings)
         {
-            return std::make_shared<ProtobufRowInputFormat>(
-                buf, sample, std::move(params), FormatSchemaInfo(settings, "Protobuf", true), /*with_length_delimiter=*/true);
+            return std::make_shared<ProtobufRowInputFormat>(buf, sample, std::move(params),
+                FormatSchemaInfo(settings, "Protobuf", true),
+                /*with_length_delimiter=*/true,
+                settings.protobuf.input_flatten_google_wrappers);
         });
     /// proton: ends
 }
@@ -129,15 +130,15 @@ ProtobufSchemaReader::ProtobufSchemaReader(const FormatSettings & format_setting
           format_settings.schema.format_schema,
           "Protobuf",
           true,
-          format_settings.schema.is_server,
-          format_settings.schema.format_schema_path)
+          format_settings.schema.is_server, format_settings.schema.format_schema_path)
+    , skip_unsupported_fields(format_settings.protobuf.skip_fields_with_unsupported_types_in_schema_inference)
 {
 }
 
 NamesAndTypesList ProtobufSchemaReader::readSchema()
 {
-    const auto * message_descriptor = ProtobufSchemas::instance().getMessageTypeForFormatSchema(schema_info);
-    return protobufSchemaToCHSchema(message_descriptor);
+    const auto * message_descriptor = ProtobufSchemas::instance().getMessageTypeForFormatSchema(schema_info, ProtobufSchemas::WithEnvelope::No);
+    return protobufSchemaToCHSchema(message_descriptor, skip_unsupported_fields);
 }
 
 /// proton: starts
@@ -257,6 +258,7 @@ private:
 ProtobufConfluentRowInputFormat::ProtobufConfluentRowInputFormat(
     ReadBuffer & in_, const Block & header_, Params params_, const FormatSettings & format_settings_)
     : IRowInputFormat(header_, in_, params_, ProcessorID::ProtobufRowInputFormatID)
+    , flatten_google_wrappers(format_settings_.protobuf.input_flatten_google_wrappers)
     , registry(getConfluentSchemaRegistry(format_settings_))
 {
 }
@@ -298,6 +300,8 @@ bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadE
         missing_column_indices,
         *registry->getMessageType(schema_id, indexes),
         /*with_length_delimiter=*/false,
+        /* with_envelope = */ false,
+        flatten_google_wrappers,
         reader);
 
     size_t row_num = columns.empty() ? 0 : columns[0]->size();
@@ -367,13 +371,8 @@ void registerProtobufSchemaReader(FormatFactory & factory)
 namespace DB
 {
 class FormatFactory;
-void registerInputFormatProtobuf(FormatFactory &)
-{
-}
-
-void registerProtobufSchemaReader(FormatFactory &)
-{
-}
+void registerInputFormatProtobuf(FormatFactory &) {}
+void registerProtobufSchemaReader(FormatFactory &) {}
 }
 
 #endif

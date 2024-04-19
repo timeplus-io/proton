@@ -448,14 +448,48 @@ StorageURLSink::StorageURLSink(
 
 void StorageURLSink::consume(Chunk chunk)
 {
+    std::lock_guard lock(cancel_mutex);
+    if (cancelled)
+        return;
     writer->write(getHeader().cloneWithColumns(chunk.detachColumns()));
+}
+
+void StorageURLSink::onCancel()
+{
+    std::lock_guard lock(cancel_mutex);
+    finalize();
+    cancelled = true;
+}
+
+void StorageURLSink::onException()
+{
+    std::lock_guard lock(cancel_mutex);
+    finalize();
 }
 
 void StorageURLSink::onFinish()
 {
-    writer->finalize();
-    writer->flush();
-    write_buf->finalize();
+    std::lock_guard lock(cancel_mutex);
+    finalize();
+}
+
+void StorageURLSink::finalize()
+{
+    if (!writer)
+        return;
+
+    try
+    {
+        writer->finalize();
+        writer->flush();
+        write_buf->finalize();
+    }
+    catch (...)
+    {
+        /// Stop ParallelFormattingOutputFormat correctly.
+        writer.reset();
+        throw;
+    }
 }
 
 class PartitionedStorageURLSink final : public PartitionedSink
