@@ -134,7 +134,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test28_right_stream;"},
                         {"client":"python", "query_type": "table", "exist":"test28_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_left_stream (i int, k string);"},
                         {"client":"python", "query_type": "table", "exist":"test28_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_right_stream (j int, kk string);"},
-                        {"client":"python", "query_type": "stream", "query_id":"2804", "wait":1, "query": "select i, k, j, kk, _tp_delta from test28_left_stream as a inner join changelog(test28_right_stream, kk) as b on a.i == b.j;"},
+                        {"client":"python", "query_type": "stream", "query_id":"2804", "wait":1, "query": "select i, k, j, kk from test28_left_stream as a inner join changelog(test28_right_stream, kk) as b on a.i == b.j;"},
                         {"client":"python", "query_type": "table", "depends_on":"2804", "wait":1, "query": "insert into test28_right_stream (j, kk) values (1, 'kk1');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_left_stream (i, k) values (1, 'k1');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_right_stream (j, kk) values (2, 'kk1');"},
@@ -146,8 +146,8 @@
                 {
                     "query_id":"2804",
                     "expected_results":[
-                        [1, "k1", 1, "kk1", 1],
-                        [2, "k1", 2, "kk1", 1]
+                        [1, "k1", 1, "kk1"],
+                        [2, "k1", 2, "kk1"]
                     ]
                 }
             ]
@@ -164,7 +164,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test28_version_kv_stream;"},
                         {"client":"python", "query_type": "table", "exist":"test28_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_left_stream (i int, k string);"},
                         {"client":"python", "query_type": "table", "exist":"test28_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_version_kv_stream(j int, kk string) primary key kk settings mode='versioned_kv';"},
-                        {"client":"python", "query_type": "stream", "query_id":"2805", "wait":1, "query": "select i, k, j, kk, _tp_delta from test28_left_stream as a inner join changelog(test28_version_kv_stream, true) as b on a.i == b.j;"},
+                        {"client":"python", "query_type": "stream", "query_id":"2805", "wait":1, "query": "select i, k, j, kk from test28_left_stream as a inner join changelog(test28_version_kv_stream, true) as b on a.i == b.j;"},
                         {"client":"python", "query_type": "table", "depends_on":"2805", "wait":1, "query": "insert into test28_version_kv_stream (j, kk) values (1, 'kk1');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_left_stream (i, k) values (1, 'k1');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_version_kv_stream (j, kk) values (2, 'kk1');"},
@@ -176,8 +176,8 @@
                 {
                     "query_id":"2805",
                     "expected_results":[
-                        [1, "k1", 1, "kk1", 1],
-                        [2, "k1", 2, "kk1", 1]
+                        [1, "k1", 1, "kk1"],
+                        [2, "k1", 2, "kk1"]
                     ]
                 }
             ]
@@ -194,7 +194,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test28_right_stream;"},
                         {"client":"python", "query_type": "table", "exist":"test28_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_left_stream (i int, k string);"},
                         {"client":"python", "query_type": "table", "exist":"test28_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_right_stream (j int, kk string);"},
-                        {"client":"python", "query_type": "stream", "query_id":"2806", "wait":1, "query": "with cte as (select j, kk from test28_right_stream) select i, k, j, kk, _tp_delta from test28_left_stream as a inner join changelog(cte, kk) as b on a.i == b.j;"},
+                        {"client":"python", "query_type": "stream", "query_id":"2806", "wait":1, "query": "with cte as (select j, kk from test28_right_stream) select i, k, j, kk from test28_left_stream as a inner join changelog(cte, kk) as b on a.i == b.j;"},
                         {"client":"python", "query_type": "table", "depends_on":"2806", "wait":1, "query": "insert into test28_right_stream (j, kk) values (1, 'kk1');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_left_stream (i, k) values (1, 'k1');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_right_stream (j, kk) values (2, 'kk1');"},
@@ -206,8 +206,8 @@
                 {
                     "query_id":"2806",
                     "expected_results":[
-                        [1, "k1", 1, "kk1", 1],
-                        [2, "k1", 2, "kk1", 1]
+                        [1, "k1", 1, "kk1"],
+                        [2, "k1", 2, "kk1"]
                     ]
                 }
             ]
@@ -224,7 +224,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test28_right_stream;"},
                         {"client":"python", "query_type": "table", "exist":"test28_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_left_stream (i int, k string);"},
                         {"client":"python", "query_type": "table", "exist":"test28_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_right_stream (j int, kk string);"},
-                        {"client":"python", "query_type": "stream", "query_id":"2807", "wait":1, "query": "select i, k, j, kk, _tp_delta from test28_left_stream as a left join changelog(test28_right_stream, kk) as b on a.i == b.j;"},
+                        {"client":"python", "query_type": "stream", "query_id":"2807", "wait":1, "query": "select i, k, j, kk from test28_left_stream as a left join changelog(test28_right_stream, kk) as b on a.i == b.j;"},
                         {"client":"python", "query_type": "table", "depends_on":"2807", "wait":1, "query": "insert into test28_right_stream (j, kk) values (1, 'kk1');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_left_stream (i, k) values (1, 'k1');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_right_stream (j, kk) values (2, 'kk1');"},
@@ -237,9 +237,9 @@
                 {
                     "query_id":"2807",
                     "expected_results":[
-                        [1, "k1", 1, "kk1", 1],
-                        [2, "k1", 2, "kk1", 1],
-                        [3, "k2", 0, "", 0]
+                        [1, "k1", 1, "kk1"],
+                        [2, "k1", 2, "kk1"],
+                        [3, "k2", 0, ""]
                     ]
                 }
             ]
@@ -256,7 +256,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test28_version_kv_stream;"},
                         {"client":"python", "query_type": "table", "exist":"test28_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_left_stream (i int, k string);"},
                         {"client":"python", "query_type": "table", "exist":"test28_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_version_kv_stream(j int, kk string) primary key kk settings mode='versioned_kv';"},
-                        {"client":"python", "query_type": "stream", "query_id":"2808", "wait":1, "query": "select i, k, j, kk, _tp_delta from test28_left_stream as a left join changelog(test28_version_kv_stream, true) as b on a.i == b.j;"},
+                        {"client":"python", "query_type": "stream", "query_id":"2808", "wait":1, "query": "select i, k, j, kk from test28_left_stream as a left join changelog(test28_version_kv_stream, true) as b on a.i == b.j;"},
                         {"client":"python", "query_type": "table", "depends_on":"2808", "wait":1, "query": "insert into test28_version_kv_stream (j, kk) values (1, 'kk1');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_left_stream (i, k) values (1, 'k1');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_version_kv_stream (j, kk) values (2, 'kk1');"},
@@ -269,9 +269,9 @@
                 {
                     "query_id":"2808",
                     "expected_results":[
-                        [1, "k1", 1, "kk1", 1],
-                        [2, "k1", 2, "kk1", 1],
-                        [3, "k2", 0, "", 0]
+                        [1, "k1", 1, "kk1"],
+                        [2, "k1", 2, "kk1"],
+                        [3, "k2", 0, ""]
                     ]
                 }
             ]
@@ -288,7 +288,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test28_right_stream;"},
                         {"client":"python", "query_type": "table", "exist":"test28_left_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_left_stream (i int, k string);"},
                         {"client":"python", "query_type": "table", "exist":"test28_right_stream", "exist_wait":2, "wait":1, "query":"create stream if not exists test28_right_stream (j int, kk string);"},
-                        {"client":"python", "query_type": "stream", "query_id":"2809", "wait":1, "query": "with cte as (select j, kk from test28_right_stream) select i, k, j, kk, _tp_delta from test28_left_stream as a left join changelog(cte, kk) as b on a.i == b.j;"},
+                        {"client":"python", "query_type": "stream", "query_id":"2809", "wait":1, "query": "with cte as (select j, kk from test28_right_stream) select i, k, j, kk from test28_left_stream as a left join changelog(cte, kk) as b on a.i == b.j;"},
                         {"client":"python", "query_type": "table", "depends_on":"2809", "wait":1, "query": "insert into test28_right_stream (j, kk) values (1, 'kk1');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_left_stream (i, k) values (1, 'k1');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test28_right_stream (j, kk) values (2, 'kk1');"},
@@ -301,9 +301,9 @@
                 {
                     "query_id":"2809",
                     "expected_results":[
-                        [1, "k1", 1, "kk1", 1],
-                        [2, "k1", 2, "kk1", 1],
-                        [3, "k2", 0, "", 0]
+                        [1, "k1", 1, "kk1"],
+                        [2, "k1", 2, "kk1"],
+                        [3, "k2", 0, ""]
                     ]
                 }
             ]

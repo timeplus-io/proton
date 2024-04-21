@@ -174,6 +174,8 @@ public:
 
     void renameColumn(String new_name, size_t column_pos);
 
+    Columns detachColumns();
+
     /// Deep clone, use cautiously. Most of time, we don't need deepClone
     Block deepClone() const;
 

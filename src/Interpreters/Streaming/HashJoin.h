@@ -295,7 +295,7 @@ private:
     std::vector<Block> insertBlockToRangeBucketsAndJoin(Block block);
 
     template <bool is_left_block>
-    void doInsertBlock(Block block, HashBlocksPtr target_hash_blocks);
+    void doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, IColumn::Filter * new_keys_filter = nullptr);
 
     /// For bidirectional hash join
     /// Return retracted block if needs emit changelog, otherwise empty block
