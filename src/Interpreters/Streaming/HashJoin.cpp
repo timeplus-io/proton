@@ -435,10 +435,10 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<const
                         addNotFoundRow<jf.add_missing, jf.need_replication>(added_columns, current_offset);
                     }
                 }
-                else if constexpr ((jf.is_latest_join) && jf.right)
+                else if constexpr (jf.is_latest_join && jf.right)
                 {
                     /// FIXME
-                    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented path in joinColumns().");
+                    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "right latest join is not supported");
                 }
                 else if constexpr (jf.is_latest_join && (jf.inner || jf.left))
                 {
@@ -449,7 +449,7 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<const
                 else /// ANY LEFT
                 {
                     /// FIXME
-                    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented path in joinColumns().");
+                    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Any left join is not supported");
                 }
             }
         }
@@ -468,8 +468,8 @@ joinColumns(std::vector<KeyGetter> && key_getter_vector, const std::vector<const
             }
         }
 
-        /// Not add missing for 'right join left'
-        if (!right_row_found && added_columns.is_left_block)
+        /// Don't add missing for `right_side join left_side` in bidirectional join case
+        if (added_columns.is_left_block && !right_row_found)
             addNotFoundRow<jf.add_missing, jf.need_replication>(added_columns, current_offset);
 
         if constexpr (jf.need_replication)
@@ -933,7 +933,9 @@ void HashJoin::init()
         && (left_data.join_stream_desc->data_stream_semantic != DataStreamSemantic::Append
             || right_data.join_stream_desc->data_stream_semantic != DataStreamSemantic::Append
             || streaming_kind != Kind::Inner))
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Only support inner range join append-only streams");
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "Only inner range join is supported and the left and right stream must be append-only streams in range join");
 
     range_bidirectional_hash_join = bidirectional_hash_join && (streaming_strictness == Strictness::Range);
 
@@ -1802,13 +1804,13 @@ Block HashJoin::insertLeftBlockAndJoin(Block & left_block)
 
     if (emitChangeLog())
     {
-        /// If this is a retract block which contains _tp_delta with -1 as it value
+        /// If this is a retract block which contains _tp_delta with -1 as its value
         if (auto joined_retracted_block = eraseExistingKeysAndRetractJoin<true>(left_block); joined_retracted_block)
             return std::move(*joined_retracted_block);
     }
     else
     {
-        /// Just erase the existing keys from hash map on left side, no need retract join
+        /// Since we are not emitting changelog, just erase the existing keys from the left side hash map, no need to do retract join
         if (isRetractBlock(left_block, *left_data.join_stream_desc))
         {
             eraseExistingKeys<true>(left_block, left_data);
@@ -1831,13 +1833,13 @@ Block HashJoin::insertRightBlockAndJoin(Block & right_block)
 
     if (emitChangeLog())
     {
-        /// If this is a retract block which contains _tp_delta with -1 as it value
+        /// If this is a retract block which contains _tp_delta with -1 as its value
         if (auto joined_retracted_block = eraseExistingKeysAndRetractJoin<false>(right_block); joined_retracted_block)
             return std::move(*joined_retracted_block);
     }
     else
     {
-        /// Just erase the existing keys from hash map on right side, no need retract join
+        /// Since we are not emitting changelog, just erase the existing keys from the left side hash map, no need to do retract join
         if (isRetractBlock(right_block, *right_data.join_stream_desc))
         {
             eraseExistingKeys<false>(right_block, right_data);
@@ -1846,73 +1848,83 @@ Block HashJoin::insertRightBlockAndJoin(Block & right_block)
         }
     }
 
-    /// For left join, if right data have new join keys, we need delete prev joined result (join key + left_cols + right_cols<empty>),
+    /// For left join, if right data have new join keys, we need retract prev left joined result (join key + left_cols + empty right_cols),
     /// for example: `lkv left join rkv on lkv.key = rkv.key`
-    ///         (lkv)           (rkv)               (output)
-    /// (s1)    k1,v1,+1                    >>      k1, v1, (rkv.defaults), +1
-    /// (s2)                    k1,v2,+1    >>      k1, v1, (rkv.defaults), -1
+    ///         (lkv)           (rkv)               (left joined)
+    /// (t1)    k1,v1,+1                    >>      k1, v1, (columns with 'empty' values for rkv), +1
+    /// (t2)                    k1,v2,+1    >>      k1, v1, (columns with 'empty' values for rkv), -1
     ///                                             k1, v1, rkv.k1, rkv.v2, +1
-    /// So, at (s2): we need to do right join left with `k1,(other defaults),-1` and `k1,v2,+1` 
-    std::unique_ptr<IColumn::Filter> new_keys_filter;
+    /// So, at (t2): we need to do right join left with `k1,(other defaults),-1` and `k1,v2,+1` 
     if (streaming_kind == Kind::Left && emitChangeLog())
-        new_keys_filter = std::make_unique<IColumn::Filter>(right_block.rows(), 0);
-
-    doInsertBlock<false>(right_block, right_data.buffered_data->getCurrentHashBlocksPtr(), new_keys_filter.get());
-    if (new_keys_filter)
     {
+        IColumn::Filter new_keys_filter(right_block.rows(), 0);
+        doInsertBlock<false>(right_block, right_data.buffered_data->getCurrentHashBlocksPtr(), &new_keys_filter);
         assert(right_data.join_stream_desc->hasDeltaColumn());
-        /// 1) Generate an block with new keys and default values (such as `k1, (other defaults), -1`)
-        MutableColumns columns;
-        columns.reserve(right_block.columns());
-        /// FIXME, multiple disjuncts OR clause
-        const auto & key_names = table_join->getClauses().front().key_names_right;
-        size_t new_keys_rows = std::accumulate(new_keys_filter->begin(), new_keys_filter->end(), static_cast<size_t>(0));
-        for (auto & col_with_type_name : right_block)
-        {
-            if (std::ranges::any_of(key_names, [&](const auto & name) { return name == col_with_type_name.name; }))
-                columns.emplace_back(IColumn::mutate(col_with_type_name.column->filter(*new_keys_filter, new_keys_rows)));
-            else if (col_with_type_name.name == right_data.join_stream_desc->deltaColumnName())
-            {
-                columns.emplace_back(col_with_type_name.column->cloneEmpty());
-                columns.back()->reserve(new_keys_rows);
-                columns.back()->insertMany(-1, new_keys_rows);
-            }
-            else
-            {
-                columns.emplace_back(col_with_type_name.column->cloneEmpty());
-                columns.back()->reserve(new_keys_rows);
-                columns.back()->insertManyDefaults(new_keys_rows);
-            }
-        }
 
-        /// 2) Do retract right <left join> left (such as `k1, v1, (rkv.defaults), -1`)
-        Block retracted_block = right_block.cloneWithColumns(std::move(columns));
-        auto pushdown_retracted = joinBlockWithHashTable<false>(retracted_block, left_data.buffered_data->getCurrentHashBlocksPtr());
-        assert(!pushdown_retracted);
-        /// NOTE: Reset the right join key columns to default values after joined, for example:
-        /// `k1, v1, rkv.k1, (rkv.other_defaults), -1`  =>  `k1, v1, (rkv.defaults), -1`
-        if (retracted_block.rows())
+        Block retracted_block;
+        size_t new_keys_rows = std::accumulate(new_keys_filter.begin(), new_keys_filter.end(), static_cast<size_t>(0));
+        if (new_keys_rows > 0)
         {
-            for (auto & col_with_type_name : retracted_block)
+            /// 1) Generate a block for the new keys
+            MutableColumns columns;
+            columns.reserve(right_block.columns());
+            /// FIXME, multiple disjuncts OR clause
+            const auto & key_names = table_join->getClauses().front().key_names_right;
+            for (const auto & col_with_type_name : right_block)
             {
-                if (std::ranges::any_of(key_names, [&](const auto & name) { return name == col_with_type_name.name; }))
+                auto is_key_column = std::ranges::any_of(key_names, [&](const auto & name) { return name == col_with_type_name.name; });
+                if (is_key_column)
                 {
-                    auto key_col = IColumn::mutate(col_with_type_name.column->cloneEmpty());
-                    key_col->reserve(right_block.rows());
-                    key_col->insertManyDefaults(right_block.rows());
-                    col_with_type_name.column = std::move(key_col);
+                    columns.emplace_back(IColumn::mutate(col_with_type_name.column->filter(new_keys_filter, new_keys_rows)));
+                }
+                else if (col_with_type_name.name == right_data.join_stream_desc->deltaColumnName())
+                {
+                    columns.emplace_back(col_with_type_name.column->cloneEmpty());
+                    columns.back()->reserve(new_keys_rows);
+                    columns.back()->insertMany(-1, new_keys_rows);
+                }
+                else
+                {
+                    columns.emplace_back(col_with_type_name.column->cloneEmpty());
+                    columns.back()->reserve(new_keys_rows);
+                    columns.back()->insertManyDefaults(new_keys_rows);
+                }
+            }
+
+            /// 2) Do retract right_side <left join> left_side
+            retracted_block = right_block.cloneWithColumns(std::move(columns));
+            auto pushdown_retracted = joinBlockWithHashTable<false>(retracted_block, left_data.buffered_data->getCurrentHashBlocksPtr());
+            assert(!pushdown_retracted);
+            /// NOTE: Reset the right join key columns to default values after joined, for example:
+            /// `k1, v1, rkv.k1, (rkv.other_defaults), -1`  =>  `k1, v1, (rkv.defaults), -1`
+            auto retracted_rows = retracted_block.rows();
+            if (retracted_rows)
+            {
+                for (auto & col_with_type_name : retracted_block)
+                {
+                    auto is_key_column = std::ranges::any_of(key_names, [&](const auto & name) { return name == col_with_type_name.name; });
+                    if (is_key_column)
+                    {
+                        auto key_col = IColumn::mutate(col_with_type_name.column->cloneEmpty());
+                        key_col->reserve(retracted_rows);
+                        key_col->insertManyDefaults(retracted_rows);
+                        col_with_type_name.column = std::move(key_col);
+                    }
                 }
             }
         }
 
-        /// 3) Do right <left join> left (such as `k1, v1, v2, +1`)
-        pushdown_retracted = joinBlockWithHashTable<false>(right_block, left_data.buffered_data->getCurrentHashBlocksPtr());
+        /// 3) Do right_side <left join> left_side
+        auto pushdown_retracted = joinBlockWithHashTable<false>(right_block, left_data.buffered_data->getCurrentHashBlocksPtr());
         assert(!pushdown_retracted);
 
         return retracted_block;
     }
-
-    return joinBlockWithHashTable<false>(right_block, left_data.buffered_data->getCurrentHashBlocksPtr());
+    else
+    {
+        doInsertBlock<false>(right_block, right_data.buffered_data->getCurrentHashBlocksPtr());
+        return joinBlockWithHashTable<false>(right_block, left_data.buffered_data->getCurrentHashBlocksPtr());
+    }
 }
 
 template <bool is_left_block>
@@ -2321,17 +2333,11 @@ void HashJoin::transformToOutputBlock(Block & joined_block) const
             left_delta_col.column = std::move(right_retract_delta_col.column);
 
             /// Then remove right delta column, skip this operation since next reordering will ignore it
-            // joined_block.erase(*right_delta_column_position_rlj);
         }
         else
         {
             /// output header:  "c2.i, c2.v, i, v"
-            /// Skip this operation since next reordering will ignore it
-            // if (right_delta_column_position_lrj)
-            //     joined_block.erase(*right_delta_column_position_lrj);
-
-            // if (left_delta_column_position_lrj)
-            //     joined_block.erase(*left_delta_column_position_lrj);
+            /// Remove left or right delta columns, skip this operation since next reordering will ignore it
         }
 
         joined_block.reorderColumnsInplace(output_header);

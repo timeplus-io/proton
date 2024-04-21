@@ -273,7 +273,12 @@ inline void JoinTransform::joinBidirectionally(Chunks chunks)
         auto retracted_block_rows = retracted_block.rows();
         if (retracted_block_rows)
         {
-            /// Don't watermark this block. We can concat retracted / result blocks or use avoid watermarking
+            /// Don't watermark retracted chunk since we like the retracted chunk and the following result chunk
+            /// to process in a consecutive way. For example, avoid emitting result right after processing retracted chunk
+            /// but without processing the following result chunk. This will prevent transitive emit result we don't like
+            /// to have usually.
+            /// To have retracted chunk / result chunk processed consecutively, we can either concat them into one bigger
+            /// chunk or use `consecutive` flag which we use here.
             auto chunk_ctx = ChunkContext::create();
             chunk_ctx->setConsecutiveDataFlag();
             output_chunks.emplace_back(retracted_block.getColumns(), retracted_block_rows, nullptr, std::move(chunk_ctx));
@@ -299,8 +304,9 @@ inline void JoinTransform::rangeJoinBidirectionally(Chunks chunks)
 
         for (auto & joined_block : joined_blocks)
         {
-            if (joined_block.rows())
-                output_chunks.emplace_back(joined_block.getColumns(), joined_block.rows());
+            auto rows = joined_block.rows();
+            if (rows)
+                output_chunks.emplace_back(joined_block.detachColumns(), rows);
         }
     }
 }
