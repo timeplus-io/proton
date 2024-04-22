@@ -537,7 +537,7 @@ void StorageMaterializedView::initBackgroundState()
                                 auto current_failed_sns = getProcessedSNOfStreamingSources(streaming_sources);
                                 recover_sns.clear();
                                 /// If the current SN fails three times in a row, we will skipping some SNs and recover from the next SN to avoid permanent recovery.
-                                if (failed_sn_queue.size() >= local_context->getSettingsRef().recovery_retry_for_sn_failure)
+                                if (failed_sn_queue.size() >= local_context->getSettingsRef().recovery_retry_for_sn_failure - 1)
                                 {
                                     recover_sns.reserve(current_failed_sns.size());
                                     for (size_t i = 0; i < current_failed_sns.size(); ++i)
