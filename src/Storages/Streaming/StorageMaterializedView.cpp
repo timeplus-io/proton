@@ -58,6 +58,11 @@ extern const int DIRECTORY_DOESNT_EXIST;
 extern const int UNEXPECTED_ERROR_CODE;
 }
 
+namespace
+{
+constexpr size_t DEFAULT_MAX_RETRY_TIME = 6;
+constexpr size_t DEFAULT_RECOVER_RETRY_FOR_SN_FAILURE = 3;
+}
 
 namespace
 {
@@ -529,15 +534,21 @@ void StorageMaterializedView::initBackgroundState()
                                         getExceptionMessage(e, true)));
 
                                 /// For some queries that always go wrong, we don’t want to recover too frequently. Now wait 5s, 10s, 15s, ... 30s, 30s for each time
-                                waitFor(recover_interval * std::min<size_t>(retry_times, 6));
+                                waitFor(recover_interval * std::min<size_t>(retry_times, DEFAULT_MAX_RETRY_TIME));
                                 break;
                             }
                             case RecoveryPolicy::BestEffort:
                             {
                                 auto current_failed_sns = getProcessedSNOfStreamingSources(streaming_sources);
                                 recover_sns.clear();
-                                /// If the current SN fails three times in a row, we will skipping some SNs and recover from the next SN to avoid permanent recovery.
-                                if (failed_sn_queue.size() >= local_context->getSettingsRef().recovery_retry_for_sn_failure - 1)
+
+                                /// If the current SN fails three times(can be adjusted in config) in a row, we will skipping some SNs and recover from the next SN to avoid permanent recovery.
+                                size_t recovery_retry_from_settings = local_context->getSettingsRef().recovery_retry_for_sn_failure;
+                                size_t recover_retry_times = DEFAULT_RECOVER_RETRY_FOR_SN_FAILURE;
+                                if (recovery_retry_from_settings > 0)
+                                    recover_retry_times = recovery_retry_from_settings - 1;
+
+                                if (failed_sn_queue.size() >= recover_retry_times)
                                 {
                                     recover_sns.reserve(current_failed_sns.size());
                                     for (size_t i = 0; i < current_failed_sns.size(); ++i)
