@@ -61,7 +61,7 @@ extern const int UNEXPECTED_ERROR_CODE;
 namespace
 {
 constexpr size_t DEFAULT_MAX_RETRY_TIME = 6;
-constexpr size_t DEFAULT_RECOVER_RETRY_FOR_SN_FAILURE = 3;
+constexpr size_t DEFAULT_RECOVER_RETRY_FOR_SN_FAILURE = 2;
 }
 
 namespace
