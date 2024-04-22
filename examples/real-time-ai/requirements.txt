@@ -1,0 +1,11 @@
+torch==2.2.0
+transformers==4.37.2
+unstructured==0.12.4
+bytewax==0.18.2
+fake-useragent==1.4.0
+icecream
+proton-driver
+pymilvus==2.3.4
+streamlit
+jproperties
+watchdog
