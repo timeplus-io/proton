@@ -48,8 +48,8 @@ private:
     ThreadPool poller;
     Poco::Logger * logger;
 
-    std::atomic_flag started = ATOMIC_FLAG_INIT;
-    std::atomic_flag stopped = ATOMIC_FLAG_INIT;
+    std::atomic_flag started;
+    std::atomic_flag stopped;
 };
 
 }

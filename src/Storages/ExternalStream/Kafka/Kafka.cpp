@@ -499,7 +499,7 @@ std::shared_ptr<RdKafka::Consumer> Kafka::getConsumer()
     auto new_consumer = std::make_shared<RdKafka::Consumer>(*conf, poll_timeout_ms, getLoggerName());
     std::weak_ptr<RdKafka::Consumer> ref = new_consumer;
 
-    std::lock_guard<std::mutex> lock(consumer_mutex);
+    std::lock_guard<std::mutex> lock{consumer_mutex};
     for (auto & consumer : consumers)
     {
         /// if a consumer is gone, replace it with the new one, so that `consumers` won't keep growing forever.
@@ -518,7 +518,7 @@ std::shared_ptr<RdKafka::Producer> Kafka::getProducer()
     if (producer)
         return producer;
 
-    std::scoped_lock lock(producer_mutex);
+    std::lock_guard<std::mutex> lock{producer_mutex};
     /// Check again in case of losing the race
     if (producer)
         return producer;

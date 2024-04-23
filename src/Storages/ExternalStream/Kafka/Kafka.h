@@ -46,30 +46,24 @@ public:
         /// Must release all resources here rather than relying on the deconstructor.
         /// Because the `Kafka` instance will not be destroyed immediately when the external stream gets dropped.
         {
-            std::lock_guard<std::mutex> lock(consumer_mutex);
-            for (auto & consumer_ptr : consumers)
+            std::lock_guard<std::mutex> lock{consumer_mutex};
+            for (const auto & consumer_ptr : consumers)
                 /// if the consumer is still running, mark it stopped
                 if (auto consumer = consumer_ptr.lock())
                     consumer->setStopped();
 
-            std::vector<std::weak_ptr<RdKafka::Consumer>> empty_consumers;
-            consumers.swap(empty_consumers);
+            consumers.clear();
         }
 
         if (producer)
             producer->setStopped();
+
         if (producer_topic)
-        {
-            // producer_topic.reset();
-            std::shared_ptr<RdKafka::Topic> empty_topic_ptr;
-            producer_topic.swap(empty_topic_ptr);
-        }
+            producer_topic.reset();
+
         if (producer)
-        {
-            // producer.reset();
-            std::shared_ptr<RdKafka::Producer> empty_producer_ptr;
-            producer.swap(empty_producer_ptr);
-        }
+            producer.reset();
+
         tryRemoveTempDir(logger);
     }
     bool supportsSubcolumns() const override { return true; }
