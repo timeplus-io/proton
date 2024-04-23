@@ -707,6 +707,8 @@ void TCPHandler::processOrdinaryQueryWithProcessors()
         sendPartUUIDs();
     }
 
+    LOG_INFO(log, "process 0");
+    
     /// Send header-block, to allow client to prepare output format for data to send.
     {
         const auto & header = pipeline.getHeader();
@@ -718,6 +720,7 @@ void TCPHandler::processOrdinaryQueryWithProcessors()
         }
     }
 
+    LOG_INFO(log, "process 1");
     {
         PullingAsyncPipelineExecutor executor(pipeline);
         CurrentMetrics::Increment query_thread_metric_increment{CurrentMetrics::QueryThread};
@@ -745,7 +748,9 @@ void TCPHandler::processOrdinaryQueryWithProcessors()
                 sendSelectProfileEvents();
             }
 
+	    LOG_INFO(log, "process 2");
             sendLogs();
+	    LOG_INFO(log, "process 3");
 
             if (block)
             {
@@ -754,6 +759,7 @@ void TCPHandler::processOrdinaryQueryWithProcessors()
             }
         }
 
+	LOG_INFO(log, "process 4");
         /** If data has run out, we will send the profiling data and total values to
           * the last zero block to be able to use
           * this information in the suffix output of stream.
@@ -778,6 +784,7 @@ void TCPHandler::processOrdinaryQueryWithProcessors()
         last_sent_snapshots.clear();
     }
 
+    LOG_INFO(log, "process 5");
     sendProgress();
 }
 
@@ -1727,6 +1734,12 @@ void TCPHandler::sendData(const Block & block)
 
     size_t prev_bytes_written_out = out->count();
     size_t prev_bytes_written_compressed_out = state.maybe_compressed_out->count();
+
+    auto x = block.getNames();
+    for (const auto &y: x) {
+        LOG_INFO(log, "sendData");
+        LOG_INFO(log, "{}", y);
+    }
 
     try
     {

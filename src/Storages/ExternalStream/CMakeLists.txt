@@ -14,6 +14,7 @@ add_headers_and_sources(external_stream Pulsar)
 add_library(external_stream ${external_stream_headers} ${external_stream_sources})
 
 target_link_libraries(external_stream PUBLIC klog)
+target_link_libraries(external_stream PUBLIC ch_contrib::pulsar)
 
 if (ENABLE_TESTS)
     add_subdirectory(tests)

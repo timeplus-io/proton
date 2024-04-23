@@ -25,6 +25,7 @@ public:
     bool supportsSubcolumns() const override { return true; }
     NamesAndTypesList getVirtuals() const override;
     ExternalStreamCounterPtr getExternalStreamCounter() const override { return nullptr; }
+    const String & dataFormat() const override { return data_format; }
 
     Pipe read(
         const Names & column_names,
@@ -37,7 +38,7 @@ public:
 private:
     void calculateDataFormat(const IStorage * storage);
     void cacheVirtualColumnNamesAndTypes();
-    void validate(const std::vector<int32_t> & shards_to_query = {});
+    void validate();
 
     StorageID storage_id;
     Poco::Logger * logger;
@@ -49,3 +50,4 @@ private:
     std::mutex shards_mutex;
 };
 }
+

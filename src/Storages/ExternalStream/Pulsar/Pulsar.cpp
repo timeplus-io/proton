@@ -95,7 +95,7 @@ void Pulsar::cacheVirtualColumnNamesAndTypes()
 }
 
 /// Validate the topic still exists, specified partitions are still valid etc
-void Pulsar::validate(const std::vector<int32_t> & shards_to_query)
+void Pulsar::validate()
 {
     std::scoped_lock lock(shards_mutex);
     /// We haven't describe the topic yet
@@ -128,7 +128,8 @@ Pipe Pulsar::read(
         header.insert({any_one_column.type->createColumn(), any_one_column.type, any_one_column.name});
     }
     return Pipe(std::make_shared<PulsarSource>(
-        this, std::move(header), std::move(context), max_block_size));
+        this, std::move(header), storage_snapshot, std::move(context), logger, external_stream_counter, max_block_size));
 }
 }
+
 

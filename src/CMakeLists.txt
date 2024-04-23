@@ -355,6 +355,10 @@ if (TARGET ch_contrib::rdkafka)
     dbms_target_link_libraries(PRIVATE ch_contrib::rdkafka)
 endif()
 
+if (TARGET ch_contrib::pulsar)
+    dbms_target_link_libraries(PUBLIC ch_contrib::pulsar)
+endif()
+
 if (TARGET ch_contrib::sasl2)
     dbms_target_link_libraries(PRIVATE ch_contrib::sasl2)
 endif()
