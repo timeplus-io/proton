@@ -21,13 +21,14 @@ public:
     ChunkSharder(ExpressionActionsPtr sharding_expr_, const String & column_name);
     ChunkSharder();
 
-    BlocksWithShard shard(Block block, Int32 shard_cnt) const;
+    BlocksWithShard shard(Block block, Int32 shard_cnt);
 
 private:
-    Int32 getNextShardIndex(Int32 /*shard_cnt*/) const noexcept
+    Int32 getNextShardIndex(Int32 shard_cnt) noexcept
     {
-        /// let librdkafka decides
-        return RD_KAFKA_PARTITION_UA;
+        if (next_shard >= shard_cnt)
+            next_shard = 0;
+        return next_shard++;
     }
 
     BlocksWithShard doSharding(Block block, Int32 shard_cnt) const;
@@ -37,6 +38,7 @@ private:
     ExpressionActionsPtr sharding_expr;
     String sharding_key_column_name;
     bool random_sharding = false;
+    Int32 next_shard = 0;
 };
 
 }
