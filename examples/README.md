@@ -20,4 +20,6 @@ This folder lists some examples to run Proton in various use cases. For more rea
 
 - jdbc: demonstrates how to connect to Proton via JDBC using DBeaver or Metabase.
 
-- onebrc: Aggregation of 1 billion rows (of historical data) from the [1 billion row challenge](https://github.com/gunnarmorling/1brc) is fast, out-of-the-box. This is because Proton is based on ClickHouse, an open-source column-oriented DBMS for OLAP workloads. 
+- onebrc: aggregation of 1 billion rows (of historical data) from the [1 billion row challenge](https://github.com/gunnarmorling/1brc) is fast, out-of-the-box. This is because Proton is based on ClickHouse, an open-source column-oriented DBMS for OLAP workloads. 
+
+- Real-time-ai: build real-time RAG with open source tools: load real-time hackernews feed via Python and Bytewax, generate vector embeddings via Hugging Face Transformers, send the JSON documents to Timeplus Proton. You can apply SQL-based filter/transformation in Timeplus, then write to Kafka/Zilliz. 
