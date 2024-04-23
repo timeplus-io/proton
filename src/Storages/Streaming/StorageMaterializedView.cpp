@@ -61,7 +61,7 @@ extern const int UNEXPECTED_ERROR_CODE;
 namespace
 {
 constexpr size_t DEFAULT_MAX_RETRY_TIME = 6;
-constexpr size_t DEFAULT_RECOVER_RETRY_FOR_SN_FAILURE = 2;
+constexpr size_t DEFAULT_RECOVER_RETRY_FOR_SN_FAILURE = 3;
 }
 
 namespace
@@ -546,9 +546,9 @@ void StorageMaterializedView::initBackgroundState()
                                 size_t recovery_retry_from_settings = local_context->getSettingsRef().recovery_retry_for_sn_failure;
                                 size_t recover_retry_times = DEFAULT_RECOVER_RETRY_FOR_SN_FAILURE;
                                 if (recovery_retry_from_settings > 0)
-                                    recover_retry_times = recovery_retry_from_settings - 1;
+                                    recover_retry_times = recovery_retry_from_settings;
 
-                                if (failed_sn_queue.size() >= recover_retry_times)
+                                if (failed_sn_queue.size() >= recover_retry_times - 1)
                                 {
                                     recover_sns.reserve(current_failed_sns.size());
                                     for (size_t i = 0; i < current_failed_sns.size(); ++i)
