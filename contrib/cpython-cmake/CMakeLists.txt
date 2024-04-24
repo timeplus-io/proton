@@ -30,7 +30,7 @@ endif()
 message(STATUS "using command ${confcommand} to configure CPython")
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/cpython/libpython3.10.a
-                   COMMAND ./configure --enable-shared
+                   COMMAND ./configure "LDFLAGS=-static -static-libgcc" "CPPFLAGS=-static" 
                    COMMAND make -j 20
                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/cpython
                    COMMENT "Building library")

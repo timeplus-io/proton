@@ -443,10 +443,8 @@ macro (proton_add_executable target)
     # if GLIBC_COMPATIBILITY is ON and ENABLE_THINLTO is on than provide memcpy symbol explicitly to neutrialize thinlto's libcall generation.
     if (ARCH_AMD64 AND GLIBC_COMPATIBILITY AND ENABLE_THINLTO)
         add_executable (${ARGV} $<TARGET_OBJECTS:clickhouse_malloc> $<TARGET_OBJECTS:memcpy>)
-        target_compile_options(${target} PRIVATE -rdynamic)
     else ()
         add_executable (${ARGV} $<TARGET_OBJECTS:clickhouse_malloc>)
-        target_compile_options(${target} PRIVATE -rdynamic)
     endif ()
 
     get_target_property (type ${target} TYPE)

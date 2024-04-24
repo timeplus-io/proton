@@ -31,9 +31,6 @@ PythonUserDefinedFunction::PythonUserDefinedFunction(
     assert(py_byte_code != nullptr);
 
     PyObject * exe_result = PyEval_EvalCode(py_byte_code, PyModule_GetDict(PyImport_AddModule("__main__")), nullptr);
-    if (PyErr_Occurred()) {
-        PyErr_Print();
-    }
 
     /// same as above, exe_result can't be nullptr
     assert(exe_result != nullptr);
@@ -44,7 +41,6 @@ PythonUserDefinedFunction::PythonUserDefinedFunction(
     PyGILState_Release(gstate);
 
 }
-
 
 
 ColumnPtr PythonUserDefinedFunction::userDefinedExecuteImpl(
