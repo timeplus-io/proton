@@ -79,9 +79,12 @@ void CompletedPipelineExecutor::execute()
         data->executor->setReadProgressCallback(pipeline.getReadProgressCallback());
         data->exec_mode = pipeline.exec_mode;
 
-        auto func = [&, thread_group = CurrentThread::getGroup()]()
+
+        /// Avoid passing this to lambda, copy ptr to data instead.
+        /// Destructor of unique_ptr copy raw ptr into local variable first, only then calls object destructor.
+        auto func = [data_ptr = data.get(), num_threads = pipeline.getNumThreads(), thread_group = CurrentThread::getGroup()]
         {
-            threadFunction(*data, thread_group, pipeline.getNumThreads());
+            threadFunction(*data_ptr, thread_group, num_threads);
         };
 
         data->thread = ThreadFromGlobalPool(std::move(func));
