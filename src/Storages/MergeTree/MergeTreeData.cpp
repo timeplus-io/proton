@@ -3439,42 +3439,49 @@ size_t MergeTreeData::getPartsCount() const
 }
 
 
-size_t MergeTreeData::getMaxPartsCountForPartitionWithState(DataPartState state) const
+std::pair<size_t, size_t> MergeTreeData::getMaxPartsCountAndSizeForPartitionWithState(DataPartState state) const
 {
     auto lock = lockParts();
 
-    size_t res = 0;
-    size_t cur_count = 0;
+    size_t cur_parts_count = 0;
+    size_t cur_parts_size = 0;
+    size_t max_parts_count = 0;
+    size_t argmax_parts_size = 0;
+
     const String * cur_partition_id = nullptr;
 
     for (const auto & part : getDataPartsStateRange(state))
     {
-        if (cur_partition_id && part->info.partition_id == *cur_partition_id)
-        {
-            ++cur_count;
-        }
-        else
+        if (!cur_partition_id || part->info.partition_id != *cur_partition_id)
         {
             cur_partition_id = &part->info.partition_id;
-            cur_count = 1;
+            cur_parts_count = 0;
+            cur_parts_size = 0;
         }
 
-        res = std::max(res, cur_count);
+        ++cur_parts_count;
+        cur_parts_size += part->getBytesOnDisk();
+
+        if (cur_parts_count > max_parts_count)
+        {
+            max_parts_count = cur_parts_count;
+            argmax_parts_size = cur_parts_size;
+        }
     }
 
-    return res;
+    return {max_parts_count, argmax_parts_size};
 }
 
 
-size_t MergeTreeData::getMaxPartsCountForPartition() const
+std::pair<size_t, size_t> MergeTreeData::getMaxPartsCountAndSizeForPartition() const
 {
-    return getMaxPartsCountForPartitionWithState(DataPartState::Active);
+    return getMaxPartsCountAndSizeForPartitionWithState(DataPartState::Active);
 }
 
 
-size_t MergeTreeData::getMaxInactivePartsCountForPartition() const
+size_t MergeTreeData::getMaxOutdatedPartsCountForPartition() const
 {
-    return getMaxPartsCountForPartitionWithState(DataPartState::Outdated);
+    return getMaxPartsCountAndSizeForPartitionWithState(DataPartState::Outdated).first;
 }
 
 
@@ -3493,71 +3500,116 @@ std::optional<Int64> MergeTreeData::getMinPartDataVersion() const
 }
 
 
-void MergeTreeData::delayInsertOrThrowIfNeeded(Poco::Event * until) const
+void MergeTreeData::delayInsertOrThrowIfNeeded(Poco::Event * until, const ContextPtr & query_context, bool allow_throw) const
 {
     const auto settings = getSettings();
+    const auto & query_settings = query_context->getSettingsRef();
     const size_t parts_count_in_total = getPartsCount();
-    if (parts_count_in_total >= settings->max_parts_in_total)
+
+    /// Check if we have too many parts in total
+    if (allow_throw && parts_count_in_total >= settings->max_parts_in_total)
     {
         ProfileEvents::increment(ProfileEvents::RejectedInserts);
-        throw Exception("Too many parts (" + toString(parts_count_in_total) + ") in all partitions in total. This indicates wrong choice of partition key. The threshold can be modified with 'max_parts_in_total' setting in <merge_tree> element in config.xml or with per-stream setting.", ErrorCodes::TOO_MANY_PARTS);
+        throw Exception(
+            ErrorCodes::TOO_MANY_PARTS,
+            "Too many parts ({}) in all partitions in total. This indicates wrong choice of partition key. The threshold can be modified "
+            "with 'max_parts_in_total' setting in <merge_tree> element in config.xml or with per-table setting.",
+            toString(parts_count_in_total));
     }
 
-    size_t parts_count_in_partition = getMaxPartsCountForPartition();
-    ssize_t k_inactive = -1;
-    if (settings->inactive_parts_to_throw_insert > 0 || settings->inactive_parts_to_delay_insert > 0)
+    size_t outdated_parts_over_threshold = 0;
     {
-        size_t inactive_parts_count_in_partition = getMaxInactivePartsCountForPartition();
-        if (settings->inactive_parts_to_throw_insert > 0 && inactive_parts_count_in_partition >= settings->inactive_parts_to_throw_insert)
+        size_t outdated_parts_count_in_partition = 0;
+        if (settings->inactive_parts_to_throw_insert > 0 || settings->inactive_parts_to_delay_insert > 0)
+            outdated_parts_count_in_partition = getMaxOutdatedPartsCountForPartition();
+
+        if (allow_throw && settings->inactive_parts_to_throw_insert > 0 && outdated_parts_count_in_partition >= settings->inactive_parts_to_throw_insert)
         {
             ProfileEvents::increment(ProfileEvents::RejectedInserts);
             throw Exception(
                 ErrorCodes::TOO_MANY_PARTS,
                 "Too many inactive parts ({}). Parts cleaning are processing significantly slower than inserts",
-                inactive_parts_count_in_partition);
+                outdated_parts_count_in_partition);
         }
-        k_inactive = ssize_t(inactive_parts_count_in_partition) - ssize_t(settings->inactive_parts_to_delay_insert);
+        if (settings->inactive_parts_to_delay_insert > 0 && outdated_parts_count_in_partition >= settings->inactive_parts_to_delay_insert)
+            outdated_parts_over_threshold = outdated_parts_count_in_partition - settings->inactive_parts_to_delay_insert + 1;
     }
 
-    if (parts_count_in_partition >= settings->parts_to_throw_insert)
+    auto [parts_count_in_partition, size_of_partition] = getMaxPartsCountAndSizeForPartition();
+    size_t average_part_size = parts_count_in_partition ? size_of_partition / parts_count_in_partition : 0;
+    const auto active_parts_to_delay_insert
+        = query_settings.parts_to_delay_insert ? query_settings.parts_to_delay_insert : settings->parts_to_delay_insert;
+    const auto active_parts_to_throw_insert
+        = query_settings.parts_to_throw_insert ? query_settings.parts_to_throw_insert : settings->parts_to_throw_insert;
+    size_t active_parts_over_threshold = 0;
     {
-        ProfileEvents::increment(ProfileEvents::RejectedInserts);
-        throw Exception(
-            ErrorCodes::TOO_MANY_PARTS,
-            "Too many parts ({}). Merges are processing significantly slower than inserts",
-            parts_count_in_partition);
+        bool parts_are_large_enough_in_average
+            = settings->max_avg_part_size_for_too_many_parts && average_part_size > settings->max_avg_part_size_for_too_many_parts;
+
+        if (allow_throw && parts_count_in_partition >= active_parts_to_throw_insert && !parts_are_large_enough_in_average)
+        {
+            ProfileEvents::increment(ProfileEvents::RejectedInserts);
+            throw Exception(
+                ErrorCodes::TOO_MANY_PARTS,
+                "Too many parts ({} with average size of {}). Merges are processing significantly slower than inserts",
+                parts_count_in_partition,
+                ReadableSize(average_part_size));
+        }
+        if (active_parts_to_delay_insert > 0 && parts_count_in_partition >= active_parts_to_delay_insert
+            && !parts_are_large_enough_in_average)
+            /// if parts_count == parts_to_delay_insert -> we're 1 part over threshold
+            active_parts_over_threshold = parts_count_in_partition - active_parts_to_delay_insert + 1;
     }
 
-    if (k_inactive < 0 && parts_count_in_partition < settings->parts_to_delay_insert)
+    /// no need for delay
+    if (!active_parts_over_threshold && !outdated_parts_over_threshold)
         return;
 
-    const ssize_t k_active = ssize_t(parts_count_in_partition) - ssize_t(settings->parts_to_delay_insert);
-    size_t max_k;
-    size_t k;
-    if (k_active > k_inactive)
+    UInt64 delay_milliseconds = 0;
     {
-        max_k = settings->parts_to_throw_insert - settings->parts_to_delay_insert;
-        k = k_active + 1;
+        size_t parts_over_threshold = 0;
+        size_t allowed_parts_over_threshold = 1;
+        const bool use_active_parts_threshold = (active_parts_over_threshold >= outdated_parts_over_threshold);
+        if (use_active_parts_threshold)
+        {
+            parts_over_threshold = active_parts_over_threshold;
+            allowed_parts_over_threshold = active_parts_to_throw_insert - active_parts_to_delay_insert;
+        }
+        else
+        {
+            parts_over_threshold = outdated_parts_over_threshold;
+            allowed_parts_over_threshold = outdated_parts_over_threshold; /// if throw threshold is not set, will use max delay
+            if (settings->inactive_parts_to_throw_insert > 0)
+                allowed_parts_over_threshold = settings->inactive_parts_to_throw_insert - settings->inactive_parts_to_delay_insert;
+        }
+
+        const UInt64 max_delay_milliseconds = (settings->max_delay_to_insert > 0 ? settings->max_delay_to_insert * 1000 : 1000);
+        if (allowed_parts_over_threshold == 0 || parts_over_threshold > allowed_parts_over_threshold)
+        {
+            delay_milliseconds = max_delay_milliseconds;
+        }
+        else
+        {
+            double delay_factor = static_cast<double>(parts_over_threshold) / allowed_parts_over_threshold;
+            const UInt64 min_delay_milliseconds = settings->min_delay_to_insert_ms;
+            delay_milliseconds = std::max(min_delay_milliseconds, static_cast<UInt64>(max_delay_milliseconds * delay_factor));
+        }
     }
-    else
-    {
-        max_k = settings->inactive_parts_to_throw_insert - settings->inactive_parts_to_delay_insert;
-        k = k_inactive + 1;
-    }
-    const UInt64 delay_milliseconds = static_cast<UInt64>(::pow(settings->max_delay_to_insert * 1000, static_cast<double>(k) / max_k));
 
     ProfileEvents::increment(ProfileEvents::DelayedInserts);
     ProfileEvents::increment(ProfileEvents::DelayedInsertsMilliseconds, delay_milliseconds);
 
     CurrentMetrics::Increment metric_increment(CurrentMetrics::DelayedInserts);
 
-    LOG_INFO(log, "Delaying inserting block by {} ms. because there are {} parts", delay_milliseconds, parts_count_in_partition);
+    LOG_INFO(log, "Delaying inserting block by {} ms. because there are {} parts and their average size is {}",
+        delay_milliseconds, parts_count_in_partition, ReadableSize(average_part_size));
 
     if (until)
         until->tryWait(delay_milliseconds);
     else
         std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<size_t>(delay_milliseconds)));
 }
+
 
 MergeTreeData::DataPartPtr MergeTreeData::getActiveContainingPart(
     const MergeTreePartInfo & part_info, MergeTreeData::DataPartState state, DataPartsLock & /*lock*/) const
