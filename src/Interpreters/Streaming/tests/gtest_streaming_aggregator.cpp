@@ -1,87 +1,42 @@
-#include <cstddef>
-#include <cstdlib>
-#include <memory>
-#include <utility>
-#include <vector>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <Columns/ColumnLowCardinality.h>
-#include <Columns/IColumn.h>
-#include <Core/Block.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeLowCardinality.h>
-#include <Formats/formatBlock.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/WriteBufferFromString.h>
-#include <Interpreters/CollectJoinOnKeysVisitor.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/JoinedTables.h>
+#include <DataTypes/DataTypeString.h>
 #include <Interpreters/Streaming/Aggregator.h>
-#include <Interpreters/Streaming/HashJoin.h>
-#include <Interpreters/Streaming/SyntaxAnalyzeUtils.h>
-#include <Interpreters/Streaming/TrackingUpdatesData.h>
-#include <Interpreters/Streaming/WindowCommon.h>
-#include <Interpreters/TranslateQualifiedNamesVisitor.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ExpressionElementParsers.h>
-#include <Parsers/ParserSelectQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Parsers/queryToString.h>
-#include <Processors/Formats/IRowInputFormat.h>
-#include <Processors/Transforms/Streaming/JoinTransform.h>
-#include <base/constexpr_helpers.h>
 #include <gtest/gtest.h>
-#include <Common/logger_useful.h>
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_global_register.h>
-#include "Columns/ColumnString.h"
-#include "Columns/ColumnsNumber.h"
-#include "Core/ColumnNumbers.h"
-#include "Core/NamesAndTypes.h"
-#include "Core/iostream_debug_helpers.h"
-#include "DataTypes/DataTypeDateTime.h"
-#include "DataTypes/DataTypeDateTime64.h"
-#include "DataTypes/DataTypeFixedString.h"
 #include "DataTypes/DataTypeInterval.h"
-#include "DataTypes/DataTypeString.h"
-#include "DataTypes/DataTypesNumber.h"
-#include "DataTypes/IDataType.h"
 #include "Interpreters/Streaming/TableFunctionDescription.h"
-#include "Interpreters/Streaming/TableFunctionDescription_fwd.h"
-
 namespace DB
 {
-using namespace DB;
-
-void prepareHeader(Block & header)
+Block prepareHeader()
 {
     std::vector<ColumnWithTypeAndName> columns;
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("int8"), fmt::format("int8", 0)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("int16"), fmt::format("num16", 1)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("int32"), fmt::format("num32", 2)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("int64"), fmt::format("num64", 3)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("int128"), fmt::format("num128", 4)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("int256"), fmt::format("num256", 5)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("low_cardinality(int8)"), fmt::format("low_int8", 6)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("low_cardinality(int16)"), fmt::format("low_int16", 7)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("low_cardinality(int32)"), fmt::format("low_int32", 8)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("low_cardinality(int64)"), fmt::format("low_int64", 9)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("low_cardinality(int128)"), fmt::format("low_int128", 10)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("low_cardinality(int256)"), fmt::format("low_int256", 11)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("low_cardinality(string)"), fmt::format("low_str", 12)));
-    columns.push_back(
-        ColumnWithTypeAndName(DataTypeFactory::instance().get("low_cardinality(fixed_string(3))"), fmt::format("low_fixed_str", 13)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("string"), fmt::format("str", 14)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("fixed_string(3)"), fmt::format("fixed_str", 15)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("nullable(int8)"), fmt::format("nullable", 16)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("datetime"), fmt::format("window_start", 17)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("datetime"), fmt::format("window_end", 18)));
-    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("datetime"), fmt::format("_tp_time", 19)));
-    for (auto & column : columns)
-    {
-        header.insert(column);
-    }
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("int8"), "int8"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("int16"), "int16"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("int32"), "int32"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("int64"), "int64"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("int128"), "int128"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("int256"), "int256"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("low_cardinality(int8)"), "low_int8"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("low_cardinality(int16)"), "low_int16"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("low_cardinality(int32)"), "low_int32"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("low_cardinality(int64)"), "low_int64"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("low_cardinality(int128)"), "low_int128"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("low_cardinality(int256)"), "low_int256"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("low_cardinality(string)"), "low_str"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("low_cardinality(fixed_string(3))"), "low_fixed_str"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("string"), "str"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("fixed_string(3)"), "fixed_str"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("nullable(int8)"), "nullable"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("datetime"), "window_start"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("datetime"), "window_end"));
+    columns.push_back(ColumnWithTypeAndName(DataTypeFactory::instance().get("datetime"), "_tp_time"));
+    return Block(std::move(columns));
 }
 
 void prepareAggregates(AggregateDescriptions & aggregates)
@@ -97,11 +52,10 @@ void prepareAggregates(AggregateDescriptions & aggregates)
     aggregates.push_back(aggregate);
 }
 
-std::shared_ptr<Streaming::Aggregator::Params> prepareParams(size_t max_threads, [[maybe_unused]] std::vector<size_t> & key_sites)
+std::shared_ptr<Streaming::Aggregator::Params> prepareParams(size_t max_threads, [[maybe_unused]] std::vector<size_t> & key_site)
 {
-    Block src_header;
-    prepareHeader(src_header);
-    ColumnNumbers keys = key_sites;
+    Block src_header = prepareHeader();
+    ColumnNumbers keys = key_site;
     AggregateDescriptions aggregates;
     prepareAggregates(aggregates);
     bool overflow_row{false};
@@ -159,7 +113,7 @@ auto createLowColumn(Args &&... args)
     return low_cardinality_data_type->createColumn();
 };
 
-void setColumnsData(Columns & columns, size_t & num_rows, [[maybe_unused]] std::vector<const DB::IColumn *> & aggr_columns)
+void setColumnsData(Columns & columns, [[maybe_unused]] std::vector<const DB::IColumn *> & aggr_columns)
 {
     auto c_int_8 = ColumnInt8::create();
     auto c_int_16 = ColumnInt16::create();
@@ -208,7 +162,6 @@ void setColumnsData(Columns & columns, size_t & num_rows, [[maybe_unused]] std::
         c_time_start->insert(0);
         c_time_end->insert(5);
     }
-    num_rows = 10;
     columns.push_back(std::move(c_int_8));
     columns.push_back(std::move(c_int_16));
     columns.push_back(std::move(c_int_32));
@@ -231,158 +184,223 @@ void setColumnsData(Columns & columns, size_t & num_rows, [[maybe_unused]] std::
     columns.push_back(std::move(c_datetime64));
 }
 
-TEST(StreamingAggregation, globalcount)
+void initAggregation()
 {
-    auto context = getContext().context;
     tryRegisterFormats();
     tryRegisterAggregateFunctions();
-    size_t max_threads = 10;
+}
 
-    size_t num_rows{0};
-    Columns columns;
-    std::vector<const DB::IColumn *> aggr_columns;
-    setColumnsData(columns, num_rows, aggr_columns);
+std::vector<std::vector<size_t>> prepareGlobalCountKeys()
+{
+    std::vector<std::vector<size_t>> key_sites{
+        {0},
+        {1},
+        {2},
+        {3},
+        {4},
+        {5},
+        {6},
+        {7},
+        {8},
+        {9},
+        {10},
+        {11},
+        {12},
+        {13},
+        {14},
+        {15},
+        {16},
+        {4, 16},
+    };
+    return key_sites;
+}
 
-    for (size_t i = 0; i < 18; ++i)
+std::vector<std::vector<size_t>> prepareWindowCountKeys()
+{
+    std::vector<std::vector<size_t>> key_sites{
+        {17},
+        {17, 18},
+        {17, 18, 3},
+        {17, 18, 4},
+        {17, 18, 9},
+        {17, 18, 10},
+        {17, 18, 16},
+        {17, 18, 4, 16},
+    };
+    return key_sites;
+}
+
+using ResultType = std::variant<size_t, std::string>;
+
+std::vector<std::vector<std::pair<size_t, ResultType>>> prepareGlobalResult()
+{
+    std::vector<std::vector<std::pair<size_t, ResultType>>> result{
+        {{0, size_t(8)}, {1, size_t(10)}},
+        {{0, size_t(8)}, {1, size_t(10)}},
+        {{0, size_t(8)}, {1, size_t(10)}},
+        {{0, size_t(8)}, {1, size_t(10)}},
+        {{0, size_t(8)}, {1, size_t(10)}},
+        {{0, size_t(8)}, {1, size_t(10)}},
+        {{0, size_t(8)}, {1, size_t(10)}},
+        {{0, size_t(8)}, {1, size_t(10)}},
+        {{0, size_t(8)}, {1, size_t(10)}},
+        {{0, size_t(8)}, {1, size_t(10)}},
+        {{0, size_t(8)}, {1, size_t(10)}},
+        {{0, size_t(8)}, {1, size_t(10)}},
+        {{0, std::string("str")}, {1, size_t(10)}},
+        {{0, std::string("str")}, {1, size_t(10)}},
+        {{0, std::string("str")}, {1, size_t(10)}},
+        {{0, std::string("str")}, {1, size_t(10)}},
+        {{0, size_t(8)}, {1, size_t(10)}},
+        {{0, size_t(8)}, {1, size_t(8)}, {2, size_t(10)}},
+    };
+    return result;
+};
+
+std::vector<std::vector<std::pair<size_t, ResultType>>> prepareWindowResult()
+{
+    std::vector<std::vector<std::pair<size_t, ResultType>>> result{
+        {{1, size_t(10)}},
+        {{2, size_t(10)}},
+        {{2, size_t(8)}, {3, size_t(10)}},
+        {{2, size_t(8)}, {3, size_t(10)}},
+        {{2, size_t(8)}, {3, size_t(10)}},
+        {{2, size_t(8)}, {3, size_t(10)}},
+        {{2, size_t(8)}, {3, size_t(10)}},
+        {{2, size_t(8)}, {3, size_t(8)}, {4, size_t(10)}},
+    };
+    return result;
+};
+
+void checkGlobalAggregationResult(BlocksList & blocks, std::vector<std::vector<std::pair<size_t, ResultType>>> & results, size_t position)
+{
+    EXPECT_EQ(blocks.size(), 1);
+    auto & result = results[position];
+    for (auto & [site, value] : result)
     {
-        std::vector<size_t> key_sites;
-        if (i == 17)
+        if (std::holds_alternative<size_t>(value))
         {
-            key_sites.push_back(4);
-            key_sites.push_back(16);
+            EXPECT_EQ(blocks.begin()->getByPosition(site).column->get64(0), std::get<size_t>(value));
         }
         else
         {
-            key_sites.push_back(i);
+            EXPECT_EQ(blocks.begin()->getByPosition(site).column->getDataAt(0), std::get<std::string>(value));
         }
-        // global aggr
-        std::shared_ptr<Streaming::Aggregator::Params> params;
-        params = prepareParams(max_threads, key_sites);
-        Streaming::Aggregator aggregator(*params);
+    }
+}
 
-        ColumnRawPtrs key_columns;
+void checkWindowAggregationResult(BlocksList & blocks, std::vector<std::vector<std::pair<size_t, ResultType>>> & results, size_t position)
+{
+    EXPECT_EQ(blocks.size(), 1);
+    auto & result = results[position];
 
-        for (auto & key_site : key_sites)
+    for (auto & [site, value] : result)
+    {
+        if (std::holds_alternative<size_t>(value))
         {
-            key_columns.push_back(columns[key_site].get());
+            EXPECT_EQ(blocks.begin()->getByPosition(site).column->get64(0), std::get<size_t>(value));
         }
+        else
+        {
+            EXPECT_EQ(blocks.begin()->getByPosition(site).column->getDataAt(0), std::get<std::string>(value));
+        }
+    }
+}
 
-        Aggregator::AggregateColumns aggregate_columns{aggr_columns};
+std::shared_ptr<Streaming::Aggregator::Params> prepareGlobalAggregator(
+    size_t max_threads,
+    std::vector<size_t> & key_site,
+    ColumnRawPtrs & key_columns,
+    [[maybe_unused]] ColumnRawPtrs & aggr_columns,
+    Columns & columns)
+{
+    setColumnsData(columns, aggr_columns);
+    std::shared_ptr<Streaming::Aggregator::Params> params = prepareParams(max_threads, key_site);
+    Streaming::Aggregator aggregator(*params);
+    for (auto & site : key_site)
+    {
+        key_columns.push_back(columns[site].get());
+    }
+    return params;
+}
 
-        size_t row_begin = 0;
-        size_t row_end = num_rows;
+std::shared_ptr<Streaming::Aggregator::Params> prepareWindowAggregator(
+    size_t max_threads,
+    std::vector<size_t> & key_site,
+    ColumnRawPtrs & key_columns,
+    [[maybe_unused]] ColumnRawPtrs & aggr_columns,
+    Columns & columns)
+{
+    setColumnsData(columns, aggr_columns);
+    std::shared_ptr<Streaming::Aggregator::Params> params = prepareParams(max_threads, key_site);
+    params->group_by = {Streaming::Aggregator::Params::GroupBy::WINDOW_END};
+    params->window_keys_num = 2;
+    if (key_site.size() == 1)
+        params->window_keys_num = 1;
+    ParserFunction func_parser;
+    auto ast = parseQuery(func_parser, "tumble(stream, 5s)", 0, 10000);
+    NamesAndTypesList columns_list;
+    if (key_site.size() == 1)
+        columns_list = {{"window_start", std::make_shared<DataTypeDateTime64>(3, "UTC")}};
+    columns_list.push_back({"window_end", std::make_shared<DataTypeDateTime64>(3, "UTC")});
+    Streaming::TableFunctionDescriptionPtr table_function_description = std::make_shared<Streaming::TableFunctionDescription>(
+        ast,
+        Streaming::WindowType::Tumble,
+        Names{"_tp_time", "5s"},
+        DataTypes{std::make_shared<DataTypeDateTime64>(3, "UTC"), std::make_shared<DataTypeInterval>(IntervalKind::Second)},
+        std::shared_ptr<ExpressionActions>(),
+        Names{"_tp_time"},
+        columns_list);
+    Streaming::WindowParamsPtr window_params = Streaming::WindowParams::create(table_function_description);
+
+    params->window_params = window_params;
+    Streaming::Aggregator aggregator(*params);
+    for (auto & site : key_site)
+    {
+        key_columns.push_back(columns[site].get());
+    }
+    return params;
+}
+
+TEST(StreamingAggregation, globalcount)
+{
+    initAggregation();
+    auto key_sites = prepareGlobalCountKeys();
+    auto results = prepareGlobalResult();
+    size_t position = 0;
+    for (auto & key_site : key_sites)
+    {
+        Columns columns;
+        ColumnRawPtrs key_columns, aggregate_columns;
         Streaming::AggregatedDataVariants hash_map;
-        aggregator.executeOnBlock(columns, row_begin, row_end, hash_map, key_columns, aggregate_columns);
-
-        auto blocks = aggregator.convertToBlocks(hash_map, true, max_threads);
-        // auto
-        if (i >= 12 && i <= 15)
-            EXPECT_EQ(blocks.begin()->getByPosition(0).column->getDataAt(0), "str");
-        else
-            EXPECT_EQ(blocks.begin()->getByPosition(0).column->get64(0), 8);
-        if (i == 17)
-        {
-            EXPECT_EQ(blocks.begin()->getByPosition(1).column->get64(0), 8);
-            EXPECT_EQ(blocks.begin()->getByPosition(2).column->get64(0), 10);
-        }
-        else
-            EXPECT_EQ(blocks.begin()->getByPosition(1).column->get64(0), 10);
+        std::shared_ptr<Streaming::Aggregator::Params> params
+            = prepareGlobalAggregator(10, key_site, key_columns, aggregate_columns, columns);
+        Streaming::Aggregator aggregator(*params);
+        Aggregator::AggregateColumns aggregate_column{aggregate_columns};
+        aggregator.executeOnBlock(columns, 0, 10, hash_map, key_columns, aggregate_column);
+        auto blocks = aggregator.convertToBlocks(hash_map, true, 10);
+        checkGlobalAggregationResult(blocks, results, position++);
     }
 }
 
 TEST(StreamingAggregation, windowcount)
 {
-    auto context = getContext().context;
-    tryRegisterFormats();
-    tryRegisterAggregateFunctions();
-    size_t max_threads = 10;
-
-    size_t num_rows{0};
-    Columns columns;
-    std::vector<const DB::IColumn *> aggr_columns;
-    setColumnsData(columns, num_rows, aggr_columns);
-
-    for (size_t i = 0; i < 18; ++i)
+    initAggregation();
+    auto key_sites = prepareWindowCountKeys();
+    auto results = prepareWindowResult();
+    size_t position = 0;
+    for (auto & key_site : key_sites)
     {
-        std::vector<size_t> key_sites;
-        key_sites.push_back(17);
-        if (i != 0)
-            key_sites.push_back(18);
-
-        if (i == 17)
-        {
-            key_sites.push_back(4);
-            key_sites.push_back(16);
-        }
-        else if (i == 3 || i == 4 || i == 9 || i == 10 || i == 16)
-        {
-            key_sites.push_back(i);
-        }
-        else if (i != 0 && i != 1)
-            continue;
-        // window aggr
-        std::shared_ptr<Streaming::Aggregator::Params> params;
-        params = prepareParams(max_threads, key_sites);
-        params->group_by = {Streaming::Aggregator::Params::GroupBy::WINDOW_END};
-        params->window_keys_num = 2;
-        if (i == 0)
-            params->window_keys_num = 1;
-        ParserFunction func_parser;
-        auto ast = parseQuery(func_parser, "tumble(stream, 5s)", 0, 10000);
-        NamesAndTypesList columns_list;
-        if (i == 0)
-            columns_list = {{"window_start", std::make_shared<DataTypeDateTime64>(3, "UTC")}};
-        columns_list.push_back({"window_end", std::make_shared<DataTypeDateTime64>(3, "UTC")});
-        Streaming::TableFunctionDescriptionPtr table_function_description = std::make_shared<Streaming::TableFunctionDescription>(
-            ast,
-            Streaming::WindowType::Tumble,
-            Names{"_tp_time", "5s"},
-            DataTypes{std::make_shared<DataTypeDateTime64>(3, "UTC"), std::make_shared<DataTypeInterval>(IntervalKind::Second)},
-            std::shared_ptr<ExpressionActions>(),
-            Names{"_tp_time"},
-            columns_list);
-        Streaming::WindowParamsPtr window_params = Streaming::WindowParams::create(table_function_description);
-
-        params->window_params = window_params;
-        Streaming::Aggregator aggregator(*params);
-
-        ColumnRawPtrs key_columns;
-
-        for (auto & key_site : key_sites)
-        {
-            key_columns.push_back(columns[key_site].get());
-        }
-
-        Aggregator::AggregateColumns aggregate_columns{aggr_columns};
-
-        size_t row_begin = 0;
-        size_t row_end = num_rows;
+        Columns columns;
+        ColumnRawPtrs key_columns, aggregate_columns;
         Streaming::AggregatedDataVariants hash_map;
-        aggregator.executeOnBlock(columns, row_begin, row_end, hash_map, key_columns, aggregate_columns);
-
-        auto blocks = aggregator.convertToBlocks(hash_map, true, max_threads);
-
-
-        if (i == 0)
-        {
-            EXPECT_EQ(blocks.begin()->getByPosition(1).column->get64(0), 10);
-            continue;
-        }
-        if (i == 1)
-        {
-            EXPECT_EQ(blocks.begin()->getByPosition(2).column->get64(0), 10);
-            continue;
-        }
-        EXPECT_EQ(blocks.begin()->getByPosition(2).column->get64(0), 8);
-        if (i == 3 || i == 4 || i == 9 || i == 10 || i == 16)
-        {
-            EXPECT_EQ(blocks.begin()->getByPosition(3).column->get64(0), 10);
-        }
-        if (i == 17)
-        {
-            EXPECT_EQ(blocks.begin()->getByPosition(3).column->get64(0), 8);
-            EXPECT_EQ(blocks.begin()->getByPosition(4).column->get64(0), 10);
-        }
+        std::shared_ptr<Streaming::Aggregator::Params> params
+            = prepareWindowAggregator(10, key_site, key_columns, aggregate_columns, columns);
+        Streaming::Aggregator aggregator(*params);
+        Aggregator::AggregateColumns aggregate_column{aggregate_columns};
+        aggregator.executeOnBlock(columns, 0, 10, hash_map, key_columns, aggregate_column);
+        auto blocks = aggregator.convertToBlocks(hash_map, true, 10);
+        checkWindowAggregationResult(blocks, results, position++);
     }
 }
 
