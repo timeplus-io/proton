@@ -244,12 +244,16 @@ SessionInfoPtr getLastFinalizedSession(const SessionInfoQueue & sessions)
     return nullptr;
 }
 
-SessionID removeExpiredSessions(SessionInfoQueue & sessions)
+SessionID removeExpiredSessions(SessionInfoQueue & sessions, Int64 finalized_watermark)
 {
     auto last_expired_session_id = -1;
-    while (!sessions.empty() && !sessions.front()->active)
+    while (!sessions.empty())
     {
-        last_expired_session_id = sessions.front()->id;
+        auto & session = sessions.front();
+        if (session->active && session->win_end > finalized_watermark)
+            break;
+
+        last_expired_session_id = session->id;
         sessions.pop_front();
     }
     return last_expired_session_id;

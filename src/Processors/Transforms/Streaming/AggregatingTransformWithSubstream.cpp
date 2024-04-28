@@ -169,10 +169,14 @@ void AggregatingTransformWithSubstream::propagateWatermarkAndClearExpiredStates(
     assert(substream_ctx);
     if (!hasAggregatedResult())
     {
-        auto chunk_ctx = ChunkContext::create();
-        chunk_ctx->setSubstreamID(substream_ctx->id);
-        chunk_ctx->setWatermark(substream_ctx->finalized_watermark);
-        Chunk res{getOutputs().front().getHeader().getColumns(), 0, nullptr, std::move(chunk_ctx)};
+        Chunk res{getOutputs().front().getHeader().getColumns(), 0};
+        if (substream_ctx->finalized_watermark != INVALID_WATERMARK)
+        {
+            auto chunk_ctx = ChunkContext::create();
+            chunk_ctx->setSubstreamID(substream_ctx->id);
+            chunk_ctx->setWatermark(substream_ctx->finalized_watermark);
+            res.setChunkContext(std::move(chunk_ctx));
+        }
         setAggregatedResult(res);
     }
     else

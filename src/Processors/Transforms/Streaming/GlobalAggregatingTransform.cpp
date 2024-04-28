@@ -112,7 +112,7 @@ void GlobalAggregatingTransform::finalize(const ChunkContextPtr & chunk_ctx)
 {
     SCOPE_EXIT({
         many_data->resetRowCounts();
-        many_data->finalized_watermark.store(chunk_ctx->getWatermark(), std::memory_order_relaxed);
+        many_data->finalized_watermark.store(chunk_ctx->getWatermark());
     });
 
     ChunkList chunks;
