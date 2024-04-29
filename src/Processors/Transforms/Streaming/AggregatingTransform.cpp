@@ -488,13 +488,13 @@ void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
             UInt16 num_variants = many_data->variants.size();
             DB::writeIntBinary(num_variants, wb);
 
-            DB::writeIntBinary(many_data->finalized_watermark.load(std::memory_order_relaxed), wb);
-            DB::writeIntBinary(many_data->finalized_window_end.load(std::memory_order_relaxed), wb);
-            DB::writeIntBinary(many_data->emitted_version.load(std::memory_order_relaxed), wb);
+            DB::writeIntBinary(many_data->finalized_watermark.load(), wb);
+            DB::writeIntBinary(many_data->finalized_window_end.load(), wb);
+            DB::writeIntBinary(many_data->emitted_version.load(), wb);
 
             assert(num_variants == many_data->rows_since_last_finalizations.size());
             for (const auto & last_row : many_data->rows_since_last_finalizations)
-                writeIntBinary<UInt64>(last_row->load(std::memory_order_relaxed), wb);
+                writeIntBinary<UInt64>(last_row->load(), wb);
 
             bool has_field = many_data->hasField();
             DB::writeBoolText(has_field, wb);

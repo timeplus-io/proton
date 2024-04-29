@@ -72,7 +72,7 @@ bool WindowAggregatingTransform::needFinalization(Int64 min_watermark) const
 bool WindowAggregatingTransform::prepareFinalization(Int64 min_watermark)
 {
     /// If we only emit finalized windows and the watermark has been finalized in by another AggregatingTransform, skip it
-    if (only_emit_finalized_windows && min_watermark <= many_data->finalized_watermark.load(std::memory_order_relaxed))
+    if (only_emit_finalized_windows && min_watermark <= many_data->finalized_watermark.load())
         return false;
 
     /// FIXME: For multiple WindowAggregatingTransform, will emit multiple times in a periodic interval,

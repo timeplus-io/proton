@@ -771,6 +771,27 @@
                     ["dev2", "2020-02-02 20:00:02.262", "2020-02-02 20:00:03.263", 150]
                 ]}
             ]
+        },
+        {
+            "id": 23,
+            "tags": ["session window"],
+            "name": "session with emit timeout",
+            "description": "session window with emit timeout",
+            "steps":[
+                {"statements": [
+                    {"client":"python", "query_id": "701", "query_type": "stream", "terminate":"auto", "query_end_timer": 1, "query":"select id, to_string(window_start), to_string(window_end), sum(value) over (partition by id)  from session(test7_session, timestamp, 10s) group by id, window_start, window_end emit timeout 1s"},
+                    {"client":"python", "query_type": "table", "depends_on": "701", "wait": 1, "query":"insert into test7_session(id, value, timestamp) values ('dev1', 1, '2020-02-02 20:00:00')"},
+                    {"client":"python", "query_type": "table", "wait": 2, "query":"insert into test7_session(id, value, timestamp) values ('dev1', 2, '2020-02-02 20:00:02')"},
+                    {"client":"python", "query_type": "table", "wait": 2, "kill": "701", "kill_wait": 3, "query":"insert into test7_session(id, value, timestamp) values ('dev2', 3, '2020-02-02 20:00:04')"}
+                ]}
+            ],
+            "expected_results": [{"query_id" : "701", "expected_results":
+                [
+                    ["dev1", "2020-02-02 20:00:00.000", "2020-02-02 20:00:00.001", 1],
+                    ["dev1", "2020-02-02 20:00:02.000", "2020-02-02 20:00:02.001", 2],
+                    ["dev2", "2020-02-02 20:00:04.000", "2020-02-02 20:00:04.001", 3]
+                ]}
+            ]
         }
     ]
 }

@@ -1,6 +1,7 @@
 #include <Processors/Transforms/Streaming/SessionAggregatingTransformWithSubstream.h>
 
 #include <Interpreters/Streaming/TableFunctionDescription.h>
+#include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/Streaming/SessionWindowHelper.h>
 
 namespace DB
@@ -66,7 +67,12 @@ SessionAggregatingTransformWithSubstream::executeOrMergeColumns(Chunk & chunk, c
         }
     }
 
-    if (chunk.hasWatermark())
+    /// No finalized sessions
+    if (AggregatingHelper::onlyEmitFinalizedWindows(params->emit_mode))
+    {
+        chunk.clearWatermark();
+    }
+    else if (chunk.hasWatermark())
     {
         /// When get here, there are two scenarios:
         /// 1) No sessions, and have periodic watermark or timeout watermark
@@ -96,7 +102,7 @@ Window SessionAggregatingTransformWithSubstream::getLastFinalizedWindow(const Su
 void SessionAggregatingTransformWithSubstream::removeBucketsImpl(Int64 watermark, const SubstreamContextPtr & substream_ctx)
 {
     auto & sessions = substream_ctx->getField<SessionInfoQueue>();
-    Int64 last_expired_time_bucket = SessionWindowHelper::removeExpiredSessions(sessions);
+    Int64 last_expired_time_bucket = SessionWindowHelper::removeExpiredSessions(sessions, watermark);
     params->aggregator.removeBucketsBefore(substream_ctx->variants, last_expired_time_bucket);
 }
 
