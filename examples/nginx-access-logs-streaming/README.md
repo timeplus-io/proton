@@ -106,23 +106,112 @@ I will install Timeplus Proton on a separate EC2 instance and make the `/var/log
  
 This approach of using NFS (instead of [Amazon EFS](https://docs.aws.amazon.com/efs/latest/ug/whatisefs.html)) allows us to keep the costs of the solution down (since there will be no egress fees) while also being secure.
 
-## Setting up NFS
-TBD.
+## Sharing the nginx Access Log over NFS
+The private IP addresses of the 2 EC2 instances I will be using for the NFS share are captured in the table below:
+| EC2 Server Instance | Private IP |
+|--------------|------------|
+| Ghost web blog  | `172.31.17.58` |
+| Timeplus Proton | `172.31.24.29` |
+
+
+### NFS Server Setup
+1. SSH into the server for the Ghost web blog.
+
+2. Install NFS server components:
+```bash
+sudo apt-get install nfs-kernel-server -y
+```
+
+3. Create the directory to be shared:
+```bash
+sudo mkdir -p /var/log/nginx
+```
+
+4. Configure the NFS export such that only the Timeplus Proton server can access it by whitelisting its (private) IP address:
+```bash
+echo "/var/log/nginx  172.31.24.29(ro,sync,no_subtree_check)" | sudo tee -a /etc/exports
+```
+
+5. Export the shared directory:
+```bash
+sudo exportfs -ra
+```
+
+6. Start the NFS Server on the Ghost blog:
+```bash
+sudo systemctl restart nfs-kernel-server
+```
+
+7. Confirm that the NFS export is active:
+```bash
+showmount -e
+Export list for ip-172-31-17-58:
+/var/log/nginx 172.31.24.29
+```
+
+8. Don't forget to add an inbound rule for port `2049` in the security group for the Ghost blog instance.
+
+
+### NFS Client Setup
+1. SSH into the server for Timeplus Proton.
+
+2. Install NFS client components:
+```bash
+sudo add-apt-repository universe -y && sudo apt update -y 
+sudo apt install nfs-common -y
+```
+
+3. Create the mount point where the NFS share will be mounted inside the Timeplus Proton server:
+```bash
+sudo mkdir -p /mnt/nginx
+```
+
+4. Mount the NFS share:
+```bash
+sudo mount 172.31.17.58:/var/log/nginx /mnt/nginx
+```
+
+5. List the folder contents to confirm the log files were mounted:
+```bash
+cd /mnt/nginx
+ls -lh
+```
+
+6. Install Timeplus Proton:
+```bash
+curl https://install.timeplus.com | sh
+```
+
+7. Start the Timeplus Proton server:
+```bash
+export TELEMETRY_ENABLED=false
+./proton server
+```
+
+8. Start Timeplus Proton client:
+```bash
+./proton client --host 127.0.0.1
+```
+
+9. Create a stream for real-time monitoring of the log files:
+```sql
+CREATE EXTERNAL STREAM proton_log(
+  raw string
+)
+SETTINGS
+type='log',
+log_files='access.log',
+log_dir='/mnt/nginx',
+timestamp_regex='(\[\d{2}\/\w+\/\d{4}:\d{2}:\d{2}:\d{2} \+\d{4}\])',
+row_delimiter='(\n)'
+```
+
+10. Running this query should return results. It should continuously return results each time live traffic hits the blog:
+```sql
+select * from proton_log;
+```
 
 
 # Historical Analysis of Web Traffic
 TBD.
 
-## SQL-based Observability
-SQL-based Observability is gradually making in-roads With observability.
-
-## todo
-- [ ] setup a VPC
-- [ ] start another EC2 instance inside the VPC running Proton
-- [ ] ship historical logs to Proton
-- [ ] ship live logs to Proton
-  - [ ] share the log file using Amazon EFS?
-- [ ] analysis
-  - [ ] stats on malformed requests: 404, 403, 401
-  - [ ] review nginx error logs too ?
-  - [ ] compare Umami analytics with raw access logs to account for ad-blocker traffic
