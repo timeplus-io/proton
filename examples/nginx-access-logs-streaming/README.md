@@ -149,7 +149,7 @@ Export list for ip-172-31-17-58:
 /var/log/nginx 172.31.24.29
 ```
 
-8. Don't forget to add an inbound rule for port `2049` in the security group for the Ghost blog instance.
+8. Don't forget to add an inbound rule for NFS (on port `2049`) in the security group for the Ghost blog instance.
 
 
 ### NFS Client Setup
