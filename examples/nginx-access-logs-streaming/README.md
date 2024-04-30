@@ -88,7 +88,26 @@ Timeplus Proton extends the already excellent log-handling features of ClickHous
 
 
 # Real-time Analysis of Web Traffic
-The steady rise of SQL-based Observability makes this super easy to setup.
+## Ingesting Logs using only Timeplus Proton
+The recent Timeplus article which I mentioned earlier: [Real-Time Log Stream Analysis Using an Open-Source Streaming Database](https://www.timeplus.com/post/log-stream-analysis) goes over 3 ways to stream logs to Timeplus Proton for analysis:
+
+* Filebeat + Kafka + Proton
+* Vector + Proton 
+* Proton 
+
+Out of the three options, the simplest to setup is the 3rd option where only Timeplus Proton was used for the log analysis and this is what will be used in this article.
+
+There's a caveat: the simpler architecture has an important limitation which is that real-time log analysis can add significant load to a server, if the server is under-resourced. 
+It can significantly degrade the performance of the server on which it is run and might not scale well for real-world use.
+
+To avoid the performance and scalability limitations of the 3rd option, since the blog itself is already hosted on AWS, I'm going to perform the analysis using a separate EC2 instance. 
+
+I will install Timeplus Proton on a separate EC2 instance and make the `/var/log/nginx/` folder available over a readonly NFS share. In other words, the Ghost blog and Timeplus proton EC2 instances will be inside the same VPC subnet making it easy to securely share the access logs between the two instances over a readonly NFS share.
+ 
+This approach of using NFS (instead of [Amazon EFS](https://docs.aws.amazon.com/efs/latest/ug/whatisefs.html)) allows us to keep the costs of the solution down (since there will be no egress fees) while also being secure.
+
+## Setting up NFS
+TBD.
 
 
 # Historical Analysis of Web Traffic
