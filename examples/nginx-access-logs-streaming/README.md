@@ -104,7 +104,7 @@ To avoid the performance and scalability limitations of the 3rd option, since th
 
 I will install Timeplus Proton on a separate EC2 instance and make the `/var/log/nginx/` folder available over a readonly NFS share. In other words, the Ghost blog and Timeplus proton EC2 instances will be inside the same VPC subnet making it easy to securely share the access logs between the two instances over a readonly NFS share.
  
-This approach of using NFS (instead of [Amazon EFS](https://docs.aws.amazon.com/efs/latest/ug/whatisefs.html)) allows us to keep the costs of the solution down (since there will be no egress fees) while also being secure.
+This approach of using NFS (instead of [Amazon EFS](https://docs.aws.amazon.com/efs/latest/ug/whatisefs.html)) allows us to keep the costs of the solution down since there will be no egress fees while also being secure.
 
 ## Sharing the nginx Access Log over NFS
 The private IP addresses of the 2 EC2 instances I will be using for the NFS share are captured in the table below:
@@ -195,15 +195,15 @@ export TELEMETRY_ENABLED=false
 
 9. Create a stream for real-time monitoring of the log files:
 ```sql
-CREATE EXTERNAL STREAM proton_log(
+CREATE EXTERNAL STREAM proton_log (
   raw string
 )
 SETTINGS
-type='log',
-log_files='access.log',
-log_dir='/mnt/nginx',
-timestamp_regex='(\[\d{2}\/\w+\/\d{4}:\d{2}:\d{2}:\d{2} \+\d{4}\])',
-row_delimiter='(\n)'
+  type='log',
+  log_files='access.log',
+  log_dir='/mnt/nginx',
+  timestamp_regex='(\[\d{2}\/\w+\/\d{4}:\d{2}:\d{2}:\d{2} \+\d{4}\])',
+  row_delimiter='(\n)'
 ```
 
 10. Running this query should return results. It should continuously return results each time live traffic hits the blog:
