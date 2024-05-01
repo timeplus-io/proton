@@ -195,7 +195,7 @@ export TELEMETRY_ENABLED=false
 
 9. Create a stream for real-time monitoring of the log files:
 ```sql
-CREATE EXTERNAL STREAM proton_log (
+CREATE EXTERNAL STREAM nginx_log (
   raw string
 )
 SETTINGS
@@ -208,7 +208,7 @@ SETTINGS
 
 10. Running this query should return results. It should continuously return results each time live traffic hits the blog:
 ```sql
-select * from proton_log;
+select * from nginx_log;
 ```
 
 
