@@ -10,14 +10,14 @@ The numbers from Timeplus Proton should be of higher accuracy than the numbers r
 ## Background
 The blog that we will using is my personal blog which I launched back in 2020. It's a [Ghost](https://ghost.org/) blog hosted on AWS. Ghost is written in JavaScript/Node.js and is completely [open source](https://github.com/tryghost/ghost).
 
-In production, the Ghost blog is deployed behind nginx which serves as a reverse proxy, so the Ghost blog is in fact two services: 
+In production, the Ghost blog is deployed behind Nginx which serves as a reverse proxy, so the Ghost blog is in fact two services: 
 * a Node.js web app that listens on port `2368`
-* an nginx web server that listens for incoming traffic on the standard HTTP/HTTPS ports `80` and `443`. It handles SSL termination for the Node.js app. 
+* an Nginx web server that listens for incoming traffic on the standard HTTP/HTTPS ports `80` and `443`. It handles SSL termination for the Node.js app. 
 
-The nginx access logs are regularly rotated so I have multiple rotated log files dating back to 4 years ago when the blog was first launched in `/var/log/nginx/`.
+The Nginx access logs are regularly rotated so I have multiple rotated log files dating back to 4 years ago when the blog was first launched in `/var/log/nginx/`.
 
 <details>
-<summary>nginx logs directory listing.</summary>
+<summary>Nginx logs directory listing.</summary>
 <pre>
 ll /var/log/nginx/
 total 2152
@@ -57,7 +57,7 @@ drwxr-xr-x  2 www-data adm      4096 Apr 28 16:42 2020-10_2023-06/
 </pre>
 </details>
 
-In addition to log file rotation, nginx uses compression to keep the storage requirements of log files inside `/var/log/nginx/` to a minimum. After about 4 years, the `/var/log/nginx/` weighs in at just `2.7MB`:
+In addition to log file rotation, Nginx uses compression to keep the storage requirements of log files inside `/var/log/nginx/` to a minimum. After about 4 years, the `/var/log/nginx/` weighs in at just `2.7MB`:
 ```bash
 du -shL /var/log/nginx/
 2.7M	/var/log/nginx/
@@ -68,7 +68,7 @@ The Node.js web app for Ghost on the other hand writes its logs to `/var/www/gho
 du -shL /var/www/ghost/content/logs/
 692M  /var/www/ghost/content/logs/
 ```
-To keep things simple, I'll only make use of the access logs for nginx in this post.
+To keep things simple, I'll only make use of the access logs for Nginx in this post.
 
 
 ## Introducing a New Contender for SQL-based Observability
@@ -115,7 +115,7 @@ I will install Timeplus Proton on a separate EC2 instance and make the `/var/log
  
 This approach of using NFS (instead of [Amazon EFS](https://docs.aws.amazon.com/efs/latest/ug/whatisefs.html)) allows us to keep the costs of the solution down since there will be no egress fees while also being secure.
 
-## Sharing the nginx Access Log over NFS
+## Sharing the Nginx Access Log over NFS
 The private IP addresses of the 2 EC2 instances I will be using for the NFS share are captured in the table below:
 | EC2 Server Instance | Private IP |
 |--------------|------------|
