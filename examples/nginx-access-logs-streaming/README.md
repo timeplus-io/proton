@@ -93,7 +93,16 @@ The recent Timeplus blog which I mentioned earlier: [Real-Time Log Stream Analys
 
 * Filebeat + Kafka + Proton
 * Vector + Proton 
-* Proton 
+* Proton
+
+![Filebeat + Kafka + Proton](https://static.wixstatic.com/media/2d747e_1873fec48d79407f828c42ae5c94333f~mv2.png/v1/fill/w_1480,h_260,al_c,q_90,usm_0.66_1.00_0.01,enc_auto/2d747e_1873fec48d79407f828c42ae5c94333f~mv2.png)
+*Option 1: Filebeat + Kafka + Proton Stack*
+
+![Vector + Proton](https://static.wixstatic.com/media/2d747e_1d01a2a6b0074a999bc8e3c091a26162~mv2.png/v1/fill/w_1036,h_458,al_c,q_90,enc_auto/2d747e_1d01a2a6b0074a999bc8e3c091a26162~mv2.png)
+*Option 2: Vector + Proton Stack*
+
+![Proton](https://static.wixstatic.com/media/2d747e_773438fadf4b4fb89f449294d928616d~mv2.png/v1/fill/w_1391,h_338,al_c,lg_1,q_90,enc_auto/2d747e_773438fadf4b4fb89f449294d928616d~mv2.png)
+*Option 3: Proton Only Stack*
 
 Out of the three options, the simplest to setup is the 3rd option where only Timeplus Proton was used for the log analysis and this is what will be used in this post.
 
