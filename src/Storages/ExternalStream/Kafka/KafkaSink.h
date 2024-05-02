@@ -24,6 +24,20 @@ public:
     BlocksWithShard shard(Block block, Int32 shard_cnt);
 
 private:
+    /// We could simply return `RD_KAFKA_PARTITION_UA` for next shard ID, which means letting librdkafka to calculate the partition ID. However, there is an issue, details:
+    ///
+    /// We use rd_kafka_produce_batch with RD_KAFKA_MSG_F_FREE flag to send messages, which means if a message's err is empty, librdkafka will free the message's payload, otherwise, the application is responsible for freeing it.
+    /// However, the implementation of rd_kafka_produce_batch does not work in that way exactly. There is one case that, if RD_KAFKA_PARTITION_UA is used, then when it fails to call the partitioner, rd_kafka_produce_batch will still free the message payload, which violates the promise. Reference:
+    /// https://github.com/confluentinc/librdkafka/blob/c96878a32bdc668287cf9b11c7b32e810f762376/src/rdkafka_msg.c#L797.
+    ///
+    /// There is one known situation can trigger this issue:
+    /// * create a kafka topic and make sure that topic has more than 1 partitions (not sure why it requires more than 1 paritions)
+    /// * create an external stream
+    /// * start inserting data to that stream in a streaming way
+    /// * delete the kafka topic
+    /// * then double-free error happens
+    ///
+    /// Also, with this simple logic, it will be much faster than using `RD_KAFKA_PARTITION_UA`.
     Int32 getNextShardIndex(Int32 shard_cnt) noexcept
     {
         if (next_shard >= shard_cnt)
