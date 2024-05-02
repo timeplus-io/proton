@@ -72,13 +72,13 @@ To keep things simple, I'll only make use of the access logs for Nginx in this p
 
 
 ## Introducing a New Contender for SQL-based Observability
-[SQL-based Observability](https://clickhouse.com/blog/the-state-of-sql-based-observability) is steadily growing in popularity as an alternative to the [ELK stack](https://aws.amazon.com/what-is/elk-stack/) and the major tool at the center of this trend is ClickHouse due to its blazing-fast log-handling features. 
+[SQL-based Observability](https://clickhouse.com/blog/the-state-of-sql-based-observability#is-sql-based-observability-applicable-to-my-use-case) is steadily growing in popularity as an alternative to the [ELK stack](https://aws.amazon.com/what-is/elk-stack/) and the major tool at the center of this trend is ClickHouse due to its blazing-fast log-handling features. 
 
 Two metrics that help ClickHouse stand out relative to alternatives are:
 * ingestion speed and
 * query speed.
 
-For instance, Uber's Log Analytics platform, which used to be based on ELK, could only handle up to [~25.5k docs per second](https://www.elastic.co/blog/data-ingestion-elasticsearch) compared to an ingestion speed of [up to 300K logs per second](https://www.uber.com/en-PT/blog/logging/) on a single ClickHouse node.
+For instance, Uber's Log Analytics platform, which used to be based on ELK, could only handle [~25.5k docs per second](https://www.elastic.co/blog/data-ingestion-elasticsearch) compared to an ingestion speed of [300K logs per second](https://www.uber.com/en-PT/blog/logging/) on a single ClickHouse node.
 
 More than 80% of their queries are aggregation queries but ELK was not designed to support fast aggregations across large datasets. This lead to very slow query speeds for aggregation queries over a 1-hour window (on a 1.3TB dataset) and frequent time outs for aggregations over a 6-hour window. 
 
