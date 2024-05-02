@@ -89,27 +89,27 @@ Timeplus Proton extends the already excellent log-handling features of ClickHous
 
 # Real-time Analysis of Web Traffic
 ## Ingesting Logs using only Timeplus Proton
-The recent Timeplus blog which I mentioned earlier: [Real-Time Log Stream Analysis Using an Open-Source Streaming Database](https://www.timeplus.com/post/log-stream-analysis) goes over 3 ways to stream logs to Timeplus Proton for analysis:
+The recent Timeplus blog which I mentioned earlier: [Real-Time Log Stream Analysis Using an Open-Source Streaming Database](https://www.timeplus.com/post/log-stream-analysis) goes over 3 stacks for streaming logs to Timeplus Proton for analysis:
 
-* Filebeat + Kafka + Proton
-* Vector + Proton 
-* Proton
+1. Filebeat + Kafka + Proton
+2. Vector + Proton
+3. Proton
 
 ![Filebeat + Kafka + Proton](https://static.wixstatic.com/media/2d747e_1873fec48d79407f828c42ae5c94333f~mv2.png/v1/fill/w_1480,h_260,al_c,q_90,usm_0.66_1.00_0.01,enc_auto/2d747e_1873fec48d79407f828c42ae5c94333f~mv2.png)
-*Option 1: Filebeat + Kafka + Proton Stack*
+*Stack 1: Filebeat + Kafka + Proton*
 
 ![Vector + Proton](https://static.wixstatic.com/media/2d747e_1d01a2a6b0074a999bc8e3c091a26162~mv2.png/v1/fill/w_1036,h_458,al_c,q_90,enc_auto/2d747e_1d01a2a6b0074a999bc8e3c091a26162~mv2.png)
-*Option 2: Vector + Proton Stack*
+*Stack 2: Vector + Proton*
 
 ![Proton](https://static.wixstatic.com/media/2d747e_773438fadf4b4fb89f449294d928616d~mv2.png/v1/fill/w_1391,h_338,al_c,lg_1,q_90,enc_auto/2d747e_773438fadf4b4fb89f449294d928616d~mv2.png)
-*Option 3: Proton Only Stack*
+*Stack 3: Proton Only*
 
-Out of the three options, the simplest to setup is the 3rd option where only Timeplus Proton was used for the log analysis and this is what will be used in this post.
+Out of the three stacks, the simplest to setup is the 3rd stack where only Timeplus Proton can be used for the log analysis and this is what will be used in this post.
 
 There's a caveat: the simpler architecture has an important limitation which is that real-time log analysis can add significant load to a server, if the server is under-resourced. 
 It can significantly degrade the performance of the server on which it is run and might not scale well for real-world use.
 
-To avoid the performance and scalability limitations of the 3rd option, since the blog itself is already hosted on AWS, I'm going to perform the analysis using a separate EC2 instance. 
+To avoid the performance and scalability limitations of the selected stack, since the blog itself is already hosted on AWS, I'm going to perform the analysis using a separate EC2 instance. 
 
 I will install Timeplus Proton on a separate EC2 instance and make the `/var/log/nginx/` folder available over a readonly NFS share. In other words, the Ghost blog and Timeplus proton EC2 instances will be inside the same VPC subnet making it easy to securely share the access logs between the two instances over a readonly NFS share.
  
