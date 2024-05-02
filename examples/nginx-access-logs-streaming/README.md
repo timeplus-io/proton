@@ -203,7 +203,7 @@ curl https://install.timeplus.com | sh
 
 9. Create a stream for real-time monitoring of the log files:
 ```sql
-CREATE EXTERNAL STREAM nginx_log (
+CREATE EXTERNAL STREAM nginx_access_log (
   raw string
 )
 SETTINGS
@@ -216,8 +216,10 @@ SETTINGS
 
 10. Running this query should return results. It should continuously return results each time live traffic hits the blog:
 ```sql
-select * from nginx_log;
+select * from nginx_access_log;
 ```
+
+![Nginx access log streaming demo](timeplus-proton-nginx-streaming-logs7.gif)
 
 
 # Historical Analysis of Web Traffic
