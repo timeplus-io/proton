@@ -4,7 +4,7 @@
 #include <IO/ReadBufferFromMemory.h>
 #include <Processors/Streaming/ISource.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
-#include <Storages/ExternalStream/Kafka/ConsumerPool.h>
+#include <Storages/ExternalStream/Kafka/Consumer.h>
 #include <Storages/ExternalStream/Kafka/Topic.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageSnapshot.h>
@@ -23,7 +23,7 @@ public:
         Kafka & kafka_,
         const Block & header_,
         const StorageSnapshotPtr & storage_snapshot_,
-        const RdKafka::ConsumerPool::Entry & consumer_,
+        std::shared_ptr<RdKafka::Consumer> consumer_,
         RdKafka::TopicPtr topic_,
         Int32 shard_,
         Int64 offset_,
@@ -80,7 +80,7 @@ private:
     UInt32 record_consume_batch_count = 1000;
     Int32 record_consume_timeout_ms = 100;
 
-    RdKafka::ConsumerPool::Entry consumer;
+    std::shared_ptr<RdKafka::Consumer> consumer;
     RdKafka::TopicPtr topic;
     Int32 shard;
     Int64 offset;
