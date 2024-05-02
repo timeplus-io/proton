@@ -31,10 +31,15 @@ namespace ErrorCodes
 {
 extern const int INVALID_CONFIG_PARAMETER;
 extern const int INVALID_SETTING_VALUE;
+extern const int NO_AVAILABLE_KAFKA_CONSUMER;
 }
 
 namespace
 {
+
+const String MAX_CONSUMERS_CONFIG_KEY = "external_stream.kafka.max_consumers_per_stream";
+const size_t DEFAULT_MAX_CONSUMERS = 50;
+
 /// Checks if a config is a unsupported global config, i.e. the config is not supposed
 /// to be configured by users.
 bool isUnsupportedGlobalConfig(const String & name)
@@ -220,6 +225,7 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     , external_stream_counter(external_stream_counter_)
     , conf(createRdConf(settings->getKafkaSettings()))
     , poll_timeout_ms(settings->poll_waittime_ms.value)
+    , max_consumers(context->getConfigRef().getInt(MAX_CONSUMERS_CONFIG_KEY, DEFAULT_MAX_CONSUMERS))
     , logger(&Poco::Logger::get(getLoggerName()))
 {
     assert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);
@@ -496,20 +502,20 @@ Pipe Kafka::read(
 
 std::shared_ptr<RdKafka::Consumer> Kafka::getConsumer()
 {
+    std::lock_guard<std::mutex> lock{consumer_mutex};
+
+    auto consumer_ref = std::find_if(consumers.begin(), consumers.end(), [](const auto & consumer) { return consumer.expired(); });
+    if (consumer_ref == consumers.end() && consumers.size() >= max_consumers)
+        throw Exception(ErrorCodes::NO_AVAILABLE_KAFKA_CONSUMER, "Reached consumers limit {}. Existing queries need to be stopped before running other queries. Or update {} to a bigger number in the config file", max_consumers, MAX_CONSUMERS_CONFIG_KEY);
+
     auto new_consumer = std::make_shared<RdKafka::Consumer>(*conf, poll_timeout_ms, getLoggerName());
     std::weak_ptr<RdKafka::Consumer> ref = new_consumer;
 
-    std::lock_guard<std::mutex> lock{consumer_mutex};
-    for (auto & consumer : consumers)
-    {
-        /// if a consumer is gone, replace it with the new one, so that `consumers` won't keep growing forever.
-        if (consumer.expired())
-        {
-            consumer.swap(ref);
-            return new_consumer;
-        }
-    }
-    consumers.push_back(ref);
+    if (consumer_ref != consumers.end())
+        consumer_ref->swap(ref);
+    else
+        consumers.push_back(ref);
+
     return new_consumer;
 }
 

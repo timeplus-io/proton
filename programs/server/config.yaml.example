@@ -960,3 +960,12 @@ send_crash_reports:
     endpoint: 'https://6f33034cfe684dd7a3ab9875e57b1c8d@o388870.ingest.sentry.io/5226277'
     # Uncomment to disable proton internal DNS caching.
     # disable_internal_dns_cache: 1
+
+# External stream related configurations
+external_stream:
+    kafka:
+        # Defines how many consumers can be created for each Kafka external stream.
+        # When a SELECT query on a Kafka external stream is executed, a consumer
+        # will be created for that query. That means, no more than `max_consumers_per_stream`
+        # SELECT queries can be executed in parallel on the same Kafka external stream.
+        max_consumers_per_stream: 50

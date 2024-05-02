@@ -14,11 +14,6 @@ namespace DB
 
 class IStorage;
 
-namespace ErrorCodes
-{
-extern const int NO_AVAILABLE_KAFKA_CONSUMER;
-}
-
 class Kafka final : public StorageExternalStreamImpl
 {
 public:
@@ -125,6 +120,7 @@ private:
     /// A Consumer can only be used by one source at the same time (technically speaking, it can be used by multple sources as long as each source read from a different topic,
     /// but we will leave this as an enhancement later, probably when we introduce the `Connection` concept), thus we need a consumer pool.
     std::mutex consumer_mutex;
+    size_t max_consumers = 0;
     std::vector<std::weak_ptr<RdKafka::Consumer>> consumers;
 
     Poco::Logger * logger;
