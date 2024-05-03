@@ -1,6 +1,6 @@
 # Demo for CDC(Change Data Capture) with Debezium/Redpanda/Proton
 
-This docker compose file demonstrates how to capture live database change from a OLTP database(e.g. MySQL) and apply real-time analytics with Proton.
+This docker compose file demonstrates how to capture live database change from a OLTP database(e.g. MySQL) and apply real-time analytics with Timeplus Proton.
 
 ## Start the example
 
@@ -40,7 +40,7 @@ curl --request POST \
 
 ## Run SQL
 
-You can use `docker exec -it <name> proton-client -m -n` to run the SQL client in Proton container. Or use the Docker Desktop UI to choose the container, choose "Exec" tab and type `proton-client` to start the SQL client.
+You can use `docker exec -it <name> proton-client -h 127.0.0.1 -m -n` to run the SQL client in Proton container. Or use the Docker Desktop UI to choose the container, choose "Exec" tab and type `proton-client -h 127.0.0.1` to start the SQL client.
 
 Copy all content in cdc.sql and paste in the Proton Client.
 
