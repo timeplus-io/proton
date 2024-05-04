@@ -628,8 +628,10 @@ static void sanityChecks(Server * server)
 #if defined(OS_LINUX)
     try
     {
-        if (readString("/sys/devices/system/clocksource/clocksource0/current_clocksource").find("tsc") == std::string::npos)
-            server->context()->addWarningMessage("Linux is not using fast TSC clock source. Performance can be degraded.");
+        const char * filename = "/sys/devices/system/clocksource/clocksource0/current_clocksource";
+        String clocksource = readString(filename);
+        if (clocksource.find("tsc") == std::string::npos && clocksource.find("kvm-clock") == std::string::npos)
+            server.context()->addWarningMessage("Linux is not using a fast clock source. Performance can be degraded. Check " + String(filename));
     }
     catch (...)
     {
