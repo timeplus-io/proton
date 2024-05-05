@@ -225,3 +225,96 @@ select * from nginx_access_log;
 # Historical Analysis of Web Traffic
 TBD.
 
+## Script
+<details>
+<summary>Output of the Nginx access log to CSV conversion script.</summary>
+<pre>
+./csv.sh 
+Deleting old csv files.
+removed '/mnt/csv/nginx/access.ipinfo.csv'
+removed '/mnt/csv/nginx/access.log.csv'
+'/var/log/nginx/access.log' -> '/mnt/csv/nginx/access.log.0'
+'/var/log/nginx/access.log.1' -> '/mnt/csv/nginx/access.log.1'
+'/var/log/nginx/access.log.10.gz' -> '/mnt/csv/nginx/access.log.10.gz'
+'/var/log/nginx/access.log.11.gz' -> '/mnt/csv/nginx/access.log.11.gz'
+'/var/log/nginx/access.log.12.gz' -> '/mnt/csv/nginx/access.log.12.gz'
+'/var/log/nginx/access.log.13.gz' -> '/mnt/csv/nginx/access.log.13.gz'
+'/var/log/nginx/access.log.14.gz' -> '/mnt/csv/nginx/access.log.14.gz'
+'/var/log/nginx/access.log.2.gz' -> '/mnt/csv/nginx/access.log.2.gz'
+'/var/log/nginx/access.log.3.gz' -> '/mnt/csv/nginx/access.log.3.gz'
+'/var/log/nginx/access.log.4.gz' -> '/mnt/csv/nginx/access.log.4.gz'
+'/var/log/nginx/access.log.5.gz' -> '/mnt/csv/nginx/access.log.5.gz'
+'/var/log/nginx/access.log.6.gz' -> '/mnt/csv/nginx/access.log.6.gz'
+'/var/log/nginx/access.log.7.gz' -> '/mnt/csv/nginx/access.log.7.gz'
+'/var/log/nginx/access.log.8.gz' -> '/mnt/csv/nginx/access.log.8.gz'
+'/var/log/nginx/access.log.9.gz' -> '/mnt/csv/nginx/access.log.9.gz'
+Decompressing gzipped /mnt/csv/nginx/access.log.10.gz.
+Decompressing gzipped /mnt/csv/nginx/access.log.11.gz.
+Decompressing gzipped /mnt/csv/nginx/access.log.12.gz.
+Decompressing gzipped /mnt/csv/nginx/access.log.13.gz.
+Decompressing gzipped /mnt/csv/nginx/access.log.14.gz.
+Decompressing gzipped /mnt/csv/nginx/access.log.2.gz.
+Decompressing gzipped /mnt/csv/nginx/access.log.3.gz.
+Decompressing gzipped /mnt/csv/nginx/access.log.4.gz.
+Decompressing gzipped /mnt/csv/nginx/access.log.5.gz.
+Decompressing gzipped /mnt/csv/nginx/access.log.6.gz.
+Decompressing gzipped /mnt/csv/nginx/access.log.7.gz.
+Decompressing gzipped /mnt/csv/nginx/access.log.8.gz.
+Decompressing gzipped /mnt/csv/nginx/access.log.9.gz.
+[Python] Converting [access.log.0] to [access.log.0.csv]: (valid => 3604, malicious => 26). Total rows processed: 3630.
+removed '/mnt/csv/nginx/access.log.0'
+[Python] Converting [access.log.1] to [access.log.1.csv]: (valid => 3446, malicious => 28). Total rows processed: 3474.
+removed '/mnt/csv/nginx/access.log.1'
+[Python] Converting [access.log.10] to [access.log.10.csv]: (valid => 7916, malicious => 45). Total rows processed: 7961.
+removed '/mnt/csv/nginx/access.log.10'
+[Python] Converting [access.log.11] to [access.log.11.csv]: (valid => 3373, malicious => 84). Total rows processed: 3457.
+removed '/mnt/csv/nginx/access.log.11'
+[Python] Converting [access.log.12] to [access.log.12.csv]: (valid => 3349, malicious => 45). Total rows processed: 3394.
+removed '/mnt/csv/nginx/access.log.12'
+[Python] Converting [access.log.13] to [access.log.13.csv]: (valid => 8361, malicious => 30). Total rows processed: 8391.
+removed '/mnt/csv/nginx/access.log.13'
+[Python] Converting [access.log.14] to [access.log.14.csv]: (valid => 7332, malicious => 45). Total rows processed: 7377.
+removed '/mnt/csv/nginx/access.log.14'
+[Python] Converting [access.log.2] to [access.log.2.csv]: (valid => 5009, malicious => 48). Total rows processed: 5057.
+removed '/mnt/csv/nginx/access.log.2'
+[Python] Converting [access.log.3] to [access.log.3.csv]: (valid => 2720, malicious => 42). Total rows processed: 2762.
+removed '/mnt/csv/nginx/access.log.3'
+[Python] Converting [access.log.4] to [access.log.4.csv]: (valid => 7240, malicious => 32). Total rows processed: 7272.
+removed '/mnt/csv/nginx/access.log.4'
+[Python] Converting [access.log.5] to [access.log.5.csv]: (valid => 2760, malicious => 58). Total rows processed: 2818.
+removed '/mnt/csv/nginx/access.log.5'
+[Python] Converting [access.log.6] to [access.log.6.csv]: (valid => 4209, malicious => 42). Total rows processed: 4251.
+removed '/mnt/csv/nginx/access.log.6'
+[Python] Converting [access.log.7] to [access.log.7.csv]: (valid => 2464, malicious => 43). Total rows processed: 2507.
+removed '/mnt/csv/nginx/access.log.7'
+[Python] Converting [access.log.8] to [access.log.8.csv]: (valid => 2409, malicious => 43). Total rows processed: 2452.
+removed '/mnt/csv/nginx/access.log.8'
+[Python] Converting [access.log.9] to [access.log.9.csv]: (valid => 2947, malicious => 57). Total rows processed: 3004.
+removed '/mnt/csv/nginx/access.log.9'
+Combined all access logs into a single file: /mnt/csv/nginx/access.log.csv.
+removed '/mnt/csv/nginx/access.log.0.csv'
+removed '/mnt/csv/nginx/access.log.1.csv'
+removed '/mnt/csv/nginx/access.log.2.csv'
+removed '/mnt/csv/nginx/access.log.3.csv'
+removed '/mnt/csv/nginx/access.log.4.csv'
+removed '/mnt/csv/nginx/access.log.5.csv'
+removed '/mnt/csv/nginx/access.log.6.csv'
+removed '/mnt/csv/nginx/access.log.7.csv'
+removed '/mnt/csv/nginx/access.log.8.csv'
+removed '/mnt/csv/nginx/access.log.9.csv'
+removed '/mnt/csv/nginx/access.log.10.csv'
+removed '/mnt/csv/nginx/access.log.11.csv'
+removed '/mnt/csv/nginx/access.log.12.csv'
+removed '/mnt/csv/nginx/access.log.13.csv'
+removed '/mnt/csv/nginx/access.log.14.csv'
+Extracting only IP addresses from /mnt/csv/nginx/access.log.csv to /mnt/csv/nginx/access.ipinfo.tmp ...
+Removing duplicate IP addresses from /mnt/csv/nginx/access.ipinfo.tmp ...
+Combined all IP addresses into a single file: /mnt/csv/nginx/access.ipinfo.
+removed '/mnt/csv/nginx/access.ipinfo.tmp'
+Geo-locating all the IP addresses in bulk using the IPInfo API (https://ipinfo.io):
+   Total IP addresses that will be looked up in bulk using /mnt/csv/nginx/access.ipinfo: 3037.
+   Geo-lookup of 3037 IP addresses written to file: /mnt/csv/nginx/access.ipinfo.csv.
+   Complete!
+removed '/mnt/csv/nginx/access.ipinfo'
+</pre>
+</details>
