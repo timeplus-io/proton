@@ -291,6 +291,20 @@ removed '/mnt/csv/nginx/access.log.7'
 removed '/mnt/csv/nginx/access.log.8'
 [Python] Converting [access.log.9] to [access.log.9.csv]: (valid => 2947, malicious => 57). Total rows processed: 3004.
 removed '/mnt/csv/nginx/access.log.9'
+Removing CSV headers from /mnt/csv/nginx/access.log.1.csv.
+Removing CSV headers from /mnt/csv/nginx/access.log.10.csv.
+Removing CSV headers from /mnt/csv/nginx/access.log.11.csv.
+Removing CSV headers from /mnt/csv/nginx/access.log.12.csv.
+Removing CSV headers from /mnt/csv/nginx/access.log.13.csv.
+Removing CSV headers from /mnt/csv/nginx/access.log.14.csv.
+Removing CSV headers from /mnt/csv/nginx/access.log.2.csv.
+Removing CSV headers from /mnt/csv/nginx/access.log.3.csv.
+Removing CSV headers from /mnt/csv/nginx/access.log.4.csv.
+Removing CSV headers from /mnt/csv/nginx/access.log.5.csv.
+Removing CSV headers from /mnt/csv/nginx/access.log.6.csv.
+Removing CSV headers from /mnt/csv/nginx/access.log.7.csv.
+Removing CSV headers from /mnt/csv/nginx/access.log.8.csv.
+Removing CSV headers from /mnt/csv/nginx/access.log.9.csv.
 Combined all access logs into a single file: /mnt/csv/nginx/access.log.csv.
 removed '/mnt/csv/nginx/access.log.0.csv'
 removed '/mnt/csv/nginx/access.log.1.csv'
