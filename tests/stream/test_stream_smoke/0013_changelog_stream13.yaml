@@ -384,3 +384,103 @@ tests:
       - query_id: '13108'
         expected_results:
           - [0, 0]
+
+  - id: 109
+    tags:
+      - any
+      - changelog_kv
+      - single shard
+    name: "any supports changelog"
+    description: any supports changelog.
+    steps:
+    - statements:
+      - client: python
+        query_type: table
+        query: drop stream if exists changelog_kv_13
+
+      - client: python
+        query_type: table
+        wait: 2
+        query: create stream changelog_kv_13(id int, val int) primary key id settings mode='versioned_kv';
+
+      - client: python
+        query_type: stream
+        wait: 2
+        depends_on_stream: changelog_kv_13
+        query_id: '13109'
+        query: select last_value(val) from changelog_kv_13;
+
+      - client: python
+        query_type: table
+        depends_on: '13109'
+        wait: 2
+        query: insert into changelog_kv_13(id, val) values(1, 2);
+
+      - client: python
+        query_type: table
+        wait: 2
+        query: insert into changelog_kv_13(id, val) values(2, 3);
+
+      - client: python
+        query_type: table
+        wait: 2
+        kill: '13109'
+        kill_wait: 2
+        query: insert into changelog_kv_13(id, val) values(1, 4);
+
+    expected_results:
+      - query_id: '13109'
+        expected_results:
+          - [2]
+          - [3]
+          - [4]
+
+  - id: 110
+    tags:
+      - any
+      - changelog_kv
+      - single shard
+    name: "any supports changelog"
+    description: any supports changelog.
+    steps:
+    - statements:
+      - client: python
+        query_type: table
+        query: drop stream if exists changelog_kv_13
+
+      - client: python
+        query_type: table
+        wait: 2
+        query: create stream changelog_kv_13(id int, val int) primary key id settings mode='versioned_kv';
+
+      - client: python
+        query_type: stream
+        wait: 2
+        depends_on_stream: changelog_kv_13
+        query_id: '13110'
+        query: select first_value(val) from changelog_kv_13;
+
+      - client: python
+        query_type: table
+        depends_on: '13110'
+        wait: 2
+        query: insert into changelog_kv_13(id, val) values(1, 2);
+
+      - client: python
+        query_type: table
+        wait: 2
+        query: insert into changelog_kv_13(id, val) values(2, 3);
+
+      - client: python
+        query_type: table
+        wait: 2
+        kill: '13110'
+        kill_wait: 2
+        query: insert into changelog_kv_13(id, val) values(1, 4);
+
+    expected_results:
+      - query_id: '13110'
+        expected_results:
+          - [2]
+          - [2]
+          - [2]

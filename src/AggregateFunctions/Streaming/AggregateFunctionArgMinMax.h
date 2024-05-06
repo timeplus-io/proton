@@ -18,7 +18,7 @@ extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 namespace Streaming
 {
 /// Returns the first arg value found for the minimum/maximum value. Example: arg_max(arg, value).
-/// There are similar problems and trade off as stated in AggregateFunctionsCountedValue in AggregateFunctionMinMax.h
+/// There are similar problems and trade off as stated in AggregateFunctionsCountedValue in AggregateFunctionMinMaxAny.h
 /// In changelog mode, we need not only keep track the unique min/max value, but also need keep track the unique argument
 /// for each unique value. The following is one example how we keep tracking this in data structure
 /// For max sequence (value, arg, delta) and `retract_max = 3`:
