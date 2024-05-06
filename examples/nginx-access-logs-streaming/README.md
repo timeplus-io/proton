@@ -223,11 +223,57 @@ select * from nginx_access_log;
 
 
 # Historical Analysis of Web Traffic
-TBD.
+I wrote two scripts to help me load the Nginx access logs into Timeplus Proton:
+* [`accesslog2csv.py`](scripts/accesslog2csv.py) 
+* [`csv.sh`](scripts/csv.sh)
 
-## Script
+`accesslog2csv.py` is a Python script that converts a file in the Nginx log format into a CSV. `csv.sh` calls `accesslog2csv.py` and does a bunch of other things, including performing a lookup of IP addresses it finds in the access logs to determine their geographic location. It uses the [IPinfo](https://ipinfo.io/) service which supports bulk look up of up to 50k IP addresses.  
+
+To save on lookup costs, you could convert individual IP addresses into its network address equivalent using CIDR notation (Classless Inter-Domain Routing).
+For example, these 6 IP addresses that appears in the access logs at various times only differ in the last octet (i.e. `.191`, `.20`, `.41`, `.66`, `.84` and `.90`):
+```csv
+103.131.71.191
+103.131.71.20
+103.131.71.41
+103.131.71.66
+103.131.71.84
+103.131.71.90
+```
+When converted to CIDR notation these IPs will be equivalent to: `103.131.71.0/30` allowing them to be looked up as 1 IP address (instead of 6) using the IPinfo service.
+
+## Script Setup
+1. Install the `ipinfo` CLI.
+
+On macOS
+```bash
+brew install ipinfo-cli
+```
+On Ubuntu Linux:
+```bash
+curl -Ls https://github.com/ipinfo/cli/releases/download/ipinfo-3.3.1/deb.sh | sh
+```
+
+2. Check the installation was successful:
+```bash
+ipinfo --version
+3.3.1
+```
+
+3. Sign up for an [IPinfo account](https://ipinfo.io/signup) then provide your token to the CLI:
+```bash
+ipinfo init
+1) Enter an existing API token
+2) Sign up or log in at ipinfo.io with your browser
+1
+Enter token: 
+checking token...
+done
+```
+
+4. Copy over `accesslog2csv.py` and `csv.sh` to the `$HOME` directory of Timeplus Proton server then run `csv.sh`.
+
 <details>
-<summary>Output of the Nginx access log to CSV conversion script.</summary>
+<summary>Your output of the <code>csv.sh</code> script should be similar to the output below.</summary>
 <pre>
 ./csv.sh 
 Deleting old csv files.
@@ -332,3 +378,20 @@ Geo-locating all the IP addresses in bulk using the IPInfo API (https://ipinfo.i
 removed '/mnt/csv/nginx/access.ipinfo'
 </pre>
 </details>
+
+5. Next copy over the generated CSV files to `proton-data/user_files`
+```bash
+cp -v /mnt/nginx/csv/access.* proton-data/user_files/
+'/mnt/nginx/csv/access.ipinfo.csv' -> 'proton-data/user_files/access.ipinfo.csv'
+'/mnt/nginx/csv/access.log.csv' -> 'proton-data/user_files/access.log.csv'
+```
+
+6. Run the additional [sql scripts](scripts/sql) which will load the generated CSV files into Timeplus Proton:
+```bash
+./proton client --host 127.0.0.1 --multiquery < sql/01_create-tables.sql
+./proton client --host 127.0.0.1 --multiquery < sql/02_csv-import.sql
+
+# this alternative command will also work
+cat sql/<file-name>.sql | ./proton client --host 127.0.0.1 --multiquery
+```
+
