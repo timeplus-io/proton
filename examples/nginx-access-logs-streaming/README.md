@@ -394,4 +394,247 @@ cp -v /mnt/nginx/csv/access.* proton-data/user_files/
 # this alternative command will also work
 cat sql/<file-name>.sql | ./proton client --host 127.0.0.1 --multiquery
 ```
+The ingestion of both files: `access.log.csv` and `access.ipinfo.csv` was pretty fast with each import completing under a second on my machine: 
+```bash
+-- access.log.csv
+Query id: 711127ab-132c-4381-bdbd-0d109b958cea
+
+Ok.
+
+0 rows in set. Elapsed: 0.128 sec. Processed 65.25 thousand rows, 16.25 MB (508.14 thousand rows/s., 126.51 MB/s.)
+
+-- access.ipinfo.csv
+Query id: 2e22e9d9-d6d9-43b5-ae05-f06f93b66c2a
+
+Ok.
+
+0 rows in set. Elapsed: 0.011 sec. Processed 3.03 thousand rows, 390.10 KB (270.26 thousand rows/s., 34.75 MB/s.)
+```
+For more information on performing multiple CSV imports, the Timeplus Proton documentation has a how-to on [importing CSV files](https://docs.timeplus.com/proton-howto#csv). 
+
+
+## Web Traffic Analysis
+1. Query the number of requests with errors (`40x`-`50x` HTTP status codes) and requests with successful responses (`20x`-`30x` codes)[^1]:
+```sql
+SELECT
+    if(status >= 400, '40x', 'ok') as status_code,
+    count() as count
+FROM nginx_historical_access_log
+GROUP BY if(status >= 400, '40x', 'ok');
+```
+```sql
+Query id: 132555ea-2a7b-4a2f-a0a1-d95be677faa2
+
+┌─status_code─┬─count─┐
+│ 40x         │  3959 │
+│ ok          │ 61293 │
+└─────────────┴───────┘
+
+2 rows in set. Elapsed: 0.007 sec. Processed 65.25 thousand rows, 261.01 KB (9.20 million rows/s., 36.81 MB/s.)
+```
+
+2. Query the top 10 most requested pages, excluding some static content[^1]:
+```sql
+SELECT
+    path,
+    count()
+FROM nginx_historical_access_log 
+WHERE (path NOT LIKE '%.js%')
+    AND (path NOT LIKE '%.css%')
+    AND (path NOT LIKE '%.png%')
+    AND (path NOT LIKE '%.gif%')
+    AND (path NOT LIKE '%.jpg')
+GROUP BY path
+ORDER BY count() DESC
+LIMIT 10;
+```
+
+```sql
+Query id: 1484bf29-38d1-474c-9650-b68cdffd81bb
+
+┌─path───────────────────────────────────────────────────────────────────────────────────────────────────────────┬─count()─┐
+│ /rss/                                                                                                          │   21175 │
+│ /                                                                                                              │    2711 │
+│ /favicon.ico                                                                                                   │     917 │
+│ /robots.txt                                                                                                    │     663 │
+│                                                                                                                │     656 │
+│ /.env                                                                                                          │     544 │
+│ /members/api/member/                                                                                           │     442 │
+│ /ghost/api/content/newsletters/?key=1e4fc7f98eebaf5678ee8f1e06&limit=all                                       │     396 │
+│ /ghost/api/content/settings/?key=1e4fc7f98eebaf5678ee8f1e06&limit=all                                          │     395 │
+│ /ghost/api/content/tiers/?key=1e4fc7f98eebaf5678ee8f1e06&limit=all&include=monthly_price,yearly_price,benefits │     394 │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────────┴─────────┘
+
+10 rows in set. Elapsed: 0.018 sec. Processed 65.25 thousand rows, 1.75 MB (3.59 million rows/s., 96.38 MB/s.)
+```
+
+3. Query repeat visitors with 10 visits or more[^2]:
+```sql
+SELECT ipv4_num_to_string_class_c(remote_ip) as remote_ip, count(1) as repeat_visits
+FROM nginx_historical_access_log GROUP BY remote_ip HAVING count(1) > 10 ORDER BY repeat_visits DESC LIMIT 20;
+```
+```sql
+Query id: b6a8399d-d0e8-4b8e-8ff1-9d3818a156ac
+
+┌─remote_ip───────┬─repeat_visits─┐
+│ 64.227.130.xxx  │          4428 │
+│ 173.212.201.xxx │          4292 │
+│ 173.249.5.xxx   │          4292 │
+│ 129.151.211.xxx │          2452 │
+│ 54.202.110.xxx  │          2146 │
+│ 3.22.168.xxx    │          2146 │
+│ 176.9.136.xxx   │          1870 │
+│ 181.214.218.xxx │          1673 │
+│ 64.71.157.xxx   │          1439 │
+│ 182.253.170.xxx │          1235 │
+│ 182.253.168.xxx │          1206 │
+│ 80.39.179.xxx   │          1028 │
+│ 173.249.27.xxx  │          1009 │
+│ 95.143.172.xxx  │           807 │
+│ 126.61.242.xxx  │           733 │
+│ 5.161.48.xxx    │           707 │
+│ 165.22.123.xxx  │           706 │
+│ 109.222.33.xxx  │           705 │
+│ 135.125.164.xxx │           401 │
+│ 74.207.251.xxx  │           385 │
+└─────────────────┴───────────────┘
+
+20 rows in set. Elapsed: 0.007 sec. Processed 65.25 thousand rows, 261.01 KB (8.88 million rows/s., 35.52 MB/s.)
+```
+
+4. Where are repeat visitors with the highest number of page views based in the world?:
+```sql
+SELECT ipv4_num_to_string_class_c(nal.remote_ip) as remote_ip, count(*) as page_views, nip.country_name as country, nip.country_flag_emoji as emoji 
+FROM nginx_historical_access_log as nal JOIN nginx_ipinfo as nip ON nal.remote_ip = nip.remote_ip GROUP BY remote_ip, country, emoji HAVING count(*) > 10 ORDER BY page_views DESC LIMIT 50;
+```
+```sql
+Query id: 6b9e9ffc-53c5-4030-8760-a266f94c95b4
+
+┌─remote_ip───────┬─page_views─┬─country────────┬─emoji─┐
+│ 64.227.130.xxx  │       4428 │ India          │ 🇮🇳    │
+│ 173.212.201.xxx │       4292 │ Germany        │ 🇩🇪    │
+│ 173.249.5.xxx   │       4292 │ Germany        │ 🇩🇪    │
+│ 129.151.211.xxx │       2452 │ Sweden         │ 🇸🇪    │
+│ 3.22.168.xxx    │       2146 │ United States  │ 🇺🇸    │
+│ 54.202.110.xxx  │       2146 │ United States  │ 🇺🇸    │
+│ 176.9.136.xxx   │       1870 │ Germany        │ 🇩🇪    │
+│ 181.214.218.xxx │       1673 │ Belgium        │ 🇧🇪    │
+│ 64.71.157.xxx   │       1439 │ United States  │ 🇺🇸    │
+│ 182.253.170.xxx │       1235 │ Indonesia      │ 🇮🇩    │
+│ 182.253.168.xxx │       1206 │ Indonesia      │ 🇮🇩    │
+│ 80.39.179.xxx   │       1028 │ Spain          │ 🇪🇸    │
+│ 173.249.27.xxx  │       1009 │ Germany        │ 🇩🇪    │
+│ 95.143.172.xxx  │        807 │ Germany        │ 🇩🇪    │
+│ 126.61.242.xxx  │        733 │ Japan          │ 🇯🇵    │
+│ 5.161.48.xxx    │        707 │ United States  │ 🇺🇸    │
+│ 165.22.123.xxx  │        706 │ United Kingdom │ 🇬🇧    │
+│ 109.222.33.xxx  │        705 │ France         │ 🇫🇷    │
+│ 135.125.164.xxx │        401 │ Germany        │ 🇩🇪    │
+│ 74.207.251.xxx  │        385 │ United States  │ 🇺🇸    │
+│ 109.192.89.xxx  │        381 │ Germany        │ 🇩🇪    │
+│ 87.250.179.xxx  │        378 │ United States  │ 🇺🇸    │
+│ 192.53.124.xxx  │        372 │ United States  │ 🇺🇸    │
+│ 92.247.181.xxx  │        362 │ Bulgaria       │ 🇧🇬    │
+│ 74.73.30.xxx    │        352 │ United States  │ 🇺🇸    │
+│ 168.75.81.xxx   │        347 │ Brazil         │ 🇧🇷    │
+│ 84.202.33.xxx   │        345 │ Norway         │ 🇳🇴    │
+│ 94.130.16.xxx   │        334 │ Germany        │ 🇩🇪    │
+│ 116.202.87.xxx  │        328 │ Germany        │ 🇩🇪    │
+│ 144.126.141.xxx │        299 │ United States  │ 🇺🇸    │
+│ 80.82.156.xxx   │        299 │ Czech Republic │ 🇨🇿    │
+│ 182.191.120.xxx │        299 │ Pakistan       │ 🇵🇰    │
+│ 141.94.21.xxx   │        299 │ France         │ 🇫🇷    │
+│ 187.157.84.xxx  │        299 │ Mexico         │ 🇲🇽    │
+│ 57.129.5.xxx    │        299 │ Germany        │ 🇩🇪    │
+│ 178.4.158.xxx   │        299 │ Germany        │ 🇩🇪    │
+│ 140.238.127.xxx │        295 │ United Kingdom │ 🇬🇧    │
+│ 90.118.253.xxx  │        292 │ France         │ 🇫🇷    │
+│ 146.70.174.xxx  │        285 │ United States  │ 🇺🇸    │
+│ 96.234.150.xxx  │        283 │ United States  │ 🇺🇸    │
+│ 76.133.115.xxx  │        279 │ United States  │ 🇺🇸    │
+│ 198.251.65.xxx  │        279 │ United States  │ 🇺🇸    │
+│ 108.188.216.xxx │        274 │ United States  │ 🇺🇸    │
+│ 86.38.225.xxx   │        273 │ United States  │ 🇺🇸    │
+│ 124.156.187.xxx │        272 │ Hong Kong      │ 🇭🇰    │
+│ 188.165.201.xxx │        270 │ France         │ 🇫🇷    │
+│ 97.64.23.xxx    │        267 │ United States  │ 🇺🇸    │
+│ 135.181.35.xxx  │        260 │ Finland        │ 🇫🇮    │
+│ 192.99.227.xxx  │        251 │ Canada         │ 🇨🇦    │
+│ 172.105.166.xxx │        243 │ Australia      │ 🇦🇺    │
+└─────────────────┴────────────┴────────────────┴───────┘
+
+50 rows in set. Elapsed: 0.017 sec. Processed 68.29 thousand rows, 381.62 KB (3.95 million rows/s., 22.06 MB/s.)
+```
+
+5. Which users downloaded the most content, on average and where are they based?[^3]:
+```sql
+SELECT ipv4_num_to_string_class_c(nal.remote_ip) as remote_ip, count(*) as page_views, avg(size) as average_bytes, nip.country_name as country, nip.country_flag_emoji as emoji 
+FROM nginx_historical_access_log as nal JOIN nginx_ipinfo as nip ON nal.remote_ip = nip.remote_ip GROUP BY remote_ip, country, emoji HAVING count(*) > 10 ORDER BY average_bytes DESC LIMIT 50;
+```
+
+```sql
+Query id: d355157b-d9eb-4d27-8e5f-950d60b0385f
+
+┌─remote_ip───────┬─page_views─┬──────average_bytes─┬─country────────┬─emoji─┐
+│ 184.160.64.xxx  │         30 │           185030.6 │ Canada         │ 🇨🇦    │
+│ 23.22.35.xxx    │         35 │ 170669.51428571428 │ United States  │ 🇺🇸    │
+│ 149.56.150.xxx  │         24 │             154263 │ Canada         │ 🇨🇦    │
+│ 54.235.11.xxx   │         24 │             154263 │ United States  │ 🇺🇸    │
+│ 216.24.60.xxx   │        208 │             143213 │ United States  │ 🇺🇸    │
+│ 65.154.226.xxx  │         54 │ 137521.16666666666 │ United States  │ 🇺🇸    │
+│ 111.203.221.xxx │         30 │ 123853.56666666667 │ China          │ 🇨🇳    │
+│ 86.87.251.xxx   │         46 │ 120989.47826086957 │ Netherlands    │ 🇳🇱    │
+│ 185.242.226.xxx │         78 │ 112167.29487179487 │ Netherlands    │ 🇳🇱    │
+│ 34.123.170.xxx  │         85 │ 111370.49411764706 │ United States  │ 🇺🇸    │
+│ 52.70.240.xxx   │         44 │ 104372.56818181818 │ United States  │ 🇺🇸    │
+│ 195.93.181.xxx  │        209 │ 103435.72727272728 │ Russia         │ 🇷🇺    │
+│ 34.122.147.xxx  │         85 │  82927.17647058824 │ United States  │ 🇺🇸    │
+│ 3.224.220.xxx   │         37 │  82531.24324324324 │ United States  │ 🇺🇸    │
+│ 34.97.174.xxx   │         63 │  77891.04761904762 │ Japan          │ 🇯🇵    │
+│ 69.160.160.xxx  │         52 │  74082.88461538461 │ United States  │ 🇺🇸    │
+│ 117.132.188.xxx │        100 │           73709.66 │ China          │ 🇨🇳    │
+│ 112.175.187.xxx │         11 │  69961.81818181818 │ South Korea    │ 🇰🇷    │
+│ 106.38.221.xxx  │         27 │  69016.77777777778 │ China          │ 🇨🇳    │
+│ 66.249.75.xxx   │         44 │  63793.52272727273 │ United States  │ 🇺🇸    │
+│ 102.91.4.xxx    │         23 │  60814.13043478261 │ Nigeria        │ 🇳🇬    │
+│ 62.250.221.xxx  │         14 │  57457.57142857143 │ Netherlands    │ 🇳🇱    │
+│ 182.69.182.xxx  │         24 │           57162.25 │ India          │ 🇮🇳    │
+│ 71.56.25.xxx    │         21 │ 55815.666666666664 │ United States  │ 🇺🇸    │
+│ 209.122.69.xxx  │         15 │            51437.8 │ United States  │ 🇺🇸    │
+│ 66.253.176.xxx  │         15 │            51437.8 │ United States  │ 🇺🇸    │
+│ 172.98.32.xxx   │         15 │  51437.73333333333 │ United States  │ 🇺🇸    │
+│ 185.119.0.xxx   │         78 │  50131.61538461538 │ Russia         │ 🇷🇺    │
+│ 85.76.79.xxx    │         14 │ 49400.357142857145 │ Finland        │ 🇫🇮    │
+│ 49.229.186.xxx  │         14 │  49400.28571428572 │ Thailand       │ 🇹🇭    │
+│ 172.59.189.xxx  │         14 │  49400.28571428572 │ United States  │ 🇺🇸    │
+│ 107.214.5.xxx   │         14 │  49400.28571428572 │ United States  │ 🇺🇸    │
+│ 72.227.218.xxx  │         14 │  49400.28571428572 │ United States  │ 🇺🇸    │
+│ 118.92.17.xxx   │         14 │  49400.28571428572 │ New Zealand    │ 🇳🇿    │
+│ 44.232.17.xxx   │         13 │  46098.53846153846 │ United States  │ 🇺🇸    │
+│ 50.237.143.xxx  │         14 │ 45253.142857142855 │ United States  │ 🇺🇸    │
+│ 96.230.1.xxx    │         14 │  45253.07142857143 │ United States  │ 🇺🇸    │
+│ 167.172.52.xxx  │         25 │           44107.76 │ United Kingdom │ 🇬🇧    │
+│ 94.130.16.xxx   │        334 │   44107.6377245509 │ Germany        │ 🇩🇪    │
+│ 87.250.179.xxx  │        378 │ 44107.589947089946 │ United States  │ 🇺🇸    │
+│ 65.109.142.xxx  │         84 │  44107.55952380953 │ Finland        │ 🇫🇮    │
+│ 8.29.198.xxx    │         15 │  44107.53333333333 │ United States  │ 🇺🇸    │
+│ 104.254.65.xxx  │         18 │            44107.5 │ United States  │ 🇺🇸    │
+│ 216.18.205.xxx  │         30 │ 44107.433333333334 │ United States  │ 🇺🇸    │
+│ 65.109.156.xxx  │         94 │  44107.40425531915 │ Finland        │ 🇫🇮    │
+│ 86.155.139.xxx  │         13 │              44104 │ United Kingdom │ 🇬🇧    │
+│ 47.242.141.xxx  │        152 │  44056.89473684211 │ Hong Kong      │ 🇭🇰    │
+│ 45.11.60.xxx    │        137 │  44056.24087591241 │ Poland         │ 🇵🇱    │
+│ 84.140.146.xxx  │         19 │  44056.15789473684 │ Germany        │ 🇩🇪    │
+│ 71.62.20.xxx    │         16 │              44056 │ United States  │ 🇺🇸    │
+└─────────────────┴────────────┴────────────────────┴────────────────┴───────┘
+
+50 rows in set. Elapsed: 0.068 sec. Processed 68.29 thousand rows, 642.63 KB (1.01 million rows/s., 9.51 MB/s.)
+```
+
+
+## Footnotes
+[^1]: [ClickTail Introduction](https://altinity.com/blog/2018-3-12-clicktail-introduction)
+[^2]: [ClickHouse+Python+Nginx: Quick tutorial how handle your logs](https://hackernoon.com/clickhousepythonnginx-quick-tutorial-how-handle-your-logs)
+[^3]: [Publish SQL-based endpoints on NGINX log analysis](https://www.tinybird.co/blog-posts/nginx-log-analysis)
+
 
