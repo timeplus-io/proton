@@ -1,6 +1,6 @@
-# Demo for CDC(Change Data Capture) with Debezium/Redpanda/Proton
+# Demo for CDC(Change Data Capture) with Debezium/Redpanda/Proton/ClickHouse
 
-This docker compose file demonstrates how to capture live database change from a OLTP database(e.g. MySQL) and apply real-time analytics with Proton.
+This docker compose file demonstrates how to capture live database change from a OLTP database(e.g. MySQL) and apply real-time analytics with Timeplus Proton and send to ClickHouse table.
 
 ## Start the example
 
@@ -10,7 +10,24 @@ Simply run `docker compose up` in this folder. Five docker containers in the sta
 2. docker.redpanda.com/redpandadata/redpanda, as the Kafka compatiable streaming message bus
 3. docker.redpanda.com/redpandadata/console, as the web UI to explore data in Kafka/Redpanda
 4. debezium/connect, as the CDC engine to read changes from OLTP and send data to Kafka/Redpanda
-5. debezium/example-mysql, a pre-configured MySQL
+5. debezium/example-mysql, a pre-configured MySQL, as pipeline source
+6. clickhouse/clickhouse-server, the real-time OLAP as the pipeline destination
+
+## Prepare the table in ClickHouse
+
+Open the `clickhouse client` in the clickhouse container. Run the following SQL to create a regular MergeTree table.
+
+```sql
+CREATE TABLE customers
+(
+    id Int32,
+    first_name String,
+    last_name String,
+    email String
+)
+ENGINE=MergeTree()
+PRIMARY KEY (id);
+```
 
 ## Create the CDC job
 
@@ -40,21 +57,16 @@ curl --request POST \
 
 ## Run SQL
 
-You can use `docker exec -it <name> proton-client -m -n` to run the SQL client in Proton container. Or use the Docker Desktop UI to choose the container, choose "Exec" tab and type `proton-client` to start the SQL client.
+You can use `docker exec -it <name> proton-client -h 127.0.0.1 -m -n` to run the SQL client in Proton container. Or use the Docker Desktop UI to choose the container, choose "Exec" tab and type `proton-client -h 127.0.0.1 -m -n` to start the SQL client.
 
-Copy all content in cdc.sql and paste in the Proton Client.
+There are 2 SQL files. Choose one use case and copy all content and paste in the Proton Client.
 
-Run
-
-```sql
-select * from customers
-```
-
-to see the current data.
+- mysql-to-clickhouse.sql Read the CDC message from MySQL and send them to ClickHouse, using Timeplus Proton for the streaming ETL. Append-only.
+- cdc.sql Read the CDC message from MySQL and keep the live data in Timeplus Proton. Support append, update, delete. Run `select * from customers` to see the current data.
 
 Use a MySQL client(e.g. DBeaver) to add/update/delete some records to see the update from `select * from customers`. You can also run `select * from table(customers)` to avoid waiting for new updates.
 
-## Avro
+## Optional, generate CDC data in Avro format
 
 If you want to generate CDC messages in Avro format and consume the data in Proton, you need to:
 

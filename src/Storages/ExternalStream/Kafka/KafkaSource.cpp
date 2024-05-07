@@ -17,9 +17,6 @@ namespace DB
 {
 namespace ErrorCodes
 {
-extern const int INVALID_SETTING_VALUE;
-extern const int LOGICAL_ERROR;
-extern const int OK;
 extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
@@ -27,7 +24,7 @@ KafkaSource::KafkaSource(
     Kafka & kafka_,
     const Block & header_,
     const StorageSnapshotPtr & storage_snapshot_,
-    const RdKafka::ConsumerPool::Entry & consumer_,
+    std::shared_ptr<RdKafka::Consumer> consumer_,
     RdKafka::TopicPtr topic_,
     Int32 shard_,
     Int64 offset_,
@@ -85,6 +82,12 @@ Chunk KafkaSource::generate()
 {
     if (isCancelled())
         return {};
+
+    if (unlikely(consumer->isStopped()))
+    {
+        LOG_INFO(logger, "Consumer has stopped, stop reading data, topic={} shard={}", topic->name(), shard);
+        return {};
+    }
 
     if (!consume_started)
     {

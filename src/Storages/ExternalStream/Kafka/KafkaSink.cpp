@@ -48,7 +48,7 @@ ChunkSharder::ChunkSharder()
     random_sharding = true;
 }
 
-BlocksWithShard ChunkSharder::shard(Block block, Int32 shard_cnt) const
+BlocksWithShard ChunkSharder::shard(Block block, Int32 shard_cnt)
 {
     /// no topics have zero partitions
     assert(shard_cnt > 0);

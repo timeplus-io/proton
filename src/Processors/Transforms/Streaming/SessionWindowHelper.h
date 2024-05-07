@@ -27,7 +27,7 @@ SessionInfoPtr getLastFinalizedSession(const SessionInfoQueue & sessions);
 
 /// \brief Remove expired sessions that not active
 /// \return last removed expired session id
-SessionID removeExpiredSessions(SessionInfoQueue & sessions);
+SessionID removeExpiredSessions(SessionInfoQueue & sessions, Int64 finalized_watermark);
 
 /// \brief Get windows with buckets
 WindowsWithBuckets getWindowsWithBuckets(const SessionInfoQueue & sessions);

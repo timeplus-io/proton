@@ -33,6 +33,11 @@ Producer::Producer(const rd_kafka_conf_t & rk_conf, UInt64 poll_timeout_ms, cons
     poller.scheduleOrThrowOnError([this, poll_timeout_ms] { backgroundPoll(poll_timeout_ms); });
 }
 
+Producer::~Producer() {
+    setStopped();
+    poller.wait();
+}
+
 void Producer::backgroundPoll(UInt64 poll_timeout_ms) const
 {
     LOG_INFO(logger, "Start producer poll");

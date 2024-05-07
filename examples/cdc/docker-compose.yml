@@ -71,3 +71,11 @@ services:
       MYSQL_ROOT_PASSWORD: debezium
       MYSQL_USER: mysqluser
       MYSQL_PASSWORD: mysqlpw
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    ports:
+      - 9000:9000
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144

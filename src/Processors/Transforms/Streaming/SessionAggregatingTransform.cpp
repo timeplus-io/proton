@@ -1,6 +1,7 @@
 #include <Processors/Transforms/Streaming/SessionAggregatingTransform.h>
 
 #include <Interpreters/Streaming/TableFunctionDescription.h>
+#include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/Streaming/SessionWindowHelper.h>
 
 #include <ranges>
@@ -64,7 +65,12 @@ std::pair<bool, bool> SessionAggregatingTransform::executeOrMergeColumns(Chunk &
         }
     }
 
-    if (chunk.hasWatermark())
+    /// No finalized sessions
+    if (AggregatingHelper::onlyEmitFinalizedWindows(params->emit_mode))
+    {
+        chunk.clearWatermark();
+    }
+    else if (chunk.hasWatermark())
     {
         /// When get here, there are two scenarios:
         /// 1) No sessions, and have periodic watermark or timeout watermark
@@ -85,10 +91,10 @@ WindowsWithBuckets SessionAggregatingTransform::getLocalWindowsWithBucketsImpl()
     return SessionWindowHelper::getWindowsWithBuckets(many_data->getField<SessionInfoQueue>());
 }
 
-void SessionAggregatingTransform::removeBucketsImpl(Int64 /*watermark_*/)
+void SessionAggregatingTransform::removeBucketsImpl(Int64 watermark_)
 {
     auto & sessions = many_data->getField<SessionInfoQueue>();
-    Int64 last_expired_time_bucket = SessionWindowHelper::removeExpiredSessions(sessions);
+    Int64 last_expired_time_bucket = SessionWindowHelper::removeExpiredSessions(sessions, watermark_);
     params->aggregator.removeBucketsBefore(variants, last_expired_time_bucket);
 }
 

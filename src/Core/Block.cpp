@@ -1061,6 +1061,17 @@ int Block::compareAt(size_t lhs_row, size_t rhs_row, const Block & rhs_block, co
 
     return 0;
 }
+
+Columns Block::detachColumns()
+{
+    size_t num_columns = data.size();
+    Columns columns(num_columns);
+    for (size_t i = 0; i < num_columns; ++i)
+        columns[i] = std::move(data[i].column);
+
+    clear();
+    return columns;
+}
 /// proton: ends
 
 }

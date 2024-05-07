@@ -5,7 +5,6 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/TreeRewriter.h>
-#include <KafkaLog/KafkaWALPool.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/ExternalStream/Kafka/Kafka.h>
@@ -32,10 +31,15 @@ namespace ErrorCodes
 {
 extern const int INVALID_CONFIG_PARAMETER;
 extern const int INVALID_SETTING_VALUE;
+extern const int NO_AVAILABLE_KAFKA_CONSUMER;
 }
 
 namespace
 {
+
+const String MAX_CONSUMERS_CONFIG_KEY = "external_stream.kafka.max_consumers_per_stream";
+const size_t DEFAULT_MAX_CONSUMERS = 50;
+
 /// Checks if a config is a unsupported global config, i.e. the config is not supposed
 /// to be configured by users.
 bool isUnsupportedGlobalConfig(const String & name)
@@ -220,6 +224,8 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     , data_format(StorageExternalStreamImpl::dataFormat())
     , external_stream_counter(external_stream_counter_)
     , conf(createRdConf(settings->getKafkaSettings()))
+    , poll_timeout_ms(settings->poll_waittime_ms.value)
+    , max_consumers(context->getConfigRef().getInt(MAX_CONSUMERS_CONFIG_KEY, DEFAULT_MAX_CONSUMERS))
     , logger(&Poco::Logger::get(getLoggerName()))
 {
     assert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);
@@ -253,8 +259,6 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
     rd_kafka_conf_set_throttle_cb(conf.get(), &Kafka::onThrottle);
     rd_kafka_conf_set_dr_msg_cb(conf.get(), &KafkaSink::onMessageDelivery);
 
-    consumer_pool = std::make_unique<RdKafka::ConsumerPool>(/*size=*/100, storage_id, *conf, settings->poll_waittime_ms.value, getLoggerName());
-
     if (!attach)
         /// Only validate cluster / topic for external stream creation
         validate();
@@ -285,7 +289,7 @@ void Kafka::cacheVirtualColumnNamesAndTypes()
     virtual_column_names_and_types.push_back(NameAndTypePair(VIRTUAL_COLUMN_MESSAGE_KEY, std::make_shared<DataTypeString>()));
 }
 
-std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const
+std::vector<Int64> Kafka::getOffsets(const RdKafka::Consumer & consumer, const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const
 {
     assert(seek_to_info);
     seek_to_info->replicateForShards(shards_to_query.size());
@@ -303,8 +307,7 @@ std::vector<Int64> Kafka::getOffsets(const SeekToInfoPtr & seek_to_info, const s
         for (auto [shard, timestamp] : std::ranges::views::zip(shards_to_query, seek_timestamps))
             partition_timestamps.emplace_back(shard, timestamp);
 
-        auto consumer = getConsumer();
-        return consumer->getOffsetsForTimestamps(settings->topic.value, partition_timestamps);
+        return consumer.getOffsetsForTimestamps(settings->topic.value, partition_timestamps);
     }
 }
 
@@ -353,7 +356,7 @@ void Kafka::validateMessageKey(const String & message_key_, IStorage * storage, 
 }
 
 /// Validate the topic still exists, specified partitions are still valid etc
-void Kafka::validate() const
+void Kafka::validate()
 {
     auto consumer = getConsumer();
     RdKafka::Topic topic {*consumer->getHandle(), topicName()};
@@ -463,7 +466,7 @@ Pipe Kafka::read(
         else
             header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
 
-        auto offsets = getOffsets(query_info.seek_to_info, shards_to_query);
+        auto offsets = getOffsets(*consumer, query_info.seek_to_info, shards_to_query);
         assert(offsets.size() == shards_to_query.size());
 
         for (auto [shard, offset] : std::ranges::views::zip(shards_to_query, offsets))
@@ -497,12 +500,31 @@ Pipe Kafka::read(
     return pipe;
 }
 
+std::shared_ptr<RdKafka::Consumer> Kafka::getConsumer()
+{
+    std::lock_guard<std::mutex> lock{consumer_mutex};
+
+    auto consumer_ref = std::find_if(consumers.begin(), consumers.end(), [](const auto & consumer) { return consumer.expired(); });
+    if (consumer_ref == consumers.end() && consumers.size() >= max_consumers)
+        throw Exception(ErrorCodes::NO_AVAILABLE_KAFKA_CONSUMER, "Reached consumers limit {}. Existing queries need to be stopped before running other queries. Or update {} to a bigger number in the config file", max_consumers, MAX_CONSUMERS_CONFIG_KEY);
+
+    auto new_consumer = std::make_shared<RdKafka::Consumer>(*conf, poll_timeout_ms, getLoggerName());
+    std::weak_ptr<RdKafka::Consumer> ref = new_consumer;
+
+    if (consumer_ref != consumers.end())
+        consumer_ref->swap(ref);
+    else
+        consumers.push_back(ref);
+
+    return new_consumer;
+}
+
 std::shared_ptr<RdKafka::Producer> Kafka::getProducer()
 {
     if (producer)
         return producer;
 
-    std::scoped_lock lock(producer_mutex);
+    std::lock_guard<std::mutex> lock{producer_mutex};
     /// Check again in case of losing the race
     if (producer)
         return producer;

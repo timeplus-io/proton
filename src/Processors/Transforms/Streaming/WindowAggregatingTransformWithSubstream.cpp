@@ -33,10 +33,8 @@ void WindowAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
 {
     assert(substream_ctx);
 
-    auto finalized_watermark = chunk_ctx->getWatermark();
     SCOPE_EXIT({
         substream_ctx->resetRowCounts();
-        substream_ctx->finalized_watermark = finalized_watermark;
     });
 
     if ((params->emit_mode == Streaming::EmitMode::PeriodicWatermark || params->emit_mode == Streaming::EmitMode::PeriodicWatermarkOnUpdate) && !substream_ctx->hasNewData())
@@ -44,7 +42,7 @@ void WindowAggregatingTransformWithSubstream::finalize(const SubstreamContextPtr
 
     /// Finalize current watermark
     auto start = MonotonicMilliseconds::now();
-    doFinalize(finalized_watermark, substream_ctx, chunk_ctx);
+    doFinalize(chunk_ctx->getWatermark(), substream_ctx, chunk_ctx);
     auto end = MonotonicMilliseconds::now();
 
     LOG_INFO(

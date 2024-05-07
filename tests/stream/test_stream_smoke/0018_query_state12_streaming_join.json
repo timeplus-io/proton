@@ -67,7 +67,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test19_changelog_kv_stream;"},
                         {"client":"python", "query_type": "table", "exist":"test19_test19_changelog_kv_stream1", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream3(i int, s string);"},
                         {"client":"python", "query_type": "table", "exist":"test19_test19_changelog_kv_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_changelog_kv_stream(ii int, ss string) primary key ss settings mode='changelog_kv';"},
-                        {"client":"python", "query_type": "stream", "query_id":"19351", "wait":1, "terminate":"manual", "query":"subscribe to select i, s, ii, ss, _tp_delta from test19_left_stream3 inner join test19_changelog_kv_stream on i == ii settings checkpoint_interval=1;"},
+                        {"client":"python", "query_type": "stream", "query_id":"19351", "wait":1, "terminate":"manual", "query":"subscribe to select i, s, ii, ss from test19_left_stream3 inner join test19_changelog_kv_stream on i == ii settings checkpoint_interval=1;"},
                         {"client":"python", "query_type": "table", "depends_on":"19351", "wait":1, "query": "insert into test19_changelog_kv_stream (ii, ss) values (1, 's1');"},
                         {"client":"python", "query_type": "table", "kill":"19351", "kill_wait":3, "wait":1, "query": "insert into test19_left_stream3 (i, s) values (1, 's1');"}
                     ]
@@ -87,13 +87,13 @@
                 {
                     "query_id":"19351",
                     "expected_results":[
-                        [1, "s1", 1, "s1", 1]
+                        [1, "s1", 1, "s1"]
                     ]
                 },
                 {
                     "query_id":"19351-1",
                     "expected_results":[
-                        [1, "s1", 1, "s2", 1]
+                        [1, "s1", 1, "s2"]
                     ]
                 }
             ]
