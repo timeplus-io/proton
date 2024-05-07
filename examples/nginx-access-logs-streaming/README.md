@@ -112,6 +112,8 @@ It can significantly degrade the performance of the server on which it is run an
 To avoid the performance and scalability limitations of the selected stack, since the blog itself is already hosted on AWS, I'm going to perform the analysis using a separate EC2 instance. 
 
 I will install Timeplus Proton on a separate EC2 instance and make the `/var/log/nginx/` folder available over a readonly NFS share. In other words, the Ghost blog and Timeplus proton EC2 instances will be inside the same VPC subnet making it easy to securely share the access logs between the two instances over a readonly NFS share.
+
+![AWS VPC Deployment](Timeplus_Proton_Nginx_Analysis.drawio.png)
  
 This approach of using NFS (instead of [Amazon EFS](https://docs.aws.amazon.com/efs/latest/ug/whatisefs.html)) allows us to keep the costs of the solution down since there will be no egress fees while also being secure.
 
