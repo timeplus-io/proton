@@ -652,7 +652,12 @@ Query id: d355157b-d9eb-4d27-8e5f-950d60b0385f
 ```
 
 ## Summary
-The post highlights Timeplus Proton's log-handling and fast aggregations capabilities for real-time and historical log analysis. Timeplus Proton leverages ClickHouse's efficient columnar storage and underlying query engine.
+The post highlights Timeplus Proton's ability to leverage ClickHouse's efficient columnar storage and underlying query engine for log-handling and fast aggregations for real-time and historical log analysis.
+
+Although the analysis and visualization was a bit ad-hoc, proper data visualization and analytics tools like [Grafana](https://grafana.com/) and [Metabase](https://www.metabase.com/) can be used for the same outcome, provided that a compatible plugin or driver is available for the data source. Timeplus Proton supports being used as a data source for either Grafana or Metabase as they offer a [Grafana plugin](https://grafana.com/grafana/plugins/timeplus-proton-datasource/) as well as a [Metabase driver](https://github.com/timeplus-io/metabase-proton-driver).
+
+My next blog post will revisit the analysis covered in this post using one of these data visualization and analytics tools.
+
 
 ## Footnotes
 [^1]: [ClickTail Introduction](https://altinity.com/blog/2018-3-12-clicktail-introduction)
