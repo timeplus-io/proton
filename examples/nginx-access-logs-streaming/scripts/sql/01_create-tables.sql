@@ -16,7 +16,6 @@ CREATE STREAM IF NOT EXISTS nginx_historical_access_log
 	user_agent string,
 	malicious_request string
 ) 
-ENGINE = MergeTree
 ORDER BY remote_ip
 SETTINGS event_time_column='date_time';
 
@@ -32,6 +31,5 @@ CREATE STREAM IF NOT EXISTS nginx_ipinfo
     continent_name string,
     isEU bool
 )
-ENGINE MergeTree
 PRIMARY KEY remote_ip
 ORDER BY remote_ip;
