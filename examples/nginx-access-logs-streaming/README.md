@@ -649,6 +649,8 @@ Query id: d355157b-d9eb-4d27-8e5f-950d60b0385f
 50 rows in set. Elapsed: 0.068 sec. Processed 68.29 thousand rows, 642.63 KB (1.01 million rows/s., 9.51 MB/s.)
 ```
 
+## Summary
+The post highlights Timeplus Proton's log-handling and fast aggregations capabilities for real-time and historical log analysis. Timeplus Proton leverages ClickHouse's efficient columnar storage and underlying query engine.
 
 ## Footnotes
 [^1]: [ClickTail Introduction](https://altinity.com/blog/2018-3-12-clicktail-introduction)
