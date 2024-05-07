@@ -161,7 +161,7 @@ Export list for ip-172-31-17-58:
 8. Don't forget to add an inbound rule for NFS (on port `2049`) in the security group for the Ghost blog instance.
 
 
-### NFS Client Setup
+### NFS Client and Timeplus Proton Setup
 1. SSH into the server for Timeplus Proton.
 
 2. Install NFS client components:
@@ -397,13 +397,31 @@ cat sql/<file-name>.sql | ./proton client --host 127.0.0.1 --multiquery
 The ingestion of both files: `access.log.csv` and `access.ipinfo.csv` was pretty fast with each import completing under a second on my machine: 
 ```bash
 -- access.log.csv
+INSERT INTO nginx_historical_access_log (remote_ip, rfc1413_ident, remote_user, date_time_string, http_verb, path, http_ver, status, size, referer, user_agent, malicious_request) SELECT
+  remote_ip, rfc1413_ident, remote_user, date_time, http_verb, path, http_ver, status, size, referer, user_agent, malicious_request
+FROM
+  file('access.log.csv', 'CSVWithNames', 'remote_ip ipv4, rfc1413_ident string, remote_user string, date_time string, http_verb string, path string, http_ver string, status uint32, size uint32, referer string, user_agent string, malicious_request string')
+SETTINGS
+  max_insert_threads = 8
+SETTINGS max_insert_threads = 8
+
 Query id: 711127ab-132c-4381-bdbd-0d109b958cea
 
 Ok.
 
 0 rows in set. Elapsed: 0.128 sec. Processed 65.25 thousand rows, 16.25 MB (508.14 thousand rows/s., 126.51 MB/s.)
+```
 
+```bash
 -- access.ipinfo.csv
+INSERT INTO nginx_ipinfo (remote_ip, city, region, country, country_name, country_flag_emoji, country_flag_unicode, continent_name, isEU) SELECT
+  ip, city, region, country, country_name, country_flag_emoji, country_flag_unicode, continent_name, isEU
+FROM
+  file('access.ipinfo.csv', 'CSVWithNames', 'ip ipv4, city string, region string, country string, country_name string, country_flag_emoji string, country_flag_unicode string, continent_name string, isEU bool')
+SETTINGS
+  max_insert_threads = 8
+SETTINGS max_insert_threads = 8
+
 Query id: 2e22e9d9-d6d9-43b5-ae05-f06f93b66c2a
 
 Ok.
