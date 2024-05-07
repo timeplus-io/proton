@@ -1,11 +1,27 @@
 # Analyzing Nginx Access Logs using Timeplus Proton 
 In a [recent blog post](https://www.timeplus.com/post/log-stream-analysis), we walked through three different ways of using Timeplus Proton to ingest and analyse a log file in real-time.
 
-I’ll explore a similar theme in the first part of this post: ad-hoc analysis of web traffic, in real-time, using Timeplus Proton. I will use a Node.js blog that is behind an Nginx web server for the analysis. 
+In this post, I will use Timeplus Proton to show how to perform: 
+* real-time analysis of web traffic 
+* historical analysis of web traffic
+  
+I will use an Nginx web server for the analysis.
+ 
 
-In the second part of this post, I will analyze past traffic stats for the blog. I'll compare historical traffic stats obtained using Timeplus Proton with traffic stats reported by [Umami](https://umami.is). (Umami is an open source, privacy-focused alternative to Google Analytics.) 
+## Introducing a New Contender for SQL-based Observability
+[SQL-based Observability](https://clickhouse.com/blog/the-state-of-sql-based-observability#is-sql-based-observability-applicable-to-my-use-case) is steadily growing in popularity as an alternative to the [ELK stack](https://aws.amazon.com/what-is/elk-stack/) and the major tool at the center of this trend is ClickHouse due to its blazing-fast log-handling features. 
 
-The numbers from Timeplus Proton should be of higher accuracy than the numbers reported by Umami because Umami, like Google Analytics, is a JavaScript-based analytics product and thus susceptible to under-reporting traffic from users with ad blocking enabled.
+Two metrics that help ClickHouse stand out relative to alternatives are:
+* ingestion speed and
+* query speed.
+
+For instance, Uber's Log Analytics platform, which used to be based on ELK, could only handle [~25.5k docs per second](https://www.elastic.co/blog/data-ingestion-elasticsearch) compared to an ingestion speed of [300K logs per second](https://www.uber.com/en-PT/blog/logging/) on a single ClickHouse node.
+
+More than 80% of their queries are aggregation queries but ELK was not designed to support fast aggregations across large datasets. This lead to very slow query speeds for aggregation queries over a 1-hour window (on a 1.3TB dataset) and frequent time outs for aggregations over a 6-hour window. 
+
+ClickHouse's columnar design allows it to support fast aggregations across large datasets out-of-the-box. The Uber team were able to further speedup the execution time of aggregation queries on ClickHouse by *materializing frequently queried fields into their own columns*. The historical analysis in the second part of this blog will make use of this technique.
+
+Timeplus Proton extends the already excellent log-handling features of ClickHouse with streaming making it a perfect candidate for our first and second tasks: real-time traffic analysis and historical traffic analysis. 
 
 ## Background
 The blog that we will using is my personal blog which I launched back in 2020. It's a [Ghost](https://ghost.org/) blog hosted on AWS. Ghost is written in JavaScript/Node.js and is completely [open source](https://github.com/tryghost/ghost).
@@ -69,22 +85,6 @@ du -shL /var/www/ghost/content/logs/
 692M  /var/www/ghost/content/logs/
 ```
 To keep things simple, I'll only make use of the access logs for Nginx in this post.
-
-
-## Introducing a New Contender for SQL-based Observability
-[SQL-based Observability](https://clickhouse.com/blog/the-state-of-sql-based-observability#is-sql-based-observability-applicable-to-my-use-case) is steadily growing in popularity as an alternative to the [ELK stack](https://aws.amazon.com/what-is/elk-stack/) and the major tool at the center of this trend is ClickHouse due to its blazing-fast log-handling features. 
-
-Two metrics that help ClickHouse stand out relative to alternatives are:
-* ingestion speed and
-* query speed.
-
-For instance, Uber's Log Analytics platform, which used to be based on ELK, could only handle [~25.5k docs per second](https://www.elastic.co/blog/data-ingestion-elasticsearch) compared to an ingestion speed of [300K logs per second](https://www.uber.com/en-PT/blog/logging/) on a single ClickHouse node.
-
-More than 80% of their queries are aggregation queries but ELK was not designed to support fast aggregations across large datasets. This lead to very slow query speeds for aggregation queries over a 1-hour window (on a 1.3TB dataset) and frequent time outs for aggregations over a 6-hour window. 
-
-ClickHouse's columnar design allows it to support fast aggregations across large datasets out-of-the-box. The Uber team were able to further speedup the execution time of aggregation queries on ClickHouse by *materializing frequently queried fields into their own columns*. The historical analysis in the second part of this blog will make use of this technique.
-
-Timeplus Proton extends the already excellent log-handling features of ClickHouse with streaming making it a perfect candidate for our first and second tasks: real-time traffic analysis and historical traffic analysis. 
 
 
 # Real-time Analysis of Web Traffic
