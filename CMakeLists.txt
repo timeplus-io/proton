@@ -247,26 +247,12 @@ if (ENABLE_BUILD_PATH_MAPPING)
     set (CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} -ffile-prefix-map=${PROJECT_SOURCE_DIR}=.")
 endif ()
 
-if (${CMAKE_VERSION} VERSION_LESS "3.12.4")
-    # CMake < 3.12 doesn't support setting 20 as a C++ standard version.
-    # We will add C++ standard controlling flag in CMAKE_CXX_FLAGS manually for now.
-
-    if (COMPILER_GCC OR COMPILER_CLANG)
-        # to make numeric_limits<__int128> works with GCC
-        set (_CXX_STANDARD "gnu++2a")
-    else ()
-        set (_CXX_STANDARD "c++2a")
-    endif ()
-
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=${_CXX_STANDARD}")
-else ()
-    set (CMAKE_CXX_STANDARD 23)
-    set (CMAKE_CXX_EXTENSIONS ON) # Same as gnu++2a (ON) vs c++2a (OFF): https://cmake.org/cmake/help/latest/prop_tgt/CXX_EXTENSIONS.html
-    set (CMAKE_CXX_STANDARD_REQUIRED ON)
-endif ()
+set (CMAKE_CXX_STANDARD 23)
+set (CMAKE_CXX_EXTENSIONS OFF)
+set (CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set (CMAKE_C_STANDARD 11)
-set (CMAKE_C_EXTENSIONS ON)
+set (CMAKE_C_EXTENSIONS ON) # required by most contribs written in C
 set (CMAKE_C_STANDARD_REQUIRED ON)
 
 # Compiler-specific coverage flags e.g. -fcoverage-mapping for gcc
@@ -397,8 +383,11 @@ endif ()
 
 set (CMAKE_POSTFIX_VARIABLE "CMAKE_${CMAKE_BUILD_TYPE_UC}_POSTFIX")
 
-set (CMAKE_POSITION_INDEPENDENT_CODE OFF)
-if (OS_LINUX AND NOT ARCH_ARM)
+if (NOT SANITIZE)
+    set (CMAKE_POSITION_INDEPENDENT_CODE OFF)
+endif()
+
+if (OS_LINUX AND NOT (ARCH_AARCH64 OR ARCH_S390X) AND NOT SANITIZE)
     # Slightly more efficient code can be generated
     # It's disabled for ARM because otherwise proton cannot run on Android.
     set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -fno-pie")

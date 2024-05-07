@@ -971,7 +971,7 @@ Pipe RangeHashedDictionary<dictionary_key_type>::read(const Names & column_names
     DictionarySourceCoordinator::ReadColumnsFunc read_keys_func = [dictionary_copy = dictionary](
         const Strings & attribute_names,
         const DataTypes & result_types,
-        const Columns & key_columns,
+        const Columns & key_columns_,
         const DataTypes,
         const Columns &)
     {
@@ -982,15 +982,15 @@ Pipe RangeHashedDictionary<dictionary_key_type>::read(const Names & column_names
         Columns result;
         result.reserve(attribute_names_size);
 
-        const auto & key_column = key_columns.back();
+        const auto & key_column = key_columns_.back();
 
-        const auto * key_to_index_column = typeid_cast<const ColumnUInt64 *>(key_column.get());
-        if (!key_to_index_column)
+        const auto * key_to_index_column_ = typeid_cast<const ColumnUInt64 *>(key_column.get());
+        if (!key_to_index_column_)
             throw Exception(ErrorCodes::LOGICAL_ERROR,
                 "Dictionary {} read expect indexes column with type uint64",
                 range_dictionary_ptr->getFullName());
 
-        const auto & data = key_to_index_column->getData();
+        const auto & data = key_to_index_column_->getData();
 
         for (size_t i = 0; i < attribute_names_size; ++i)
         {

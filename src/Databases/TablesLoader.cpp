@@ -170,7 +170,7 @@ void TablesLoader::removeUnresolvableDependencies(bool remove_loaded)
     }
 }
 
-void TablesLoader::loadTablesInTopologicalOrder(ThreadPool & pool)
+void TablesLoader::loadTablesInTopologicalOrder(ThreadPool & pool_)
 {
     /// Load independent tables in parallel.
     /// Then remove loaded tables from dependency graph, find tables/dictionaries that do not have unresolved dependencies anymore,
@@ -184,7 +184,7 @@ void TablesLoader::loadTablesInTopologicalOrder(ThreadPool & pool)
         assert(metadata.parsed_tables.size() == tables_processed + metadata.independent_database_objects.size() + getNumberOfTablesWithDependencies());
         logDependencyGraph();
 
-        startLoadingIndependentTables(pool, level);
+        startLoadingIndependentTables(pool_, level);
 
         TableNames new_independent_database_objects;
         for (const auto & table_name : metadata.independent_database_objects)
@@ -198,7 +198,7 @@ void TablesLoader::loadTablesInTopologicalOrder(ThreadPool & pool)
             removeResolvedDependency(info_it, new_independent_database_objects);
         }
 
-        pool.wait();
+        pool_.wait();
 
         metadata.independent_database_objects = std::move(new_independent_database_objects);
         ++level;
@@ -238,7 +238,7 @@ DependenciesInfosIter TablesLoader::removeResolvedDependency(const DependenciesI
     return metadata.dependencies_info.erase(info_it);
 }
 
-void TablesLoader::startLoadingIndependentTables(ThreadPool & pool, size_t level)
+void TablesLoader::startLoadingIndependentTables(ThreadPool & pool_, size_t level)
 {
     size_t total_tables = metadata.parsed_tables.size();
 
@@ -246,7 +246,7 @@ void TablesLoader::startLoadingIndependentTables(ThreadPool & pool, size_t level
 
     for (const auto & table_name : metadata.independent_database_objects)
     {
-        pool.scheduleOrThrowOnError([this, total_tables, &table_name]()
+        pool_.scheduleOrThrowOnError([this, total_tables, &table_name]()
         {
             const auto & path_and_query = metadata.parsed_tables[table_name];
             databases[table_name.database]->loadTableFromMetadata(global_context, path_and_query.path, table_name, path_and_query.ast, force_restore);
