@@ -32,6 +32,11 @@ ReplayStreamTransform::ReplayStreamTransform(const Block & header, Float32 repla
     sn_index = header.getPositionByName(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID);
 }
 
+/**
+ * @brief put the row that has different time into different chunk.
+ * For example: input_chunk: [1, 1, 1, 2, 2, 2, 3, 3, 3]
+ * After the cutChunk, the output_chunks will be [[1, 1, 1], [2, 2, 2], [3, 3, 3]]
+ */
 void ReplayStreamTransform::cutChunk(Chunk & input_chunk)
 {
     assert(input_chunk.rows() > 0);
@@ -46,7 +51,6 @@ void ReplayStreamTransform::cutChunk(Chunk & input_chunk)
         output_chunks.push(Chunk());
         output_chunks.back().swap(chunk);
     };
-
     while (index < input_chunk.rows())
     {
         if (columns[time_index]->getInt(index) != columns[time_index]->getInt(cur_index))
@@ -126,7 +130,13 @@ void ReplayStreamTransform::transform(Chunk & input_chunk, Chunk & output_chunk)
     const auto & columns = output_chunk.getColumns();
     auto this_batch_last_sn = columns[sn_index]->getInt(output_chunk.rows() - 1);
 
-    /// mark the historical data replay end and begin stream query.
+    /**
+     * mark the historical data replay end and begin stream query.
+     * If insert a block such as insert into test_rep(id, time_col) values (1, '2020-02-02 20:01:14')(2, '2020-02-02 20:01:14')(3, '2020-02-02 20:01:17')(4, '2020-02-02 20:01:20');
+     * After the cutChunk, the output_chunks will be [[1, '2020-02-02 20:01:14'], [2, '2020-02-02 20:01:14'], [3, '2020-02-02 20:01:17'], [4, '2020-02-02 20:01:20']], and the last_sn will be 0.
+     * And each chunk in the output_chunks will have the same time sn, when [1, '2020-02-02 20:01:14'] chunk came, this_batch_last_sn >= last_sn, but the output_chunks is not empty,
+     * we still need to replay the remain data.
+    */
     if (this_batch_last_sn >= last_sn && output_chunks.empty())
         enable_replay = false;
 
@@ -141,7 +151,7 @@ void ReplayStreamTransform::transform(Chunk & input_chunk, Chunk & output_chunk)
                 "Unoreded data checked, ReplayStreamTransform need ordered data, replay_time_col: {}, last_batch_time: {}, "
                 "this_batch_time: {}",
                 this->replay_time_col,
-                last_batch_time,
+                this->last_batch_time.value(),
                 this_batch_time),
             ErrorCodes::LOGICAL_ERROR);
 
