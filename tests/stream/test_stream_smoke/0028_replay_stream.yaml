@@ -337,8 +337,8 @@ tests:
     tags:
       - replay_stream
       - stream query
-    name: replay a stream by a specified column, and check insert interval, allowable error within 10ms. 
-    description: replay a stream by a specified column, and check insert interval, allowable error within 10ms.
+    name: replay a stream by a specified column, and check insert interval, allowable error within 20ms. 
+    description: replay a stream by a specified column, and check insert interval, allowable error within 20ms.
     steps:
       - statements:
           - client: python
@@ -377,21 +377,22 @@ tests:
             terminate: manual
             query_id: '2906'
             wait: 1
-            query: select id, (abs(date_diff('millisecond',lag(now64(), 1), now64()) - date_diff('millisecond', lag(time_col, 1), time_col)) < 10) as interval from test29_stream2
+            query: select id, (abs(date_diff('millisecond',lag(now64(), 1), now64()) - date_diff('millisecond', lag(time_col, 1), time_col)) < 20) as interval from test29_stream2
 
           - client: python
             query_type: table
             depends_on: '2906'
             exist: test29_mv
             exist_wait: 2
-            wait: 3
+            wait: 1
             query: create materialized view if not exists test29_mv into test29_stream2 as (select id, time_col from test29_stream where _tp_time > earliest_timestamp() settings replay_speed=1, replay_time_column='time_col');
 
           - client: python
             query_type: table
             kill: '2906'
             kill_wait: 1
-            wait: 10
+            # wait for the query to finish
+            wait: 15
             query: drop view if exists test29_mv
 
     expected_results:

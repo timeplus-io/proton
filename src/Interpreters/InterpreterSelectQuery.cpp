@@ -2397,8 +2397,8 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             assert(storagestream);
 
             const String & replay_time_col = settings.replay_time_column;
-            if (std::ranges::none_of(required_columns, [](const auto & name) { return name == ProtonConsts::RESERVED_APPEND_TIME; }))
-                required_columns.emplace_back(ProtonConsts::RESERVED_APPEND_TIME);
+            if (std::ranges::none_of(required_columns, [](const auto & name) { return name == replay_time_col; }))
+                required_columns.emplace_back(replay_time_col);
 
             if (std::ranges::none_of(
                     required_columns, [](const auto & name) { return name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID; }))
