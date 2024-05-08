@@ -27,7 +27,8 @@ ReplayStreamTransform::ReplayStreamTransform(const Block & header, Float32 repla
     auto & type = header.getByPosition(time_index).type;
     /// user defined replay_time_col must be DateTime64
     if (replay_time_col != ProtonConsts::RESERVED_APPEND_TIME && !isDateTime64(type))
-            throw Exception(fmt::format("ReplayStreamTransform need datatime64 type column, but got {}", type->getName()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            fmt::format("ReplayStreamTransform need datatime64 type column, but got {}", type->getName()), ErrorCodes::LOGICAL_ERROR);
     sn_index = header.getPositionByName(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID);
 }
 
@@ -117,7 +118,7 @@ void ReplayStreamTransform::transform(Chunk & input_chunk, Chunk & output_chunk)
         has_input = false;
         return;
     }
-    
+
     output_chunk.swap(output_chunks.front());
     // output_chunk.swap(output_chunks.front());
     output_chunks.pop();
@@ -133,6 +134,16 @@ void ReplayStreamTransform::transform(Chunk & input_chunk, Chunk & output_chunk)
     wait_interval_ms
         = static_cast<Int64>(std::lround((last_batch_time.has_value() ? this_batch_time - last_batch_time.value() : 0) / replay_speed));
     last_batch_time = this_batch_time;
+
+    if (wait_interval_ms < 0)
+        throw Exception(
+            fmt::format(
+                "Unoreded data checked, ReplayStreamTransform need ordered data, replay_time_col: {}, last_batch_time: {}, "
+                "this_batch_time: {}",
+                this->replay_time_col,
+                last_batch_time,
+                this_batch_time),
+            ErrorCodes::LOGICAL_ERROR);
 
     while (wait_interval_ms > 0)
     {
