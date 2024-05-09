@@ -206,7 +206,7 @@ Converts a date or date with time to a UInt8 number containing the number of the
 
 Aliases: `DAYOFMONTH`, `DAY`.
 
-## toDayOfWeek {#todayofweek}
+## toDayOfWeek
 
 Converts a date or date with time to a UInt8 number containing the number of the day of the week (Monday is 1, and Sunday is 7).
 
