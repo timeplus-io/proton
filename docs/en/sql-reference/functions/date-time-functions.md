@@ -208,11 +208,26 @@ Aliases: `DAYOFMONTH`, `DAY`.
 
 ## toDayOfWeek
 
-Converts a date or date with time to a UInt8 number containing the number of the day of the week (Monday is 1, and Sunday is 7).
+Converts a date or date with time to a UInt8 number containing the number of the day of the week.
+
+The two-argument form of `toDayOfWeek()` enables you to specify whether the week starts on Monday or Sunday, and whether the return value should be in the range from 0 to 6 or 1 to 7. If the mode argument is ommited, the default mode is 0. The time zone of the date can be specified as the third argument.
+
+| Mode | First day of week | Range                                          |
+|------|-------------------|------------------------------------------------|
+| 0    | Monday            | 1-7, Monday = 1, Tuesday = 2, ..., Sunday = 7  |
+| 1    | Monday            | 0-6, Monday = 0, Tuesday = 1, ..., Sunday = 6  |
+| 2    | Sunday            | 0-6, Sunday = 0, Monday = 1, ..., Saturday = 6 |
+| 3    | Sunday            | 1-7, Sunday = 1, Monday = 2, ..., Saturday = 7 |
 
 Alias: `DAYOFWEEK`.
 
-## toHour {#tohour}
+**Syntax**
+
+``` sql
+toDayOfWeek(t[, mode[, timezone]])
+```
+
+## toHour
 
 Converts a date with time to a UInt8 number containing the number of the hour in 24-hour time (0-23).
 This function assumes that if clocks are moved ahead, it is by one hour and occurs at 2 a.m., and if clocks are moved back, it is by one hour and occurs at 3 a.m. (which is not always true – even in Moscow the clocks were twice changed at a different time).
@@ -298,13 +313,28 @@ Returns the date.
 Rounds down a date or date with time to the nearest Monday.
 Returns the date.
 
-## toStartOfWeek(t\[,mode\]) {#tostartofweektmode}
+Alias: `LAST_DAY`.
 
-Rounds down a date or date with time to the nearest Sunday or Monday by mode.
+If `toLastDayOfMonth` is called with an argument of type `Date` greater then 2149-05-31, the result will be calculated from the argument 2149-05-31 instead.
+
+## toMonday
+
+Rounds down a date, or date with time, to the nearest Monday.
 Returns the date.
-The mode argument works exactly like the mode argument to toWeek(). For the single-argument syntax, a mode value of 0 is used.
 
-## toStartOfDay {#tostartofday}
+## toStartOfWeek
+
+Rounds a date or date with time down to the nearest Sunday or Monday.
+Returns the date.
+The mode argument works exactly like the mode argument in function `toWeek()`. If no mode is specified, mode is assumed as 0.
+
+**Syntax**
+
+``` sql
+toStartOfWeek(t[, mode[, timezone]])
+```
+
+## toStartOfDay
 
 Rounds down a date with time to the start of the day.
 
@@ -437,10 +467,12 @@ Converts a date or date with time to a UInt16 number containing the ISO Year num
 
 Converts a date or date with time to a UInt8 number containing the ISO Week number.
 
-## toWeek(date\[,mode\]) {#toweekdatemode}
+## toWeek
 
-This function returns the week number for date or datetime. The two-argument form of toWeek() enables you to specify whether the week starts on Sunday or Monday and whether the return value should be in the range from 0 to 53 or from 1 to 53. If the mode argument is omitted, the default mode is 0.
-`toISOWeek()`is a compatibility function that is equivalent to `toWeek(date,3)`.
+This function returns the week number for date or datetime. The two-argument form of `toWeek()` enables you to specify whether the week starts on Sunday or Monday and whether the return value should be in the range from 0 to 53 or from 1 to 53. If the mode argument is omitted, the default mode is 0.
+
+`toISOWeek()` is a compatibility function that is equivalent to `toWeek(date,3)`.
+
 The following table describes how the mode argument works.
 
 | Mode | First day of week | Range | Week 1 is the first week …    |
@@ -464,13 +496,15 @@ For mode values with a meaning of “with 4 or more days this year,” weeks are
 
 For mode values with a meaning of “contains January 1”, the week contains January 1 is week 1. It does not matter how many days in the new year the week contained, even if it contained only one day.
 
+**Syntax**
+
 ``` sql
-toWeek(date, [, mode][, Timezone])
+toWeek(t[, mode[, time_zone]])
 ```
 
 **Arguments**
 
--   `date` – Date or DateTime.
+-   `t` – Date or DateTime.
 -   `mode` – Optional parameter, Range of values is \[0,9\], default is 0.
 -   `Timezone` – Optional parameter, it behaves like any other conversion function.
 
@@ -486,13 +520,19 @@ SELECT toDate('2016-12-27') AS date, toWeek(date) AS week0, toWeek(date,1) AS we
 └────────────┴───────┴───────┴───────┘
 ```
 
-## toYearWeek(date\[,mode\]) {#toyearweekdatemode}
+## toYearWeek
 
 Returns year and week for a date. The year in the result may be different from the year in the date argument for the first and the last week of the year.
 
-The mode argument works exactly like the mode argument to toWeek(). For the single-argument syntax, a mode value of 0 is used.
+The mode argument works exactly like the mode argument to `toWeek()`. For the single-argument syntax, a mode value of 0 is used.
 
-`toISOYear()`is a compatibility function that is equivalent to `intDiv(toYearWeek(date,3),100)`.
+`toISOYear()` is a compatibility function that is equivalent to `intDiv(toYearWeek(date,3),100)`.
+
+**Syntax**
+
+``` sql
+toYearWeek(t[, mode[, timezone]])
+```
 
 **Example**
 
@@ -506,7 +546,160 @@ SELECT toDate('2016-12-27') AS date, toYearWeek(date) AS yearWeek0, toYearWeek(d
 └────────────┴───────────┴───────────┴───────────┘
 ```
 
-## date\_trunc {#date_trunc}
+## age
+
+Returns the `unit` component of the difference between `startdate` and `enddate`. The difference is calculated using a precision of 1 second.
+E.g. the difference between `2021-12-29` and `2022-01-01` is 3 days for `day` unit, 0 months for `month` unit, 0 years for `year` unit.
+
+For an alternative to `age`, see function `date\_diff`.
+
+**Syntax**
+
+``` sql
+age('unit', startdate, enddate, [timezone])
+```
+
+**Arguments**
+
+-   `unit` — The type of interval for result. [String](../../sql-reference/data-types/string.md).
+    Possible values:
+
+    - `second` (possible abbreviations: `ss`, `s`)
+    - `minute` (possible abbreviations: `mi`, `n`)
+    - `hour` (possible abbreviations: `hh`, `h`)
+    - `day` (possible abbreviations: `dd`, `d`)
+    - `week` (possible abbreviations: `wk`, `ww`)
+    - `month` (possible abbreviations: `mm`, `m`)
+    - `quarter` (possible abbreviations: `qq`, `q`)
+    - `year` (possible abbreviations: `yyyy`, `yy`)
+
+-   `startdate` — The first time value to subtract (the subtrahend). [Date](../../sql-reference/data-types/date.md), [Date32](../../sql-reference/data-types/date32.md), [DateTime](../../sql-reference/data-types/datetime.md) or [DateTime64](../../sql-reference/data-types/datetime64.md).
+
+-   `enddate` — The second time value to subtract from (the minuend). [Date](../../sql-reference/data-types/date.md), [Date32](../../sql-reference/data-types/date32.md), [DateTime](../../sql-reference/data-types/datetime.md) or [DateTime64](../../sql-reference/data-types/datetime64.md).
+
+-   `timezone` — [Timezone name](../../operations/server-configuration-parameters/settings.md#server_configuration_parameters-timezone) (optional). If specified, it is applied to both `startdate` and `enddate`. If not specified, timezones of `startdate` and `enddate` are used. If they are not the same, the result is unspecified. [String](../../sql-reference/data-types/string.md).
+
+**Returned value**
+
+Difference between `enddate` and `startdate` expressed in `unit`.
+
+Type: [Int](../../sql-reference/data-types/int-uint.md).
+
+**Example**
+
+Query:
+
+``` sql
+SELECT age('hour', toDateTime('2018-01-01 22:30:00'), toDateTime('2018-01-02 23:00:00'));
+```
+
+Result:
+
+``` text
+┌─age('hour', toDateTime('2018-01-01 22:30:00'), toDateTime('2018-01-02 23:00:00'))─┐
+│                                                                                24 │
+└───────────────────────────────────────────────────────────────────────────────────┘
+```
+
+Query:
+
+``` sql
+SELECT
+    toDate('2022-01-01') AS e,
+    toDate('2021-12-29') AS s,
+    age('day', s, e) AS day_age,
+    age('month', s, e) AS month__age,
+    age('year', s, e) AS year_age;
+```
+
+Result:
+
+``` text
+┌──────────e─┬──────────s─┬─day_age─┬─month__age─┬─year_age─┐
+│ 2022-01-01 │ 2021-12-29 │       3 │          0 │        0 │
+└────────────┴────────────┴─────────┴────────────┴──────────┘
+```
+
+
+## date\_diff
+
+Returns the count of the specified `unit` boundaries crossed between the `startdate` and the `enddate`.
+The difference is calculated using relative units, e.g. the difference between `2021-12-29` and `2022-01-01` is 3 days for unit `day` (see [toRelativeDayNum](#torelativedaynum)), 1 month for unit `month` (see [toRelativeMonthNum](#torelativemonthnum)) and 1 year for unit `year` (see [toRelativeYearNum](#torelativeyearnum)).
+
+If unit `week` was specified, `date\_diff` assumes that weeks start on Monday. Note that this behavior is different from that of function `toWeek()` in which weeks start by default on Sunday.
+
+For an alternative to `date\_diff`, see function `age`.
+
+**Syntax**
+
+``` sql
+date_diff('unit', startdate, enddate, [timezone])
+```
+
+Aliases: `dateDiff`, `DATE_DIFF`.
+
+**Arguments**
+
+-   `unit` — The type of interval for result. [String](../../sql-reference/data-types/string.md).
+    Possible values:
+
+    - `second` (possible abbreviations: `ss`, `s`)
+    - `minute` (possible abbreviations: `mi`, `n`)
+    - `hour` (possible abbreviations: `hh`, `h`)
+    - `day` (possible abbreviations: `dd`, `d`)
+    - `week` (possible abbreviations: `wk`, `ww`)
+    - `month` (possible abbreviations: `mm`, `m`)
+    - `quarter` (possible abbreviations: `qq`, `q`)
+    - `year` (possible abbreviations: `yyyy`, `yy`)
+
+-   `startdate` — The first time value to subtract (the subtrahend). [Date](../../sql-reference/data-types/date.md), [Date32](../../sql-reference/data-types/date32.md), [DateTime](../../sql-reference/data-types/datetime.md) or [DateTime64](../../sql-reference/data-types/datetime64.md).
+
+-   `enddate` — The second time value to subtract from (the minuend). [Date](../../sql-reference/data-types/date.md), [Date32](../../sql-reference/data-types/date32.md), [DateTime](../../sql-reference/data-types/datetime.md) or [DateTime64](../../sql-reference/data-types/datetime64.md).
+
+-   `timezone` — [Timezone name](../../operations/server-configuration-parameters/settings.md#server_configuration_parameters-timezone) (optional). If specified, it is applied to both `startdate` and `enddate`. If not specified, timezones of `startdate` and `enddate` are used. If they are not the same, the result is unspecified. [String](../../sql-reference/data-types/string.md).
+
+**Returned value**
+
+Difference between `enddate` and `startdate` expressed in `unit`.
+
+Type: [Int](../../sql-reference/data-types/int-uint.md).
+
+**Example**
+
+Query:
+
+``` sql
+SELECT dateDiff('hour', toDateTime('2018-01-01 22:00:00'), toDateTime('2018-01-02 23:00:00'));
+```
+
+Result:
+
+``` text
+┌─dateDiff('hour', toDateTime('2018-01-01 22:00:00'), toDateTime('2018-01-02 23:00:00'))─┐
+│                                                                                     25 │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+Query:
+
+``` sql
+SELECT
+    toDate('2022-01-01') AS e,
+    toDate('2021-12-29') AS s,
+    dateDiff('day', s, e) AS day_diff,
+    dateDiff('month', s, e) AS month__diff,
+    dateDiff('year', s, e) AS year_diff;
+```
+
+Result:
+
+``` text
+┌──────────e─┬──────────s─┬─day_diff─┬─month__diff─┬─year_diff─┐
+│ 2022-01-01 │ 2021-12-29 │        3 │           1 │         1 │
+└────────────┴────────────┴──────────┴─────────────┴───────────┘
+```
+
+## date\_trunc
 
 Truncates date and time data to the specified part of date.
 
