@@ -1783,12 +1783,12 @@ namespace
 
     struct NameParseDateTime
     {
-        static constexpr auto name = "parseDateTime";
+        static constexpr auto name = "parse_datetime";
     };
 
     struct NameParseDateTimeInJodaSyntax
     {
-        static constexpr auto name = "parseDateTimeInJodaSyntax";
+        static constexpr auto name = "parse_datetime_in_joda_syntax";
     };
 
 

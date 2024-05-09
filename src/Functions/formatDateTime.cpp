@@ -1728,12 +1728,12 @@ struct NameFromUnixTime
 
 struct NameFormatDateTimeInJodaSyntax
 {
-    static constexpr auto name = "formatDateTimeInJodaSyntax";
+    static constexpr auto name = "format_datetime_in_joda_syntax";
 };
 
 struct NameFromUnixTimeInJodaSyntax
 {
-    static constexpr auto name = "fromUnixTimestampInJodaSyntax";
+    static constexpr auto name = "from_unix_timestamp_in_joda_syntax";
 };
 
 
