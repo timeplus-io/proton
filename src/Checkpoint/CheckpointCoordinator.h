@@ -69,11 +69,21 @@ public:
 
     void triggerLastCheckpointAndFlush();
 
+    enum class TriggeredResult : uint8_t
+    {
+        Success = 0,
+        Skipped = 1,
+        Failed = 2
+    };
+
+    /// \brief Trigger checkpoint for a query, and call the callback when the checkpoint is done.
+    TriggeredResult triggerCheckpointForQuery(const String & qid, std::function<void(CheckpointContextPtr)> && callback);
+
 private:
     void triggerCheckpoint(const String & qid, UInt64 checkpoint_interval);
     void removeExpiredCheckpoints(bool delete_marked);
 
-    bool doTriggerCheckpoint(const std::weak_ptr<PipelineExecutor> & executor, CheckpointContextPtr ckpt_ctx);
+    TriggeredResult doTriggerCheckpoint(CheckpointContextPtr ckpt_ctx);
 
     void resetCurrentCheckpointEpoch(const String & qid);
 

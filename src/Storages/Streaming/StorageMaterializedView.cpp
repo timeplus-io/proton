@@ -1,6 +1,7 @@
 #include <Storages/Streaming/StorageMaterializedView.h>
 #include <Storages/Streaming/StorageStream.h>
 
+#include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
 #include <Interpreters/DiskUtilChecker.h>
 #include <Interpreters/InterpreterCreateQuery.h>
@@ -167,15 +168,11 @@ StorageMaterializedView::State::~State()
 
 void StorageMaterializedView::State::terminate()
 {
-    /// Cancel pipeline executing first
-    is_cancelled = true;
+    if (is_cancelled.test_and_set())
+        return;
 
     if (thread.joinable())
         thread.join();
-
-    updateStatus(State::UNKNOWN);
-
-    err.store(ErrorCodes::OK);
 }
 
 void StorageMaterializedView::State::updateStatus(StorageMaterializedView::State::ThreadStatus status)
@@ -187,13 +184,14 @@ void StorageMaterializedView::State::updateStatus(StorageMaterializedView::State
 void StorageMaterializedView::State::waitStatusUntil(StorageMaterializedView::State::ThreadStatus target_status) const
 {
     auto current_status = thread_status.load(std::memory_order_relaxed);
-    while (current_status < target_status)
+    while (current_status != target_status)
     {
-        thread_status.wait(current_status, std::memory_order_relaxed);
+        if (is_cancelled.test())
+            break;
+
+        thread_status.wait(current_status);
         current_status = thread_status.load(std::memory_order_relaxed);
     }
-
-    checkException();
 }
 
 void StorageMaterializedView::State::setException(int code, const String & msg, bool log_error)
@@ -341,6 +339,7 @@ void StorageMaterializedView::startup()
     {
         auto start = MonotonicMilliseconds::now();
         background_state.waitStatusUntil(State::EXECUTING_PIPELINE);
+        background_state.checkException();
         auto end = MonotonicMilliseconds::now();
         LOG_INFO(
             log,
@@ -415,6 +414,9 @@ void StorageMaterializedView::checkDependencies() const
 
 void StorageMaterializedView::initBackgroundState()
 {
+    background_state.is_cancelled.clear();
+    background_state.err = ErrorCodes::OK;
+    background_state.updateStatus(State::UNKNOWN);
     background_state.thread = ThreadFromGlobalPool{[this]() {
         try
         {
@@ -431,7 +433,7 @@ void StorageMaterializedView::initBackgroundState()
             std::vector<Int64> recover_sns;
             while (1)
             {
-                if (background_state.is_cancelled)
+                if (background_state.is_cancelled.test())
                     break;
 
                 ++retry_times;
@@ -715,14 +717,14 @@ void StorageMaterializedView::executeBackgroundPipeline(BlockIO & io, ContextMut
     LOG_INFO(log, "Executing background pipeline for materialized view {}", getStorageID().getFullTableName());
     CompletedPipelineExecutor executor(io.pipeline);
     executor.setCancelCallback(
-        [this] { return background_state.is_cancelled.load(); }, local_context->getSettingsRef().interactive_delay / 1000);
+        [this] { return background_state.is_cancelled.test(); }, local_context->getSettingsRef().interactive_delay / 1000);
     executor.execute();
 
     /// If the pipeline is finished, we need check whether it's cancelled or not. If not, it's abnormal.
     /// For exmaple:
     /// A background query likes stream join table, and the table has no data, the background pipeline will be finished immediately.
     /// In this case, we need throw a exception to notify users and retry it.
-    if (!((*io.process_list_entry)->isKilled() || background_state.is_cancelled.load()))
+    if (!((*io.process_list_entry)->isKilled() || background_state.is_cancelled.test()))
         throw Exception(
             ErrorCodes::UNEXPECTED_ERROR_CODE,
             "The background pipeline for materialized view {} finished unexpectedly, it's abnormal.",
@@ -964,12 +966,48 @@ Streaming::DataStreamSemanticEx StorageMaterializedView::dataStreamSemantic() co
 
 void StorageMaterializedView::pause()
 {
-    /// TODO
+    if (background_state.thread_status.load() == State::PAUSED)
+    {
+        LOG_INFO(log, "Ignore pause since materialized view '{}' is already paused", getStorageID().getFullTableName());
+        return;
+    }
+
+    auto checkpointed_callback = [this](CheckpointContextPtr) {
+        background_state.terminate();
+        background_state.updateStatus(State::PAUSED);
+        LOG_INFO(log, "Paused background pipeline for query_id=`{}`", generateInnerQueryID(getStorageID()));
+    };
+
+    auto res
+        = CheckpointCoordinator::instance(nullptr).triggerCheckpointForQuery(generateInnerQueryID(getStorageID()), checkpointed_callback);
+
+    switch (res)
+    {
+        case CheckpointCoordinator::TriggeredResult::Success:
+            background_state.waitStatusUntil(State::PAUSED);
+            break;
+        case CheckpointCoordinator::TriggeredResult::Skipped:
+            checkpointed_callback(nullptr);
+            break;
+        case CheckpointCoordinator::TriggeredResult::Failed:
+            throw Exception(
+                ErrorCodes::UNEXPECTED_ERROR_CODE,
+                "Failed to pause background pipeline for query_id=`{}`",
+                generateInnerQueryID(getStorageID()));
+    }
 }
 
 void StorageMaterializedView::unpause()
 {
     /// TODO
+    if (background_state.thread_status.load() != State::PAUSED)
+    {
+        LOG_INFO(log, "Ignore unpause, since materialized view '{}' is not paused", getStorageID().getFullTableName());
+        return;
+    }
+
+    initBackgroundState();
+    LOG_INFO(log, "Unpaused background pipeline for query_id=`{}`", generateInnerQueryID(getStorageID()));
 }
 
 void registerStorageMaterializedView(StorageFactory & factory)

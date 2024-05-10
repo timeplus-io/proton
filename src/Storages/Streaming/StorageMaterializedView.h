@@ -116,16 +116,17 @@ private:
         enum ThreadStatus
         {
             UNKNOWN = 0,
-            CHECKING_DEPENDENCIES,
-            BUILDING_PIPELINE,
-            EXECUTING_PIPELINE,
-            FATAL /// Always last one
+            CHECKING_DEPENDENCIES = 1,
+            BUILDING_PIPELINE = 2,
+            EXECUTING_PIPELINE = 3,
+            PAUSED = 10,
+            FATAL = 255 /// Always last one
         };
         std::atomic<ThreadStatus> thread_status;
 
         String err_msg;
         std::atomic_int32_t err; /// != 0, background thread has exception
-        std::atomic_bool is_cancelled;
+        std::atomic_flag is_cancelled;
 
         ~State();
         void terminate();

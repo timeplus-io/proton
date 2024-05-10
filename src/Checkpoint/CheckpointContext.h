@@ -4,14 +4,16 @@
 #include <cassert>
 #include <filesystem>
 
+#include <Checkpoint/CheckpointRequestContext.h>
+
 namespace DB
 {
 class CheckpointCoordinator;
 
 struct CheckpointContext
 {
-    CheckpointContext(int64_t epoch_, std::string_view qid_, CheckpointCoordinator * coordinator_)
-        : epoch(epoch_), qid(qid_), coordinator(coordinator_)
+    CheckpointContext(int64_t epoch_, std::string_view qid_, CheckpointCoordinator * coordinator_, CheckpointRequestContextPtr request_ctx_ = nullptr)
+        : epoch(epoch_), qid(qid_), coordinator(coordinator_), request_ctx(request_ctx_)
     {
         assert(epoch >= 0);
         assert(!qid.empty());
@@ -25,6 +27,9 @@ struct CheckpointContext
     std::string qid;
 
     CheckpointCoordinator * coordinator = nullptr;
+
+    /// If not null, it is a checkpoint request, otherwise it is used to register or recover the query
+    CheckpointRequestContextPtr request_ctx;
 
     std::filesystem::path checkpointDir(const std::filesystem::path & base_dir) const
     {
