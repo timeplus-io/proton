@@ -72,6 +72,10 @@ public:
 
     bool supportsStreamingQuery() const override { return true; }
 
+    /// Pause/Unpause the background pipeline execution
+    void pause();
+    void unpause();
+
 private:
     /// Return true on success, false on failure
     void createInnerTable();
@@ -122,8 +126,6 @@ private:
         String err_msg;
         std::atomic_int32_t err; /// != 0, background thread has exception
         std::atomic_bool is_cancelled;
-
-        RecoveryPolicy recovery_policy;
 
         ~State();
         void terminate();

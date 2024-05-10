@@ -31,6 +31,7 @@
 #include <Parsers/ParserShowCreateFormatSchemaQuery.h>
 #include <Parsers/ParserShowFormatSchemasQuery.h>
 #include <Parsers/Streaming/ParserSubscribeQuery.h>
+#include <Parsers/Streaming/ParserPauseMaterializedViewQuery.h>
 /// proton : ends
 
 
@@ -44,6 +45,8 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     Streaming::ParserSubscribeQuery subscribe_p;
     Streaming::ParserUnsubscribeQuery unsubscribe_p;
     Streaming::ParserRecoverQuery recover_p;
+    Streaming::ParserPauseMaterializedViewQuery pause_p;
+    Streaming::ParserUnpauseMaterializedViewQuery unpause_p;
     ParserTablePropertiesQuery table_p;
     ParserDescribeTableQuery describe_table_p;
     ParserDescribeCacheQuery describe_cache_p;
@@ -76,6 +79,8 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || subscribe_p.parse(pos, query, expected)
         || unsubscribe_p.parse(pos, query, expected)
         || recover_p.parse(pos, query, expected)
+        || pause_p.parse(pos, query, expected)
+        || unpause_p.parse(pos, query, expected)
         || show_create_access_entity_p.parse(pos, query, expected) /// should be before `show_tables_p`
         /// proton: starts
         || show_create_format_schema_p.parse(pos, query, expected) /// should be before 'show_tables_p'

@@ -94,11 +94,15 @@
 #include <Parsers/ASTShowCreateFormatSchemaQuery.h>
 #include <Parsers/ASTShowFormatSchemasQuery.h>
 #include <Parsers/Streaming/ASTUnsubscribeQuery.h>
+#include <Parsers/Streaming/ASTPauseMaterializedViewQuery.h>
+#include <Parsers/Streaming/ASTUnpauseMaterializedViewQuery.h>
 #include <Interpreters/InterpreterCreateFormatSchemaQuery.h>
 #include <Interpreters/InterpreterDropFormatSchemaQuery.h>
 #include <Interpreters/InterpreterShowCreateFormatSchemaQuery.h>
 #include <Interpreters/InterpreterShowFormatSchemasQuery.h>
 #include <Interpreters/Streaming/InterpreterUnsubscribeQuery.h>
+#include <Interpreters/Streaming/InterpreterPauseMaterializedViewQuery.h>
+#include <Interpreters/Streaming/InterpreterUnpauseMaterializedViewQuery.h>
 /// proton : ends
 
 namespace ProfileEvents
@@ -329,6 +333,14 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTShowCreateFormatSchemaQuery>())
     {
         return std::make_unique<InterpreterShowCreateFormatSchemaQuery>(query, context);
+    }
+    else if (query->as<Streaming::ASTPauseMaterializedViewQuery>())
+    {
+        return std::make_unique<Streaming::InterpreterPauseMaterializedViewQuery>(query, context);
+    }
+    else if (query->as<Streaming::ASTUnpauseMaterializedViewQuery>())
+    {
+        return std::make_unique<Streaming::InterpreterUnpauseMaterializedViewQuery>(query, context);
     }
     // proton: ends
     else if (query->as<ASTDropFunctionQuery>())

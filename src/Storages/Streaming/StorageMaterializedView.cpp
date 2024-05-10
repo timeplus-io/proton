@@ -962,6 +962,16 @@ Streaming::DataStreamSemanticEx StorageMaterializedView::dataStreamSemantic() co
     return getTargetTable()->dataStreamSemantic();
 }
 
+void StorageMaterializedView::pause()
+{
+    /// TODO
+}
+
+void StorageMaterializedView::unpause()
+{
+    /// TODO
+}
+
 void registerStorageMaterializedView(StorageFactory & factory)
 {
     factory.registerStorage("MaterializedView", [](const StorageFactory::Arguments & args) {
