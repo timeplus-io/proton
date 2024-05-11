@@ -323,7 +323,8 @@ void StorageMaterializedView::startup()
     for (const auto & select_table_id : select_query.select_table_ids)
         DatabaseCatalog::instance().addDependency(select_table_id, storage_id);
 
-    DatabaseCatalog::instance().addDependency(target_table_id, storage_id);
+    if (!has_inner_table)
+        DatabaseCatalog::instance().addDependency(target_table_id, storage_id);
 
     /// Sync target table settings and ttls
     updateStorageSettingsAndTTLs();
@@ -367,7 +368,8 @@ void StorageMaterializedView::shutdown()
     for (const auto & select_table_id : select_query.select_table_ids)
         DatabaseCatalog::instance().removeDependency(select_table_id, storage_id);
 
-    DatabaseCatalog::instance().removeDependency(target_table_id, storage_id);
+    if (!has_inner_table)
+        DatabaseCatalog::instance().removeDependency(target_table_id, storage_id);
 }
 
 template <typename Duration>
