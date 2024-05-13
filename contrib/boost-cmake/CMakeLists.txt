@@ -153,9 +153,9 @@ target_include_directories (_boost_context PRIVATE ${LIBRARY_DIR})
 # coroutine
 
 set (SRCS_COROUTINE
-  "${LIBRARY_DIR}/libs/coroutine/detail/coroutine_context.cpp"
-  "${LIBRARY_DIR}/libs/coroutine/exceptions.cpp"
-  "${LIBRARY_DIR}/libs/coroutine/posix/stack_traits.cpp"
+  "${LIBRARY_DIR}/libs/coroutine/src/detail/coroutine_context.cpp"
+  "${LIBRARY_DIR}/libs/coroutine/src/exceptions.cpp"
+  "${LIBRARY_DIR}/libs/coroutine/src/posix/stack_traits.cpp"
 )
 add_library (_boost_coroutine ${SRCS_COROUTINE})
 add_library (boost::coroutine ALIAS _boost_coroutine)
