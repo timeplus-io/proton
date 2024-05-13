@@ -255,6 +255,7 @@ tests:
       - changelog_kv
       - single shard
       - checkpoint
+      - bug
     name: "global aggr on changelog_kv stream with single shard, checkpoint"
     description: global aggr on changelog_kv stream with single shard, checkpoint
     steps:
