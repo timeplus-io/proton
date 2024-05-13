@@ -14,6 +14,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/formatAST.h>
 #include <Processors/Executors/CompletedPipelineExecutor.h>
+#include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/Sinks/EmptySink.h>
@@ -161,54 +162,63 @@ private:
 };
 
 
-StorageMaterializedView::State::~State()
+StorageMaterializedView::PipelineState::~State()
 {
-    terminate();
+    cancel();
 }
 
-void StorageMaterializedView::State::terminate()
+
+void StorageMaterializedView::PipelineState::cancel() noexcept
 {
     if (is_cancelled.test_and_set())
         return;
 
-    if (thread.joinable())
-        thread.join();
+    if (auto io_ = io.load(); io_ && io_->process_list_entry)
+        (*io_->process_list_entry)->cancelQuery(true);
+
+    executor.wait();
 }
 
-void StorageMaterializedView::State::updateStatus(StorageMaterializedView::State::ThreadStatus status)
+bool StorageMaterializedView::PipelineState::isCanceled() const noexcept
+{
+    if (is_cancelled.test())
+        return true;
+
+    if (auto io_ = io.load(); io_ && io_->process_list_entry)
+        return (*io_->process_list_entry)->isKilled();
+
+    return false;
+}
+
+void StorageMaterializedView::PipelineState::updateStatus(StorageMaterializedView::PipelineState::ThreadStatus status)
 {
     thread_status.store(status, std::memory_order_relaxed);
     thread_status.notify_all();
 }
 
-void StorageMaterializedView::State::waitStatusUntil(StorageMaterializedView::State::ThreadStatus target_status) const
+void StorageMaterializedView::PipelineState::waitStatusUntil(StorageMaterializedView::PipelineState::ThreadStatus target_status) const
 {
     auto current_status = thread_status.load(std::memory_order_relaxed);
     while (current_status != target_status)
     {
         if (is_cancelled.test())
-            break;
+            return;
+
+        if (current_status == PipelineState::Status::FATAL)
+            return checkException("Fatal error occurred:");
 
         thread_status.wait(current_status);
         current_status = thread_status.load(std::memory_order_relaxed);
     }
 }
 
-void StorageMaterializedView::State::setException(int code, const String & msg, bool log_error)
+void StorageMaterializedView::PipelineState::setException(int code, const String & msg)
 {
     err_msg = msg;
-    err = code;
-
-    if (log_error)
-        LOG_ERROR(
-            log,
-            "{}: {} (Background status: {})",
-            ErrorCodes::getName(code),
-            msg,
-            magic_enum::enum_name(thread_status.load(std::memory_order_relaxed)));
+    err.store(code);
 }
 
-void StorageMaterializedView::State::checkException(const String & msg_prefix) const
+void StorageMaterializedView::PipelineState::checkException(const String & msg_prefix) const
 {
     auto err_code = err.load();
     if (err_code != ErrorCodes::OK)
@@ -229,10 +239,10 @@ StorageMaterializedView::StorageMaterializedView(
     bool is_virtual_)
     : IStorage(table_id_)
     , WithMutableContext(local_context->getGlobalContext())
-    , log(&Poco::Logger::get(fmt::format("StorageMaterializedView ({})", table_id_.getFullTableName())))
     , is_attach(attach_)
     , is_virtual(is_virtual_)
-    , background_state{.log = log}
+    , logger(&Poco::Logger::get(fmt::format("{}-mv", table_id_.getFullTableName())))
+    , pipeline_state(logger)
 {
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
@@ -332,18 +342,17 @@ void StorageMaterializedView::startup()
     if (is_virtual)
         return;
 
-    initBackgroundState();
+    initPipelineState();
 
     /// NOTE: If it's an Create request, we should wait for done of startup background pipeline,
     /// so that, we can report the error if has exception (e.g. bad query)
     if (!is_attach)
     {
         auto start = MonotonicMilliseconds::now();
-        background_state.waitStatusUntil(State::EXECUTING_PIPELINE);
-        background_state.checkException();
+        pipeline_state.waitStatusUntil(PipelineState::Status::ExecutingPipeline);
         auto end = MonotonicMilliseconds::now();
         LOG_INFO(
-            log,
+            logger,
             "Took {} ms to wait for built background pipeline during matierialized view '{}' startup",
             end - start,
             getStorageID().getFullTableName());
@@ -361,7 +370,7 @@ void StorageMaterializedView::shutdown()
         wait_cv.notify_all();
     }
 
-    background_state.terminate();
+    pipeline_state.terminate();
 
     auto storage_id = getStorageID();
     const auto & select_query = getInMemoryMetadataPtr()->getSelectQuery();
@@ -414,219 +423,245 @@ void StorageMaterializedView::checkDependencies() const
         getStorageID().getFullTableName());
 }
 
-void StorageMaterializedView::initBackgroundState()
+void StorageMaterializedView::initPipelineState()
 {
-    background_state.is_cancelled.clear();
-    background_state.err = ErrorCodes::OK;
-    background_state.updateStatus(State::UNKNOWN);
-    background_state.thread = ThreadFromGlobalPool{[this]() {
+    pipeline_state.err_msg.clear();
+    pipeline_state.err = DB::ErrorCodes::OK;
+    pipeline_state.is_cancelled.clear();
+    pipeline_state.retriable = true;
+    pipeline_state.retry_times = 0;
+    pipeline_state.query_context = nullptr;
+    pipeline_state.io.store(nullptr);
+    pipeline_state.updateStatus(PipelineState::Status::Initializing);
+
+    pipeline_state.executor = ThreadFromGlobalPool{[this]() { backgroundPipelineMaterializing(); }};
+}
+
+void StorageMaterializedView::backgroundPipelineMaterializing()
+{
+    setThreadName("MVBgQueryEx");
+    pipeline_state.query_context = Context::createCopy(getContext());
+    CurrentThread::QueryScope query_scope(pipeline_state.query_context);
+
+    pipeline_state.exec_mode = is_attach ? ExecuteMode::RECOVER : ExecuteMode::SUBSCRIBE;
+
+    do
+    {
         try
         {
-            setThreadName("MVBgQueryEx");
-
-            auto local_context = Context::createCopy(getContext());
-            CurrentThread::QueryScope query_scope(local_context);
-            ExecuteMode exec_mode = is_attach ? ExecuteMode::RECOVER : ExecuteMode::SUBSCRIBE;
-
-            /// FIXME: limit retry times ?
-            size_t retry_times = 0;
-            /// Keep the last SNs of the stream source during the last retries.
-            std::deque<std::vector<Int64>> failed_sn_queue;
-            std::vector<Int64> recover_sns;
-            while (1)
+            switch (pipeline_state.status.load())
             {
-                if (background_state.is_cancelled.test())
-                    break;
-
-                ++retry_times;
-
-                BlockIO io;
-                try
+                case PipelineState::Status::Initializing:
+                    [[fallthrough]];
+                case Status::CheckingDependencies:
                 {
-                    auto current_status = background_state.thread_status.load(std::memory_order_relaxed);
-                    switch (current_status)
-                    {
-                        case State::UNKNOWN:
-                            [[fallthrough]];
-                        case State::CHECKING_DEPENDENCIES:
-                        {
-                            background_state.updateStatus(State::CHECKING_DEPENDENCIES);
-                            /// During server bootstrap, we shall startup all tables in parallel, so here
-                            /// needs validity check underlying tables.
-                            checkDependencies();
-                            [[fallthrough]];
-                        }
-                        case State::BUILDING_PIPELINE:
-                        {
-                            background_state.updateStatus(State::BUILDING_PIPELINE);
-                            local_context->setSetting(
-                                "exec_mode", exec_mode == ExecuteMode::RECOVER ? String("recover") : String("subscribe"));
-                            io = buildBackgroundPipeline(local_context);
-                            assert(io.pipeline.initialized());
-                            [[fallthrough]];
-                        }
-                        case State::EXECUTING_PIPELINE:
-                        {
-                            background_state.updateStatus(State::EXECUTING_PIPELINE);
-                            background_state.err = ErrorCodes::OK; /// Reset the status is ok after recovered
-                            io.pipeline.setExecuteMode(exec_mode);
-                            if (!recover_sns.empty())
-                                resetSNForStreamingSources(io.pipeline.getStreamingSources(), recover_sns);
-
-                            executeBackgroundPipeline(io, local_context);
-                            break;
-                        }
-                        default:
-                            throw Exception(
-                                ErrorCodes::LOGICAL_ERROR, "No support background state: {}", magic_enum::enum_name(current_status));
-                    }
-
-                    break; /// Cancelled normally, no retry
+                    pipeline_state.updateStatus(PipelineState::Status::CheckingDependencies);
+                    /// During server bootstrap, we shall startup all tables in parallel, so here
+                    /// needs validity check underlying tables.
+                    checkDependencies();
+                    [[fallthrough]];
                 }
-                catch (Exception & e)
+                case PipelineState::Status::BuildingPipeline:
                 {
-                    auto current_status = background_state.thread_status.load(std::memory_order_relaxed);
-                    /// For create request, no retry if built pipeline fails
-                    /// and update status to `FATAL`, it will wake up the blocked thread (startup()) and then check whether exception exists later
-                    if (unlikely(retry_times == 1 && !is_attach && current_status < State::EXECUTING_PIPELINE))
-                    {
-                        background_state.setException(e.code(), e.message());
-                        background_state.updateStatus(State::FATAL);
-                        return;
-                    }
-
-                    /// FIXME: Add more (un)retriable error handling
-                    auto err_code = e.code();
-                    if (err_code == ErrorCodes::RESOURCE_NOT_INITED)
-                    {
-                        /// Retry to wait for dependencies
-                        /// The first check of dependencies will most likely fail, so we skip logging error once.
-                        bool log_error = (retry_times > 1);
-                        background_state.setException(
-                            err_code, fmt::format("{}, {}th wait for ready", getExceptionMessage(e, true), retry_times), log_error);
-                        waitFor(recheck_dependencies_interval);
-                    }
-                    else if (err_code == ErrorCodes::DIRECTORY_DOESNT_EXIST)
-                    {
-                        /// Compatibility case for attach old materialized views:
-                        /// Failed to recover with err msg "Failed to recover checkpoint since checkpoint directory ... doesn't exist"
-                        /// FIXME: match msg ?
-                        exec_mode = ExecuteMode::SUBSCRIBE;
-                        background_state.setException(
-                            err_code,
-                            fmt::format(
-                                "Retry {}th re-subscribe to background pipeline. Background runtime error: {}",
-                                retry_times,
-                                getExceptionMessage(e, true)));
-                    }
-                    else
-                    {
-                        auto streaming_sources = io.pipeline.getStreamingSources();
-                        switch (local_context->getSettingsRef().recovery_policy)
-                        {
-                            case RecoveryPolicy::Strict:
-                            {
-                                background_state.setException(
-                                    err_code,
-                                    fmt::format(
-                                        "Wait for {}th recovering background pipeline from {}, processed_sns={} checkpointed_sns={}. "
-                                        "Background runtime error: {}",
-                                        retry_times,
-                                        dumpStreamingSourcesWithSNs(streaming_sources, /*recover_from_checkpointed*/ {}),
-                                        dumpSNs(getProcessedSNOfStreamingSources(streaming_sources)),
-                                        dumpSNs(getCheckpointedSNOfStreamingSources(streaming_sources)),
-                                        getExceptionMessage(e, true)));
-
-                                /// For some queries that always go wrong, we don’t want to recover too frequently. Now wait 5s, 10s, 15s, ... 30s, 30s for each time
-                                waitFor(recover_interval * std::min<size_t>(retry_times, DEFAULT_MAX_RETRY_TIME));
-                                break;
-                            }
-                            case RecoveryPolicy::BestEffort:
-                            {
-                                auto current_failed_sns = getProcessedSNOfStreamingSources(streaming_sources);
-                                recover_sns.clear();
-
-                                /// If the current SN fails three times(can be adjusted in config) in a row, we will skipping some SNs and recover from the next SN to avoid permanent recovery.
-                                size_t recovery_retry_from_settings = local_context->getSettingsRef().recovery_retry_for_sn_failure;
-                                size_t recover_retry_times = DEFAULT_RECOVER_RETRY_FOR_SN_FAILURE;
-                                if (recovery_retry_from_settings > 0)
-                                    recover_retry_times = recovery_retry_from_settings;
-
-                                if (failed_sn_queue.size() >= recover_retry_times - 1)
-                                {
-                                    recover_sns.reserve(current_failed_sns.size());
-                                    for (size_t i = 0; i < current_failed_sns.size(); ++i)
-                                    {
-                                        if (std::ranges::all_of(
-                                                failed_sn_queue, [&](const auto & sns) { return sns[i] == current_failed_sns[i]; }))
-                                            recover_sns.emplace_back(current_failed_sns[i] + 1);
-                                        else
-                                            recover_sns.emplace_back(-1); /// Invalid SN, indicates still recover from checkpointed
-                                    }
-
-                                    failed_sn_queue.pop_front();
-                                }
-
-                                background_state.setException(
-                                    err_code,
-                                    fmt::format(
-                                        "Wait for {}th recovering background pipeline from {}, processed_sns={} checkpointed_sns={}. "
-                                        "Background runtime error: {}",
-                                        retry_times,
-                                        dumpStreamingSourcesWithSNs(streaming_sources, recover_sns),
-                                        dumpSNs(current_failed_sns),
-                                        dumpSNs(getCheckpointedSNOfStreamingSources(streaming_sources)),
-                                        getExceptionMessage(e, true)));
-
-                                failed_sn_queue.emplace_back(std::move(current_failed_sns));
-
-                                waitFor(recover_interval);
-                                break;
-                            }
-                        }
-
-                        /// Retry recovering with recover mode
-                        if (current_status == State::EXECUTING_PIPELINE)
-                            exec_mode = ExecuteMode::RECOVER;
-                    }
-
-                    /// NOTE: If failed to executing pipeline, we need to re-build an new pipeline,
-                    /// since the processors of current failed pipeline are invalid.
-                    if (current_status == State::EXECUTING_PIPELINE)
-                        background_state.updateStatus(State::BUILDING_PIPELINE);
+                    pipeline_state.updateStatus(PipelineState::Status::BuildingPipeline);
+                    buildBackgroundPipeline();
+                    assert(io.pipeline.initialized());
+                    [[fallthrough]];
+                }
+                case PipelineState::Status::ExecutingPipeline:
+                {
+                    pipeline_state.updateStatus(PipelineState::Status::ExecutingPipeline);
+                    /// Reset the status is ok after recovered
+                    pipeline_state.err = ErrorCodes::OK;
+                    pipeline_state.recovery_disabled = false;
+                    executeBackgroundPipeline();
+                    /// Expects long running background pipeline or an exception
+                    UNREACHABLE();
+                    break;
+                }
+                case PipelineState::Status::PAUSED:
+                {
+                    /// Query is paused, wait for resume
+                    LOG_INFO(logger, "Paused background pipeline for query_id=`{}`", generateInnerQueryID(getStorageID()));
+                    pipeline_state.waitStatusUntil(PipelineState::Status::Initializing);
+                    pipeline_state.exec_mode = ExecuteMode::RECOVER;
+                    pipeline_state.recovery_disabled = true;
+                    break;
+                }
+                case PipelineState::Status::Fatal:
+                {
+                    /// Current pipeline thread is finished, we will call shutdown in another thread, since shutdown() will wait until current pipeline thread finished.
+                    /// There are two scenarios:
+                    /// 1) The pipeline thread was cancelled (such as drop), will ignore duplicated shutdown().
+                    /// 2) The pipeline thread was aborted (such as cannot recover), will self-stopping
+                    LOG_ERROR(pipeline_state.logger, "Background pipeline thread was aborted, shutdown it now.");
+                    pipeline_state.shutdown_pool.scheduleOrThrowOnError([this] {
+                        shutdownPipelineState();
+                    });
+                    return; /// Fatal error occurred, exit the thread
                 }
             }
         }
-        catch (...)
+        catch (Exception & e)
         {
-            auto e = std::current_exception();
-            background_state.setException(getExceptionErrorCode(e), getExceptionMessage(e, true));
+            /// Not log error for internal cancel
+            if (!(e.code() == ErrorCodes::QUERY_WAS_CANCELLED && pipeline_state.is_cancelled.test()))
+                tryLogCurrentException(
+                    pipeline_state.logger,
+                    fmt::format("Background runtime {}th error", pipeline_state.retry_times.load(std::memory_order_relaxed)));
+
+            // If recovery is disabled or if preparing for recovery after an exception fails,
+            // update the status to 'Fatal' and exit.
+            if (pipeline_state.recovery_disabled || !prepareRecoveryAfterException(e))
+                pipeline_state.updateStatus(PipelineState::Status::Fatal);
         }
-    }};
+
+        pipeline_state.retry_times.fetch_add(1, std::memory_order_relaxed);
+    } while (!pipeline_state.isCanceled() && !pipeline_state.no_retry);
 }
 
-BlockIO StorageMaterializedView::buildBackgroundPipeline(ContextMutablePtr local_context)
+bool StorageMaterializedView::prepareRecoveryAfterException(const Exception & e)
 {
-    BlockIO io;
+    auto current_status = pipeline_state.status.load(std::memory_order_relaxed);
+    auto retry_times = pipeline_state.retry_times.load(std::memory_order_relaxed);
+
+    /// Some scenarios don't need to retry:
+    /// 1) For pause request,
+    /// 2) For create request, no retry if built pipeline fails
+    /// Update status to `FATAL`, it will wake up the blocked thread (startup()) and then check whether exception exists later
+    if (unlikely(unpause_requested || (retry_times == 1 && !is_attach && current_status < PipelineState::Status::ExecutingPipeline)))
+    {
+        pipeline_state.setException(e.code(), e.message());
+    }
+
+    /// FIXME: Add more (un)retriable error handling
+    auto err_code = e.code();
+    if (err_code == ErrorCodes::RESOURCE_NOT_INITED)
+    {
+        /// Retry to wait for dependencies
+        /// The first check of dependencies will most likely fail, so we skip logging error once.
+        bool log_error = (retry_times > 1);
+        pipeline_state.setException(err_code, fmt::format("{}, {}th wait for ready", getExceptionMessage(e, true), retry_times), log_error);
+        waitFor(internal_recheck_interval);
+    }
+    else if (err_code == ErrorCodes::DIRECTORY_DOESNT_EXIST)
+    {
+        /// Compatibility case for attach old materialized views:
+        /// Failed to recover with err msg "Failed to recover checkpoint since checkpoint directory ... doesn't exist"
+        /// FIXME: match msg ?
+        exec_mode = ExecuteMode::SUBSCRIBE;
+        pipeline_state.setException(
+            err_code,
+            fmt::format(
+                "Retry {}th re-subscribe to background pipeline. Background runtime error: {}", retry_times, getExceptionMessage(e, true)));
+    }
+    else if (err_code == ErrorCodes::QUERY_WAS_CANCELLED)
+    {
+        /// Cancel is treated like normal, when we loop over, we will exit the thread
+        pipeline_state.err = DB::ErrorCodes::OK;
+    }
+    else
+    {
+        auto streaming_sources = io.pipeline.getStreamingSources();
+        switch (local_context->getSettingsRef().recovery_policy)
+        {
+            case RecoveryPolicy::Strict:
+            {
+                pipeline_state.setException(
+                    err_code,
+                    fmt::format(
+                        "Wait for {}th recovering background pipeline from {}, processed_sns={} checkpointed_sns={}. "
+                        "Background runtime error: {}",
+                        retry_times,
+                        dumpStreamingSourcesWithSNs(streaming_sources, /*recover_from_checkpointed*/ {}),
+                        dumpSNs(getProcessedSNOfStreamingSources(streaming_sources)),
+                        dumpSNs(getCheckpointedSNOfStreamingSources(streaming_sources)),
+                        getExceptionMessage(e, true)));
+
+                /// For some queries that always go wrong, we don’t want to recover too frequently. Now wait 5s, 10s, 15s, ... 30s, 30s for each time
+                waitFor(recover_interval * std::min<size_t>(retry_times, DEFAULT_MAX_RETRY_TIME));
+                break;
+            }
+            case RecoveryPolicy::BestEffort:
+            {
+                auto current_failed_sns = getProcessedSNOfStreamingSources(streaming_sources);
+                recover_sns.clear();
+
+                /// If the current SN fails three times(can be adjusted in config) in a row, we will skipping some SNs and recover from the next SN to avoid permanent recovery.
+                size_t recovery_retry_from_settings = local_context->getSettingsRef().recovery_retry_for_sn_failure;
+                size_t recover_retry_times = DEFAULT_RECOVER_RETRY_FOR_SN_FAILURE;
+                if (recovery_retry_from_settings > 0)
+                    recover_retry_times = recovery_retry_from_settings;
+
+                if (failed_sn_queue.size() >= recover_retry_times - 1)
+                {
+                    recover_sns.reserve(current_failed_sns.size());
+                    for (size_t i = 0; i < current_failed_sns.size(); ++i)
+                    {
+                        if (std::ranges::all_of(failed_sn_queue, [&](const auto & sns) { return sns[i] == current_failed_sns[i]; }))
+                            recover_sns.emplace_back(current_failed_sns[i] + 1);
+                        else
+                            recover_sns.emplace_back(-1); /// Invalid SN, indicates still recover from checkpointed
+                    }
+
+                    failed_sn_queue.pop_front();
+                }
+
+                pipeline_state.setException(
+                    err_code,
+                    fmt::format(
+                        "Wait for {}th recovering background pipeline from {}, processed_sns={} checkpointed_sns={}. "
+                        "Background runtime error: {}",
+                        retry_times,
+                        dumpStreamingSourcesWithSNs(streaming_sources, recover_sns),
+                        dumpSNs(current_failed_sns),
+                        dumpSNs(getCheckpointedSNOfStreamingSources(streaming_sources)),
+                        getExceptionMessage(e, true)));
+
+                failed_sn_queue.emplace_back(std::move(current_failed_sns));
+
+                waitFor(recover_interval);
+                break;
+            }
+        }
+
+        /// Retry recovering with recover mode
+        if (current_status == PipelineState::Status::ExecutingPipeline)
+            exec_mode = ExecuteMode::RECOVER;
+    }
+
+    /// NOTE: If failed to executing pipeline, we need to re-build an new pipeline,
+    /// since the processors of current failed pipeline are invalid.
+    if (current_status == PipelineState::Status::ExecutingPipeline)
+        pipeline_state.updateStatus(PipelineState::Status::BuildingPipeline);
+}
+
+void StorageMaterializedView::buildBackgroundPipeline()
+{
+    pipeline_state.io.store(nullptr);
 
     auto target_table = getTargetTable();
     auto target_metadata_snapshot = target_table->getInMemoryMetadataPtr();
     auto metadata_snapshot = getInMemoryMetadataPtr();
 
-    local_context->setCurrentQueryId(generateInnerQueryID(getStorageID())); /// Use a query_id bound to the uuid of mv
-    local_context->setInternalQuery(false); /// We like to log materialized query like a regular one
-    local_context->setInsertionTable(target_table->getStorageID());
-    local_context->setIngestMode(IngestMode::SYNC); /// No need async mode status for internal ingest
+    pipeline_state.query_context->setSetting(
+        "exec_mode", pipeline_state.exec_mode == ExecuteMode::RECOVER ? String("recover") : String("subscribe"));
+    pipeline_state.query_context->setCurrentQueryId(generateInnerQueryID(getStorageID())); /// Use a query_id bound to the uuid of mv
+    pipeline_state.query_context->setInternalQuery(false); /// We like to log materialized query like a regular one
+    pipeline_state.query_context->setInsertionTable(target_table->getStorageID());
+    pipeline_state.query_context->setIngestMode(IngestMode::SYNC); /// No need async mode status for internal ingest
 
     auto & inner_query = metadata_snapshot->getSelectQuery().inner_query;
-    io.process_list_entry = local_context->getProcessList().insert(serializeAST(*inner_query), inner_query.get(), local_context);
-    local_context->setProcessListElement(&io.process_list_entry->get());
+    auto io = boost::make_shared<BlockIO>();
+    io->process_list_entry = pipeline_state.query_context->getProcessList().insert(
+        serializeAST(*inner_query), inner_query.get(), pipeline_state.query_context);
+    pipeline_state.query_context->setProcessListElement(&io->process_list_entry->get());
     CurrentThread::get().performance_counters[ProfileEvents::OSCPUWaitMicroseconds] = 0;
     CurrentThread::get().performance_counters[ProfileEvents::OSCPUVirtualTimeMicroseconds] = 0;
 
     /// NOTE: Here we build two stages `select` + `insert` instead of directly building `insert select`,
     /// so that the pipeline can be adjusted more flexibly
-    InterpreterSelectWithUnionQuery select_interpreter(inner_query, local_context, SelectQueryOptions());
+    InterpreterSelectWithUnionQuery select_interpreter(inner_query, pipeline_state.query_context, SelectQueryOptions());
 
     /// [Pipeline]: `Source` -> `Converting` -> `Materializing const` -> `target_table`
     auto pipeline_builder = select_interpreter.buildQueryPipeline();
@@ -677,14 +712,14 @@ BlockIO StorageMaterializedView::buildBackgroundPipeline(ContextMutablePtr local
         pipeline_builder.addTransform(std::make_shared<ExpressionTransform>(
             source_header,
             std::make_shared<ExpressionActions>(
-                std::move(converting), ExpressionActionsSettings::fromContext(local_context, CompileExpressions::yes))));
+                std::move(converting), ExpressionActionsSettings::fromContext(pipeline_state.query_context, CompileExpressions::yes))));
     }
 
     /// Materializing const columns
     pipeline_builder.addTransform(std::make_shared<MaterializingTransform>(pipeline_builder.getHeader()));
 
     /// Sink to target table
-    InterpreterInsertQuery interpreter(nullptr, local_context, false, false, false);
+    InterpreterInsertQuery interpreter(nullptr, pipeline_state.query_context, false, false, false);
     /// FIXME, thread status
     auto out_chain
         = interpreter.buildChain(target_table, target_metadata_snapshot, insert_columns, nullptr, nullptr, pipeline_builder.isStreaming());
@@ -697,36 +732,44 @@ BlockIO StorageMaterializedView::buildBackgroundPipeline(ContextMutablePtr local
         return std::make_shared<EmptySink>(cur_header);
     });
 
-    io.pipeline = QueryPipelineBuilder::getPipeline(std::move(pipeline_builder));
-    io.pipeline.addResources(std::move(resources));
-    io.pipeline.setProgressCallback(local_context->getProgressCallback());
-    io.pipeline.setProcessListElement(local_context->getProcessListElement());
+    io->pipeline = QueryPipelineBuilder::getPipeline(std::move(pipeline_builder));
+    io->pipeline.addResources(std::move(resources));
+    io->pipeline.setProgressCallback(pipeline_state.query_context->getProgressCallback());
+    io->pipeline.setProcessListElement(pipeline_state.query_context->getProcessListElement());
 
     /// NOTE: We must use enough threads to process streaming query, otherwise, there is no idle thread to process Sink, all threads are used for select processing (Especially join queries)
-    // io.pipeline.setNumThreads(std::min<size_t>(io.pipeline.getNumThreads(), local_context->getSettingsRef().max_threads));
-    return io;
+    // background_state.io.pipeline.setNumThreads(std::min<size_t>(io.pipeline.getNumThreads(), local_context->getSettingsRef().max_threads));
+
+    /// Other threads may call `shutdown` to cancel the pipeline execution (via `process_list_entry->cancelQuery(true)`)
+    assert(io && io->process_list_entry);
+    pipeline_state.io.store(io);
 }
 
-void StorageMaterializedView::executeBackgroundPipeline(BlockIO & io, ContextMutablePtr local_context)
+void StorageMaterializedView::executeBackgroundPipeline()
 {
-    assert(io.process_list_entry);
-    if ((*io.process_list_entry)->isKilled())
+    auto io = pipeline_state.io.load();
+
+    io->pipeline.setExecuteMode(pipeline_state.exec_mode);
+    CompletedPipelineExecutor executor(io->pipeline);
+
+    if (pipeline_state.isCanceled())
         throw Exception(
             ErrorCodes::QUERY_WAS_CANCELLED,
             "The background pipeline for materialized view {} is killed before execution, it's abnormal.",
             getStorageID().getFullTableName());
 
-    LOG_INFO(log, "Executing background pipeline for materialized view {}", getStorageID().getFullTableName());
-    CompletedPipelineExecutor executor(io.pipeline);
-    executor.setCancelCallback(
-        [this] { return background_state.is_cancelled.test(); }, local_context->getSettingsRef().interactive_delay / 1000);
+    LOG_INFO(logger, "Executing background pipeline on mode '{}'", magic_enum::enum_name(exec_mode));
+
+    if (!pipeline.recover_sns.empty())
+        resetSNForStreamingSources(io.pipeline.getStreamingSources(), pipeline.recover_sns);
+
     executor.execute();
 
     /// If the pipeline is finished, we need check whether it's cancelled or not. If not, it's abnormal.
     /// For exmaple:
     /// A background query likes stream join table, and the table has no data, the background pipeline will be finished immediately.
     /// In this case, we need throw a exception to notify users and retry it.
-    if (!((*io.process_list_entry)->isKilled() || background_state.is_cancelled.test()))
+    if (!pipeline_state.isCanceled())
         throw Exception(
             ErrorCodes::UNEXPECTED_ERROR_CODE,
             "The background pipeline for materialized view {} finished unexpectedly, it's abnormal.",
@@ -851,7 +894,7 @@ void StorageMaterializedView::checkValid() const
     /// check disk quota
     DiskUtilChecker::instance(getContext()).check();
 
-    background_state.checkException("Bad MaterializedView, please wait for auto-recovery or restart/recreate manually:");
+    pipeline_state.checkException("Bad MaterializedView, please wait for auto-recovery or restart/recreate manually:");
 
     if (!isReady())
         throw Exception(ErrorCodes::RESOURCE_NOT_INITED, "Background thread of '{}' are initializing", getStorageID().getFullTableName());
@@ -859,7 +902,7 @@ void StorageMaterializedView::checkValid() const
 
 bool StorageMaterializedView::isReady() const
 {
-    return is_virtual || background_state.thread_status.load(std::memory_order_relaxed) > State::CHECKING_DEPENDENCIES;
+    return is_virtual || pipeline_state.thread_status.load(std::memory_order_relaxed) > PipelineState::Status::CheckingDependencies;
 }
 
 NamesAndTypesList StorageMaterializedView::getVirtuals() const
@@ -891,13 +934,13 @@ void StorageMaterializedView::createInnerTable()
         catch (...)
         {
             waitFor(std::chrono::seconds(2));
-            LOG_DEBUG(log, "'{}' waiting for inner stream ready", getStorageID().getFullTableName());
+            LOG_DEBUG(logger, "'{}' waiting for inner stream ready", getStorageID().getFullTableName());
         }
     }
 
     if (max_retries <= 0)
     {
-        LOG_ERROR(log, "Failed to create inner stream for Materialized view '{}'", getStorageID().getFullTableName());
+        LOG_ERROR(logger, "Failed to create inner stream for Materialized view '{}'", getStorageID().getFullTableName());
         throw Exception(
             ErrorCodes::RESOURCE_NOT_INITED, "Failed to create inner stream for Materialized view '{}'", getStorageID().getFullTableName());
     }
@@ -966,18 +1009,20 @@ Streaming::DataStreamSemanticEx StorageMaterializedView::dataStreamSemantic() co
     return getTargetTable()->dataStreamSemantic();
 }
 
-void StorageMaterializedView::pause()
+void StorageMaterializedView::pause(bool sync)
 {
-    if (background_state.thread_status.load() == State::PAUSED)
+    if (pipeline_state.thread_status.load() == PipelineState::Status::Paused)
     {
-        LOG_INFO(log, "Ignore pause since materialized view '{}' is already paused", getStorageID().getFullTableName());
+        LOG_INFO(logger, "Ignore pause since materialized view '{}' is already paused", getStorageID().getFullTableName());
         return;
     }
 
-    auto checkpointed_callback = [this](CheckpointContextPtr) {
-        background_state.terminate();
-        background_state.updateStatus(State::PAUSED);
-        LOG_INFO(log, "Paused background pipeline for query_id=`{}`", generateInnerQueryID(getStorageID()));
+    auto checkpointed_callback = [this](CheckpointContextPtr ckpt_ctx) {
+        /// Already finished last checkpoint, we can pause the background pipeline now:
+        /// 1) switch status to Paused
+        /// 2) interrupt current pipeline execution
+        pipeline_state.updateStatus(PipelineState::Status::Paused);
+        throw Exception(ErrorCodes::QUERY_WAS_CANCELLED, "Paused background pipeline");
     };
 
     auto res
@@ -986,11 +1031,16 @@ void StorageMaterializedView::pause()
     switch (res)
     {
         case CheckpointCoordinator::TriggeredResult::Success:
-            background_state.waitStatusUntil(State::PAUSED);
+        {
+            if (sync)
+                pipeline_state.waitStatusUntil(PipelineState::Status::Paused);
             break;
+        }
         case CheckpointCoordinator::TriggeredResult::Skipped:
-            checkpointed_callback(nullptr);
+        {
+            assert(pipeline_state.thread_status.load() == PipelineState::Status::Paused);
             break;
+        }
         case CheckpointCoordinator::TriggeredResult::Failed:
             throw Exception(
                 ErrorCodes::UNEXPECTED_ERROR_CODE,
@@ -999,17 +1049,17 @@ void StorageMaterializedView::pause()
     }
 }
 
-void StorageMaterializedView::unpause()
+void StorageMaterializedView::resume(bool sync)
 {
-    /// TODO
-    if (background_state.thread_status.load() != State::PAUSED)
+    PipelineState::Status expected_status = PipelineState::Status::Paused;
+    if (!pipeline_state.compare_exchange_strong(expected_status, PipelineState::Status::Initializing))
     {
-        LOG_INFO(log, "Ignore unpause, since materialized view '{}' is not paused", getStorageID().getFullTableName());
+        LOG_WARNING(logger, "Failed to resume, since current status ({}) is not paused", magic_enum::enum_name(expected_status));
         return;
     }
 
-    initBackgroundState();
-    LOG_INFO(log, "Unpaused background pipeline for query_id=`{}`", generateInnerQueryID(getStorageID()));
+    if (sync)
+        pipeline_state.waitStatusUntil(PipelineState::Status::ExecutingPipeline);
 }
 
 void registerStorageMaterializedView(StorageFactory & factory)

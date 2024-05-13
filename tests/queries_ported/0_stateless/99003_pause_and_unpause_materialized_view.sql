@@ -3,26 +3,30 @@ drop stream if exists test_99003_stream;
 
 create stream test_99003_stream (i int);
 create materialized view test_99003_mv as select i from test_99003_stream;
-
-insert into test_99003_stream values (1);
 select sleep(1) FORMAT Null;
-select i from table(test_99003_mv);
+
+insert into test_99003_stream(i) values (1);
+select sleep(1) FORMAT Null;
+select i from table(test_99003_mv) order by i;
 
 --- Pause the materialized view and insert a new row
-pause materialized view test_99003_mv;
+PAUSE MATERIALIZED VIEW test_99003_mv SYNC;
 
-insert into test_99003_stream values (2);
+select '---';
+insert into test_99003_stream(i) values (2);
 select sleep(1) FORMAT Null;
-select i from table(test_99003_mv);
+select i from table(test_99003_mv) order by i;
 
 --- Unpause the materialized view and insert a new row
-unpause materialized view test_99003_mv;
-select sleep(1) FORMAT Null;
-select i from table(test_99003_mv);
+UNPAUSE MATERIALIZED VIEW test_99003_mv SYNC;
 
-insert into test_99003_stream values (3);
+select '---';
+select i from table(test_99003_mv) order by i;
+
+select '---';
+insert into test_99003_stream(i) values (3);
 select sleep(1) FORMAT Null;
-select i from table(test_99003_mv);
+select i from table(test_99003_mv) order by i;
 
 drop view if exists test_99003_mv;
 drop stream if exists test_99003_stream;

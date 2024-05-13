@@ -1,6 +1,5 @@
-#include "ParserPauseMaterializedViewQuery.h"
-#include "ASTPauseMaterializedViewQuery.h"
-#include "ASTUnpauseMaterializedViewQuery.h"
+#include "ParserMaterializedViewCommandQuery.h"
+#include "ASTMaterializedViewCommandQuery.h"
 
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTIdentifier.h>
@@ -15,14 +14,28 @@ extern const int SYNTAX_ERROR;
 
 namespace Streaming
 {
-bool ParserPauseMaterializedViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, bool hint)
+bool ParserMaterializedViewCommandQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, bool hint)
 {
-    /// PAUSE MATERIALIZED VIEW 'mv_name'
+    /// PAUSE|RESUME|ABORT|RECOVER MATERIALIZED VIEW 'mv_name(s)' [SYNC | ASYNC (default)]
     ParserKeyword s_pause("PAUSE");
+    ParserKeyword s_resume("RESUME");
+    ParserKeyword s_abort("ABORT");
+    ParserKeyword s_recover("RECOVER");
     ParserKeyword s_materialized("MATERIALIZED");
     ParserKeyword s_view("VIEW");
+    ParserKeyword s_sync("SYNC");
+    ParserKeyword s_async("ASYNC");
 
-    if (!s_pause.ignore(pos, expected))
+    MaterializedViewCommandType type = MaterializedViewCommandType::Pause;
+    if (s_pause.ignore(pos, expected))
+        type = MaterializedViewCommandType::Pause;
+    else if (s_resume.ignore(pos, expected))
+        type = MaterializedViewCommandType::Resume;
+    else if (s_abort.ignore(pos, expected))
+        type = MaterializedViewCommandType::Abort;
+    else if (s_recover.ignore(pos, expected))
+        type = MaterializedViewCommandType::Recover;
+    else
         return false;
 
     if (!s_materialized.ignore(pos, expected))
@@ -42,17 +55,27 @@ bool ParserPauseMaterializedViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expec
             if (!table_ident)
                 throw Exception(
                     ErrorCodes::SYNTAX_ERROR,
-                    "PAUSE MATERIALIZED VIEW query requires a list of materialiezd view identifier, for example, PAUSE MATERIALIZED VIEW "
-                    "'mv1', 'default.mv2', but got '{}'",
+                    "{} requires a list of materialiezd view identifier, for example, {} MATERIALIZED VIEW 'mv1', 'default.mv2', but got "
+                    "'{}'",
+                    getName(),
+                    Poco::toUpper(magic_enum::enum_name(type)),
                     elem->formatForErrorMessage());
 
             elem = table_ident; // Replace ASTIdentifier with ASTTableIdentifier
         }
 
-        auto pause_ast = std::make_shared<ASTPauseMaterializedViewQuery>();
-        pause_ast->children.push_back(mvs);
-        pause_ast->mvs = mvs;
-        node = pause_ast;
+        bool sync = false;
+        if (s_sync.ignore(pos, expected))
+            sync = true;
+        else if (s_async.ignore(pos, expected))
+            sync = false;
+
+        auto command_ast = std::make_shared<ASTPauseMaterializedViewQuery>();
+        command_ast->type = type;
+        command_ast->sync = sync;
+        command_ast->children.push_back(mvs);
+        command_ast->mvs = mvs;
+        node = command_ast;
     }
 
     return parsed;
@@ -60,10 +83,12 @@ bool ParserPauseMaterializedViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expec
 
 bool ParserUnpauseMaterializedViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, bool hint)
 {
-    /// UNPAUSE MATERIALIZED VIEW 'mv_name'
+    /// UNPAUSE MATERIALIZED VIEW 'mv_name' [SYNC | ASYNC (default)]
     ParserKeyword s_pause("UNPAUSE");
     ParserKeyword s_materialized("MATERIALIZED");
     ParserKeyword s_view("VIEW");
+    ParserKeyword s_sync("SYNC");
+    ParserKeyword s_async("ASYNC");
 
     if (!s_pause.ignore(pos, expected))
         return false;
@@ -93,9 +118,16 @@ bool ParserUnpauseMaterializedViewQuery::parseImpl(Pos & pos, ASTPtr & node, Exp
             elem = table_ident; // Replace ASTIdentifier with ASTTableIdentifier
         }
 
+        bool sync = false;
+        if (s_sync.ignore(pos, expected))
+            sync = true;
+        else if (s_async.ignore(pos, expected))
+            sync = false;
+
         auto unpause_ast = std::make_shared<ASTUnpauseMaterializedViewQuery>();
         unpause_ast->children.push_back(mvs);
         unpause_ast->mvs = mvs;
+        unpause_ast->sync = sync;
         node = unpause_ast;
     }
 

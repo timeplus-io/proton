@@ -55,19 +55,27 @@ INSTANTIATE_TEST_SUITE_P(ParserPauseMaterializedViewQuery, TPParserTest,
         {
             {
                 "PAUSE MATERIALIZED VIEW mv_name",
-                "PAUSE MATERIALIZED VIEW mv_name"
+                "PAUSE MATERIALIZED VIEW mv_name ASYNC"
             },
             {
                 "PAUSE MATERIALIZED VIEW default.mv_name",
-                "PAUSE MATERIALIZED VIEW default.mv_name"
+                "PAUSE MATERIALIZED VIEW default.mv_name ASYNC"
             },
             {
                 "PAUSE MATERIALIZED VIEW default.mv_name, default.mv_name2",
-                "PAUSE MATERIALIZED VIEW default.mv_name, default.mv_name2"
+                "PAUSE MATERIALIZED VIEW default.mv_name, default.mv_name2 ASYNC"
             },
             {
                 "PAUSE MATERIALIZED VIEW default.mv_name, mv_name2, default.mv_name3",
-                "PAUSE MATERIALIZED VIEW default.mv_name, mv_name2, default.mv_name3"
+                "PAUSE MATERIALIZED VIEW default.mv_name, mv_name2, default.mv_name3 ASYNC"
+            },
+            {
+                "PAUSE MATERIALIZED VIEW default.mv_name, mv_name2, default.mv_name3 SYNC",
+                "PAUSE MATERIALIZED VIEW default.mv_name, mv_name2, default.mv_name3 SYNC"
+            },
+            {
+                "PAUSE MATERIALIZED VIEW default.mv_name, mv_name2, default.mv_name3 ASYNC",
+                "PAUSE MATERIALIZED VIEW default.mv_name, mv_name2, default.mv_name3 ASYNC"
             }
         }
 )));
@@ -102,19 +110,27 @@ INSTANTIATE_TEST_SUITE_P(ParserUnpauseMaterializedViewQuery, TPParserTest,
         {
             {
                 "UNPAUSE MATERIALIZED VIEW mv_name",
-                "UNPAUSE MATERIALIZED VIEW mv_name"
+                "UNPAUSE MATERIALIZED VIEW mv_name ASYNC"
             },
             {
                 "UNPAUSE MATERIALIZED VIEW default.mv_name",
-                "UNPAUSE MATERIALIZED VIEW default.mv_name"
+                "UNPAUSE MATERIALIZED VIEW default.mv_name ASYNC"
             },
             {
                 "UNPAUSE MATERIALIZED VIEW default.mv_name, default.mv_name2",
-                "UNPAUSE MATERIALIZED VIEW default.mv_name, default.mv_name2"
+                "UNPAUSE MATERIALIZED VIEW default.mv_name, default.mv_name2 ASYNC"
             },
             {
                 "UNPAUSE MATERIALIZED VIEW default.mv_name, mv_name2, default.mv_name3",
-                "UNPAUSE MATERIALIZED VIEW default.mv_name, mv_name2, default.mv_name3"
+                "UNPAUSE MATERIALIZED VIEW default.mv_name, mv_name2, default.mv_name3 ASYNC"
+            },
+            {
+                "UNPAUSE MATERIALIZED VIEW default.mv_name, mv_name2, default.mv_name3 SYNC",
+                "UNPAUSE MATERIALIZED VIEW default.mv_name, mv_name2, default.mv_name3 SYNC"
+            },
+            {
+                "UNPAUSE MATERIALIZED VIEW default.mv_name, mv_name2, default.mv_name3 ASYNC",
+                "UNPAUSE MATERIALIZED VIEW default.mv_name, mv_name2, default.mv_name3 ASYNC"
             }
         }
 )));

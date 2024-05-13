@@ -10,6 +10,8 @@
 #include <base/shared_ptr_helper.h>
 #include <Common/MultiVersion.h>
 
+#include <boost/smart_ptr/atomic_shared_ptr.hpp>
+
 namespace DB
 {
 struct BlockIO;
@@ -72,18 +74,26 @@ public:
 
     bool supportsStreamingQuery() const override { return true; }
 
-    /// Pause/Unpause the background pipeline execution
-    void pause();
-    void unpause();
+    const PipelineState & getPipelineState() const noexcept { return pipeline_state; }
+
+    /// Pause/Resume/Abort/Recover the background pipeline execution
+    /// \return false means that
+    bool pause(bool sync);
+    bool resume(bool sync);
+    bool abort(bool sync);
+    bool recover(bool sync);
 
 private:
     /// Return true on success, false on failure
     void createInnerTable();
     void doCreateInnerTable(const StorageMetadataPtr & metadata_snapshot, ContextMutablePtr context_);
 
-    void initBackgroundState();
+    void initPipelineState();
+    void backgroundPipelineMaterializing();
+
     BlockIO buildBackgroundPipeline(ContextMutablePtr local_context);
     void executeBackgroundPipeline(BlockIO & io, ContextMutablePtr local_context);
+    void prepareRecoveryAfterException(const Exception & e);
 
     void updateStorageSettingsAndTTLs();
 
@@ -109,34 +119,57 @@ private:
     std::mutex wait_cv_mutex;
 
     /// Background state
-    struct State
+    struct PipelineState
     {
-        Poco::Logger * log;
-        ThreadFromGlobalPool thread;
-        enum ThreadStatus
+        explicit PipelineState(Poco::Logger * logger_) : logger(logger_) { }
+
+        ~PipelineState();
+
+        void cancel() noexcept;
+        bool isCanceled() const noexcept;
+        void setException(int code, const String & msg);
+        void checkException(const String & msg_prefix = "") const;
+        void updateStatus(Status status);
+        void waitStatusUntil(Status target_status) const;
+
+        enum Status
         {
-            UNKNOWN = 0,
-            CHECKING_DEPENDENCIES = 1,
-            BUILDING_PIPELINE = 2,
-            EXECUTING_PIPELINE = 3,
-            PAUSED = 10,
-            FATAL = 255 /// Always last one
+            /* Normal status */
+            Initializing = 0,
+            CheckingDependencies = 1,
+            BuildingPipeline = 2,
+            ExecutingPipeline = 3,
+
+            /* Stillness Status */
+            Fatal = 4,
+            Paused = 5,
         };
-        std::atomic<ThreadStatus> thread_status;
+
+        Poco::Logger * logger = nullptr;
+        ThreadPool executor{1};
+        ThreadPool shutdown_pool{1};
+
+        std::atomic<Status> status;
 
         String err_msg;
-        std::atomic_int32_t err; /// != 0, background thread has exception
+        std::atomic_int32_t err = 0; /// != 0, background thread has exception
         std::atomic_flag is_cancelled;
+        std::atomic_int64_t retry_times = 0;
 
-        ~State();
-        void terminate();
-        void setException(int code, const String & msg, bool log_error = true);
-        void checkException(const String & msg_prefix = "") const;
-        void updateStatus(State::ThreadStatus status);
-        void waitStatusUntil(State::ThreadStatus target_status) const;
-    } background_state;
+        ContextMutablePtr query_context;
+        boost::atomic_shared_ptr<BlockIO> io;
 
-    static constexpr auto recheck_dependencies_interval = std::chrono::milliseconds(200);
+        /// Internal state
+        ExecuteMode execute_mode;
+        /// Keep the last SNs of the stream source during the last retries.
+        std::deque<std::vector<Int64>> failed_sn_queue;
+        std::vector<Int64> recover_sns;
+        bool recovery_disabled = false;
+    };
+
+    PipelineState pipeline_state;
+
+    static constexpr auto internal_recheck_interval = std::chrono::milliseconds(200);
     static constexpr auto recover_interval = std::chrono::seconds(5);
 
 protected:

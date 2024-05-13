@@ -249,6 +249,7 @@ enum class ProcessorID : UInt32
     GenerateRandomSourceID = 10'045,
     SourceFromQueryPipelineID = 10'046,
     ConvertingAggregatedToChunksSourceShuffledID = 10'047,
+    MaterialiedViewCommandQuerySourceID = 10'048,
     /// proton: starts
     ClickHouseSourceID = 11'000,
     /// proton: ends

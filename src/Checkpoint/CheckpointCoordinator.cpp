@@ -322,15 +322,17 @@ void CheckpointCoordinator::checkpointed(VersionType /*version*/, UInt32 node_id
             iter->second->prepareForNextEpoch();
 
             ckpt_epoch_done = true;
-
-            if (ckpt_ctx->request_ctx && ckpt_ctx->request_ctx->callback)
-                ckpt_ctx->request_ctx->callback(ckpt_ctx);
         }
     }
 
     /// 3) Delete ckpts for prev epochs
     if (ckpt_epoch_done)
-        ckpt->remove(std::move(ckpt_ctx));
+    {
+        ckpt->remove(ckpt_ctx);
+
+        if (ckpt_ctx->request_ctx && ckpt_ctx->request_ctx->callback)
+            ckpt_ctx->request_ctx->callback(ckpt_ctx);
+    }
 }
 
 String CheckpointCoordinator::getQuery(const String & qid)
@@ -420,6 +422,10 @@ CheckpointCoordinator::TriggeredResult CheckpointCoordinator::doTriggerCheckpoin
                 ckpt_ctx->epoch);
 
             resetCurrentCheckpointEpoch(ckpt_ctx->qid);
+
+            if (ckpt_ctx->request_ctx && ckpt_ctx->request_ctx->callback)
+                ckpt_ctx->request_ctx->callback(ckpt_ctx);
+
             return TriggeredResult::Skipped;
         }
 
