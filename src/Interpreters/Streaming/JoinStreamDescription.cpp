@@ -90,7 +90,8 @@ void JoinStreamDescription::checkValid() const
     /// If it is a changelog data stream, we are expecting `delta` column or `primary key + version column`
     /// are there in the input
     if (Streaming::isChangelogDataStream(data_stream_semantic) && (!hasDeltaColumn() && !(hasPrimaryKey() && hasVersionColumn())))
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "The changelog data stream requires 'delta column' or 'primary key + version column' in the input");
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "The changelog data stream requires '_tp_delta' column or 'primary key + version column' in the pipeline's input");
 }
 }
 }
+

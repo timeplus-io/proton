@@ -131,10 +131,10 @@ void ChangelogQueryVisitorMatcher::addDeltaColumn(ASTSelectQuery & select_query,
     if (!found_delta_col)
     {
         if (is_subquery)
-            /// Need add delta if _tp_delta is not present and the @p select_query is a subquery (not top level select)
+            /// Need add delta if _tp_delta is not present and the \param select_query is a subquery (not top level select)
             select_expression_list->children.emplace_back(std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG));
         else
-            throw Exception(ErrorCodes::INCORRECT_QUERY, "The query with changelog output explicitly requires a `_tp_delta` column in select list");
+            throw Exception(ErrorCodes::INCORRECT_QUERY, "The query with changelog output requires selecting the `_tp_delta` column explicitly");
     }
 
     if (add_new_required_result_columns)
@@ -143,3 +143,4 @@ void ChangelogQueryVisitorMatcher::addDeltaColumn(ASTSelectQuery & select_query,
 
 }
 }
+
