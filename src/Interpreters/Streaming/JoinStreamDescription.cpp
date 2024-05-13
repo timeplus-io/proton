@@ -75,7 +75,7 @@ void JoinStreamDescription::calculateColumnPositions(JoinStrictness strictness)
     if (table_with_columns.hasColumn(ProtonConsts::RESERVED_DELTA_FLAG))
         delta_column_position = calc_column_position(ProtonConsts::RESERVED_DELTA_FLAG);
 
-    assertValid();
+    checkValid();
 }
 
 const String & JoinStreamDescription::deltaColumnName() const
@@ -85,11 +85,12 @@ const String & JoinStreamDescription::deltaColumnName() const
     return input_header.getByPosition(*delta_column_position).name;
 }
 
-void JoinStreamDescription::assertValid() const
+void JoinStreamDescription::checkValid() const
 {
-    /// If it is a keyed data stream, we are expecting `delta` column or `primary key + version column`
+    /// If it is a changelog data stream, we are expecting `delta` column or `primary key + version column`
     /// are there in the input
-    assert(Streaming::isAppendDataStream(data_stream_semantic) || (hasDeltaColumn() || (hasPrimaryKey() && hasVersionColumn())));
+    if (Streaming::isChangelogDataStream(data_stream_semantic) && (!hasDeltaColumn() && !(hasPrimaryKey() && hasVersionColumn())))
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "The changelog data stream requires 'delta column' or 'primary key + version column' in the input");
 }
 }
 }

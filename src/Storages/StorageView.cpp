@@ -138,7 +138,7 @@ void StorageView::read(
     Streaming::rewriteSubquery(current_inner_query->as<ASTSelectWithUnionQuery &>(), query_info);
     /// proton: ends.
 
-    auto options = SelectQueryOptions(QueryProcessingStage::Complete, 0, true, query_info.settings_limit_offset_done);
+    auto options = SelectQueryOptions(QueryProcessingStage::Complete, 1, true, query_info.settings_limit_offset_done);
     InterpreterSelectWithUnionQuery interpreter(current_inner_query, context, options, column_names);
     interpreter.addStorageLimits(*query_info.storage_limits);
     interpreter.buildQueryPlan(query_plan);
@@ -268,7 +268,7 @@ bool StorageView::isStreamingQuery(ContextPtr query_context) const
     auto select = getInMemoryMetadataPtr()->getSelectQuery().inner_query;
     auto local_ctx = Context::createCopy(query_context);
     local_ctx->setCollectRequiredColumns(false);
-    return InterpreterSelectWithUnionQuery(select, local_ctx, SelectQueryOptions().analyze()).isStreamingQuery();
+    return InterpreterSelectWithUnionQuery(select, local_ctx, SelectQueryOptions().subquery().analyze()).isStreamingQuery();
 }
 
 Streaming::DataStreamSemanticEx StorageView::dataStreamSemantic() const
@@ -280,7 +280,7 @@ Streaming::DataStreamSemanticEx StorageView::dataStreamSemantic() const
     auto ctx = Context::createCopy(local_context);
     ctx->setCollectRequiredColumns(false);
 
-    data_stream_semantic = InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().analyze()).getDataStreamSemantic();
+    data_stream_semantic = InterpreterSelectWithUnionQuery(select, ctx, SelectQueryOptions().subquery().analyze()).getDataStreamSemantic();
 
     data_stream_semantic_resolved = true;
 
