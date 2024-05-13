@@ -154,6 +154,7 @@ HTTPRequestHandlerFactoryPtr createHandlerFactory(IServer & server, Asynchronous
         auto factory = std::make_shared<HTTPRequestHandlerFactoryMain>(name);
         auto handler = std::make_shared<HandlingRuleHTTPHandlerFactory<PrometheusRequestHandler>>(
             server, PrometheusMetricsWriter(server.config(), "prometheus", async_metrics, server.context()));
+        handler->attachStrictPath("/timeplusd/metrics");
         handler->attachStrictPath(server.config().getString("prometheus.endpoint", "/metrics"));
         handler->allowGetAndHeadRequest();
         factory->addHandler(handler);
@@ -168,6 +169,7 @@ HTTPRequestHandlerFactoryPtr createMetaStoreHandlerFactory(IServer & server, con
 {
     auto factory = std::make_shared<HTTPRequestHandlerFactoryMain>(name);
     auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(server, "metastore");
+    rest_handler->attachNonStrictPath("/timeplusd/metastore");
     rest_handler->attachNonStrictPath("/proton/metastore");
     factory->addHandler(rest_handler);
     return factory;
@@ -185,12 +187,13 @@ void addCommonDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IS
     factory.addHandler(root_handler);
 
     auto ping_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<StaticRequestHandler>>(server, ping_response_expression);
+    ping_handler->attachStrictPath("/timeplusd/ping");
     ping_handler->attachStrictPath("/ping");
     ping_handler->allowGetAndHeadRequest();
     factory.addHandler(ping_handler);
 
     auto web_ui_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<WebUIRequestHandler>>(server, "play.html");
-    web_ui_handler->attachNonStrictPath("/play");
+    web_ui_handler->attachNonStrictPath("/timeplusd/play");
     web_ui_handler->allowGetAndHeadRequest();
     factory.addHandler(web_ui_handler);
 }
@@ -202,9 +205,12 @@ void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer 
     addCommonDefaultHandlersFactory(factory, server);
 
     /// proton: start. Add rest request process handler
-    auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(server, "proton");
-    rest_handler->attachNonStrictPath("/proton");
-    factory.addHandler(rest_handler);
+    for (const auto * prefix : {"proton", "timeplusd"})
+    {
+        auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(server, prefix);
+        rest_handler->attachNonStrictPath(fmt::format("/{}", prefix));
+        factory.addHandler(rest_handler);
+    }
     /// proton: end.
 
     /// proton: starts
@@ -219,6 +225,7 @@ void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer 
     {
         auto prometheus_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<PrometheusRequestHandler>>(
             server, PrometheusMetricsWriter(server.config(), "prometheus", async_metrics, server.context()));
+        prometheus_handler->attachStrictPath("/timeplusd/metrics");
         prometheus_handler->attachStrictPath(server.config().getString("prometheus.endpoint", "/metrics"));
         prometheus_handler->allowGetAndHeadRequest();
         factory.addHandler(prometheus_handler);
