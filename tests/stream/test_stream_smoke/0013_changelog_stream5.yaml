@@ -861,7 +861,7 @@ tests:
             query_id: '1419'
             depends_on_stream: test14_subquery_5
             query_type: stream
-            query: select lag(i, 2), k2 from test14_view_5;
+            query: select lag(i, 2), k2, _tp_delta from test14_view_5;
 
           - client: python
             query_type: table
@@ -904,14 +904,14 @@ tests:
     expected_results:
       - query_id: '1419'
         expected_results:
-          - [0, 'a']
-          - [0, 'a']
-          - [4, 'a']
-          - [4, 'b']
-          - [2, 'a']
-          - [5, 'a']
-          - [2, 'b']
-          - [2, 'b']
+          - [0, 'a', 1]
+          - [0, 'a', -1]
+          - [4, 'a', 1]
+          - [4, 'b', 1]
+          - [2, 'a', -1]
+          - [5, 'a', 1]
+          - [2, 'b', -1]
+          - [2, 'b', 1]
 
   - id: 20
     tags:
@@ -1046,7 +1046,7 @@ tests:
             query_id: '1421'
             depends_on_stream: test14_subquery_5
             query_type: stream
-            query: select lag(i, 2), k2 from test14_view2_5;
+            query: select lag(i, 2), k2, _tp_delta from test14_view2_5;
 
           - client: python
             query_type: table
@@ -1094,14 +1094,14 @@ tests:
     expected_results:
       - query_id: '1421'
         expected_results:
-          - [0, 'a']
-          - [0, 'a']
-          - [4, 'a']
-          - [4, 'b']
-          - [2, 'a']
-          - [5, 'a']
-          - [2, 'b']
-          - [2, 'b']
+          - [0, 'a', 1]
+          - [0, 'a', -1]
+          - [4, 'a', 1]
+          - [4, 'b', 1]
+          - [2, 'a', -1]
+          - [5, 'a', 1]
+          - [2, 'b', -1]
+          - [2, 'b', 1]
 
   - id: 22
     tags:
@@ -1129,7 +1129,7 @@ tests:
               with cte1 as (
                 with cte2 as (select i, k1, k2, _tp_delta from changelog(test14_subquery_5, k2))
                 select * from cte2
-              )select lag(i, 2), k2 from cte1;
+              )select lag(i, 2), k2, _tp_delta from cte1;
 
           - client: python
             query_type: table
@@ -1167,14 +1167,14 @@ tests:
     expected_results:
       - query_id: '1422'
         expected_results:
-          - [0, 'a']
-          - [0, 'a']
-          - [4, 'a']
-          - [4, 'b']
-          - [2, 'a']
-          - [5, 'a']
-          - [2, 'b']
-          - [2, 'b']
+          - [0, 'a', 1]
+          - [0, 'a', -1]
+          - [4, 'a', 1]
+          - [4, 'b', 1]
+          - [2, 'a', -1]
+          - [5, 'a', 1]
+          - [2, 'b', -1]
+          - [2, 'b', 1]
 
   - id: 23
     tags:

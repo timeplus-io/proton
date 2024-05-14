@@ -2949,7 +2949,7 @@
                             "query_id": "14199",
                             "wait": 5,
                             "terminate": "manual",
-                            "query": "with t as (select * from test14_stream1_5 as a join table(test14_stream2_5) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t join table(test14_stream3_5) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_5 as a join table(test14_stream2_5) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3, _tp_delta from t join table(test14_stream3_5) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
@@ -2994,7 +2994,8 @@
                             "a",
                             "3",
                             "2",
-                            "e"
+                            "e",
+                            1
                         ],
                         [
                             "1",
@@ -3005,7 +3006,8 @@
                             "f",
                             "6",
                             "3",
-                            "7"
+                            "7",
+                            1
                         ],
                         [
                             "1",
@@ -3016,7 +3018,8 @@
                             "a",
                             "3",
                             "2",
-                            "e"
+                            "e",
+                            -1
                         ],
                         [
                             "1",
@@ -3027,7 +3030,8 @@
                             "a",
                             "3",
                             "2",
-                            "e"
+                            "e",
+                            1
                         ]
                     ]
                 }
@@ -3140,7 +3144,7 @@
                             "query_id": "14200",
                             "wait": 5,
                             "terminate": "manual",
-                            "query": "with t as (select * from test14_stream1_5 as a join table(test14_stream2_5) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3 from t left join table(test14_stream3_5) as k on t.j = k.j3;"
+                            "query": "with t as (select * from test14_stream1_5 as a join table(test14_stream2_5) as b on a.j = b.j2)select i, j, k, i2, j2, k2, i3, j3, k3, _tp_delta from t left join table(test14_stream3_5) as k on t.j = k.j3;"
                         },
                         {
                             "client": "python",
@@ -3185,7 +3189,8 @@
                             "a",
                             "3",
                             "2",
-                            "e"
+                            "e",
+                            1
                         ],
                         [
                             "1",
@@ -3196,7 +3201,8 @@
                             "f",
                             "6",
                             "3",
-                            "7"
+                            "7",
+                            1
                         ],
                         [
                             "1",
@@ -3207,7 +3213,8 @@
                             "a",
                             "3",
                             "2",
-                            "e"
+                            "e",
+                            -1
                         ],
                         [
                             "1",
@@ -3218,7 +3225,8 @@
                             "a",
                             "3",
                             "2",
-                            "e"
+                            "e",
+                            1
                         ],
                         [
                             "1",
@@ -3229,7 +3237,8 @@
                             "b",
                             "0",
                             "0",
-                            ""
+                            "",
+                            1
                         ]
                     ]
                 }

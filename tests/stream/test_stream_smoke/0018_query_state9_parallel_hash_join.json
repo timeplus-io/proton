@@ -209,7 +209,7 @@
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test19_right_stream2"},
                         {"client":"python", "query_type": "table", "exist":"test19_left_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_left_stream2 (i int, s string, ts datetime) primary key i settings mode='versioned_kv'"},
                         {"client":"python", "query_type": "table", "exist":"test19_right_stream2", "exist_wait":2, "wait":1, "query":"create stream if not exists test19_right_stream2 (ii int, ss string, tts datetime) primary key ii settings mode='versioned_kv'"},
-                        {"client":"python", "query_type": "stream", "depends_on_stream":"test19_right_stream2", "query_id":"19227", "wait":1, "terminate":"manual", "query":"subscribe to select s, ss from test19_left_stream2 inner join test19_right_stream2 on i=ii settings join_algorithm = 'parallel_hash', checkpoint_interval=1"},
+                        {"client":"python", "query_type": "stream", "depends_on_stream":"test19_right_stream2", "query_id":"19227", "wait":1, "terminate":"manual", "query":"subscribe to select s, ss, _tp_delta from test19_left_stream2 inner join test19_right_stream2 on i=ii settings join_algorithm = 'parallel_hash', checkpoint_interval=1"},
                         {"client":"python", "query_type": "table", "depends_on":"19227", "wait":1, "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's1', '2022-05-23 15:45:10')"},
                         {"client":"python", "query_type": "table", "query": "insert into test19_right_stream2(ii, ss, tts) values (1, 's2', '2022-05-23 15:45:11')"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test19_left_stream2(i, s, ts) values (1, 's', '2022-05-23 15:45:10')"},
@@ -222,7 +222,7 @@
                 {
                     "query_id":"19227",
                     "expected_results":[
-                        ["s", "s2"], ["s", "s2"], ["ss", "s2"]
+                        ["s", "s2", 1], ["s", "s2", -1], ["ss", "s2", 1]
                     ]
                 }
             ]
