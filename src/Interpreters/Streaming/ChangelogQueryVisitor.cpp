@@ -17,6 +17,7 @@ namespace ErrorCodes
 {
 extern const int UNKNOWN_IDENTIFIER;
 extern const int NOT_IMPLEMENTED;
+extern const int INCORRECT_QUERY;
 }
 
 namespace Streaming
@@ -70,8 +71,7 @@ void ChangelogQueryVisitorMatcher::visit(ASTSelectQuery & select_query, ASTPtr &
         {
             /// For changelog/changelog_kv, the `*` include `_tp_delta`
             /// For versioned_kv, the `*` didn't include `_tp_delta`
-            bool asterisk_include_delta = isChangelogDataStream(tables_with_columns.front().output_data_stream_semantic)
-                || isChangelogKeyedStorage(tables_with_columns.front().output_data_stream_semantic);
+            bool asterisk_include_delta = isChangelogDataStream(tables_with_columns.front().output_data_stream_semantic);
             addDeltaColumn(select_query, asterisk_include_delta);
         }
     }
@@ -131,10 +131,10 @@ void ChangelogQueryVisitorMatcher::addDeltaColumn(ASTSelectQuery & select_query,
     if (!found_delta_col)
     {
         if (is_subquery)
-            /// Need add delta if _tp_delta is not present and the @p select_query is a subquery 
+            /// Need add delta if _tp_delta is not present and the \param select_query is a subquery (not top level select)
             select_expression_list->children.emplace_back(std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_DELTA_FLAG));
-        else if (query_info.force_emit_changelog)
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "The query with emit changelog explicitly requires a `_tp_delta` in select list");
+        else
+            throw Exception(ErrorCodes::INCORRECT_QUERY, "The query with changelog output requires selecting the `_tp_delta` column explicitly");
     }
 
     if (add_new_required_result_columns)
@@ -143,3 +143,4 @@ void ChangelogQueryVisitorMatcher::addDeltaColumn(ASTSelectQuery & select_query,
 
 }
 }
+
