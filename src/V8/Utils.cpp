@@ -456,12 +456,16 @@ std::string getHeapStatisticsString(v8::HeapStatistics & heap_statistics)
 
 void checkHeapLimit(v8::Isolate * isolate, size_t max_v8_heap_size_in_bytes)
 {
-    v8::Locker locker(isolate);
-    v8::Isolate::Scope isolate_scope(isolate);
-    v8::HandleScope handle_scope(isolate);
-    v8::HandleScope scope(isolate);
     v8::HeapStatistics heap_statistics;
-    isolate->GetHeapStatistics(&heap_statistics);
+
+    /// Lock only for getting heap statistics
+    {
+        v8::Locker locker(isolate);
+        v8::Isolate::Scope isolate_scope(isolate);
+        v8::HandleScope handle_scope(isolate);
+        v8::HandleScope scope(isolate);
+        isolate->GetHeapStatistics(&heap_statistics);
+    }
 
     auto used = heap_statistics.used_heap_size();
     auto total = heap_statistics.heap_size_limit();
