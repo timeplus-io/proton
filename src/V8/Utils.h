@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Functions/UserDefined/UserDefinedFunctionConfiguration.h>
+#include <base/getMemoryAmount.h>
 #include <base/types.h>
 
 #include <span>
@@ -72,5 +73,7 @@ void validateStatelessFunctionSource(const std::string & func_name, const std::s
 
 /// Check v8 heap size and throw exception if exceeds limit
 void checkHeapLimit(v8::Isolate * isolate, size_t max_v8_heap_size_in_bytes);
+
+std::string getHeapStatisticsString(v8::HeapStatistics & heap_statistics);
 }
 }
