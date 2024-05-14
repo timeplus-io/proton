@@ -2381,7 +2381,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             storage->read(
                 query_plan, required_columns, storage_snapshot, query_info, context, processing_stage, max_block_size, max_streams);
             auto replay_step = std::make_unique<Streaming::ReplayStreamStep>(
-                query_plan.getCurrentDataStream(), settings.replay_speed, std::move(last_sns), settings.replay_time_column);
+                query_plan.getCurrentDataStream(), settings.replay_speed, settings.replay_time_column, std::move(last_sns));
             query_plan.addStep(std::move(replay_step));
         }
         else
@@ -3856,17 +3856,20 @@ std::vector<nlog::RecordSN> InterpreterSelectQuery::checkReplaySettingsAndGetLas
         }
         else
             storagestream = storage->as<StorageStream>();
-
-        if (!storagestream)
-            throw Exception("Replay Stream is only support append-only stream", ErrorCodes::NOT_IMPLEMENTED);
     }
-    assert(storagestream);
+
+    if (!storagestream)
+        throw Exception("Replay Stream is only support append-only stream", ErrorCodes::NOT_IMPLEMENTED);
 
     const String & replay_time_col = settings.replay_time_column;
-    const auto & name_type = storage_snapshot->getColumn(GetColumnsOptions(GetColumnsOptions::All).withSubcolumns(), replay_time_col);
-    const auto & type = name_type.type;
-    if (replay_time_col != ProtonConsts::RESERVED_APPEND_TIME && !isDateTime64(type))
-        throw Exception("Userdefined replay time column must be DateTime64", ErrorCodes::INVALID_SETTING_VALUE);
+
+    auto name_type = storage_snapshot->tryGetColumn(GetColumnsOptions(GetColumnsOptions::All).withVirtuals(), replay_time_col);
+    if (!name_type.has_value())
+        throw Exception("Not found replay column in stream", ErrorCodes::INVALID_SETTING_VALUE);
+
+    const auto & type = name_type.value().type;
+    if (replay_time_col != ProtonConsts::RESERVED_APPEND_TIME && !isDateTime64(type) && !isDateTime(type))
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "The setting replay_time_column must be DateTime64 or DateTim32 type, but got {}", type->getName());
 
     if (std::ranges::none_of(required_columns, [&replay_time_col](const auto & name) { return name == replay_time_col; }))
         required_columns.emplace_back(replay_time_col);

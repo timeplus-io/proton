@@ -25,7 +25,7 @@ static ITransformingStep::Traits getTraits()
 }
 
 ReplayStreamStep::ReplayStreamStep(
-    const DataStream & input_stream_, Float32 replay_speed_, std::vector<Int64> shards_last_sns_, const String & replay_time_col_)
+    const DataStream & input_stream_, Float32 replay_speed_, const String & replay_time_col_, std::vector<Int64> shards_last_sns_)
     : ITransformingStep(input_stream_, input_stream_.header, getTraits())
     , replay_speed(replay_speed_)
     , shards_last_sns(std::move(shards_last_sns_))
