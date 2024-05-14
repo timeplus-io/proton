@@ -2,7 +2,7 @@
 #include <Processors/Streaming/ReplayStreamTransform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 #include <Common/Exception.h>
-
+#include <Common/ProtonCommon.h>
 
 
 namespace DB
@@ -41,8 +41,7 @@ void ReplayStreamStep::transformPipeline(QueryPipelineBuilder & pipeline, const 
 
     size_t index = 0;
     pipeline.addSimpleTransform([&](const Block & header) {
-        return std::make_shared<ReplayStreamTransform>(
-            header, replay_speed, shards_last_sns[index++], replay_time_col);
+        return std::make_shared<ReplayStreamTransform>(header, replay_speed, shards_last_sns[index++], replay_time_col);
     });
 }
 

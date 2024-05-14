@@ -114,7 +114,6 @@
 #include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/Streaming/WatermarkStamper.h>
 #include <Storages/Streaming/ProxyStream.h>
-#include <Storages/Streaming/StorageStream.h>
 #include <Storages/Streaming/storageUtil.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends
@@ -144,6 +143,7 @@ namespace ErrorCodes
     extern const int FUNCTION_NOT_ALLOWED;
     extern const int DATABASE_ACCESS_DENIED;
     extern const int UDA_NOT_APPLICABLE;
+    extern const int INVALID_SETTING_VALUE;
     /// proton: ends
 }
 
@@ -2377,39 +2377,11 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         /// need replay operation
         if (settings.replay_speed > 0)
         {
-            /// So far, only support append-only stream (or proxyed)
-            StorageStream * storagestream = nullptr;
-            if (Streaming::isAppendStorage(storage->dataStreamSemantic()))
-            {
-                if (const auto * proxy = storage->as<Streaming::ProxyStream>())
-                {
-                    const auto & proxyed = proxy->getProxyStorageOrSubquery();
-                    const auto * nested_storage = std::get_if<StoragePtr>(&proxyed);
-                    if (nested_storage)
-                        storagestream = (*nested_storage)->as<StorageStream>();
-                }
-                else
-                    storagestream = storage->as<StorageStream>();
-
-                if (!storagestream)
-                    throw Exception("Replay Stream is only support append-only stream", ErrorCodes::NOT_IMPLEMENTED);
-            }
-            assert(storagestream);
-
-            const String & replay_time_col = settings.replay_time_column;
-            if (std::ranges::none_of(required_columns, [](const auto & name) { return name == replay_time_col; }))
-                required_columns.emplace_back(replay_time_col);
-
-            if (std::ranges::none_of(
-                    required_columns, [](const auto & name) { return name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID; }))
-                required_columns.emplace_back(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID);
-
+            auto last_sns = checkReplaySettingsAndGetLastSN();
             storage->read(
                 query_plan, required_columns, storage_snapshot, query_info, context, processing_stage, max_block_size, max_streams);
-
             auto replay_step = std::make_unique<Streaming::ReplayStreamStep>(
-                query_plan.getCurrentDataStream(), settings.replay_speed, (storagestream)->getLastSNs(), replay_time_col);
-            replay_step->setStepDescription("Replay Stream");
+                query_plan.getCurrentDataStream(), settings.replay_speed, std::move(last_sns), settings.replay_time_column);
             query_plan.addStep(std::move(replay_step));
         }
         else
@@ -3865,6 +3837,45 @@ void InterpreterSelectQuery::checkUDA()
     if (!isStreamingQuery() && has_user_defined_emit_strategy)
         throw Exception(
             ErrorCodes::UDA_NOT_APPLICABLE, "User Defined Aggregate function with own emit strategy cannot be used in non-streaming query");
+}
+
+std::vector<nlog::RecordSN> InterpreterSelectQuery::checkReplaySettingsAndGetLastSN()
+{
+    const Settings & settings = context->getSettingsRef();
+
+    /// So far, only support append-only stream (or proxyed)
+    StorageStream * storagestream = nullptr;
+    if (Streaming::isAppendStorage(storage->dataStreamSemantic()))
+    {
+        if (const auto * proxy = storage->as<Streaming::ProxyStream>())
+        {
+            const auto & proxyed = proxy->getProxyStorageOrSubquery();
+            const auto * nested_storage = std::get_if<StoragePtr>(&proxyed);
+            if (nested_storage)
+                storagestream = (*nested_storage)->as<StorageStream>();
+        }
+        else
+            storagestream = storage->as<StorageStream>();
+
+        if (!storagestream)
+            throw Exception("Replay Stream is only support append-only stream", ErrorCodes::NOT_IMPLEMENTED);
+    }
+    assert(storagestream);
+
+    const String & replay_time_col = settings.replay_time_column;
+    const auto & name_type = storage_snapshot->getColumn(GetColumnsOptions(GetColumnsOptions::All).withSubcolumns(), replay_time_col);
+    const auto & type = name_type.type;
+    if (replay_time_col != ProtonConsts::RESERVED_APPEND_TIME && !isDateTime64(type))
+        throw Exception("Userdefined replay time column must be DateTime64", ErrorCodes::INVALID_SETTING_VALUE);
+
+    if (std::ranges::none_of(required_columns, [&replay_time_col](const auto & name) { return name == replay_time_col; }))
+        required_columns.emplace_back(replay_time_col);
+
+    if (std::ranges::none_of(
+            required_columns, [](const auto & name) { return name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID; }))
+        required_columns.emplace_back(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID);
+
+    return storagestream->getLastSNs();
 }
 
 /// Preliminary LIMIT - is used in every source, if there are several sources, before they are combined.

@@ -24,11 +24,7 @@ ReplayStreamTransform::ReplayStreamTransform(const Block & header, Float32 repla
     , replay_time_col(replay_time_col_)
 {
     time_index = header.getPositionByName(replay_time_col);
-    auto & type = header.getByPosition(time_index).type;
     /// user defined replay_time_col must be DateTime64
-    if (replay_time_col != ProtonConsts::RESERVED_APPEND_TIME && !isDateTime64(type))
-        throw Exception(
-            fmt::format("ReplayStreamTransform need datatime64 type column, but got {}", type->getName()), ErrorCodes::LOGICAL_ERROR);
     sn_index = header.getPositionByName(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID);
 }
 
@@ -37,7 +33,7 @@ ReplayStreamTransform::ReplayStreamTransform(const Block & header, Float32 repla
  * For example: input_chunk: [1, 1, 1, 2, 2, 2, 3, 3, 3]
  * After the cutChunk, the output_chunks will be [[1, 1, 1], [2, 2, 2], [3, 3, 3]]
  */
-void ReplayStreamTransform::cutChunk(Chunk & input_chunk)
+void ReplayStreamTransform::transform(Chunk & input_chunk)
 {
     assert(input_chunk.rows() > 0);
     size_t index = 0;
@@ -48,9 +44,18 @@ void ReplayStreamTransform::cutChunk(Chunk & input_chunk)
         Chunk chunk;
         for (const auto & col : columns)
             chunk.addColumn(col->cut(start_pos, end_pos - start_pos));
-        output_chunks.push(Chunk());
-        output_chunks.back().swap(chunk);
+        output_chunks.emplace(std::move(chunk));
     };
+
+    const auto first_row_time = columns[time_index]->getInt(0);
+    const auto last_row_time = columns[time_index]->getInt(input_chunk.rows() - 1);
+    if (last_row_time == first_row_time)
+    {
+        /// fast path, the whole chunk has the same time, no need to traverse one by one.
+        output_chunks.emplace(std::move(input_chunk));
+        return;
+    }
+
     while (index < input_chunk.rows())
     {
         if (columns[time_index]->getInt(index) != columns[time_index]->getInt(cur_index))
@@ -83,7 +88,7 @@ void ReplayStreamTransform::work()
     try
     {
         if (enable_replay && input_data.chunk.rows() && output_chunks.empty())
-            cutChunk(input_data.chunk);
+            transform(input_data.chunk);
         transform(input_data.chunk, output_data.chunk);
 
         metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
@@ -147,13 +152,11 @@ void ReplayStreamTransform::transform(Chunk & input_chunk, Chunk & output_chunk)
 
     if (wait_interval_ms < 0)
         throw Exception(
-            fmt::format(
-                "Unoreded data checked, ReplayStreamTransform need ordered data, replay_time_col: {}, last_batch_time: {}, "
-                "this_batch_time: {}",
-                this->replay_time_col,
-                this->last_batch_time.value(),
-                this_batch_time),
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "Found unordered replay timestamp '{}', current_ts: {}, last_ts: {}",
+            this->replay_time_col,
+            this_batch_time,
+            last_batch_time.value());
 
     while (wait_interval_ms > 0)
     {

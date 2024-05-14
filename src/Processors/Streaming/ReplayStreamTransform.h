@@ -17,9 +17,8 @@ public:
     String getName() const override { return "ReplayStreamTransform"; }
     void work() override;
     void transform(Chunk & input_chunk, Chunk & output_chunk) override;
-    void transform(Chunk & chunk) override {}
+    void transform(Chunk & chunk) override;
 
-    void cutChunk(Chunk & input_chunk);
 private:
 
     Float32 replay_speed = 0;
