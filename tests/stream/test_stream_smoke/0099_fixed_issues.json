@@ -515,7 +515,7 @@
     },
     {
       "id": 18,
-      "tags": ["changelog"],
+      "tags": ["changelog", "to_support"],
       "name": "#221",
       "description": "Covering query changelog function over a view with changelog join",
       "steps":[
