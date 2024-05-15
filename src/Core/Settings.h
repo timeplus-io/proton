@@ -824,6 +824,7 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(UInt64, checkpoint_interval, 0, "Checkpoint interval in seconds", 0) \
     M(UInt64, javascript_uda_max_concurrency, 1, "Control the concurrency of JavaScript UDA in a query", 0) \
     M(Float, replay_speed, 0., "Control the replay speed..0 < replay_speed < 1, means replay slower.replay_speed == 1, means replay by actual ingest interval.1 < replay_speed < <max_limit>, means replay faster", 0) \
+    M(String, replay_time_column, "_tp_append_time", "user specified replay time column, default column is _tp_append_time", 0) \
     M(UInt64, max_events, 0, "Total events to generate for random stream", 0) \
     M(Float, eps, -1., "control the random stream eps in query time, defalut value is -1, if it is 0 means no limit.", 0) \
 // End of GLOBAL_SETTINGS
