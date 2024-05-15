@@ -35,7 +35,7 @@ private:
     bool ignore_spaces;
 };
 
-class CustomSeparatedFormatReader : public FormatWithNamesAndTypesReader
+class CustomSeparatedFormatReader final : public FormatWithNamesAndTypesReader
 {
 public:
     CustomSeparatedFormatReader(PeekableReadBuffer & buf_, bool ignore_spaces_, const FormatSettings & format_settings_);
