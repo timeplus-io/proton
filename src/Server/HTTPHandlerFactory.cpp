@@ -212,10 +212,15 @@ void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer 
     addCommonDefaultHandlersFactory(factory, server);
 
     /// proton: start. Add rest request process handler
-    for (const auto * prefix : {"proton", "timeplusd"})
     {
-        auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(server, prefix);
-        rest_handler->attachNonStrictPath(fmt::format("/{}", prefix));
+        auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(server, "proton");
+        rest_handler->attachNonStrictPath("/proton");
+        factory.addHandler(rest_handler);
+    }
+
+    {
+        auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(server, "timeplusd");
+        rest_handler->attachNonStrictPath("/timeplusd");
         factory.addHandler(rest_handler);
     }
     /// proton: end.
