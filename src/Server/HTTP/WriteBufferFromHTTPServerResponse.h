@@ -27,7 +27,7 @@ namespace DB
 /// Additionally, supports HTTP response compression (in this case corresponding Content-Encoding
 /// header will be set).
 ///
-/// Also this class write and flush special x-proton-progress HTTP headers
+/// Also this class write and flush special x-timeplus-progress HTTP headers
 ///  if no data was sent at the time of progress notification.
 /// This allows to implement progress bar in HTTP clients.
 class WriteBufferFromHTTPServerResponse final : public BufferWithOwnMemory<WriteBuffer>
@@ -84,9 +84,9 @@ private:
     ///  but not finish them with \r\n, allowing to send more headers subsequently.
     void startSendHeaders();
 
-    // Used for write the header x-proton-progress
+    // Used for write the header x-timeplus-progress
     void writeHeaderProgress();
-    // Used for write the header x-proton-summary
+    // Used for write the header x-timeplus-summary
     void writeHeaderSummary();
 
     /// This method finish headers with \r\n, allowing to start to send body.
