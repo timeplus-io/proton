@@ -126,7 +126,7 @@ interserver_http_port: 9009
 listen_host: '::'
 
 # Same for hosts without support for IPv6:
-# listen_host: 0.0.0.0
+listen_host: 0.0.0.0
 
 # Default values - try listen localhost on IPv4 and IPv6.
 # listen_host: '::1'
