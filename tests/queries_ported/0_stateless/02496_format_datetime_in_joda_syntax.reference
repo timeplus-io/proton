@@ -1,0 +1,149 @@
+-- { echoOn }
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'G'), format_datetime_in_joda_syntax(datetime64, 'G'), format_datetime_in_joda_syntax(date, 'G'), format_datetime_in_joda_syntax(date32, 'G');
+AD	AD	AD	AD
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'GG'), format_datetime_in_joda_syntax(datetime64, 'GG'), format_datetime_in_joda_syntax(date, 'GG'), format_datetime_in_joda_syntax(date32, 'GG');
+AD	AD	AD	AD
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'GGG'), format_datetime_in_joda_syntax(datetime64, 'GGG'), format_datetime_in_joda_syntax(date, 'GGG'), format_datetime_in_joda_syntax(date32, 'GGG');
+AD	AD	AD	AD
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'GGGG'), format_datetime_in_joda_syntax(datetime64, 'GGGG'), format_datetime_in_joda_syntax(date, 'GGGG'), format_datetime_in_joda_syntax(date32, 'GGGG');
+Anno Domini	Anno Domini	Anno Domini	Anno Domini
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'GGGGG'), format_datetime_in_joda_syntax(datetime64, 'GGGGG'), format_datetime_in_joda_syntax(date, 'GGGGG'), format_datetime_in_joda_syntax(date32, 'GGGGG');
+Anno Domini	Anno Domini	Anno Domini	Anno Domini
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'C'), format_datetime_in_joda_syntax(datetime64, 'C'), format_datetime_in_joda_syntax(date, 'C'), format_datetime_in_joda_syntax(date32, 'C');
+20	20	20	20
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'CC'), format_datetime_in_joda_syntax(datetime64, 'CC'), format_datetime_in_joda_syntax(date, 'CC'), format_datetime_in_joda_syntax(date32, 'CC');
+20	20	20	20
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'CCC'), format_datetime_in_joda_syntax(datetime64, 'CCC'), format_datetime_in_joda_syntax(date, 'CCC'), format_datetime_in_joda_syntax(date32, 'CCC');
+020	020	020	020
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'Y'), format_datetime_in_joda_syntax(datetime64, 'Y'), format_datetime_in_joda_syntax(date, 'Y'), format_datetime_in_joda_syntax(date32, 'Y');
+2018	2018	2018	2018
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'YY'), format_datetime_in_joda_syntax(datetime64, 'YY'), format_datetime_in_joda_syntax(date, 'YY'), format_datetime_in_joda_syntax(date32, 'YY');
+18	18	18	18
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'YYY'), format_datetime_in_joda_syntax(datetime64, 'YYY'), format_datetime_in_joda_syntax(date, 'YYY'), format_datetime_in_joda_syntax(date32, 'YYY');
+2018	2018	2018	2018
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'YYYY'), format_datetime_in_joda_syntax(datetime64, 'YYYY'), format_datetime_in_joda_syntax(date, 'YYYY'), format_datetime_in_joda_syntax(date32, 'YYYY');
+2018	2018	2018	2018
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'YYYYY'), format_datetime_in_joda_syntax(datetime64, 'YYYYY'), format_datetime_in_joda_syntax(date, 'YYYYY'), format_datetime_in_joda_syntax(date32, 'YYYYY');
+02018	02018	02018	02018
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'e'), format_datetime_in_joda_syntax(datetime64, 'e'), format_datetime_in_joda_syntax(date, 'e'), format_datetime_in_joda_syntax(date32, 'e');
+5	5	5	5
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'ee'), format_datetime_in_joda_syntax(datetime64, 'ee'), format_datetime_in_joda_syntax(date, 'ee'), format_datetime_in_joda_syntax(date32, 'ee');
+05	05	05	05
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'E'), format_datetime_in_joda_syntax(datetime64, 'E'), format_datetime_in_joda_syntax(date, 'E'), format_datetime_in_joda_syntax(date32, 'E');
+Fri	Fri	Fri	Fri
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'EE'), format_datetime_in_joda_syntax(datetime64, 'EE'), format_datetime_in_joda_syntax(date, 'EE'), format_datetime_in_joda_syntax(date32, 'EE');
+Fri	Fri	Fri	Fri
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'EEE'), format_datetime_in_joda_syntax(datetime64, 'EEE'), format_datetime_in_joda_syntax(date, 'EEE'), format_datetime_in_joda_syntax(date32, 'EEE');
+Fri	Fri	Fri	Fri
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'EEEE'), format_datetime_in_joda_syntax(datetime64, 'EEEE'), format_datetime_in_joda_syntax(date, 'EEEE'), format_datetime_in_joda_syntax(date32, 'EEEE');
+Friday	Friday	Friday	Friday
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'EEEEE'), format_datetime_in_joda_syntax(datetime64, 'EEEEE'), format_datetime_in_joda_syntax(date, 'EEEEE'), format_datetime_in_joda_syntax(date32, 'EEEEE');
+Friday	Friday	Friday	Friday
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'y'), format_datetime_in_joda_syntax(datetime64, 'y'), format_datetime_in_joda_syntax(date, 'y'), format_datetime_in_joda_syntax(date32, 'y');
+2018	2018	2018	2018
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'yy'), format_datetime_in_joda_syntax(datetime64, 'yy'), format_datetime_in_joda_syntax(date, 'yy'), format_datetime_in_joda_syntax(date32, 'yy');
+18	18	18	18
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'yyy'), format_datetime_in_joda_syntax(datetime64, 'yyy'), format_datetime_in_joda_syntax(date, 'yyy'), format_datetime_in_joda_syntax(date32, 'yyy');
+2018	2018	2018	2018
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'yyyy'), format_datetime_in_joda_syntax(datetime64, 'yyyy'), format_datetime_in_joda_syntax(date, 'yyyy'), format_datetime_in_joda_syntax(date32, 'yyyy');
+2018	2018	2018	2018
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'yyyyy'), format_datetime_in_joda_syntax(datetime64, 'yyyyy'), format_datetime_in_joda_syntax(date, 'yyyyy'), format_datetime_in_joda_syntax(date32, 'yyyyy');
+02018	02018	02018	02018
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'D'), format_datetime_in_joda_syntax(datetime64, 'D'), format_datetime_in_joda_syntax(date, 'D'), format_datetime_in_joda_syntax(date32, 'D');
+12	12	12	12
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'DD'), format_datetime_in_joda_syntax(datetime64, 'DD'), format_datetime_in_joda_syntax(date, 'DD'), format_datetime_in_joda_syntax(date32, 'DD');
+12	12	12	12
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'DDD'), format_datetime_in_joda_syntax(datetime64, 'DDD'), format_datetime_in_joda_syntax(date, 'DDD'), format_datetime_in_joda_syntax(date32, 'DDD');
+012	012	012	012
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'M'), format_datetime_in_joda_syntax(datetime64, 'M'), format_datetime_in_joda_syntax(date, 'M'), format_datetime_in_joda_syntax(date32, 'M');
+1	1	1	1
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'MM'), format_datetime_in_joda_syntax(datetime64, 'MM'), format_datetime_in_joda_syntax(date, 'MM'), format_datetime_in_joda_syntax(date32, 'MM');
+01	01	01	01
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'MMM'), format_datetime_in_joda_syntax(datetime64, 'MMM'), format_datetime_in_joda_syntax(date, 'MMM'), format_datetime_in_joda_syntax(date32, 'MMM');
+Jan	Jan	Jan	Jan
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'MMMM'), format_datetime_in_joda_syntax(datetime64, 'MMMM'), format_datetime_in_joda_syntax(date, 'MMMM'), format_datetime_in_joda_syntax(date32, 'MMMM');
+January	January	January	January
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'd'), format_datetime_in_joda_syntax(datetime64, 'd'), format_datetime_in_joda_syntax(date, 'd'), format_datetime_in_joda_syntax(date32, 'd');
+12	12	12	12
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'dd'), format_datetime_in_joda_syntax(datetime64, 'dd'), format_datetime_in_joda_syntax(date, 'dd'), format_datetime_in_joda_syntax(date32, 'dd');
+12	12	12	12
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'ddd'), format_datetime_in_joda_syntax(datetime64, 'ddd'), format_datetime_in_joda_syntax(date, 'ddd'), format_datetime_in_joda_syntax(date32, 'ddd');
+012	012	012	012
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'a'), format_datetime_in_joda_syntax(datetime64, 'a'), format_datetime_in_joda_syntax(date, 'a'), format_datetime_in_joda_syntax(date32, 'a');
+PM	PM	AM	AM
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'aa'), format_datetime_in_joda_syntax(datetime64, 'aa'), format_datetime_in_joda_syntax(date, 'aa'), format_datetime_in_joda_syntax(date32, 'aa');
+PM	PM	AM	AM
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'aaa'), format_datetime_in_joda_syntax(datetime64, 'aaa'), format_datetime_in_joda_syntax(date, 'aaa'), format_datetime_in_joda_syntax(date32, 'aaa');
+PM	PM	AM	AM
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'K'), format_datetime_in_joda_syntax(datetime64, 'K'), format_datetime_in_joda_syntax(date, 'K'), format_datetime_in_joda_syntax(date32, 'K');
+10	10	0	0
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'KK'), format_datetime_in_joda_syntax(datetime64, 'KK'), format_datetime_in_joda_syntax(date, 'KK'), format_datetime_in_joda_syntax(date32, 'KK');
+10	10	00	00
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'KKK'), format_datetime_in_joda_syntax(datetime64, 'KKK'), format_datetime_in_joda_syntax(date, 'KKK'), format_datetime_in_joda_syntax(date32, 'KKK');
+010	010	000	000
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'h'), format_datetime_in_joda_syntax(datetime64, 'h'), format_datetime_in_joda_syntax(date, 'h'), format_datetime_in_joda_syntax(date32, 'h');
+10	10	12	12
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'hh'), format_datetime_in_joda_syntax(datetime64, 'hh'), format_datetime_in_joda_syntax(date, 'hh'), format_datetime_in_joda_syntax(date32, 'hh');
+10	10	12	12
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'hhh'), format_datetime_in_joda_syntax(datetime64, 'hhh'), format_datetime_in_joda_syntax(date, 'hhh'), format_datetime_in_joda_syntax(date32, 'hhh');
+010	010	012	012
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'H'), format_datetime_in_joda_syntax(datetime64, 'H'), format_datetime_in_joda_syntax(date, 'H'), format_datetime_in_joda_syntax(date32, 'H');
+22	22	0	0
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'HH'), format_datetime_in_joda_syntax(datetime64, 'HH'), format_datetime_in_joda_syntax(date, 'HH'), format_datetime_in_joda_syntax(date32, 'HH');
+22	22	00	00
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'HHH'), format_datetime_in_joda_syntax(datetime64, 'HHH'), format_datetime_in_joda_syntax(date, 'HHH'), format_datetime_in_joda_syntax(date32, 'HHH');
+022	022	000	000
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'k'), format_datetime_in_joda_syntax(datetime64, 'k'), format_datetime_in_joda_syntax(date, 'k'), format_datetime_in_joda_syntax(date32, 'k');
+22	22	24	24
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'kk'), format_datetime_in_joda_syntax(datetime64, 'kk'), format_datetime_in_joda_syntax(date, 'kk'), format_datetime_in_joda_syntax(date32, 'kk');
+22	22	24	24
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'kkk'), format_datetime_in_joda_syntax(datetime64, 'kkk'), format_datetime_in_joda_syntax(date, 'kkk'), format_datetime_in_joda_syntax(date32, 'kkk');
+022	022	024	024
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'm'), format_datetime_in_joda_syntax(datetime64, 'm'), format_datetime_in_joda_syntax(date, 'm'), format_datetime_in_joda_syntax(date32, 'm');
+33	33	0	0
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'mm'), format_datetime_in_joda_syntax(datetime64, 'mm'), format_datetime_in_joda_syntax(date, 'mm'), format_datetime_in_joda_syntax(date32, 'mm');
+33	33	00	00
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'mmm'), format_datetime_in_joda_syntax(datetime64, 'mmm'), format_datetime_in_joda_syntax(date, 'mmm'), format_datetime_in_joda_syntax(date32, 'mmm');
+033	033	000	000
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 's'), format_datetime_in_joda_syntax(datetime64, 's'), format_datetime_in_joda_syntax(date, 's'), format_datetime_in_joda_syntax(date32, 's');
+44	44	0	0
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'ss'), format_datetime_in_joda_syntax(datetime64, 'ss'), format_datetime_in_joda_syntax(date, 'ss'), format_datetime_in_joda_syntax(date32, 'ss');
+44	44	00	00
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'sss'), format_datetime_in_joda_syntax(datetime64, 'sss'), format_datetime_in_joda_syntax(date, 'sss'), format_datetime_in_joda_syntax(date32, 'sss');
+044	044	000	000
+with '2018-01-12 22:33:44' as s, to_datetime(s, 'UTC') as datetime, to_datetime64(s, 6, 'UTC') as datetime64, to_date16(s) as date, to_date(s) as date32 select format_datetime_in_joda_syntax(datetime, 'zzzz'), format_datetime_in_joda_syntax(datetime64, 'zzzz');
+UTC	UTC
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'G123DDD'), format_datetime_in_joda_syntax(datetime64, 'G123DDD'), format_datetime_in_joda_syntax(date, 'G123DDD'), format_datetime_in_joda_syntax(date32, 'G123DDD');
+AD123012	AD123012	AD123012	AD123012
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'G\'\'DDD'), format_datetime_in_joda_syntax(datetime64, 'G\'\'DDD'), format_datetime_in_joda_syntax(date, 'G\'\'DDD'), format_datetime_in_joda_syntax(date32, 'G\'\'DDD');
+AD\'012	AD\'012	AD\'012	AD\'012
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'G\'aaa\'DDD'), format_datetime_in_joda_syntax(datetime64, 'G\'aaa\'DDD'), format_datetime_in_joda_syntax(date, 'G\'aaa\'DDD'), format_datetime_in_joda_syntax(date32, 'G\'aaa\'DDD');
+ADaaa012	ADaaa012	ADaaa012	ADaaa012
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'G\'a\'\'aa\'DDD'), format_datetime_in_joda_syntax(datetime64, 'G\'a\'\'aa\'DDD'), format_datetime_in_joda_syntax(date, 'G\'a\'\'aa\'DDD'), format_datetime_in_joda_syntax(date32, 'G\'a\'\'aa\'DDD');
+ADa\'aa012	ADa\'aa012	ADa\'aa012	ADa\'aa012
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'x'), format_datetime_in_joda_syntax(datetime64, 'x'), format_datetime_in_joda_syntax(date, 'x'), format_datetime_in_joda_syntax(date32, 'x');
+2018	2018	2018	2018
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'w'), format_datetime_in_joda_syntax(datetime64, 'w'), format_datetime_in_joda_syntax(date, 'w'), format_datetime_in_joda_syntax(date32, 'w');
+2	2	2	2
+with '2018-01-12 22:33:44' as s, to_datetime(s) as datetime, to_datetime64(s, 6) as datetime64, to_date16(s) as date, to_date(s) as date32 SELECT format_datetime_in_joda_syntax(datetime, 'S'), format_datetime_in_joda_syntax(datetime64, 'S'), format_datetime_in_joda_syntax(date, 'S'), format_datetime_in_joda_syntax(date32, 'S');
+0	0	0	0
+with '2018-01-12 22:33:44.55' as s, to_datetime64(s, 6) as datetime64 SELECT format_datetime_in_joda_syntax(datetime64, 'S');
+5
+with '2018-01-12 22:33:44.55' as s, to_datetime64(s, 6) as datetime64 SELECT format_datetime_in_joda_syntax(datetime64, 'SS');
+55
+with '2018-01-12 22:33:44.55' as s, to_datetime64(s, 6) as datetime64 SELECT format_datetime_in_joda_syntax(datetime64, 'SSS');
+550
+with '2018-01-12 22:33:44.55' as s, to_datetime64(s, 6) as datetime64 SELECT format_datetime_in_joda_syntax(datetime64, 'SSSS');
+5500
+with '2018-01-12 22:33:44.55' as s, to_datetime64(s, 6) as datetime64 SELECT format_datetime_in_joda_syntax(datetime64, 'SSSSS');
+55000
+with '2018-01-12 22:33:44.55' as s, to_datetime64(s, 6) as datetime64 SELECT format_datetime_in_joda_syntax(datetime64, 'SSSSSS');
+550000
+with '2018-01-12 22:33:44.55' as s, to_datetime64(s, 6) as datetime64 SELECT format_datetime_in_joda_syntax(datetime64, 'SSSSSSS');
+5500000
+with '2018-01-12 22:33:44.55' as s, to_datetime64(s, 6) as datetime64 SELECT format_datetime_in_joda_syntax(datetime64, 'SSSSSSSS');
+55000000
+with '2018-01-12 22:33:44.55' as s, to_datetime64(s, 6) as datetime64 SELECT format_datetime_in_joda_syntax(datetime64, 'SSSSSSSSS');
+550000000
+with '2018-01-12 22:33:44.55' as s, to_datetime64(s, 6) as datetime64 SELECT format_datetime_in_joda_syntax(datetime64, 'SSSSSSSSSS');
+550000000

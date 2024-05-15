@@ -1,6 +1,6 @@
 -- We add 1, because function to_string has special behaviour for zero datetime
 WITH to_datetime(1 + rand() % 0xFFFFFFFF) AS t SELECT count() FROM numbers(1000000) WHERE format_datetime(t, '%F %T') != to_string(t);
-WITH to_datetime(1 + rand() % 0xFFFFFFFF) AS t SELECT count() FROM numbers(1000000) WHERE format_datetime(t, '%Y-%m-%d %H:%M:%S') != to_string(t);
+WITH to_datetime(1 + rand() % 0xFFFFFFFF) AS t SELECT count() FROM numbers(1000000) WHERE format_datetime(t, '%Y-%m-%d %H:%i:%S') != to_string(t);
 WITH to_datetime(1 + rand() % 0xFFFFFFFF) AS t SELECT count() FROM numbers(1000000) WHERE format_datetime(t, '%Y-%m-%d %R:%S') != to_string(t);
 WITH to_datetime(1 + rand() % 0xFFFFFFFF) AS t SELECT count() FROM numbers(1000000) WHERE format_datetime(t, '%F %R:%S') != to_string(t);
 

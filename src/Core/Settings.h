@@ -442,6 +442,9 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(Bool, allow_simdjson, true, "Allow using simdjson library in 'JSON*' functions if AVX2 instructions are available. If disabled rapidjson will be used.", 0) \
     M(Bool, allow_introspection_functions, false, "Allow functions for introspection of ELF and DWARF for query profiling. These functions are slow and may impose security considerations.", 0) \
     \
+    M(Bool, allow_execute_multiif_columnar, true, "Allow execute multiIf function columnar", 0) \
+    M(Bool, formatdatetime_parsedatetime_m_is_month_name, true, "Formatter '%M' in function 'formatDateTime' produces the month name instead of minutes.", 0) \
+    \
     M(UInt64, max_partitions_per_insert_block, 100, "Limit maximum number of partitions in single INSERTed block. Zero means unlimited. Throw exception if the block contains too many partitions. This setting is a safety threshold, because using large number of partitions is a common misconception.", 0) \
     M(Int64, max_partitions_to_read, -1, "Limit the max number of partitions that can be accessed in one query. <= 0 means unlimited.", 0) \
     M(Bool, check_query_single_value_result, true, "Return check query result as single 1/0 value", 0) \
@@ -821,6 +824,7 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(UInt64, checkpoint_interval, 0, "Checkpoint interval in seconds", 0) \
     M(UInt64, javascript_uda_max_concurrency, 1, "Control the concurrency of JavaScript UDA in a query", 0) \
     M(Float, replay_speed, 0., "Control the replay speed..0 < replay_speed < 1, means replay slower.replay_speed == 1, means replay by actual ingest interval.1 < replay_speed < <max_limit>, means replay faster", 0) \
+    M(String, replay_time_column, "_tp_append_time", "user specified replay time column, default column is _tp_append_time", 0) \
     M(UInt64, max_events, 0, "Total events to generate for random stream", 0) \
     M(Float, eps, -1., "control the random stream eps in query time, defalut value is -1, if it is 0 means no limit.", 0) \
 // End of GLOBAL_SETTINGS
