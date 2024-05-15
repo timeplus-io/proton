@@ -102,7 +102,7 @@ struct JoinStreamDescription
     std::optional<size_t> delta_column_position;
 
 private:
-    void assertValid() const;
+    void checkValid() const;
 };
 
 using JoinStreamDescriptionPtr = std::shared_ptr<JoinStreamDescription>;

@@ -47,9 +47,9 @@ std::pair<String, Int32> sendRequest(
         request.setContentLength(payload.size());
         request.setContentType("application/json");
         /// FIXME : query ID chain. Change the query ID to avoid same query ID issue
-        request.add("x-proton-query-id", "from-" + query_id);
+        request.add("x-timeplus-query-id", "from-" + query_id);
         if (!user.empty())
-            request.add("x-proton-user", user);
+            request.add("x-timeplus-user", user);
 
         /// add other headers
         if (!headers.empty())
@@ -59,7 +59,7 @@ std::pair<String, Int32> sendRequest(
 
         if (!password.empty())
         {
-            request.add("x-proton-key", password);
+            request.add("x-timeplus-key", password);
         }
 
         auto & ostr = session->sendRequest(request);

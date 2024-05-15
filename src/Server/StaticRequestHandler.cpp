@@ -69,7 +69,7 @@ static inline void trySendExceptionToClient(
 {
     try
     {
-        response.set("x-proton-exception-code", toString<int>(exception_code));
+        response.set("x-timeplus-exception-code", toString<int>(exception_code));
 
         /// If HTTP method is POST and Keep-Alive is turned on, we should read the whole request body
         /// to avoid reading part of the current request body in the next request.

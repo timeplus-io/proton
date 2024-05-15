@@ -38,7 +38,7 @@ void WriteBufferFromHTTPServerResponse::writeHeaderSummary()
     accumulated_progress.writeJSON(progress_string_writer);
 
     if (response_header_ostr)
-        *response_header_ostr << "x-proton-summary: " << progress_string_writer.str() << "\r\n" << std::flush;
+        *response_header_ostr << "x-timeplus-summary: " << progress_string_writer.str() << "\r\n" << std::flush;
 }
 
 void WriteBufferFromHTTPServerResponse::writeHeaderProgress()
@@ -50,7 +50,7 @@ void WriteBufferFromHTTPServerResponse::writeHeaderProgress()
     accumulated_progress.writeJSON(progress_string_writer);
 
     if (response_header_ostr)
-        *response_header_ostr << "x-proton-progress: " << progress_string_writer.str() << "\r\n" << std::flush;
+        *response_header_ostr << "x-timeplus-progress: " << progress_string_writer.str() << "\r\n" << std::flush;
 }
 
 void WriteBufferFromHTTPServerResponse::finishSendHeaders()

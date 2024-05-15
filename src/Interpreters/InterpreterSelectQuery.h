@@ -9,10 +9,11 @@
 #include <Interpreters/PreparedSets.h>
 #include <Interpreters/StorageID.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <QueryPipeline/Pipe.h>
 #include <Storages/ReadInOrderOptimizer.h>
 #include <Storages/SelectQueryInfo.h>
+#include <Storages/Streaming/StorageStream.h>
 #include <Storages/TableLockHolder.h>
-#include <QueryPipeline/Pipe.h>
 
 #include <Columns/FilterDescription.h>
 
@@ -206,6 +207,7 @@ private:
     void analyzeEventPredicateAsSeekTo(const JoinedTables & joined_tables);
     void checkAndPrepareStreamingFunctions();
     void checkUDA();
+    std::vector<nlog::RecordSN> checkReplaySettingsAndGetLastSN();
 
     void resolveDataStreamSemantic(const JoinedTables & joined_tables);
     /// proton: ends
