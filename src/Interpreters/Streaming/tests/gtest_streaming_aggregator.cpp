@@ -97,7 +97,7 @@ prepareParams(size_t max_threads, bool is_changelog_input, [[maybe_unused]] std:
     bool keep_state{true};
     size_t streaming_window_count{0};
     Streaming::Aggregator::Params::GroupBy streaming_group_by{Streaming::Aggregator::Params::GroupBy::OTHER};
-    ssize_t delta_col_pos{is_changelog_input ? 20 : -1}; 
+    int delta_col_pos{is_changelog_input ? 20 : -1};
     size_t window_keys_num{0};
     Streaming::WindowParamsPtr window_params{nullptr};
     Streaming::TrackingUpdatesType tracking_updates_type{Streaming::TrackingUpdatesType::None};
@@ -173,14 +173,14 @@ void setColumnsData(Columns & columns, InputData input_data, [[maybe_unused]] st
         c_int_16->insertValue(input_data.int_data);
         c_int_32->insertValue(input_data.int_data);
         c_int_64->insertValue(input_data.int_data);
-        c_int_128->insertValue(input_data.int_data);
-        c_int_256->insertValue(input_data.int_data);
+        c_int_128->insertValue(Int128(input_data.int_data));
+        c_int_256->insertValue(Int256(input_data.int_data));
         c_low_int8->insert(input_data.int_data);
         c_low_int16->insert(input_data.int_data);
         c_low_int32->insert(input_data.int_data);
         c_low_int64->insert(input_data.int_data);
-        c_low_int128->insert(input_data.int_data);
-        c_low_int256->insert(input_data.int_data);
+        c_low_int128->insert(Int128(input_data.int_data));
+        c_low_int256->insert(Int256(input_data.int_data));
         c_low_str->insertData(input_data.str_data.c_str(), 3);
         c_low_fixed_str->insertData(input_data.str_data.c_str(), 3);
         c_str->insertData(input_data.str_data.c_str(), 3);
@@ -415,8 +415,8 @@ std::vector<std::vector<std::tuple<size_t, size_t, ResultType>>> prepareGlobalCh
 std::vector<std::vector<std::tuple<size_t, size_t, ResultType>>> prepareWindowAppendonlyAppendonlyResult()
 {
     std::vector<std::vector<std::tuple<size_t, size_t, ResultType>>> result{
-        {{1, 0, Int64(20)}}, 
-        {{2, 0, Int64(20)}}, 
+        {{1, 0, Int64(20)}},
+        {{2, 0, Int64(20)}},
         {{2, 0, Int64(8)}, {3, 0, Int64(20)}},
         {{2, 0, Int64(8)}, {3, 0, Int64(20)}},
         {{2, 0, Int64(8)}, {3, 0, Int64(20)}},
@@ -430,7 +430,7 @@ std::vector<std::vector<std::tuple<size_t, size_t, ResultType>>> prepareWindowAp
 std::vector<std::vector<std::tuple<size_t, size_t, ResultType>>> prepareWindowAppendonlyUpdateResult()
 {
     std::vector<std::vector<std::tuple<size_t, size_t, ResultType>>> result{
-        {{1, 0, Int64(20)}}, 
+        {{1, 0, Int64(20)}},
         {{2, 0, Int64(20)}},
         {{2, 0, Int64(8)}, {3, 0, Int64(20)}},
         {{2, 0, Int64(8)}, {3, 0, Int64(20)}},
@@ -714,7 +714,6 @@ TEST(StreamingAggregation, WindowAppendOnlyAppendOnly)
         Streaming::Aggregator aggregator(*params);
         Aggregator::AggregateColumns aggregate_column{aggregate_columns};
         aggregator.executeOnBlock(columns, 0, 10, hash_map, key_columns, aggregate_column);
-        // auto block_first = aggregator.spliceAndConvertToBlock(hash_map, true, {0});
         setColumnsData(column_second, {8, "str", 3, 1}, aggregate_columns);
         aggregator.executeOnBlock(column_second, 0, 10, hash_map, key_columns, aggregate_column);
         auto block_second = aggregator.spliceAndConvertToBlock(hash_map, true, {0});
@@ -740,10 +739,8 @@ TEST(StreamingAggregation, WindowAppendOnlyUpdate)
         Streaming::Aggregator aggregator(*params);
         Aggregator::AggregateColumns aggregate_column{aggregate_columns};
         aggregator.executeOnBlock(columns, 0, 10, hash_map, key_columns, aggregate_column);
-        // auto block_first = aggregator.spliceAndConvertUpdatesToBlock(hash_map, {0});
         setColumnsData(column_second, {8, "str", 3, 1}, aggregate_columns);
         aggregator.executeOnBlock(column_second, 0, 10, hash_map, key_columns, aggregate_column);
-        // aggregator.executeOnBlock(column_second, 0, 20, hash_map, key_columns, aggregate_column);
         auto block_second = aggregator.spliceAndConvertUpdatesToBlock(hash_map, {0});
         checkAggregationResult(block_second, results, position++);
     }
