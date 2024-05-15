@@ -172,20 +172,39 @@ void tryTranslateToParametricAggregateFunction(
         argument_names = {argument_names[0], argument_names[1]};
         types = {types[0], types[1]};
     }
-    else if (lower_name == "quantile")
+    else if (lower_name.starts_with("quantile") && !lower_name.ends_with("if"))
     { 
-        ///Translate `quantile(key, level)` to `quantile(level)(key)`,and the default level is 0.5, median fucntion is the alias of quantile(key, 0.5)
-        if (arguments.size() != 2 && arguments.size() != 1)
-            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires one or two arguments", node->name);
-        if (arguments.size() == 2)
+        if (lower_name.ends_with("deterministic") || lower_name.ends_with("weighted"))
         {
+            /// for qunatile_deterministic, quantiles_deterministic, qunatile_weighted, qunatiles_weighted.
+            /// qunatile_deterministic(expr, determinator, level) -> qunatile_deterministic(level)(expr, determinator)
             ASTPtr expression_list = std::make_shared<ASTExpressionList>();
-            expression_list->children.push_back(arguments[1]);
-            parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+            if (arguments.size() >= 3)
+            {
+                for (size_t i = 2; i < arguments.size(); ++i)
+                    expression_list->children.push_back(arguments[i]);
+                parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+            }
+            argument_names = {argument_names[0], argument_names[1]};
+            types = {types[0], types[1]};
+        }
+        else 
+        {
+            /// For functions: quantile, quantiles, quantile_extract, quantiles_extract, quantile_exact_low, quantiles_exact_low....
+            ///Translate `quantile(key, level)` to `quantile(level)(key)`,and the default level is 0.5, median fucntion is the alias of quantile(key, 0.5)
+            if (arguments.size() >= 2)
+            {
+                ASTPtr expression_list = std::make_shared<ASTExpressionList>();
+                for (size_t i = 1; i < arguments.size(); ++i)
+                    expression_list->children.push_back(arguments[i]);
+                parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+            }
+
+            argument_names = {argument_names[0]};
+            types = {types[0]};
         }
 
-        argument_names = {argument_names[0]};
-        types = {types[0]};
+
     }
     else if (lower_name == "stochastic_linear_regression_state" || lower_name == "stochastic_logistic_regression_state")
     {
