@@ -3865,7 +3865,7 @@ std::vector<nlog::RecordSN> InterpreterSelectQuery::checkReplaySettingsAndGetLas
 
     auto name_type = storage_snapshot->tryGetColumn(GetColumnsOptions(GetColumnsOptions::All).withVirtuals(), replay_time_col);
     if (!name_type.has_value())
-        throw Exception("Not found replay column in stream", ErrorCodes::INVALID_SETTING_VALUE);
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Not found replay column {} in stream", replay_time_col);
 
     const auto & type = name_type.value().type;
     if (replay_time_col != ProtonConsts::RESERVED_APPEND_TIME && !isDateTime64(type) && !isDateTime(type))
