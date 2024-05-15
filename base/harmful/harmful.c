@@ -172,7 +172,16 @@ TRAP(tcflow)
 TRAP(tcsendbreak)
 TRAP(tmpnam)
 TRAP(ttyname)
-TRAP(unsetenv)
+// disable these traps for cpython, if don't enable python udf, we still need these traps
+// #ifdef ENABLE_PYTHON_UDF
+// TRAP(unsetenv)
+// TRAP(nl_langinfo)
+// TRAP(wcstombs)
+// #else
+// TRAP(unsetenv)
+// TRAP(nl_langinfo)
+// TRAP(wcstombs)
+// #endif
 TRAP(updwtmp)
 TRAP(utmpname)
 TRAP(utmpxname)
@@ -204,7 +213,6 @@ TRAP(lgamma)
 TRAP(lgammaf)
 TRAP(lgammal)
 TRAP(nftw)
-TRAP(nl_langinfo)
 TRAP(putc_unlocked)
 TRAP(rand)
 /** In  the current POSIX.1 specification (POSIX.1-2008), readdir() is not required to be thread-safe.  However, in modern
@@ -216,7 +224,6 @@ TRAP(rand)
   */
 //TRAP(readdir)
 TRAP(system)
-TRAP(wcstombs)
 TRAP(ether_aton)
 TRAP(ether_ntoa)
 TRAP(fgetsgent)

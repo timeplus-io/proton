@@ -5,6 +5,9 @@
 #include <Functions/UserDefined/IUserDefinedSQLObjectsLoader.h>
 #include <Functions/UserDefined/UserDefinedExecutableFunction.h>
 #include <Functions/UserDefined/UserDefinedFunctionFactory.h>
+#ifdef ENABLE_PYTHON_UDF
+#include <Functions/UserDefined/PythonUserDefinedFunction.h>
+#endif
 #include <Functions/UserDefined/UserDefinedSQLObjectType.h>
 #include <Interpreters/FunctionNameNormalizer.h>
 #include <Parsers/ASTFunction.h>
@@ -70,6 +73,10 @@ UserDefinedFunctionConfiguration::FuncType getFuncType(String type_name)
         func_type = UserDefinedFunctionConfiguration::FuncType::REMOTE;
     else if (type_name == "javascript")
         func_type = UserDefinedFunctionConfiguration::FuncType::JAVASCRIPT;
+#ifdef ENABLE_PYTHON_UDF
+    else if (type_name == "python")
+        func_type = UserDefinedFunctionConfiguration::FuncType::PYTHON;
+#endif
     else
         throw Exception(
             ErrorCodes::BAD_ARGUMENTS, "Wrong user defined function type expected 'executable' or 'remote' actual {}", type_name);
@@ -278,6 +285,16 @@ createUserDefinedExecutableFunction(ContextPtr context, const std::string & name
             udf_config->source = std::move(source);
             return std::make_shared<UserDefinedExecutableFunction>(std::move(udf_config), lifetime);
         }
+#ifdef ENABLE_PYTHON_UDF
+        case UserDefinedFunctionConfiguration::FuncType::PYTHON: {
+            auto udf_config = std::make_shared<PythonUserDefinedFunctionConfiguration>();
+            init_config(udf_config);
+            String source = get_or_throw("source");
+            udf_config->source = std::move(source);
+            udf_config->using_numpy = config.getBool(key_in_config + ".numpy_optimize_enable", false);
+            return std::make_shared<UserDefinedExecutableFunction>(std::move(udf_config), lifetime);
+        }
+#endif
         case UserDefinedFunctionConfiguration::FuncType::UNKNOWN:
             throw Exception(
                 ErrorCodes::BAD_ARGUMENTS,

@@ -44,7 +44,11 @@ public:
         Poco::JSON::Object::Ptr json_func,
         bool throw_if_exists,
         bool replace_if_exists);
-
+    
+    void validateJavaScriptFunction(Poco::JSON::Object::Ptr config);
+#ifdef ENABLE_PYTHON_UDF
+    void validatePythonFunction(Poco::JSON::Object::Ptr config);
+#endif
     bool unregisterFunction(const ContextMutablePtr & context, const String & function_name, bool throw_if_not_exists);
     /// proton: ends
 

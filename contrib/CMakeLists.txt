@@ -168,6 +168,14 @@ add_contrib (muduo-cmake muduo)
 
 # enable v8 build by default to support UDA and UDF
 add_contrib(v8-cmake)
+if (ENABLE_PYTHON_UDF)
+    message(STATUS "Enable Python UDF support")
+    
+    add_contrib(numpy-cmake)
+    add_contrib(cpython-cmake)
+endif()
+
+
 
 # proton: ends
 

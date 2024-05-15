@@ -138,6 +138,8 @@ private:
     ColumnVector(const size_t n, const ValueType x) : data(n, x) {}
     ColumnVector(const ColumnVector & src) : data(src.data.begin(), src.data.end()) {}
 
+    ColumnVector(ColumnVector && src) = default;
+
     /// Sugar constructor.
     ColumnVector(std::initializer_list<T> il) : data{il} {}
 

@@ -3,6 +3,9 @@
 #include <Server/IServer.h>
 
 #include <Daemon/BaseDaemon.h>
+#ifdef ENABLE_PYTHON_UDF
+    #include <Python.h>
+#endif
 
 
 /** Server provides three interfaces:
@@ -64,6 +67,11 @@ public:
     void initV8();
 
     void disposeV8();
+#ifdef ENABLE_PYTHON_UDF
+    void initPythonInterpreter();
+
+    void finalizePythonInterpreter();
+#endif
     /// proton: ends
 
 protected:
@@ -82,6 +90,9 @@ private:
 
     /// proton: starts
     std::unique_ptr<v8::Platform> platform;
+#ifdef ENABLE_PYTHON_UDF
+    PyThreadState *mainstate = nullptr;
+#endif
     /// proton: ends
 
     Poco::Net::SocketAddress socketBindListen(Poco::Net::ServerSocket & socket, const std::string & host, UInt16 port, [[maybe_unused]] bool secure = false) const;

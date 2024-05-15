@@ -6,6 +6,7 @@
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ExpressionListParsers.h>
+#include <Parsers/ParserSetQuery.h>
 
 /// proton: starts
 #include <Parsers/ParserCreateQuery.h>
@@ -25,9 +26,15 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     ParserKeyword s_aggr_function("AGGREGATE FUNCTION");
     ParserKeyword s_returns("RETURNS");
     ParserKeyword s_javascript_type("LANGUAGE JAVASCRIPT");
+#ifdef ENABLE_PYTHON_UDF
+    ParserKeyword s_python_type("LANGUAGE PYTHON");
+#endif
+    [[maybe_unused]] ParserKeyword s_settings("SETTINGS");
     ParserArguments arguments_p;
     ParserDataType return_p;
     ParserStringLiteral js_src_p;
+    [[maybe_unused]] ParserSetQuery settings_p(/* parse_only_internals_ = */ true);
+
     /// proton: ends
 
     ParserKeyword s_or_replace("OR REPLACE");
@@ -43,8 +50,11 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     /// proton: starts
     ASTPtr arguments;
     ASTPtr return_type;
+    ASTPtr settings;
     bool is_aggregation = false;
     bool is_javascript_func = false;
+    bool is_python_func = false;
+
     bool is_new_syntax = false;
     /// proton: ends
 
@@ -93,13 +103,23 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
 
         if (s_javascript_type.ignore(pos, expected))
             is_javascript_func = true;
+#ifdef ENABLE_PYTHON_UDF
+        if (s_python_type.ignore(pos, expected))
+            is_python_func = true;
+#endif
 
         if (!s_as.ignore(pos, expected))
             return false;
 
         /// Parse source code and function_core will be 'ASTLiteral'
-        if (is_javascript_func && !js_src_p.parse(pos, function_core, expected))
+        if ((is_javascript_func || is_python_func) && !js_src_p.parse(pos, function_core, expected))
             return false;
+        
+        if (s_settings.ignore(pos, expected))
+        {
+            if (!settings_p.parse(pos, settings, expected))
+                return false;
+        }
     }
     else
     {
@@ -127,9 +147,15 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
 
     /// proton: starts
     create_function_query->is_aggregation = is_aggregation;
-    create_function_query->lang = is_javascript_func ? "JavaScript" : "SQL";
+    if (is_javascript_func)
+        create_function_query->lang = ASTCreateFunctionQuery::Language::JavaScript;
+    else if (is_python_func)
+        create_function_query->lang = ASTCreateFunctionQuery::Language::Python;
+    else
+        create_function_query->lang = ASTCreateFunctionQuery::Language::SQL;
     create_function_query->arguments = std::move(arguments);
     create_function_query->return_type = std::move(return_type);
+    create_function_query->udf_settings = settings;
     /// proton: ends
 
     return true;

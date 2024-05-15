@@ -6,6 +6,9 @@
 #include <Poco/URI.h>
 
 #include <string>
+#ifdef ENABLE_PYTHON_UDF
+#include <Python.h>
+#endif
 
 namespace DB
 {
@@ -17,9 +20,12 @@ struct UserDefinedFunctionConfiguration : public TypePromotion<UserDefinedFuncti
         EXECUTABLE = 0,
         REMOTE = 1,
         JAVASCRIPT = 2,
+#ifdef ENABLE_PYTHON_UDF
+        PYTHON = 3,
+#endif
         UNKNOWN = 999
     };
-    /// 'type' can be 'executable', 'remote' or 'javascript'
+    /// 'type' can be 'executable', 'remote', 'javascript', 'python'
     FuncType type;
     struct Argument
     {
@@ -104,6 +110,17 @@ struct JavaScriptUserDefinedFunctionConfiguration : public UserDefinedFunctionCo
     std::string source;
 };
 
+#ifdef ENABLE_PYTHON_UDF
+struct PythonUserDefinedFunctionConfiguration : public UserDefinedFunctionConfiguration
+{
+    /// source code of function, only available when 'type' is 'python'
+    std::string source;
+    [[maybe_unused]] PyThreadState *substate = nullptr;
+    bool using_numpy = false;
+};
+using PythonUserDefinedFunctionConfigurationPtr = std::shared_ptr<PythonUserDefinedFunctionConfiguration>;
+#endif
 using UserDefinedFunctionConfigurationPtr = std::shared_ptr<UserDefinedFunctionConfiguration>;
 using JavaScriptUserDefinedFunctionConfigurationPtr = std::shared_ptr<JavaScriptUserDefinedFunctionConfiguration>;
+
 }

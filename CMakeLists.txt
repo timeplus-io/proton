@@ -419,7 +419,10 @@ include (GNUInstallDirs)
 if (TARGET global-group)
     install (EXPORT global DESTINATION cmake)
 endif ()
-
+if (ENABLE_PYTHON_UDF)
+    add_definitions(-DENABLE_PYTHON_UDF)
+    message(STATUS "Python UDFs are enabled")
+endif()
 add_subdirectory (contrib EXCLUDE_FROM_ALL)
 
 if (NOT ENABLE_JEMALLOC)
@@ -432,6 +435,7 @@ macro (proton_add_executable target)
     # if GLIBC_COMPATIBILITY is ON and ENABLE_THINLTO is on than provide memcpy symbol explicitly to neutrialize thinlto's libcall generation.
     if (ARCH_AMD64 AND GLIBC_COMPATIBILITY AND ENABLE_THINLTO)
         add_executable (${ARGV} $<TARGET_OBJECTS:clickhouse_malloc> $<TARGET_OBJECTS:memcpy>)
+        
     else ()
         add_executable (${ARGV} $<TARGET_OBJECTS:clickhouse_malloc>)
     endif ()
@@ -464,6 +468,11 @@ endmacro()
 
 set(CONFIG_INCLUDE_PATH ${CMAKE_CURRENT_BINARY_DIR}/includes/configs CACHE INTERNAL "Path to generated configuration files.")
 include_directories(${CONFIG_INCLUDE_PATH})
+if(ENABLE_PYTHON_UDF)
+    include_directories(SYSTEM ${proton_SOURCE_DIR}/contrib/cpython-cmake/cpython)
+    include_directories(SYSTEM ${proton_SOURCE_DIR}/contrib/cpython-cmake/cpython/Include)
+    include_directories(SYSTEM ${proton_SOURCE_DIR}/contrib/numpy-cmake//numpy/build-install/usr/lib/python3/dist-packages/numpy/_core/include)
+endif()
 
 # Add as many warnings as possible for our own code.
 include (cmake/warnings.cmake)

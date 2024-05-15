@@ -630,6 +630,7 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     \
     /** proton: starts */                       \
     M(String, shards, "", "If not empty, only the specified shard IDs (or partition IDs if the target stream is a Kafka external stream) will be selected to be read data from. IDs are separated by comma. Example: shards='0,2'", 0) \
+    M(Bool, numpy_optimize_enable, false, "Using numpy for zero-copy, this will greatly speed up the process ", 0) \
     \
     /** proton: ends */                       \
 

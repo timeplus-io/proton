@@ -26,6 +26,7 @@
 #include <Parsers/ASTWatchQuery.h>
 #include <Parsers/ASTTransactionControl.h>
 #include <Parsers/ASTExplainQuery.h>
+#include <Parsers/ASTCreateFunctionQuery.h>
 #include <Parsers/Lexer.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/ParserQuery.h>
@@ -518,6 +519,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         {
             if (query_with_output->settings_ast)
                 InterpreterSetQuery(query_with_output->settings_ast, context).executeForCurrentContext();
+        }
+        else if (const auto * create_function_query = ast->as<ASTCreateFunctionQuery>())
+        {
+            if (auto new_sttings = create_function_query->settings())
+                InterpreterSetQuery(new_sttings, context).executeForCurrentContext();
         }
 
         if (auto * create_query = ast->as<ASTCreateQuery>())

@@ -87,7 +87,8 @@ bool MetaStoreJSONConfigRepository::exists(const std::string & definition_entity
 Poco::AutoPtr<Poco::Util::AbstractConfiguration> MetaStoreJSONConfigRepository::load(const std::string & key)
 {
     Poco::JSON::Object::Ptr object = get(key);
-    return Poco::AutoPtr<Poco::Util::AbstractConfiguration>(new Poco::Util::JSONConfiguration(object));
+    return Poco::AutoPtr<Poco::Util::AbstractConfiguration>(
+    new Poco::Util::JSONConfiguration(object));
 }
 
 Poco::JSON::Object::Ptr MetaStoreJSONConfigRepository::get(const std::string & key) const
