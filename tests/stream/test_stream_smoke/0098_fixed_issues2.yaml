@@ -296,3 +296,47 @@ tests:
           - [1, 666, 888, 999, 999, 1]
           - [1, 666, 888, 999, 999, -1]
           - [1, 666, 999, 999, 999, 1]
+
+  - id: 3
+    tags:
+      - watermark
+      - tumble window
+    name: issue 733
+    description: emit watermark for tumble window
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists fixed_issues2_stream;
+
+          - client: python
+            query_type: table
+            exists: fixed_issues2_stream
+            exists_wait: 2
+            wait: 1
+            query: create stream fixed_issues2_stream(i int, v string);
+
+          - client: python
+            query_type: table
+            depends_on_stream: fixed_issues2_stream
+            wait: 1
+            query: insert into fixed_issues2_stream(i, v, _tp_time) values(1, 't1', '2024-05-16 21:28:00');
+
+          - client: python
+            query_id: fixed-issues2-1
+            query_type: stream
+            wait: 2
+            query: with cte as (select * from fixed_issues2_stream where v != 't1' settings seek_to='earliest') select i, window_end, count() from tumble(cte, 2m) group by i, window_end;
+
+          - client: python
+            query_type: type
+            depends_on: fixed-issues2-1
+            wait: 1
+            kill: fixed-issues2-1
+            kill_wait: 2
+            query: insert into fixed_issues2_stream(i, v, _tp_time) values (2, 't2', '2024-05-16 21:30:00') (2, 't3', '2024-05-16 21:32:00');
+
+    expected_results:
+      - query_id: fixed-issues2-1
+        expected_results:
+          - [1, '2024-05-16 21:32:00', 1]
