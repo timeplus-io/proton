@@ -467,7 +467,16 @@ Pipe Kafka::read(
         {
             Int64 high_watermark = NO_WARTERMARK;
             if (!streaming)
-                high_watermark = topic_ptr->queryWatermarks(shard).high;
+            {
+                auto marks = topic_ptr->queryWatermarks(shard);
+                LOG_INFO(logger, "watermarks low={} high={}", marks.low, marks.high);
+                high_watermark = marks.high;
+
+                if (offset == nlog::EARLIEST_SN)
+                    offset = marks.low;
+                else if (offset == nlog::LATEST_SN || offset > marks.high)
+                    offset = marks.high;
+            }
             pipes.emplace_back(
                 std::make_shared<KafkaSource>(
                     *this,

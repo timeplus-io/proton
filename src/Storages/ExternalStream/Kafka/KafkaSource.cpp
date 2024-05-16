@@ -92,6 +92,19 @@ Chunk KafkaSource::generate()
     if (isCancelled())
         return {};
 
+    /// For non-streaming queries
+    if (high_watermark != Kafka::NO_WARTERMARK)
+    {
+        /// The topic is empty.
+        if (offset == high_watermark) [[unlikely]]
+            return {};
+
+        /// All available messages up to the moment when the query was executed have been consumed, no need to read the messages beyond that point.
+        /// `high_watermark` is the next available offset, i.e. the offset that will be assigned to the next message, thus need to use `high_watermark - 1`.
+        if (lastProcessedSN() >= high_watermark - 1)
+            return {};
+    }
+
     if (unlikely(consumer->isStopped()))
     {
         LOG_INFO(logger, "Consumer has stopped, stop reading data, topic={} shard={}", topic->name(), shard);
@@ -114,24 +127,11 @@ Chunk KafkaSource::generate()
 
         /// After processing blocks, check again to see if there are new results
         if (result_chunks_with_sns.empty() || iter == result_chunks_with_sns.end())
-        {
-            /// For non-streaming queries, it has read all available messages at this moment, it can stop now.
-            if (high_watermark != Kafka::NO_WARTERMARK)
-                return {};
-
             /// Act as a heart beat
             return header_chunk.clone();
-        }
 
         /// result_blocks is not empty, fallthrough
     }
-
-    auto sn = iter->second;
-    /// For non-streaming queries, it is supposed to read the messages available up to the moment when the query was executed,
-    /// no need to read the messages pass that point.
-    /// `high_watermark` is the next available offset, i.e. the offset that will be assigned to the next message, thus it's exclusive.
-    if (high_watermark != Kafka::NO_WARTERMARK && sn >= high_watermark)
-        return {};
 
     setLastProcessedSN(iter->second);
     return std::move((iter++)->first);
