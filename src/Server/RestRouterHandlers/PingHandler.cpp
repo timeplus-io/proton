@@ -4,6 +4,7 @@
 #include <NativeLog/Server/NativeLog.h>
 
 #include <Core/Block.h>
+#include <Core/ServerUUID.h>
 #include <base/getMemoryAmount.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 
@@ -81,6 +82,9 @@ void PingHandler::buildResponse(const Block & block, String & resp) const
 
     Poco::JSON::Object server_info;
 
+    const auto & server_uuid = DB::ServerUUID::get();
+
+    server_info.set("uuid", server_uuid != DB::UUIDHelpers::Nil ? DB::toString(server_uuid) : "Unknown");
     server_info.set("num_of_physical_cpu_cores", getNumberOfPhysicalCPUCores());
     server_info.set("memory_amount", getMemoryAmount());
     json_resp.set("server", server_info);
