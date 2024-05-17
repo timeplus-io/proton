@@ -14,6 +14,7 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
+#include <Processors/Sources/NullSource.h>
 #include <Parsers/ASTFunction.h>
 
 #include <boost/algorithm/string/classification.hpp>
@@ -396,10 +397,10 @@ std::vector<int32_t> parseShards(const std::string & shards_setting)
     return specified_shards;
 }
 
-std::vector<Int32> getShardsToQuery(const ContextPtr & context, Int32 parition_count)
+std::vector<Int32> getShardsToQuery(const String & shards_exp, Int32 parition_count)
 {
     std::vector<Int32> ret;
-    if (const auto & shards_exp = context->getSettingsRef().shards.value; !shards_exp.empty())
+    if (!shards_exp.empty())
     {
         ret = parseShards(shards_exp);
         /// Make sure they are valid.
@@ -422,6 +423,23 @@ std::vector<Int32> getShardsToQuery(const ContextPtr & context, Int32 parition_c
 }
 }
 
+std::optional<UInt64> Kafka::totalRows(const Settings & settings_ref)
+{
+    auto consumer = getConsumer();
+    auto topic = RdKafka::Topic(*consumer->getHandle(), topicName());
+    auto shards_to_query = getShardsToQuery(settings_ref.shards.value, topic.getPartitionCount());
+    LOG_INFO(logger, "Counting number of messages in partitions [{}] of topic {}", fmt::join(shards_to_query, ","), topicName());
+
+    UInt64 rows = 0;
+    for (auto shard : shards_to_query)
+    {
+            auto marks = topic.queryWatermarks(shard);
+            LOG_INFO(logger, "watermarks on partition {} low={} high={}", shard, marks.low, marks.high);
+            rows += marks.high - marks.low;
+    }
+    return rows;
+}
+
 Pipe Kafka::read(
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
@@ -437,9 +455,12 @@ Pipe Kafka::read(
 
     /// User can explicitly consume specific kafka partitions by specifying `shards=` setting
     /// `SELECT * FROM kafka_stream SETTINGS shards=0,3`
-    auto shards_to_query = getShardsToQuery(context, topic_ptr->getPartitionCount());
+    auto shards_to_query = getShardsToQuery(context->getSettingsRef().shards.value, topic_ptr->getPartitionCount());
     assert(!shards_to_query.empty());
-    LOG_INFO(logger, "Reading from partitions [{}] of topic {}", fmt::join(shards_to_query, ","), topicName());
+
+    auto streaming = query_info.syntax_analyzer_result->streaming;
+
+    LOG_INFO(logger, "Reading from partitions [{}] of topic {} streaming={}", fmt::join(shards_to_query, ","), topicName(), streaming);
 
     Pipes pipes;
     pipes.reserve(shards_to_query.size());
@@ -452,8 +473,6 @@ Pipe Kafka::read(
             header = storage_snapshot->getSampleBlockForColumns(column_names);
         else
             header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
-
-        auto streaming = query_info.syntax_analyzer_result->streaming;
 
         auto seek_to_info = query_info.seek_to_info;
         /// seek_to defaults to 'latest' for streaming. In non-streaming case, 'earliest' is preferred.
@@ -469,10 +488,16 @@ Pipe Kafka::read(
             if (!streaming)
             {
                 auto marks = topic_ptr->queryWatermarks(shard);
-                LOG_INFO(logger, "watermarks low={} high={}", marks.low, marks.high);
+                LOG_INFO(logger, "watermarks on parition {} low={} high={}", shard, marks.low, marks.high);
                 high_watermark = marks.high;
 
-                if (offset == nlog::EARLIEST_SN)
+                if (marks.low == marks.high) /// there are no messages in the topic
+                {
+                    /// As there are no messages, no need to create a KafkaSource instance at all.
+                    pipes.emplace_back(std::make_shared<NullSource>(header));
+                    continue;
+                }
+                else if (offset >= 0 && offset < marks.low) /// if offset < marks.low, consuming will stuck
                     offset = marks.low;
                 else if (offset == nlog::LATEST_SN || offset > marks.high)
                     offset = marks.high;

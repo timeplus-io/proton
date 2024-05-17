@@ -35,6 +35,8 @@ public:
     virtual const String & dataFormat() const { return settings->data_format.value; }
     const String & formatSchema() const { return settings->format_schema.value; }
 
+    virtual std::optional<UInt64> totalRows(const Settings &) { return {}; }
+
     virtual Pipe read(
         const Names & column_names,
         const StorageSnapshotPtr & storage_snapshot,

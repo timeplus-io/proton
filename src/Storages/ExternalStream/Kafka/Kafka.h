@@ -67,6 +67,8 @@ public:
     NamesAndTypesList getVirtuals() const override;
     ExternalStreamCounterPtr getExternalStreamCounter() const override { return external_stream_counter; }
 
+    std::optional<UInt64> totalRows(const Settings &) override;
+
     Pipe read(
         const Names & column_names,
         const StorageSnapshotPtr & storage_snapshot,

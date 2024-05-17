@@ -87,6 +87,8 @@ private:
     Int64 offset;
     Int64 high_watermark;
 
+    /// Indicates that the source has already consumed all messages it is supposed to read [for non-streaming queries].
+    bool reached_the_end = false;
     bool consume_started = false;
 
     ExternalStreamCounterPtr external_stream_counter;

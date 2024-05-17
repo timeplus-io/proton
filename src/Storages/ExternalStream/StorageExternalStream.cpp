@@ -93,6 +93,11 @@ NamesAndTypesList StorageExternalStream::getVirtuals() const
     return external_stream->getVirtuals();
 }
 
+std::optional<UInt64> StorageExternalStream::totalRows(const Settings & settings) const
+{
+    return external_stream->totalRows(settings);
+}
+
 Pipe StorageExternalStream::read(
     const Names & column_names,
     const StorageSnapshotPtr & storage_snapshot,
