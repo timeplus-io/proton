@@ -866,17 +866,51 @@ public:
 
     void consume(Chunk chunk) override
     {
+        std::lock_guard cancel_lock(cancel_mutex);
+        if (cancelled)
+            return;
         writer->write(getHeader().cloneWithColumns(chunk.detachColumns()));
+    }
+
+    void onCancel() override
+    {
+        std::lock_guard cancel_lock(cancel_mutex);
+        finalize();
+        cancelled = true;
+    }
+
+    void onException() override
+    {
+        std::lock_guard cancel_lock(cancel_mutex);
+        finalize();
     }
 
     void onFinish() override
     {
-        writer->finalize();
-        writer->flush();
-        write_buf->finalize();
+        std::lock_guard cancel_lock(cancel_mutex);
+        finalize();
     }
 
 private:
+    void finalize()
+    {
+        if (!writer)
+            return;
+
+        try
+        {
+            writer->finalize();
+            writer->flush();
+            write_buf->finalize();
+        }
+        catch (...)
+        {
+            /// Stop ParallelFormattingOutputFormat correctly.
+            writer.reset();
+            throw;
+        }
+    }
+
     StorageMetadataPtr metadata_snapshot;
     String table_name_for_log;
 
@@ -894,6 +928,9 @@ private:
     ContextPtr context;
     int flags;
     std::unique_lock<std::shared_timed_mutex> lock;
+
+    std::mutex cancel_mutex;
+    bool cancelled = false;
 };
 
 class PartitionedStorageFileSink : public PartitionedSink

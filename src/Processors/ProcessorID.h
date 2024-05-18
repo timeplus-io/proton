@@ -165,6 +165,7 @@ enum class ProcessorID : UInt32
     ArrowBlockInputFormatID = 4'027,
     ORCBlockInputFormatID = 4'028,
     ParquetBlockInputFormatID = 4'029,
+    ProtobufListInputFormatID = 4'030,
 
     /// Format Output Processors
     NullOutputFormatID = 5'000,
@@ -197,6 +198,7 @@ enum class ProcessorID : UInt32
     ArrowBlockOutputFormatID = 5'027,
     ORCBlockOutputFormatID = 5'028,
     ParquetBlockOutputFormatID = 5'029,
+    ProtobufListOutputFormatID = 5'030,
 
     /// Source Processors
     NullSourceID = 10'000,

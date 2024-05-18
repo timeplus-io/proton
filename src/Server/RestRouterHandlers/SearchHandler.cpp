@@ -15,14 +15,14 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int BAD_REQUEST_PARAMETER;
+extern const int BAD_REQUEST_PARAMETER;
 }
 
 namespace
 {
-    const std::map<String, std::map<String, String>> SEARCH_SCHEMA
-        = {{"required", {{"query", "string"}}},
-           {"optional", {{"mode", "string"}, {"end_time", "string"}, {"start_time", "string"}, {"offset", "int"}, {"page_size", "int"}}}};
+const std::map<String, std::map<String, String>> SEARCH_SCHEMA
+    = {{"required", {{"query", "string"}}},
+       {"optional", {{"mode", "string"}, {"end_time", "string"}, {"start_time", "string"}, {"offset", "int"}, {"page_size", "int"}}}};
 }
 
 void SearchHandler::execute(const Poco::JSON::Object::Ptr & payload, HTTPServerResponse & response) const
@@ -204,7 +204,7 @@ void SearchHandler::setQuerySettings() const
         return false;
     };
 
-    const auto & query_id = getQueryParameter("x-proton-request-id");
+    const auto & query_id = getQueryParameter("x-timeplus-request-id", getQueryParameter("x-proton-request-id"));
     if (!query_id.empty())
         query_context->setCurrentQueryId(query_id);
 

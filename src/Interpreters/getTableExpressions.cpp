@@ -123,7 +123,7 @@ static NamesAndTypesList getColumnsFromTableExpression(
         aliases = columns.getAliases();
         virtuals = table->getVirtuals();
 
-        /// proton : starts. Calculate hash semantic
+        /// proton : starts. Calculate \output_data_stream_semantic if exists
         if (output_data_stream_semantic)
         {
             *output_data_stream_semantic = table->dataStreamSemantic();

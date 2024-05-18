@@ -30,7 +30,7 @@ public:
     std::string getDiagnosticInfo() override { return {}; }
 };
 
-class BinaryFormatReader : public FormatWithNamesAndTypesReader
+class BinaryFormatReader final : public FormatWithNamesAndTypesReader
 {
 public:
     BinaryFormatReader(ReadBuffer & in_, const FormatSettings & format_settings_);

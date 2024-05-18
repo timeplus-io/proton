@@ -743,7 +743,7 @@ tests:
             query_id: '1431'
             depends_on_stream: test14_substream_6
             query_type: stream
-            query: select lag(val, 1), val, id, name from changelog(test14_substream_6, id) partition by id;
+            query: select lag(val, 1), val, id, name, _tp_delta from changelog(test14_substream_6, id) partition by id;
 
           - client: python
             query_type: table
@@ -796,19 +796,19 @@ tests:
     expected_results:
       - query_id: '1431'
         expected_results:
-          - [0, 1, 2, 'a']
-          - [0, 3, 3, 'b']
-          - [0, 5, 1, 'c']
-          - [1, 1, 2, 'a']
-          - [1, 8, 2, 'a']
-          - [3, 3, 3, 'b']
-          - [3, 9, 3, 'b']
-          - [8, 8, 2, 'a']
-          - [8, 11, 2, 'b']
-          - [5, 5, 1, 'c']
-          - [5, 10, 1, 'c']
-          - [11, 11, 2, 'b']
-          - [11, 14, 2, 'b']
+          - [0, 1, 2, 'a', 1]
+          - [0, 3, 3, 'b', 1]
+          - [0, 5, 1, 'c', 1]
+          - [1, 1, 2, 'a', -1]
+          - [1, 8, 2, 'a', 1]
+          - [3, 3, 3, 'b', -1]
+          - [3, 9, 3, 'b', 1]
+          - [8, 8, 2, 'a', -1]
+          - [8, 11, 2, 'b', 1]
+          - [5, 5, 1, 'c', -1]
+          - [5, 10, 1, 'c', 1]
+          - [11, 11, 2, 'b', -1]
+          - [11, 14, 2, 'b', 1]
 
   - id: 32
     tags:

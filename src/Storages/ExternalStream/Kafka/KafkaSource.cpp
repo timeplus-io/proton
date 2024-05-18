@@ -74,7 +74,14 @@ KafkaSource::~KafkaSource()
     if (consume_started)
     {
         LOG_INFO(logger, "Stop consuming from topic={} shard={}", topic->name(), shard);
-        consumer->stopConsume(*topic, shard);
+        try
+        {
+            consumer->stopConsume(*topic, shard);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(logger, fmt::format("Failed to stop consuming from topic={} shard={}", topic->name(), shard));
+        }
     }
 }
 

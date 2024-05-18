@@ -159,6 +159,7 @@ void WatermarkStamper::preProcess(const Block & header)
 
 ALWAYS_INLINE Int64 WatermarkStamper::calculateWatermark(Int64 event_ts) const
 {
+    assert(event_ts != INVALID_WATERMARK);
     if (params.delay_interval)
     {
         auto event_ts_bias = addTime(
@@ -176,6 +177,7 @@ ALWAYS_INLINE Int64 WatermarkStamper::calculateWatermark(Int64 event_ts) const
 
 ALWAYS_INLINE Int64 WatermarkStamper::calculateWatermarkPerRow(Int64 event_ts) const
 {
+    assert(event_ts != INVALID_WATERMARK);
     if (params.delay_interval)
        return addTime(
             event_ts,
@@ -206,23 +208,28 @@ void WatermarkStamper::processAfterUnmuted(Chunk & chunk)
         }
         case EmitMode::Watermark:
         {
-            auto muted_watermark_ts = params.window_params->type == WindowType::Session ? calculateWatermarkPerRow(max_event_ts)
-                                                                                        : calculateWatermark(max_event_ts);
-            if (muted_watermark_ts != INVALID_WATERMARK) [[likely]]
+            if (max_event_ts != INVALID_WATERMARK)
             {
-                watermark_ts = muted_watermark_ts;
-                chunk.setWatermark(watermark_ts);
+                auto muted_watermark_ts = params.window_params->type == WindowType::Session ? calculateWatermarkPerRow(max_event_ts)
+                                                                                        : calculateWatermark(max_event_ts);
+                if (muted_watermark_ts != INVALID_WATERMARK) [[likely]]
+                {
+                    watermark_ts = muted_watermark_ts;
+                    chunk.setWatermark(watermark_ts);
+                }
             }
             break;
         }
         case EmitMode::PeriodicWatermark:
         case EmitMode::PeriodicWatermarkOnUpdate:
         {
-            auto muted_watermark_ts = params.window_params->type == WindowType::Session ? calculateWatermarkPerRow(max_event_ts)
-                                                                                        : calculateWatermark(max_event_ts);
-            if (muted_watermark_ts != INVALID_WATERMARK) [[likely]]
-                watermark_ts = muted_watermark_ts;
-
+            if (max_event_ts != INVALID_WATERMARK)
+            {
+                auto muted_watermark_ts = params.window_params->type == WindowType::Session ? calculateWatermarkPerRow(max_event_ts)
+                                                                                            : calculateWatermark(max_event_ts);
+                if (muted_watermark_ts != INVALID_WATERMARK) [[likely]]
+                    watermark_ts = muted_watermark_ts;
+            }
             processPeriodic(chunk, /*use_processing_time*/ false);
             break;
         }
