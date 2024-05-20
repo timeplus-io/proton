@@ -1,3 +1,4 @@
+#include <memory>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeFixedString.h>
@@ -353,18 +354,18 @@ void executeAggregatorTest(
             params->tracking_updates_type = Streaming::TrackingUpdatesType::UpdatesWithRetract;
         if (is_update_output)
             params->tracking_updates_type = Streaming::TrackingUpdatesType::Updates;
-        Streaming::Aggregator aggregator(*params);
+        auto aggregator=std::make_shared<Streaming::Aggregator>(*params);
         Aggregator::AggregateColumns aggregate_column{aggregate_columns};
-        aggregator.executeOnBlock(columns_first, 0, 10, hash_map, key_columns, aggregate_column);
+        aggregator->executeOnBlock(columns_first, 0, 10, hash_map, key_columns, aggregate_column);
         auto block_first
-            = convertToResult(aggregator, hash_map, first_input_data, is_changelog_output, is_update_output, is_window_aggregator);
+            = convertToResult(*aggregator, hash_map, first_input_data, is_changelog_output, is_update_output, is_window_aggregator);
         setColumnsData(columns_second, second_input_data, aggregate_columns);
         if (is_changelog_output)
-            aggregator.executeAndRetractOnBlock(columns_second, 0, 10, hash_map, key_columns, aggregate_column);
+            aggregator->executeAndRetractOnBlock(columns_second, 0, 10, hash_map, key_columns, aggregate_column);
         else
-            aggregator.executeOnBlock(columns_second, 0, 10, hash_map, key_columns, aggregate_column);
+            aggregator->executeOnBlock(columns_second, 0, 10, hash_map, key_columns, aggregate_column);
         auto block_second
-            = convertToResult(aggregator, hash_map, second_input_data, is_changelog_output, is_update_output, is_window_aggregator);
+            = convertToResult(*aggregator, hash_map, second_input_data, is_changelog_output, is_update_output, is_window_aggregator);
         checkAggregationResults(block_second, results, position++);
     }
 }
