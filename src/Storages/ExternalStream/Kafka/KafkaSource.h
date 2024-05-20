@@ -27,7 +27,7 @@ public:
         RdKafka::TopicPtr topic_,
         Int32 shard_,
         Int64 offset_,
-        Int64 high_watermark_,
+        std::optional<Int64> high_watermark_,
         size_t max_block_size_,
         ExternalStreamCounterPtr external_stream_counter_,
         ContextPtr query_context_);
@@ -44,8 +44,8 @@ private:
     void calculateColumnPositions();
     void initFormatExecutor();
 
-    /// \brief Parse a Kafka message and return the offset of current message. (return nullopt if it is not a valid message)
-    std::optional<Int64> parseMessage(void * kmessage, size_t total_count, void * data);
+    /// \brief Parse a Kafka message.
+    void parseMessage(void * kmessage, size_t total_count, void * data);
     void parseFormat(const rd_kafka_message_s * kmessage);
 
     inline void readAndProcess();

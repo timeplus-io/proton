@@ -29,7 +29,8 @@ public:
     using Callback = std::function<void(void * rkmessage, size_t total_count, void * data)>;
     using ErrorCallback = std::function<void(rd_kafka_resp_err_t)>;
 
-    void consumeBatch(Topic & topic, Int32 partition, uint32_t count, int32_t timeout_ms, Callback callback, ErrorCallback error_callback) const;
+    /// Try to consume a batch of messages (if not timeout). Returns the offset of the last message of the batch. Returns -1 if no messages available.
+    Int64 consumeBatch(Topic & topic, Int32 partition, uint32_t count, int32_t timeout_ms, Callback callback, ErrorCallback error_callback) const;
 
     void setStopped() {
         stopped.test_and_set();

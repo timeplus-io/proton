@@ -70,8 +70,10 @@ void Consumer::stopConsume(Topic & topic, Int32 parition)
     }
 }
 
-void Consumer::consumeBatch(Topic & topic, Int32 partition, uint32_t count, int32_t timeout_ms, Consumer::Callback callback, ErrorCallback error_callback) const
+Int64 Consumer::consumeBatch(Topic & topic, Int32 partition, uint32_t count, int32_t timeout_ms, Consumer::Callback callback, ErrorCallback error_callback) const
 {
+    Int64 last_offset = -1;
+
     std::unique_ptr<rd_kafka_message_t *, decltype(free) *> rkmessages
     {
         static_cast<rd_kafka_message_t **>(malloc(sizeof(rd_kafka_message_t *) * count)), free
@@ -82,7 +84,7 @@ void Consumer::consumeBatch(Topic & topic, Int32 partition, uint32_t count, int3
     if (res < 0)
     {
         error_callback(rd_kafka_last_error());
-        return;
+        return last_offset;
     }
 
     for (ssize_t idx = 0; idx < res; ++idx)
@@ -104,8 +106,11 @@ void Consumer::consumeBatch(Topic & topic, Int32 partition, uint32_t count, int3
                 topic.name(), partition, DB::getCurrentExceptionMessage(true, true));
         }
 
+        last_offset = rkmessage->offset;
         rd_kafka_message_destroy(rkmessage);
     }
+
+    return last_offset;
 }
 
 }
