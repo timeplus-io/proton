@@ -47,6 +47,17 @@ int Topic::getPartitionCount() const
         throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "Describe topic of {} returned 0 partitions", name());
 }
 
+WatermarkOffsets Topic::queryWatermarks(Int32 partition) const
+{
+    int64_t low, high;
+    auto err = rd_kafka_query_watermark_offsets(&rdk, name().data(), partition, &low, &high, /*timeout_ms=*/1000);
+
+    if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
+      throw Exception(klog::mapErrorCode(err), "Failed to query watermark offsets topic={} parition={} error={}", name(), partition, rd_kafka_err2str(err));
+
+    return {low, high};
+}
+
 }
 
 }

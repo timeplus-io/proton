@@ -174,9 +174,6 @@ std::pair<int64_t, bool> tryParseAbsoluteTimeSeek(const String & seek_to)
 
 SeekToInfo::SeekToInfo(String seek_to_) : seek_to(std::move(seek_to_))
 {
-    if (seek_to == "latest")
-        seek_to = ""; /// latest, means don't need seek to
-
     std::tie(type, seek_points) = parse(seek_to, /*default utc*/ true);
     assert(!seek_points.empty());
 }

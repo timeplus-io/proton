@@ -27,6 +27,7 @@ public:
         RdKafka::TopicPtr topic_,
         Int32 shard_,
         Int64 offset_,
+        Int64 high_watermark_,
         size_t max_block_size_,
         ExternalStreamCounterPtr external_stream_counter_,
         ContextPtr query_context_);
@@ -84,7 +85,10 @@ private:
     RdKafka::TopicPtr topic;
     Int32 shard;
     Int64 offset;
+    Int64 high_watermark;
 
+    /// Indicates that the source has already consumed all messages it is supposed to read [for non-streaming queries].
+    bool reached_the_end = false;
     bool consume_started = false;
 
     ExternalStreamCounterPtr external_stream_counter;

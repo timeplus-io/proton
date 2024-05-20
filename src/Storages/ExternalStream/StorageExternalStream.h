@@ -26,6 +26,7 @@ public:
     bool squashInsert() const noexcept override { return false; }
     bool supportsAccurateSeekTo() const noexcept override { return true; }
     NamesAndTypesList getVirtuals() const override;
+    std::optional<UInt64> totalRows(const Settings &) const override;
 
     Pipe read(
         const Names & column_names,

@@ -19,6 +19,8 @@ class Kafka final : public StorageExternalStreamImpl
 public:
     using ConfPtr = std::unique_ptr<rd_kafka_conf_t, decltype(rd_kafka_conf_destroy) *>;
 
+    static const Int64 NO_WARTERMARK = -1;
+
     static const String VIRTUAL_COLUMN_MESSAGE_KEY;
 
     static Poco::Logger * cbLogger() {
@@ -64,6 +66,8 @@ public:
     bool supportsSubcolumns() const override { return true; }
     NamesAndTypesList getVirtuals() const override;
     ExternalStreamCounterPtr getExternalStreamCounter() const override { return external_stream_counter; }
+
+    std::optional<UInt64> totalRows(const Settings &) override;
 
     Pipe read(
         const Names & column_names,
