@@ -75,11 +75,10 @@ void prepareAggregates(AggregateDescriptions & aggregates, bool is_changelog_inp
     aggregates.push_back(aggregate);
 }
 
-std::shared_ptr<Streaming::Aggregator::Params>
-prepareParams(size_t max_threads, bool is_changelog_input, [[maybe_unused]] std::vector<size_t> & key_site)
+Streaming::Aggregator::Params prepareParams(size_t max_threads, bool is_changelog_input, [[maybe_unused]] std::vector<size_t> & key_site)
 {
     Block src_header = prepareHeader();
-    ColumnNumbers keys = key_site;
+    ColumnNumbers & keys = key_site;
     AggregateDescriptions aggregates;
     prepareAggregates(aggregates, is_changelog_input);
     bool overflow_row{false};
@@ -102,7 +101,7 @@ prepareParams(size_t max_threads, bool is_changelog_input, [[maybe_unused]] std:
     size_t window_keys_num{0};
     Streaming::WindowParamsPtr window_params{nullptr};
     Streaming::TrackingUpdatesType tracking_updates_type{Streaming::TrackingUpdatesType::None};
-    return make_shared<Streaming::Aggregator::Params>(
+    return Streaming::Aggregator::Params(
         src_header,
         keys,
         aggregates,
@@ -215,7 +214,7 @@ void setColumnsData(Columns & columns, InputData input_data, [[maybe_unused]] st
     columns.push_back(std::move(c_delta));
 }
 
-std::shared_ptr<Streaming::Aggregator::Params> prepareGlobalAggregator(
+Streaming::Aggregator::Params prepareGlobalAggregator(
     size_t max_threads,
     std::vector<size_t> & key_site,
     ColumnRawPtrs & key_columns,
@@ -225,7 +224,7 @@ std::shared_ptr<Streaming::Aggregator::Params> prepareGlobalAggregator(
     bool is_changelog_input = false)
 {
     setColumnsData(columns, input_data, aggr_columns);
-    std::shared_ptr<Streaming::Aggregator::Params> params = prepareParams(max_threads, is_changelog_input, key_site);
+    auto params = prepareParams(max_threads, is_changelog_input, key_site);
     for (size_t i = 0; i < key_site.size(); ++i)
     {
         key_columns.push_back(nullptr);
@@ -233,7 +232,7 @@ std::shared_ptr<Streaming::Aggregator::Params> prepareGlobalAggregator(
     return params;
 }
 
-std::shared_ptr<Streaming::Aggregator::Params> prepareWindowAggregator(
+Streaming::Aggregator::Params prepareWindowAggregator(
     size_t max_threads,
     std::vector<size_t> & key_site,
     ColumnRawPtrs & key_columns,
@@ -243,11 +242,11 @@ std::shared_ptr<Streaming::Aggregator::Params> prepareWindowAggregator(
     bool is_changelog_input = false)
 {
     setColumnsData(columns, input_data, aggr_columns);
-    std::shared_ptr<Streaming::Aggregator::Params> params = prepareParams(max_threads, is_changelog_input, key_site);
-    params->group_by = {Streaming::Aggregator::Params::GroupBy::WINDOW_END};
-    params->window_keys_num = 2;
+    auto params = prepareParams(max_threads, is_changelog_input, key_site);
+    params.group_by = {Streaming::Aggregator::Params::GroupBy::WINDOW_END};
+    params.window_keys_num = 2;
     if (key_site.size() == 1)
-        params->window_keys_num = 1;
+        params.window_keys_num = 1;
     ParserFunction func_parser;
     auto ast = parseQuery(func_parser, "tumble(stream, 5s)", 0, 10000);
     NamesAndTypesList columns_list;
@@ -263,9 +262,7 @@ std::shared_ptr<Streaming::Aggregator::Params> prepareWindowAggregator(
         Names{"_tp_time"},
         columns_list);
     Streaming::WindowParamsPtr window_params = Streaming::WindowParams::create(table_function_description);
-
-    params->window_params = window_params;
-    Streaming::Aggregator aggregator(*params);
+    params.window_params = window_params;
     for (size_t i = 0; i < key_site.size(); ++i)
     {
         key_columns.push_back(nullptr);
@@ -348,24 +345,24 @@ void executeAggregatorTest(
         Columns columns_first, columns_second;
         ColumnRawPtrs key_columns, aggregate_columns;
         Streaming::AggregatedDataVariants hash_map;
-        std::shared_ptr<Streaming::Aggregator::Params> params
+        Streaming::Aggregator::Params params
             = aggregator_func(10, key_site, key_columns, first_input_data, aggregate_columns, columns_first, is_changelog_input);
         if (is_changelog_output)
-            params->tracking_updates_type = Streaming::TrackingUpdatesType::UpdatesWithRetract;
+            params.tracking_updates_type = Streaming::TrackingUpdatesType::UpdatesWithRetract;
         if (is_update_output)
-            params->tracking_updates_type = Streaming::TrackingUpdatesType::Updates;
-        auto aggregator=std::make_shared<Streaming::Aggregator>(*params);
+            params.tracking_updates_type = Streaming::TrackingUpdatesType::Updates;
+        auto aggregator = Streaming::Aggregator(params);
         Aggregator::AggregateColumns aggregate_column{aggregate_columns};
-        aggregator->executeOnBlock(columns_first, 0, 10, hash_map, key_columns, aggregate_column);
+        aggregator.executeOnBlock(columns_first, 0, 10, hash_map, key_columns, aggregate_column);
         auto block_first
-            = convertToResult(*aggregator, hash_map, first_input_data, is_changelog_output, is_update_output, is_window_aggregator);
+            = convertToResult(aggregator, hash_map, first_input_data, is_changelog_output, is_update_output, is_window_aggregator);
         setColumnsData(columns_second, second_input_data, aggregate_columns);
         if (is_changelog_output)
-            aggregator->executeAndRetractOnBlock(columns_second, 0, 10, hash_map, key_columns, aggregate_column);
+            aggregator.executeAndRetractOnBlock(columns_second, 0, 10, hash_map, key_columns, aggregate_column);
         else
-            aggregator->executeOnBlock(columns_second, 0, 10, hash_map, key_columns, aggregate_column);
+            aggregator.executeOnBlock(columns_second, 0, 10, hash_map, key_columns, aggregate_column);
         auto block_second
-            = convertToResult(*aggregator, hash_map, second_input_data, is_changelog_output, is_update_output, is_window_aggregator);
+            = convertToResult(aggregator, hash_map, second_input_data, is_changelog_output, is_update_output, is_window_aggregator);
         checkAggregationResults(block_second, results, position++);
     }
 }
