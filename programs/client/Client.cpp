@@ -338,7 +338,7 @@ std::vector<String> Client::loadWarningMessages()
         return {};
 
     std::vector<String> messages;
-    connection->sendQuery(connection_parameters.timeouts, "SELECT message FROM system.warnings SETTINGS _tp_internal_system_open_sesame=true",
+    connection->sendQuery(connection_parameters.timeouts, "SELECT message FROM system.warnings SETTINGS _tp_internal_system_open_sesame=true,is_internal=true",
                           {} /* query_parameters */,
                           "" /* query_id */,
                           QueryProcessingStage::Complete,
