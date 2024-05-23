@@ -13,6 +13,7 @@
 #include <Formats/FormatSchemaInfo.h>
 #include <Processors/Formats/IRowInputFormat.h>
 #include <Processors/Formats/ISchemaReader.h>
+#include <Processors/Formats/ISchemaWriter.h> /// proton: updated
 
 #include <DataFile.hh>
 #include <Decoder.hh>
@@ -175,6 +176,37 @@ private:
     avro::DecoderPtr decoder;
     FormatSettings format_settings;
 };
+
+/// proton: starts
+/// Avro binary datum encoding. Mainly used for Kafka, and similar technologies.
+class AvroSchemaRowInputFormat final : public IRowInputFormat
+{
+public:
+    AvroSchemaRowInputFormat(const Block & header_, ReadBuffer & in_, Params params_, const FormatSchemaInfo & schema_info, const FormatSettings & format_settings);
+    String getName() const override { return "AvroSchemaRowInputFormat"; }
+
+private:
+    bool readRow(MutableColumns & columns, RowReadExtension & ext) override; /* proton: updated */
+
+    bool allowSyncAfterError() const override { return true; }
+    void syncAfterError() override;
+
+    AvroDeserializer deserializer;
+    avro::DecoderPtr decoder;
+};
+
+class AvroSchemaWriter : public IExternalSchemaWriter
+{
+public:
+    explicit AvroSchemaWriter(std::string_view schema_body_, const FormatSettings & settings_);
+
+    void validate() override;
+    bool write(bool replace_if_exist) override;
+
+private:
+    FormatSchemaInfo schema_info;
+};
+/// proton: ends
 
 class AvroSchemaReader : public ISchemaReader
 {
