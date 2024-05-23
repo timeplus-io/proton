@@ -263,7 +263,7 @@ void KafkaSource::initFormatExecutor()
     auto input_format = FormatFactory::instance().getInputFormat(
         data_format,
         read_buffer,
-        non_virtual_header,
+        physical_header,
         query_context,
         max_block_size,
         kafka.getFormatSettings(query_context));
