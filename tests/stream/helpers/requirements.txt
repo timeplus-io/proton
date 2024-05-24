@@ -1,5 +1,5 @@
 pytest==6.2.5
-requests>=2.26.0
+requests==2.31.0
 pyOpenSSL==23.0.0
 pytest-cases==3.6.5
 unidiff==0.7.0
