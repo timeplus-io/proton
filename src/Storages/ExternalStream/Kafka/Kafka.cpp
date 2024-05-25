@@ -488,13 +488,7 @@ Pipe Kafka::read(
     pipes.reserve(shards_to_query.size());
 
     {
-        /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
-        /// We will need add one
-        Block header;
-        if (!column_names.empty())
-            header = storage_snapshot->getSampleBlockForColumns(column_names);
-        else
-            header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
+        auto header = storage_snapshot->getSampleBlockForColumns(column_names);
 
         auto seek_to_info = query_info.seek_to_info;
         /// seek_to defaults to 'latest' for streaming. In non-streaming case, 'earliest' is preferred.
