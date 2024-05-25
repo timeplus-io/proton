@@ -28,6 +28,7 @@ KafkaSource::KafkaSource(
     RdKafka::TopicPtr topic_,
     Int32 shard_,
     Int64 offset_,
+    std::optional<Int64> high_watermark_,
     size_t max_block_size_,
     ExternalStreamCounterPtr external_stream_counter_,
     ContextPtr query_context_)
@@ -44,6 +45,9 @@ KafkaSource::KafkaSource(
     , topic(topic_)
     , shard(shard_)
     , offset(offset_)
+    , high_watermark(high_watermark_.value_or(std::numeric_limits<Int64>::max()))
+    /// if offset == high_watermark, it means there is no message to read, so it already reaches the end
+    , reached_the_end(high_watermark_.has_value() && offset == high_watermark_)
     , external_stream_counter(external_stream_counter_)
     , query_context(std::move(query_context_))
     , logger(&Poco::Logger::get(fmt::format("{}.{}", kafka.getLoggerName(), consumer->name())))
@@ -90,6 +94,9 @@ Chunk KafkaSource::generate()
     if (isCancelled())
         return {};
 
+    if (unlikely(reached_the_end))
+        return {};
+
     if (unlikely(consumer->isStopped()))
     {
         LOG_INFO(logger, "Consumer has stopped, stop reading data, topic={} shard={}", topic->name(), shard);
@@ -98,7 +105,7 @@ Chunk KafkaSource::generate()
 
     if (!consume_started)
     {
-        LOG_INFO(logger, "Start consuming from topic={} shard={} offset={}", topic->name(), shard, offset);
+        LOG_INFO(logger, "Start consuming from topic={} shard={} offset={} high_watermark={}", topic->name(), shard, offset, high_watermark);
         consumer->startConsume(*topic, shard, offset);
         consume_started = true;
     }
@@ -128,12 +135,8 @@ void KafkaSource::readAndProcess()
     current_batch.clear();
     current_batch.reserve(header.columns());
 
-    Int64 current_batch_last_sn = -1;
-    auto callback = [&current_batch_last_sn, this](void * rkmessage, size_t total_count, void * data)
-    {
-        auto current_offset = parseMessage(rkmessage, total_count, data);
-        if (current_offset.has_value()) [[likely]]
-            current_batch_last_sn = *current_offset;
+    auto callback = [this](void * rkmessage, size_t total_count, void * data) {
+        parseMessage(rkmessage, total_count, data);
     };
 
     auto error_callback = [this](rd_kafka_resp_err_t err)
@@ -142,28 +145,32 @@ void KafkaSource::readAndProcess()
         external_stream_counter->addToReadFailed(1);
     };
 
-    consumer->consumeBatch(*topic, shard, record_consume_batch_count, record_consume_timeout_ms, callback, error_callback);
+    auto current_batch_last_sn = consumer->consumeBatch(*topic, shard, record_consume_batch_count, record_consume_timeout_ms, callback, error_callback);
 
     if (!current_batch.empty())
     {
         auto rows = current_batch[0]->size();
         assert(current_batch_last_sn >= 0);
         result_chunks_with_sns.emplace_back(Chunk{std::move(current_batch), rows}, current_batch_last_sn);
+
+        /// All available messages up to the moment when the query was executed have been consumed, no need to read the messages beyond that point.
+        /// `high_watermark` is the next available offset, i.e. the offset that will be assigned to the next message, thus need to use `high_watermark - 1`.
+        if (current_batch_last_sn >= high_watermark - 1)
+            reached_the_end = true;
     }
 
     iter = result_chunks_with_sns.begin();
 }
 
-std::optional<Int64> KafkaSource::parseMessage(void * rkmessage, size_t  /*total_count*/, void *  /*data*/)
+void KafkaSource::parseMessage(void * rkmessage, size_t  /*total_count*/, void *  /*data*/)
 {
     auto * message = static_cast<rd_kafka_message_t *>(rkmessage);
 
     if (unlikely(message->offset < offset))
         /// Ignore the message which has lower offset than what clients like to have
-        return {};
+        return;
 
     parseFormat(message);
-    return message->offset;
 }
 
 void KafkaSource::parseFormat(const rd_kafka_message_t * kmessage)

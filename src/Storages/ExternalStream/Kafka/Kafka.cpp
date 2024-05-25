@@ -1,11 +1,13 @@
 #include <DataTypes/DataTypeDateTime64.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/TreeRewriter.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ExpressionListParsers.h>
+#include <Processors/Sources/NullSource.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/ExternalStream/Kafka/Kafka.h>
 #include <Storages/ExternalStream/Kafka/KafkaSink.h>
@@ -14,7 +16,6 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
-#include <Parsers/ASTFunction.h>
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -22,6 +23,7 @@
 #include <boost/algorithm/string/trim.hpp>
 
 #include <filesystem>
+#include <optional>
 #include <ranges>
 
 namespace DB
@@ -44,8 +46,7 @@ const size_t DEFAULT_MAX_CONSUMERS = 50;
 /// to be configured by users.
 bool isUnsupportedGlobalConfig(const String & name)
 {
-    static std::set<String> global_configs
-    {
+    static std::set<String> global_configs{
         "builtin.features",
         "metadata.broker.list",
         "bootstrap.servers",
@@ -97,8 +98,7 @@ bool isUnsupportedGlobalConfig(const String & name)
 /// Checks if a config a unsupported topic config.
 bool isUnsupportedTopicConfig(const String & name)
 {
-    static std::set<String> topic_configs
-    {
+    static std::set<String> topic_configs{
         /// producer
         "partitioner",
         "partitioner_cb",
@@ -128,18 +128,20 @@ Kafka::ConfPtr createConfFromSettings(const KafkaExternalStreamSettings & settin
     if (settings.brokers.value.empty())
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Empty `brokers` setting for kafka external stream");
 
-    Kafka::ConfPtr conf {rd_kafka_conf_new(), rd_kafka_conf_destroy};
-    char errstr[512] {'\0'};
+    Kafka::ConfPtr conf{rd_kafka_conf_new(), rd_kafka_conf_destroy};
+    char errstr[512]{'\0'};
 
-    auto conf_set = [&](const String & name, const String & value)
-    {
+    auto conf_set = [&](const String & name, const String & value) {
         auto err = rd_kafka_conf_set(conf.get(), name.c_str(), value.c_str(), errstr, sizeof(errstr));
         if (err != RD_KAFKA_CONF_OK)
         {
             throw Exception(
                 ErrorCodes::INVALID_CONFIG_PARAMETER,
                 "Failed to set kafka config `{}` with value `{}` error_code={} error_msg={}",
-                name, value, err, errstr);
+                name,
+                value,
+                err,
+                errstr);
         }
     };
 
@@ -211,14 +213,20 @@ Kafka::ConfPtr Kafka::createRdConf(KafkaExternalStreamSettings settings_)
     {
         createTempDirIfNotExists();
         broker_ca_file = tmpdir / "broker_ca.pem";
-        WriteBufferFromFile wb {broker_ca_file};
+        WriteBufferFromFile wb{broker_ca_file};
         wb.write(ca_pem.data(), ca_pem.size());
         settings_.ssl_ca_cert_file = broker_ca_file;
     }
     return createConfFromSettings(settings_);
 }
 
-Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ASTs & engine_args_, bool attach, ExternalStreamCounterPtr external_stream_counter_, ContextPtr context)
+Kafka::Kafka(
+    IStorage * storage,
+    std::unique_ptr<ExternalStreamSettings> settings_,
+    const ASTs & engine_args_,
+    bool attach,
+    ExternalStreamCounterPtr external_stream_counter_,
+    ContextPtr context)
     : StorageExternalStreamImpl(storage, std::move(settings_), context)
     , engine_args(engine_args_)
     , data_format(StorageExternalStreamImpl::dataFormat())
@@ -264,7 +272,8 @@ Kafka::Kafka(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setting
         validate();
 }
 
-bool Kafka::hasCustomShardingExpr() const {
+bool Kafka::hasCustomShardingExpr() const
+{
     if (engine_args.empty())
         return false;
 
@@ -281,15 +290,19 @@ NamesAndTypesList Kafka::getVirtuals() const
 
 void Kafka::cacheVirtualColumnNamesAndTypes()
 {
-    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_APPEND_TIME, std::make_shared<DataTypeDateTime64>(3, "UTC")));
-    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_TIME, std::make_shared<DataTypeDateTime64>(3, "UTC")));
-    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_PROCESS_TIME, std::make_shared<DataTypeDateTime64>(3, "UTC")));
+    virtual_column_names_and_types.push_back(
+        NameAndTypePair(ProtonConsts::RESERVED_APPEND_TIME, std::make_shared<DataTypeDateTime64>(3, "UTC")));
+    virtual_column_names_and_types.push_back(
+        NameAndTypePair(ProtonConsts::RESERVED_EVENT_TIME, std::make_shared<DataTypeDateTime64>(3, "UTC")));
+    virtual_column_names_and_types.push_back(
+        NameAndTypePair(ProtonConsts::RESERVED_PROCESS_TIME, std::make_shared<DataTypeDateTime64>(3, "UTC")));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_SHARD, std::make_shared<DataTypeInt32>()));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, std::make_shared<DataTypeInt64>()));
     virtual_column_names_and_types.push_back(NameAndTypePair(VIRTUAL_COLUMN_MESSAGE_KEY, std::make_shared<DataTypeString>()));
 }
 
-std::vector<Int64> Kafka::getOffsets(const RdKafka::Consumer & consumer, const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const
+std::vector<Int64> Kafka::getOffsets(
+    const RdKafka::Consumer & consumer, const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const
 {
     assert(seek_to_info);
     seek_to_info->replicateForShards(shards_to_query.size());
@@ -339,10 +352,17 @@ void Kafka::validateMessageKey(const String & message_key_, IStorage * storage, 
     Expected expected;
     ParserExpression p_id;
     if (!p_id.parse(pos, message_key_ast, expected))
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "message_key was not a valid expression, parse failed at {}, expected {}", expected.max_parsed_pos, fmt::join(expected.variants, ", "));
+        throw Exception(
+            ErrorCodes::INVALID_SETTING_VALUE,
+            "message_key was not a valid expression, parse failed at {}, expected {}",
+            expected.max_parsed_pos,
+            fmt::join(expected.variants, ", "));
 
     if (!pos->isEnd())
-        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "message_key must be a single expression, got extra characters: {}", expected.max_parsed_pos);
+        throw Exception(
+            ErrorCodes::INVALID_SETTING_VALUE,
+            "message_key must be a single expression, got extra characters: {}",
+            expected.max_parsed_pos);
 
     auto syntax_result = TreeRewriter(context).analyze(message_key_ast, storage->getInMemoryMetadata().getColumns().getAllPhysical());
     auto analyzer = ExpressionAnalyzer(message_key_ast, syntax_result, context).getActions(true);
@@ -359,7 +379,7 @@ void Kafka::validateMessageKey(const String & message_key_, IStorage * storage, 
 void Kafka::validate()
 {
     auto consumer = getConsumer();
-    RdKafka::Topic topic {*consumer->getHandle(), topicName()};
+    RdKafka::Topic topic{*consumer->getHandle(), topicName()};
     auto parition_count = topic.getPartitionCount();
     if (parition_count < 1)
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Topic has no paritions, topic={}", topicName());
@@ -396,18 +416,21 @@ std::vector<int32_t> parseShards(const std::string & shards_setting)
     return specified_shards;
 }
 
-std::vector<Int32> getShardsToQuery(const ContextPtr & context, Int32 parition_count)
+std::vector<Int32> getShardsToQuery(const String & shards_exp, Int32 parition_count)
 {
     std::vector<Int32> ret;
-    if (const auto & shards_exp = context->getSettingsRef().shards.value; !shards_exp.empty())
+    if (!shards_exp.empty())
     {
         ret = parseShards(shards_exp);
         /// Make sure they are valid.
         for (auto shard : ret)
         {
             if (shard >= parition_count)
-                throw Exception(ErrorCodes::INVALID_SETTING_VALUE,
-                    "Invalid topic partition {}, the topic has only {} partitions", shard, parition_count);
+                throw Exception(
+                    ErrorCodes::INVALID_SETTING_VALUE,
+                    "Invalid topic partition {}, the topic has only {} partitions",
+                    shard,
+                    parition_count);
         }
     }
     else
@@ -420,6 +443,23 @@ std::vector<Int32> getShardsToQuery(const ContextPtr & context, Int32 parition_c
 
     return ret;
 }
+}
+
+std::optional<UInt64> Kafka::totalRows(const Settings & settings_ref)
+{
+    auto consumer = getConsumer();
+    auto topic = RdKafka::Topic(*consumer->getHandle(), topicName());
+    auto shards_to_query = getShardsToQuery(settings_ref.shards.value, topic.getPartitionCount());
+    LOG_INFO(logger, "Counting number of messages topic={} partitions=[{}]", topicName(), fmt::join(shards_to_query, ","));
+
+    UInt64 rows = 0;
+    for (auto shard : shards_to_query)
+    {
+        auto marks = topic.queryWatermarks(shard);
+        LOG_INFO(logger, "Watermarks topic={} partition={} low={} high={}", topicName(), shard, marks.low, marks.high);
+        rows += marks.high - marks.low;
+    }
+    return rows;
 }
 
 Pipe Kafka::read(
@@ -437,26 +477,16 @@ Pipe Kafka::read(
 
     /// User can explicitly consume specific kafka partitions by specifying `shards=` setting
     /// `SELECT * FROM kafka_stream SETTINGS shards=0,3`
-    auto shards_to_query = getShardsToQuery(context, topic_ptr->getPartitionCount());
+    auto shards_to_query = getShardsToQuery(context->getSettingsRef().shards.value, topic_ptr->getPartitionCount());
     assert(!shards_to_query.empty());
-    LOG_INFO(logger, "Reading from partitions [{}] of topic {}", fmt::join(shards_to_query, ","), topicName());
+
+    auto streaming = query_info.syntax_analyzer_result->streaming;
+
+    LOG_INFO(logger, "Reading topic={} partitions=[{}] streaming={}", topicName(), fmt::join(shards_to_query, ","), streaming);
 
     Pipes pipes;
     pipes.reserve(shards_to_query.size());
 
-    // const auto & settings_ref = context->getSettingsRef();
-    /*auto share_resource_group = (settings_ref.query_resource_group.value == "shared") && (settings_ref.seek_to.value == "latest");
-    if (share_resource_group)
-    {
-        for (Int32 i = 0; i < shards; ++i)
-        {
-            if (!column_names.empty())
-                pipes.emplace_back(source_multiplexers->createChannel(i, column_names, metadata_snapshot, context));
-            else
-                pipes.emplace_back(source_multiplexers->createChannel(i, {RESERVED_APPEND_TIME}, metadata_snapshot, context));
-        }
-    }
-    else*/
     {
         /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
         /// We will need add one
@@ -466,22 +496,47 @@ Pipe Kafka::read(
         else
             header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_TIME});
 
-        auto offsets = getOffsets(*consumer, query_info.seek_to_info, shards_to_query);
+        auto seek_to_info = query_info.seek_to_info;
+        /// seek_to defaults to 'latest' for streaming. In non-streaming case, 'earliest' is preferred.
+        if (!streaming && seek_to_info->getSeekTo().empty())
+            seek_to_info = std::make_shared<SeekToInfo>("earliest");
+
+        auto offsets = getOffsets(*consumer, seek_to_info, shards_to_query);
         assert(offsets.size() == shards_to_query.size());
 
         for (auto [shard, offset] : std::ranges::views::zip(shards_to_query, offsets))
-            pipes.emplace_back(
-                std::make_shared<KafkaSource>(
-                    *this,
-                    header,
-                    storage_snapshot,
-                    consumer,
-                    topic_ptr,
-                    shard,
-                    offset,
-                    max_block_size,
-                    external_stream_counter,
-                    context));
+        {
+            std::optional<Int64> high_watermark = std::nullopt;
+            if (!streaming)
+            {
+                auto marks = topic_ptr->queryWatermarks(shard);
+                LOG_INFO(logger, "Watermarks topic={} partition={} low={} high={}", topicName(), shard, marks.low, marks.high);
+                high_watermark = marks.high;
+
+                if (marks.low == marks.high) /// there are no messages in the topic
+                {
+                    /// As there are no messages, no need to create a KafkaSource instance at all.
+                    pipes.emplace_back(std::make_shared<NullSource>(header));
+                    continue;
+                }
+                else if (offset >= 0 && offset < marks.low) /// if offset < marks.low, consuming will stuck
+                    offset = marks.low;
+                else if (offset == nlog::LATEST_SN || offset > marks.high)
+                    offset = marks.high;
+            }
+            pipes.emplace_back(std::make_shared<KafkaSource>(
+                *this,
+                header,
+                storage_snapshot,
+                consumer,
+                topic_ptr,
+                shard,
+                offset,
+                high_watermark,
+                max_block_size,
+                external_stream_counter,
+                context));
+        }
     }
 
     LOG_INFO(
@@ -489,8 +544,7 @@ Pipe Kafka::read(
         "Starting reading {} streams by seeking to {} with {} in dedicated resource group",
         pipes.size(),
         query_info.seek_to_info->getSeekTo(),
-        consumer->name()
-    );
+        consumer->name());
 
     auto pipe = Pipe::unitePipes(std::move(pipes));
     auto min_threads = context->getSettingsRef().min_threads.value;
@@ -506,7 +560,12 @@ std::shared_ptr<RdKafka::Consumer> Kafka::getConsumer()
 
     auto consumer_ref = std::find_if(consumers.begin(), consumers.end(), [](const auto & consumer) { return consumer.expired(); });
     if (consumer_ref == consumers.end() && consumers.size() >= max_consumers)
-        throw Exception(ErrorCodes::NO_AVAILABLE_KAFKA_CONSUMER, "Reached consumers limit {}. Existing queries need to be stopped before running other queries. Or update {} to a bigger number in the config file", max_consumers, MAX_CONSUMERS_CONFIG_KEY);
+        throw Exception(
+            ErrorCodes::NO_AVAILABLE_KAFKA_CONSUMER,
+            "Reached consumers limit {}. Existing queries need to be stopped before running other queries. Or update {} to a bigger number "
+            "in the config file",
+            max_consumers,
+            MAX_CONSUMERS_CONFIG_KEY);
 
     auto new_consumer = std::make_shared<RdKafka::Consumer>(*conf, poll_timeout_ms, getLoggerName());
     std::weak_ptr<RdKafka::Consumer> ref = new_consumer;
@@ -555,11 +614,10 @@ SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr
 {
     /// always validate before actual use
     validate();
-    return std::make_shared<KafkaSink>(
-        *this, metadata_snapshot->getSampleBlock(), message_key_ast, external_stream_counter, context);
+    return std::make_shared<KafkaSink>(*this, metadata_snapshot->getSampleBlock(), message_key_ast, external_stream_counter, context);
 }
 
-int Kafka::onStats(struct rd_kafka_s * rk, char * json, size_t json_len, void *  /*opaque*/)
+int Kafka::onStats(struct rd_kafka_s * rk, char * json, size_t json_len, void * /*opaque*/)
 {
     std::string s(json, json + json_len);
     /// controlled by the `statistics.interval.ms` property, which by default is `0`, meaning no stats
@@ -577,7 +635,7 @@ void Kafka::onLog(const struct rd_kafka_s * rk, int level, const char * fac, con
         LOG_INFO(cbLogger(), "{}|{} buf={}", rd_kafka_name(rk), fac, buf);
 }
 
-void Kafka::onError(struct rd_kafka_s * rk, int err, const char * reason, void *  /*opaque*/)
+void Kafka::onError(struct rd_kafka_s * rk, int err, const char * reason, void * /*opaque*/)
 {
     if (err == RD_KAFKA_RESP_ERR__FATAL)
     {
@@ -587,11 +645,16 @@ void Kafka::onError(struct rd_kafka_s * rk, int err, const char * reason, void *
     }
     else
     {
-        LOG_WARNING(cbLogger(), "Error occurred on {}, error={}, reason={}", rd_kafka_name(rk), rd_kafka_err2str(static_cast<rd_kafka_resp_err_t>(err)), reason);
+        LOG_WARNING(
+            cbLogger(),
+            "Error occurred on {}, error={}, reason={}",
+            rd_kafka_name(rk),
+            rd_kafka_err2str(static_cast<rd_kafka_resp_err_t>(err)),
+            reason);
     }
 }
 
-void Kafka::onThrottle(struct rd_kafka_s *  /*rk*/, const char * broker_name, int32_t broker_id, int throttle_time_ms, void *  /*opaque*/)
+void Kafka::onThrottle(struct rd_kafka_s * /*rk*/, const char * broker_name, int32_t broker_id, int throttle_time_ms, void * /*opaque*/)
 {
     LOG_WARNING(cbLogger(), "Throttled on broker={}, broker_id={}, throttle_time_ms={}", broker_name, broker_id, throttle_time_ms);
 }

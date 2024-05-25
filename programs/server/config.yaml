@@ -902,6 +902,7 @@ query_masking_rules:
 # content_type - use with static type, response content-type
 # response_content - use with static type, Response content sent to client, when using the prefix 'file://' or 'config://', find the content from the file or configuration send to client.
 
+# NOTE, if enable these dynamic handlers, please follow /timeplusd/{uri_path} convention, check createHandlersFactoryFromConfig() in HTTPHandlerFactory.cpp
 # http_handlers:
 #     - rule:
 #         url: /

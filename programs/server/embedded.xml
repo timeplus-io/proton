@@ -15,6 +15,16 @@
     <interserver_http_port>9009</interserver_http_port>
     <telemetry_enabled from_env="TELEMETRY_ENABLED" replace="true">true</telemetry_enabled>
 
+    <prometheus>
+      <endpoint>/metrics</endpoint>
+      <port>9363</port>
+      <metrics>true</metrics>
+      <events>true</events>
+      <asynchronous_metrics>true</asynchronous_metrics>
+      <status_info>true</status_info>
+      <external_stream>true</external_stream>
+    </prometheus>
+
     <path>./proton-data/</path>
 
     <mark_cache_size>5368709120</mark_cache_size>
