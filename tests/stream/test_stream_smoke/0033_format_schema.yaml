@@ -178,28 +178,34 @@ tests:
             query_id: fmt-2-1
             wait: 1
             query: |-
-              CREATE OR REPLACE FORMAT SCHEMA test_format_schema_error_handling AS '' TYPE Protobuf;
+              CREATE OR REPLACE FORMAT SCHEMA test_format_schema_error_handling AS 'anything' TYPE JSON;
           - client: python
             query_type: table
             query_id: fmt-2-2
             wait: 1
             query: |-
-              CREATE OR REPLACE FORMAT SCHEMA test_format_schema_error_handling AS 'bad' TYPE Protobuf;
+              CREATE OR REPLACE FORMAT SCHEMA test_format_schema_error_handling AS '' TYPE Protobuf;
           - client: python
             query_type: table
             query_id: fmt-2-3
             wait: 1
             query: |-
-              SHOW CREATE FORMAT SCHEMA test_format_schema_error_handling;
+              CREATE OR REPLACE FORMAT SCHEMA test_format_schema_error_handling AS 'bad' TYPE Protobuf;
           - client: python
             query_type: table
             query_id: fmt-2-4
             wait: 1
             query: |-
-              DROP FORMAT SCHEMA test_format_schema_error_handling;
+              SHOW CREATE FORMAT SCHEMA test_format_schema_error_handling;
           - client: python
             query_type: table
             query_id: fmt-2-5
+            wait: 1
+            query: |-
+              DROP FORMAT SCHEMA test_format_schema_error_handling;
+          - client: python
+            query_type: table
+            query_id: fmt-2-6
             wait: 1
             query: |-
               CREATE OR REPLACE FORMAT SCHEMA test_format_schema_error_handling AS 'bad' TYPE Avro;
@@ -207,19 +213,22 @@ tests:
     expected_results:
       - query_id: fmt-2-0
         # unknown format type
-        expected_results: error_code:2613
+        expected_results: error_code:73
       - query_id: fmt-2-1
         # empty body
-        expected_results: error_code:36
+        expected_results: error_code:2613
       - query_id: fmt-2-2
+        # empty body
+        expected_results: error_code:36
+      - query_id: fmt-2-3
         # invalid schema
         expected_results: error_code:434
-      - query_id: fmt-2-3
-        # nonexists
-        expected_results: error_code:2611
       - query_id: fmt-2-4
         # nonexists
         expected_results: error_code:2611
       - query_id: fmt-2-5
+        # nonexists
+        expected_results: error_code:2611
+      - query_id: fmt-2-6
         # incorrect data
         expected_results: error_code:117
