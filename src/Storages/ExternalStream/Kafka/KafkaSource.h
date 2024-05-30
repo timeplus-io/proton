@@ -40,6 +40,9 @@ public:
 
     Chunk generate() override;
 
+protected:
+    void onCancel() override;
+
 private:
     void calculateColumnPositions();
     void initFormatExecutor();
@@ -89,7 +92,7 @@ private:
 
     /// Indicates that the source has already consumed all messages it is supposed to read [for non-streaming queries].
     bool reached_the_end = false;
-    bool consume_started = false;
+    std::atomic_flag consume_started;
 
     ExternalStreamCounterPtr external_stream_counter;
 
