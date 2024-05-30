@@ -28,15 +28,6 @@ public:
     NamesAndTypesList getVirtuals() const override;
     std::optional<UInt64> totalRows(const Settings &) const override;
 
-    Pipe read(
-        const Names & column_names,
-        const StorageSnapshotPtr & storage_snapshot,
-        SelectQueryInfo & query_info,
-        ContextPtr context,
-        QueryProcessingStage::Enum processed_stage,
-        size_t max_block_size,
-        size_t num_streams) override;
-
     void read(
         QueryPlan & query_plan,
         const Names & column_names,
@@ -64,6 +55,15 @@ protected:
         std::unique_ptr<ExternalStreamSettings> external_stream_settings_,
         const String & comment,
         bool attach);
+
+    Pipe read(
+        const Names & column_names,
+        const StorageSnapshotPtr & storage_snapshot,
+        SelectQueryInfo & query_info,
+        ContextPtr context,
+        QueryProcessingStage::Enum processed_stage,
+        size_t max_block_size,
+        size_t num_streams) override;
 
 private:
     std::unique_ptr<StorageExternalStreamImpl> external_stream;
