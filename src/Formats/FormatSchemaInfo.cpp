@@ -21,6 +21,11 @@ namespace
             return "proto";
         else if (format == "CapnProto")
             return "capnp";
+        else if (format == "Avro")
+            /// Avro schemas are defined in JSON, but using "json" here is not a good idea,
+            /// because there are other schema formats defined in JSON as well, e.g. JSON schema.
+            /// In the Avro official tutorial, it uses "avsc" as its schema file ext, thus we use it here.
+            return "avsc";
         else
             return "";
     }
