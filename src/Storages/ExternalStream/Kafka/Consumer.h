@@ -23,7 +23,7 @@ public:
 
     std::vector<Int64> getOffsetsForTimestamps(const std::string & topic, const std::vector<klog::PartitionTimestamp> & partition_timestamps, int32_t timeout_ms = 5000) const;
 
-    void startConsume(Topic & topic, Int32 parition, Int64 offset = RD_KAFKA_OFFSET_END);
+    void startConsume(Topic & topic, Int32 parition, Int64 offset = RD_KAFKA_OFFSET_END, bool check_offset = false);
     void stopConsume(Topic & topic, Int32 parition);
 
     using Callback = std::function<void(void * rkmessage, size_t total_count, void * data)>;
