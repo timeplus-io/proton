@@ -66,6 +66,8 @@ private:
     const std::chrono::seconds update_period;
     ProtocolServerMetricsFunc protocol_server_metrics_func;
 
+    std::unique_ptr<Settings> settings;
+
     mutable std::mutex mutex;
     std::condition_variable wait_cond;
     bool quit {false};
