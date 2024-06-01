@@ -2,6 +2,7 @@
 #include "DataTypes/DataTypeLowCardinality.h"
 #if USE_AVRO
 
+#include <fstream> /// proton: updated
 #include <numeric>
 
 #include <Core/Field.h>
@@ -11,6 +12,7 @@
 #include <IO/Operators.h>
 #include <IO/ReadHelpers.h>
 #include <IO/HTTPCommon.h>
+#include <IO/WriteBufferFromFile.h> /// proton: updated
 
 #include <Formats/FormatFactory.h>
 
@@ -912,6 +914,57 @@ const AvroDeserializer & AvroConfluentRowInputFormat::getOrCreateDeserializer(Sc
     return it->second;
 }
 
+/// proton: starts
+
+namespace
+{
+
+avro::ValidSchema compileSchemaFromSchemaInfo(const FormatSchemaInfo & schema_info)
+{
+    std::ifstream ifs{schema_info.absoluteSchemaPath()};
+    avro::ValidSchema schema;
+    avro::compileJsonSchema(ifs, schema);
+    return schema;
+}
+
+}
+
+AvroSchemaRowInputFormat::AvroSchemaRowInputFormat(
+    const Block & header_, ReadBuffer & in_, Params params_, const FormatSchemaInfo & schema_info, const FormatSettings & format_settings)
+    : IRowInputFormat(header_, in_, params_, ProcessorID::AvroConfluentRowInputFormatID)
+    , deserializer(output.getHeader(), compileSchemaFromSchemaInfo(schema_info), format_settings.avro.allow_missing_fields, format_settings.avro.null_as_default)
+    , decoder(avro::binaryDecoder())
+{
+}
+
+bool AvroSchemaRowInputFormat::readRow(MutableColumns & columns, RowReadExtension & ext)
+{
+    if (in->eof())
+    {
+        return false;
+    }
+    // skip tombstone records (kafka messages with null value)
+    if (in->available() == 0)
+    {
+        return false;
+    }
+
+    InputStreamReadBufferAdapter is {*in};
+    decoder->init(is);
+
+    deserializer.deserializeRow(columns, *decoder, ext);
+    decoder->drain();
+    return true;
+}
+
+void AvroSchemaRowInputFormat::syncAfterError()
+{
+    // skip until the end of current kafka message
+    in->tryIgnore(in->available());
+}
+
+/// proton: ends
+
 AvroSchemaReader::AvroSchemaReader(ReadBuffer & in_, bool confluent_, const FormatSettings & format_settings_)
     : ISchemaReader(in_), confluent(confluent_), format_settings(format_settings_)
 {
@@ -1014,6 +1067,37 @@ DataTypePtr AvroSchemaReader::avroNodeToDataType(avro::NodePtr node)
     }
 }
 
+/// proton: starts
+AvroSchemaWriter::AvroSchemaWriter(std::string_view schema_body_, const FormatSettings & settings_)
+    : IExternalSchemaWriter(schema_body_, settings_)
+    , schema_info(settings.schema.format_schema, "Avro", false, settings.schema.is_server, settings.schema.format_schema_path)
+{
+}
+
+void AvroSchemaWriter::validate()
+{
+    try
+    {
+        avro::compileJsonSchemaFromString(schema_body.data());
+    }
+    catch (const avro::Exception & e)
+    {
+      throw Exception(e.what(), ErrorCodes::INCORRECT_DATA);
+    }
+}
+
+bool AvroSchemaWriter::write(bool replace_if_exist)
+{
+    if (std::filesystem::exists(schema_info.absoluteSchemaPath()))
+        if (!replace_if_exist)
+            return false;
+
+    WriteBufferFromFile write_buffer{schema_info.absoluteSchemaPath()};
+    write_buffer.write(schema_body.data(), schema_body.size());
+    return true;
+}
+/// proton: ends
+
 void registerInputFormatAvro(FormatFactory & factory)
 {
     factory.registerInputFormat("Avro", [](
@@ -1026,9 +1110,16 @@ void registerInputFormatAvro(FormatFactory & factory)
         /// Use only one format name "Avro" to support both schema registry and non-schema registry use cases, rather than using another name "AvroConfluent",
         /// which is what ClickHouse did.
 
+        /// Non-schema registry case
         if (settings.avro.schema_registry_url.empty() && settings.kafka_schema_registry.url.empty())
-            /// Non-schema registry case
-            return std::make_shared<AvroRowInputFormat>(sample, buf, params, settings);
+        {
+            /// Schema is part of the data
+            if (settings.schema.format_schema.empty())
+                return std::make_shared<AvroRowInputFormat>(sample, buf, params, settings);
+
+            /// Using a separate schema
+            return std::make_shared<AvroSchemaRowInputFormat>(sample, buf, params, FormatSchemaInfo(settings, "Avro", false), settings);
+        }
 
         if (!settings.schema.format_schema.empty())
             throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "schema_registry_url and format_schema cannot be used at the same time");
@@ -1049,6 +1140,13 @@ void registerAvroSchemaReader(FormatFactory & factory)
         return std::make_shared<AvroSchemaReader>(buf, true, settings);
     });
 
+    /// proton: starts
+    factory.registerSchemaFileExtension("avsc", "Avro");
+
+    factory.registerExternalSchemaWriter("Avro", [](std::string_view schema_body, const FormatSettings & settings) {
+        return std::make_shared<AvroSchemaWriter>(schema_body, settings);
+    });
+    /// proton: ends
 }
 
 

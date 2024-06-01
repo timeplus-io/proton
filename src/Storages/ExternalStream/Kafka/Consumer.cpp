@@ -47,11 +47,16 @@ std::vector<Int64> Consumer::getOffsetsForTimestamps(const std::string & topic, 
     return klog::getOffsetsForTimestamps(rk.get(), topic, partition_timestamps, timeout_ms);
 }
 
-void Consumer::startConsume(Topic & topic, Int32 parition, Int64 offset)
+void Consumer::startConsume(Topic & topic, Int32 parition, Int64 offset, bool check_offset)
 {
     if (!started.test_and_set())
         poller.scheduleOrThrowOnError([this] { backgroundPoll(); });
 
+    if (offset > 0 && check_offset)
+    {
+        if (offset > topic.queryWatermarks(parition).high)
+            offset = RD_KAFKA_OFFSET_END;
+    }
     auto res = rd_kafka_consume_start(topic.getHandle(), parition, offset);
     if (res == -1)
     {
