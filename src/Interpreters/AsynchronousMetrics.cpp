@@ -71,8 +71,13 @@ AsynchronousMetrics::AsynchronousMetrics(
     : WithContext(global_context_)
     , update_period(update_period_seconds)
     , protocol_server_metrics_func(protocol_server_metrics_func_)
+    , settings(std::make_unique<Settings>(global_context_->getSettingsRef()))
     , log(&Poco::Logger::get("AsynchronousMetrics"))
 {
+    /// proton : starts. totalRows(settings) for versioned-kv, changelog-kv
+    settings->set("compact_kv_stream", false);
+    /// proton : ends
+
 #if defined(OS_LINUX)
     openFileIfExists("/proc/meminfo", meminfo);
     openFileIfExists("/proc/loadavg", loadavg);
@@ -1525,11 +1530,10 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
                         continue;
                     /// proton : ends
 
-                    const auto & settings = getContext()->getSettingsRef();
-
                     calculateMax(max_part_count_for_partition, table_merge_tree->getMaxPartsCountForPartition());
-                    total_number_of_bytes += table_merge_tree->totalBytes(settings).value();
-                    total_number_of_rows += table_merge_tree->totalRows(settings).value();
+                    total_number_of_bytes += table_merge_tree->totalBytes(*settings).value();
+                    auto total_rows = table_merge_tree->totalRows(*settings);
+                    total_number_of_rows += total_rows ? total_rows.value() : 0;
                     total_number_of_parts += table_merge_tree->getPartsCount();
                 }
             }
