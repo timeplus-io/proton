@@ -66,8 +66,6 @@ private:
     Block physical_header;
     Chunk header_chunk;
 
-    std::shared_ptr<ExpressionActions> convert_non_virtual_to_physical_action = nullptr;
-
     std::unique_ptr<StreamingFormatExecutor> format_executor;
     ReadBufferFromMemory read_buffer;
 
