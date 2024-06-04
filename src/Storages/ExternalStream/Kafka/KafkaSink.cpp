@@ -1,4 +1,4 @@
-#include "Common/Exception.h"
+#include <Common/Exception.h>
 #include <Common/logger_useful.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -19,7 +19,6 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int CANNOT_WRITE_TO_KAFKA;
-extern const int INVALID_SETTING_VALUE;
 extern const int KAFKA_PRODUCER_STOPPED;
 extern const int TYPE_MISMATCH;
 }
@@ -135,10 +134,16 @@ KafkaSink::KafkaSink(
     , partition_cnt(topic->getPartitionCount())
     , one_message_per_row(kafka.produceOneMessagePerRow())
     , topic_refresh_interval_ms(kafka.topicRefreshIntervalMs())
+    , max_message_batch_size(context->getSettingsRef().max_insert_block_size.value)
+    , pending_data(max_message_batch_size)
     , external_stream_counter(external_stream_counter_)
     , logger(&Poco::Logger::get(fmt::format("{}.{}", kafka.getLoggerName(), producer->name())))
 {
-    wb = std::make_unique<WriteBufferFromKafkaSink>([this](char * pos, size_t len) { addMessageToBatch(pos, len); });
+    /// If the buffer_size (max_insert_block_size) is reached, the buffer will be forced to flush.
+    wb = std::make_unique<WriteBufferFromKafkaSink>(
+        [this](char * pos, size_t len, size_t total_len) { addMessageToBatch(pos, len, total_len); },
+        [this]() { tryCarryOverPendingData(); },
+        /*buffer_size=*/ max_message_batch_size);
 
     const auto & data_format = kafka.dataFormat();
     assert(!data_format.empty());
@@ -155,13 +160,14 @@ KafkaSink::KafkaSink(
     {
         /// The callback allows `IRowOutputFormat` based formats produce one Kafka message per row.
         writer = FormatFactory::instance().getOutputFormat(
-            data_format, *wb, header, context, [this](auto & /*column*/, auto /*row*/) { wb->next(); }, kafka.getFormatSettings(context));
+            data_format, *wb, header, context, [this](auto & /*column*/, auto /*row*/) { wb->markOffset(); wb->next(); }, kafka.getFormatSettings(context));
         if (!dynamic_cast<IRowOutputFormat*>(writer.get()))
-            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Data format `{}` is not a row-based foramt, it cannot be used with `one_message_per_row`", data_format);
+            LOG_WARNING(logger, "Data format `{}` is not a row-based format, `one_message_per_row` setting will not be applied", data_format);
     }
     else
     {
-        writer = FormatFactory::instance().getOutputFormat(data_format, *wb, header, context, {}, kafka.getFormatSettings(context));
+        writer = FormatFactory::instance().getOutputFormat(
+            data_format, *wb, header, context, [this](auto & /*column*/, auto /*row*/) { wb->markOffset(); }, kafka.getFormatSettings(context));
     }
     writer->setAutoFlush();
 
@@ -210,26 +216,70 @@ KafkaSink::KafkaSink(
     });
 }
 
-void KafkaSink::addMessageToBatch(char * pos, size_t len)
+/// When this function is called, there could be two scenarios:
+/// 1) len == total_len. That means the whole Chunk (or the whole row, when one_message_per_row is true) can fit into the buffer.
+///    In this case, we just need to create a rd_kafka_message_t, and push it to current_batch.
+///
+/// 2) len < total_len. That means the Chunk (or a row) is too big to fit into the buffer. In this case, the data between
+///    [pos + len, pos + total_len] will be copied into pending_data so that the bufer can accept more data until it gets
+///    complete data. Then it can create a rd_kafka_message_t.
+///
+/// In this way, we limit the size of one single Kafka message, so that it can avoid hitting the max.message.size.
+/// However, it's still possible that, one single row is still too big and it exceeds that limit. There is nothing we can do about it for now.
+void KafkaSink::addMessageToBatch(char * pos, size_t len, size_t total_len)
 {
-    StringRef key = message_key_expr ? keys_for_current_batch[current_batch_row++] : "";
+    auto pending_size = pending_data.size();
 
-    /// Data at pos (which is in the WriteBuffer) will be overwritten, thus it must be kept somewhere else (in `batch_payload`).
-    nlog::ByteVector payload {len};
-    payload.resize(len); /// set the size to the right value
-    memcpy(payload.data(), pos, len);
+    /// There are complete data to consume.
+    if (len > 0)
+    {
+        StringRef key = message_key_expr ? keys_for_current_batch[current_batch_row++] : "";
 
-    current_batch.push_back(rd_kafka_message_t{
-        .partition = next_partition,
-        .payload = payload.data(),
-        .len = len,
-        .key = const_cast<char *>(key.data),
-        .key_len = key.size,
-        ._private = this,
-    });
+        /// Data at pos (which is in the WriteBuffer) will be overwritten, thus it must be kept somewhere else (in `batch_payload`).
+        auto msg_size = pending_size + len;
+        nlog::ByteVector payload{msg_size};
+        payload.resize(msg_size); /// set the size to the right value
+        if (pending_size)
+            memcpy(payload.data(), pending_data.data(), pending_size);
+        memcpy(payload.data() + pending_size, pos, len);
 
-    batch_payload.push_back(std::move(payload));
-    ++state.outstandings;
+        current_batch.push_back(rd_kafka_message_t{
+            .partition = next_partition,
+            .payload = payload.data(),
+            .len = msg_size,
+            .key = const_cast<char *>(key.data),
+            .key_len = key.size,
+            ._private = this,
+        });
+
+        batch_payload.push_back(std::move(payload));
+        ++state.outstandings;
+
+        pending_data.resize(0);
+        pending_size = 0;
+    }
+
+    if (len == total_len)
+        /// Nothing left
+        return;
+
+    /// There are some remaining incomplete data, copy them to pending_data.
+    auto remaining = total_len - len;
+    LOG_INFO(logger, "Writing to pending_data, size={}", remaining);
+    pending_data.resize(pending_size + remaining);
+    memcpy(pending_data.data() + pending_size, pos + len, remaining);
+}
+
+void KafkaSink::tryCarryOverPendingData()
+{
+    /// If there are pending data and it can be fit into the buffer, then write the data back to the buffer,
+    /// so that we can use the buffer to limit the message size.
+    /// If the pending data are too big, that means we get a over-size row.
+    if (!pending_data.empty() && pending_data.size() < wb->available())
+    {
+        wb->write(pending_data.data(), pending_data.size());
+        pending_data.resize(0);
+    }
 }
 
 void KafkaSink::consume(Chunk chunk)
@@ -318,7 +368,7 @@ void KafkaSink::consume(Chunk chunk)
         current_batch.data(),
         current_batch.size());
 
-    rd_kafka_resp_err_t err {RD_KAFKA_RESP_ERR_NO_ERROR};
+    rd_kafka_resp_err_t err{RD_KAFKA_RESP_ERR_NO_ERROR};
     for (size_t i = 0; i < current_batch.size(); ++i)
     {
         if (current_batch[i].err)

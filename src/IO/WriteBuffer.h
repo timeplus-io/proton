@@ -59,6 +59,8 @@ public:
         }
 
         pos = working_buffer.begin();
+
+        afterNext(); /// proton: updated
     }
 
     /** it is desirable in the derived classes to place the finalize() call in the destructor,
@@ -154,6 +156,11 @@ private:
       * Throw an exception if something is wrong.
       */
     virtual void nextImpl() { throw Exception("Cannot write after end of buffer.", ErrorCodes::CANNOT_WRITE_AFTER_END_OF_BUFFER); }
+
+    /// proton: starts
+    /// Allows a subclass to do some work when `next` is done, i.e. after the data in the buffer was written.
+    virtual void afterNext() {}
+    /// proton: ends
 };
 
 

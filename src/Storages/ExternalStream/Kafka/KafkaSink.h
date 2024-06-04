@@ -80,7 +80,8 @@ public:
 private:
     // void onMessageDelivery(const rd_kafka_message_t * msg);
     void onMessageDelivery(rd_kafka_resp_err_t err);
-    void addMessageToBatch(char * pos, size_t len);
+    void addMessageToBatch(char * pos, size_t len, size_t total_len);
+    void tryCarryOverPendingData();
 
     /// the number of acknowledgement has been received so far for the current checkpoint period
     size_t acked() const noexcept { return state.acked; }
@@ -100,6 +101,7 @@ private:
     Int32 partition_cnt {0};
     bool one_message_per_row {false};
     Int32 topic_refresh_interval_ms = 0;
+    UInt64 max_message_batch_size = 0;
 
     ThreadPool background_jobs {1};
     std::atomic_flag is_finished {false};
@@ -112,6 +114,7 @@ private:
     String message_key_column_name;
 
     /// For constructing the message batch
+    nlog::ByteVector pending_data;
     std::vector<rd_kafka_message_t> current_batch;
     std::vector<nlog::ByteVector> batch_payload;
     std::vector<StringRef> keys_for_current_batch;
