@@ -11,7 +11,7 @@
 namespace DB
 {
 /// Base class of StorageExternalStreamImpl
-class StorageExternalStreamImpl : public std::enable_shared_from_this<StorageExternalStreamImpl>
+class StorageExternalStreamImpl : public std::enable_shared_from_this<StorageExternalStreamImpl>, public IStorage
 {
 public:
     explicit StorageExternalStreamImpl(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ContextPtr & context)
@@ -24,33 +24,23 @@ public:
         if (!settings->input_format_skip_unknown_fields.changed)
             settings->input_format_skip_unknown_fields = true;
     }
-    virtual ~StorageExternalStreamImpl() = default;
 
-    virtual void startup() = 0;
-    virtual void shutdown() = 0;
-    virtual bool supportsSubcolumns() const { return false; }
-    virtual NamesAndTypesList getVirtuals() const { return {}; }
     virtual ExternalStreamCounterPtr getExternalStreamCounter() const { return nullptr; }
+
     /// Some implementations have its own logic to infer the format.
     virtual const String & dataFormat() const { return settings->data_format.value; }
+
     const String & formatSchema() const { return settings->format_schema.value; }
 
-    virtual std::optional<UInt64> totalRows(const Settings &) { return {}; }
-
-    virtual Pipe read(
+    void read(
+        QueryPlan & query_plan,
         const Names & column_names,
         const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & query_info,
         ContextPtr context,
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
-        size_t num_streams)
-        = 0;
-
-    virtual SinkToStoragePtr write(const ASTPtr & /* query */, const StorageMetadataPtr & /* metadata_snapshot */, ContextPtr /* context */)
-    {
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Ingesting data to this type of external stream is not supported");
-    }
+        size_t num_streams) override;
 
     FormatSettings getFormatSettings(const ContextPtr & context) const
     {

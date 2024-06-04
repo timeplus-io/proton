@@ -77,6 +77,11 @@ std::unique_ptr<StorageExternalStreamImpl> createExternalStream(
 }
 }
 
+bool StorageExternalStream::isRemote() const
+{
+    return external_stream->isRemote();
+}
+
 void StorageExternalStream::startup()
 {
     external_stream->startup();
@@ -102,16 +107,9 @@ std::optional<UInt64> StorageExternalStream::totalRows(const Settings & settings
     return external_stream->totalRows(settings);
 }
 
-Pipe StorageExternalStream::read(
-    const Names & column_names,
-    const StorageSnapshotPtr & storage_snapshot,
-    SelectQueryInfo & query_info,
-    ContextPtr context_,
-    QueryProcessingStage::Enum processed_stage,
-    size_t max_block_size,
-    size_t num_streams)
+ExternalStreamCounterPtr StorageExternalStream::getExternalStreamCounter()
 {
-    return external_stream->read(column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+    return external_stream->getExternalStreamCounter();
 }
 
 void StorageExternalStream::read(
@@ -124,20 +122,7 @@ void StorageExternalStream::read(
     size_t max_block_size,
     size_t num_streams)
 {
-    Pipe pipe = read(column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
-
-    auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName(), query_info.storage_limits);
-
-    /// Override the maximum concurrency
-    auto min_threads = context_->getSettingsRef().min_threads.value;
-    if (min_threads > 0)
-        query_plan.setMaxThreads(min_threads);
-    query_plan.addStep(std::move(read_step));
-}
-
-ExternalStreamCounterPtr StorageExternalStream::getExternalStreamCounter()
-{
-    return external_stream->getExternalStreamCounter();
+    external_stream->read(query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
 }
 
 SinkToStoragePtr StorageExternalStream::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_)

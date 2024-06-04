@@ -3,13 +3,13 @@
 #include <Storages/IStorage.h>
 #include <Common/SettingsChanges.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
+#include "Storages/ExternalStream/StorageExternalStreamImpl.h"
 
 #include <base/shared_ptr_helper.h>
 
 namespace DB
 {
 struct ExternalStreamSettings;
-class StorageExternalStreamImpl;
 
 /// StorageExternalStream acts like a routing storage engine which proxy the requests to the underlying specific
 /// external streaming storage like Kafka, Redpanda etc.
@@ -18,13 +18,17 @@ class StorageExternalStream final : public shared_ptr_helper<StorageExternalStre
     friend struct shared_ptr_helper<StorageExternalStream>;
 
 public:
-    std::string getName() const override { return "ExternalStream"; }
+    String getName() const override { return "ExternalStream"; }
 
     void startup() override;
     void shutdown() override;
+
+    bool isRemote() const override;
     bool supportsSubcolumns() const override;
-    bool squashInsert() const noexcept override { return false; }
+    bool supportsStreamingQuery() const override { return true; }
     bool supportsAccurateSeekTo() const noexcept override { return true; }
+    bool squashInsert() const noexcept override { return false; }
+
     NamesAndTypesList getVirtuals() const override;
     std::optional<UInt64> totalRows(const Settings &) const override;
 
@@ -40,8 +44,6 @@ public:
 
     SinkToStoragePtr write(const ASTPtr & /*query*/, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr /*context*/) override;
 
-    bool supportsStreamingQuery() const override { return true; }
-
     friend class KafkaSource;
 
     ExternalStreamCounterPtr getExternalStreamCounter();
@@ -55,15 +57,6 @@ protected:
         std::unique_ptr<ExternalStreamSettings> external_stream_settings_,
         const String & comment,
         bool attach);
-
-    Pipe read(
-        const Names & column_names,
-        const StorageSnapshotPtr & storage_snapshot,
-        SelectQueryInfo & query_info,
-        ContextPtr context,
-        QueryProcessingStage::Enum processed_stage,
-        size_t max_block_size,
-        size_t num_streams) override;
 
 private:
     std::unique_ptr<StorageExternalStreamImpl> external_stream;
