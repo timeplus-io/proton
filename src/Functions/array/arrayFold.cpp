@@ -169,7 +169,9 @@ public:
             for (size_t i = 0; i < array_count; ++i)
                 data_arrays[i] = arrays[i].column->scatter(max_array_size, selector);
 
-        size_t prev_size = rows_count;
+        ColumnPtr accumulator_col = arguments.back().column->convertToFullColumnIfConst();
+        MutableColumnPtr result_col = accumulator_col->cloneEmpty();
+        ColumnPtr lambda_col = lambda_function->cloneResized(num_rows);
 
         IColumn::Permutation inverse_permutation(rows_count);
         size_t inverse_permutation_count = 0;
@@ -193,17 +195,36 @@ public:
             }
             auto prev = current_column->scatter(2, prev_selector);
 
-            result_data->insertRangeFrom(*(prev[0]), 0, prev[0]->size());
+            /// Scatter the accumulator into two columns
+            /// - one column with accumulator values for rows less than slice-many elements, no further calculation is performed on them
+            /// - one column with accumulator values for rows with slice-many or more elements, these are updated in this or following iteration
+            std::vector<IColumn::MutablePtr> finished_unfinished_accumulator_values = accumulator_col->scatter(2, prev_selector);
+            IColumn::MutablePtr & finished_accumulator_values = finished_unfinished_accumulator_values[0];
+            IColumn::MutablePtr & unfinished_accumulator_values = finished_unfinished_accumulator_values[1];
 
-            auto res_lambda = lambda_function->cloneResized(prev[1]->size());
-            auto * res_lambda_ptr = typeid_cast<ColumnFunction *>(res_lambda.get());
+            /// Copy finished accumulator values into the result
+            result_col->insertRangeFrom(*finished_accumulator_values, 0, finished_accumulator_values->size());
 
-            for (size_t i = 0; i < array_count; i++)
-                res_lambda_ptr->appendArguments(std::vector({ColumnWithTypeAndName(std::move(data_arrays[i][ind]), arrays[i].type, arrays[i].name)}));
-            res_lambda_ptr->appendArguments(std::vector({ColumnWithTypeAndName(std::move(prev[1]), arguments.back().type, arguments.back().name)}));
+            /// The lambda function can contain statically bound arguments, in particular their row values. We need to filter for the rows
+            /// we care about.
+            IColumn::Filter filter(unfinished_rows);
+            for (size_t i = 0; i < prev_selector.size(); ++i)
+                filter[i] = prev_selector[i];
+            ColumnPtr lambda_col_filtered = lambda_col->filter(filter, lambda_col->size());
+            IColumn::MutablePtr lambda_col_filtered_cloned = lambda_col_filtered->cloneResized(lambda_col_filtered->size()); /// clone so we can bind more arguments
+            auto * lambda = typeid_cast<ColumnFunction *>(lambda_col_filtered_cloned.get());
 
-            current_column = IColumn::mutate(res_lambda_ptr->reduce().column);
-            prev_size = current_column->size();
+            /// Bind arguments to lambda function (accumulator + array arguments)
+            lambda->appendArguments(std::vector({ColumnWithTypeAndName(std::move(unfinished_accumulator_values), arguments.back().type, arguments.back().name)}));
+            for (size_t array_col = 0; array_col < num_array_cols; ++array_col)
+                lambda->appendArguments(std::vector({ColumnWithTypeAndName(std::move(vertical_slices[array_col][slice]), arrays_data_with_type_and_name[array_col].type, arrays_data_with_type_and_name[array_col].name)}));
+
+            /// Perform the actual calculation and copy the result into the accumulator
+            ColumnWithTypeAndName res_with_type_and_name = lambda->reduce();
+            accumulator_col = res_with_type_and_name.column->convertToFullColumnIfConst();
+
+            unfinished_rows = accumulator_col->size();
+            lambda_col = lambda_col_filtered;
         }
 
         result_data->insertRangeFrom(*current_column, 0, current_column->size());
