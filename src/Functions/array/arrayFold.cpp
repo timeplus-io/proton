@@ -10,7 +10,7 @@ namespace ErrorCodes
     extern const int ILLEGAL_COLUMN;
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-    extern const int SIZES_OF_ARRAYS_DONT_MATCH;
+    extern const int SIZES_OF_ARRAYS_DOESNT_MATCH;
     extern const int TYPE_MISMATCH;
 }
 
@@ -112,7 +112,7 @@ public:
                 /// The first condition is optimization: do not compare data if the pointers are equal.
                 if (column_array->getOffsetsPtr() != offsets_column
                     && column_array->getOffsets() != typeid_cast<const ColumnArray::ColumnOffsets &>(*offsets_column).getData())
-                    throw Exception(ErrorCodes::SIZES_OF_ARRAYS_DONT_MATCH, "Arrays passed to {} must have equal size", getName());
+                    throw Exception(ErrorCodes::SIZES_OF_ARRAYS_DOESNT_MATCH, "Arrays passed to {} must have equal size", getName());
             }
             if (i == 1)
             {
@@ -228,9 +228,6 @@ private:
 
 REGISTER_FUNCTION(ArrayFold)
 {
-    factory.registerFunction<ArrayFold>(FunctionDocumentation{.description=R"(
-        Function arrayFold(x1,...,xn,accum -> expression, array1,...,arrayn, accum_initial) applies lambda function to a number of equally-sized arrays
-        and collects the result in an accumulator.
-        )", .examples{{"sum", "SELECT arrayFold(x,acc -> acc+x, [1,2,3,4], toInt64(1));", "11"}}, .categories{"Array"}});
+    factory.registerFunction<ArrayFold>();
 }
 }
