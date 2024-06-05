@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="Proton – An open-source, fast and lightweight streaming SQL engine, 🚀 powered by ClickHouse" src="design/proton-logo-white-bg.png"/> <br/>
+  <img alt="Timeplus Proton – An open-source, fast and lightweight streaming SQL engine, 🚀 powered by ClickHouse" src="design/proton-logo-white-bg.png"/> <br/>
   <b> A fast and lightweight streaming SQL engine, 🚀 powered by ClickHouse</b> <br/><br/>
   📄 <a href="https://docs.timeplus.com/proton" target="_blank">Documentation</a>&nbsp;&nbsp;
   🚀 <a href="https://demo.timeplus.cloud/" target="_blank">Live Demo</a>&nbsp;&nbsp;
@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="#-why-use-proton"><strong>Why Use Proton</strong></a> ·
+  <a href="#-why-use-timeplus-proton"><strong>Why Use Proton</strong></a> ·
   <a href="#-demo-video"><strong>Demo Video</strong></a> ·
   <a href="#-deployment"><strong>Deployment</strong></a> ·
   <a href="#-whats-next"><strong>What's Next</strong></a> ·
@@ -28,16 +28,11 @@ Timeplus Proton is a streaming SQL engine, a fast and lightweight alternative to
 
 ## 💪 Why use Timeplus Proton?
 
-1. **[Apache Flink](https://github.com/apache/flink) or [ksqlDB](https://github.com/confluentinc/ksql) alternative**:  Timeplus Proton provides powerful streaming SQL functionalities, such as streaming ETL, tumble/hop/session windows, watermarks, materialized views, CDC and data revision processing, and more.
-   
-2. **Fast**:  Timeplus Proton is written in C++, with optimized performance through SIMD. [For example](https://www.timeplus.com/post/scary-fast), on an Apple MacBookPro with M2 Max, Timeplus Proton can deliver 90 million EPS, 4 millisecond end-to-end latency, and high cardinality aggregation with 1 million unique keys.
-   
-3. **Lightweight**:  Timeplus Proton is a single binary (\<500MB). No JVM or any other dependencies. You can also run it with Docker, or on an AWS t2.nano instance (1 vCPU and 0.5 GiB memory).
-   
-4. **Powered by the fast, resource efficient and mature [ClickHouse](https://github.com/clickhouse/clickhouse).**  Timeplus Proton extends the historical data, storage, and computing functionality of ClickHouse with stream processing. Thousands of SQL functions are available in Timeplus Proton. Billions of rows are queried in milliseconds.
-   
-5. **Best streaming SQL engine for [Kafka](https://kafka.apache.org/) or [Redpanda](https://redpanda.com/)**: 
- Query the live data in Kafka or other compatible streaming data platforms, with [external streams](https://docs.timeplus.com/proton-kafka).
+1. **[Apache Flink](https://github.com/apache/flink) or [ksqlDB](https://github.com/confluentinc/ksql) alternative.** Timeplus Proton provides powerful streaming SQL functionalities, such as streaming ETL, tumble/hop/session windows, watermarks, materialized views, CDC and data revision processing, etc.
+2. **Fast.** Timeplus Proton is written in C++, with optimized performance through SIMD. [For example](https://www.timeplus.com/post/scary-fast), on an Apple MacBookPro with M2 Max, Timeplus Proton can deliver 90 million EPS, 4 millisecond end-to-end latency, and high cardinality aggregation with 1 million unique keys.
+3. **Lightweight.** Timeplus Proton is a single binary (\<500MB). No JVM or any other dependencies. You can also run it with Docker, or on an AWS t2.nano instance (1 vCPU and 0.5 GiB memory).
+4. **Powered by the fast, resource efficient and mature [ClickHouse](https://github.com/clickhouse/clickhouse).** Timeplus Proton extends the historical data, storage, and computing functionality of ClickHouse with stream processing. Thousands of SQL functions are available in Timeplus Proton. Billions of rows are queried in milliseconds.
+5. **Best streaming SQL engine for [Kafka](https://kafka.apache.org/) or [Redpanda](https://redpanda.com/).** Query the live data in Kafka or other compatible streaming data platforms, with [external streams](https://docs.timeplus.com/proton-kafka).
 
 ![Proton Architecture](design/proton-architecture.webp)
 See our [architecture](https://docs.timeplus.com/proton-architecture) doc for technical details and our [FAQ](https://docs.timeplus.com/proton-faq) for more information.
@@ -53,7 +48,7 @@ https://github.com/timeplus-io/proton/assets/5076438/8ceca355-d992-4798-b861-1e0
 ### A single binary:
 
 ```shell
-curl https://install.timeplus.com | sh
+curl https://install.timeplus.com/oss | sh
 ```
 
 ### Docker:
@@ -101,7 +96,7 @@ You should see data like the following:
 ```
 
 ### ⏩ What's next?
-To see more examples of using Proton, check out the [examples](https://github.com/timeplus-io/proton/tree/develop/examples) folder.
+To see more examples of using Timeplus Proton, check out the [examples](https://github.com/timeplus-io/proton/tree/develop/examples) folder.
 
 To access more features, such as sources, sinks, dashboards, alerts, and data lineage, create a workspace on [Timeplus Cloud](https://us.timeplus.cloud) or try our [live demo](https://demo.timeplus.cloud) with pre-built live data and dashboards.
 
@@ -123,21 +118,21 @@ Integrations with other systems:
 
 ## Documentation
 
-We publish full documentation for Proton at [docs.timeplus.com](https://docs.timeplus.com/proton) alongside documentation for the Timeplus Cloud and Timeplus Enterprise.
+We publish full documentation for Timeplus Proton at [docs.timeplus.com](https://docs.timeplus.com/proton) alongside documentation for Timeplus Enterprise.
 
-We also have a [FAQ](https://docs.timeplus.com/proton-faq/) for detailing how we chose Apache License 2.0, how Timeplus Proton is related to ClickHouse, what features are available in Proton versus Timeplus, and more.
+We also have a [FAQ](https://docs.timeplus.com/proton-faq/) for detailing how we chose Apache License 2.0, how Timeplus Proton is related to ClickHouse, what features are available in Timeplus Proton versus Timeplus Enterprise, and more.
 
 ## Contributing
 
 We welcome your contributions! If you are looking for issues to work on, try looking at [the issue list](https://github.com/timeplus-io/proton/issues).
 
-Please see the [wiki](https://github.com/timeplus-io/proton/wiki/Contributing) for more details, and [BUILD.md](https://github.com/timeplus-io/proton/blob/develop/BUILD.md) to compile Proton in different platforms.
+Please see the [wiki](https://github.com/timeplus-io/proton/wiki/Contributing) for more details, and [BUILD.md](https://github.com/timeplus-io/proton/blob/develop/BUILD.md) to compile Timeplus Proton in different platforms.
 
 We also encourage you to join our [Timeplus Community Slack](https://timeplus.com/slack) to ask questions and meet other active contributors from Timeplus and beyond.
 
 ## Need help?
 
-Join our [Timeplus Community Slack](https://timeplus.com/slack) to connect with Timeplus engineers and other Proton users.
+Join our [Timeplus Community Slack](https://timeplus.com/slack) to connect with Timeplus engineers and other Timeplus Proton users.
 
 For filing bugs, suggesting improvements, or requesting new features, see the [open issues](https://github.com/timeplus-io/proton/issues) here on GitHub.
 
