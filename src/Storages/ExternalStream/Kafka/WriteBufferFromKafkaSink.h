@@ -15,8 +15,8 @@ public:
         std::function<void()> after_next_,
         size_t buffer_size = DBMS_DEFAULT_BUFFER_SIZE)
     : BufferWithOwnMemory<WriteBuffer>(buffer_size)
-    , on_next(on_next_)
-    , after_next(after_next_)
+    , on_next(std::move(on_next_))
+    , after_next(std::move(after_next_))
     {
         assert(on_next);
     }
@@ -41,9 +41,9 @@ private:
     }
 
     /// Callback for handling the next chunk of data.
-    /// @param pos the begin position of the data.
-    /// @param len the size of the data which contain the complete rows.
-    /// @param total_len the size of the whole available data, the data availble at between `len` and `total_len` is in-complete data, which means the buffer doesnot have enough space for storing that row.
+    /// \param pos the begin position of the data.
+    /// \param len the size of the data which contain the complete rows.
+    /// \param total_len the size of the whole available data, the data availble at between `len` and `total_len` is in-complete data, which means the buffer doesnot have enough space for storing that row.
     std::function<void(char * pos, size_t len, size_t total_len)> on_next;
 
     std::function<void()> after_next;

@@ -134,16 +134,15 @@ KafkaSink::KafkaSink(
     , partition_cnt(topic->getPartitionCount())
     , one_message_per_row(kafka.produceOneMessagePerRow())
     , topic_refresh_interval_ms(kafka.topicRefreshIntervalMs())
-    , max_message_batch_size(context->getSettingsRef().max_insert_block_size.value)
-    , pending_data(max_message_batch_size)
+    , pending_data(context->getSettingsRef().kafka_max_message_size.value)
     , external_stream_counter(external_stream_counter_)
     , logger(&Poco::Logger::get(fmt::format("{}.{}", kafka.getLoggerName(), producer->name())))
 {
-    /// If the buffer_size (max_insert_block_size) is reached, the buffer will be forced to flush.
+    /// If the buffer_size (kafka_max_message_size) is reached, the buffer will be forced to flush.
     wb = std::make_unique<WriteBufferFromKafkaSink>(
         [this](char * pos, size_t len, size_t total_len) { addMessageToBatch(pos, len, total_len); },
         [this]() { tryCarryOverPendingData(); },
-        /*buffer_size=*/ max_message_batch_size);
+        /*buffer_size=*/ context->getSettingsRef().kafka_max_message_size.value);
 
     const auto & data_format = kafka.dataFormat();
     assert(!data_format.empty());
@@ -265,7 +264,6 @@ void KafkaSink::addMessageToBatch(char * pos, size_t len, size_t total_len)
 
     /// There are some remaining incomplete data, copy them to pending_data.
     auto remaining = total_len - len;
-    LOG_INFO(logger, "Writing to pending_data, size={}", remaining);
     pending_data.resize(pending_size + remaining);
     memcpy(pending_data.data() + pending_size, pos + len, remaining);
 }

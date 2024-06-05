@@ -101,7 +101,6 @@ private:
     Int32 partition_cnt {0};
     bool one_message_per_row {false};
     Int32 topic_refresh_interval_ms = 0;
-    UInt64 max_message_batch_size = 0;
 
     ThreadPool background_jobs {1};
     std::atomic_flag is_finished {false};
