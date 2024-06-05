@@ -259,6 +259,15 @@ Kafka::Kafka(
 
     calculateDataFormat(storage);
 
+    /// For raw format, one_message_per_row default to true. Because if multiple rows are combined together,
+    /// it could be hard to separate them again.
+    if (data_format == "RawBLOB" && !settings->isChanged("one_message_per_row"))
+        settings->set("one_message_per_row", true);
+
+    support_count_optimization = data_format == "RawBLOB" ||
+        data_format == "ProtobufSingle" ||
+        (data_format == "Avro" && (!settings->format_schema.value.empty() || !settings->kafka_schema_registry_url.value.empty()));
+
     cacheVirtualColumnNamesAndTypes();
 
     rd_kafka_conf_set_log_cb(conf.get(), &Kafka::onLog);
@@ -447,6 +456,9 @@ std::vector<Int32> getShardsToQuery(const String & shards_exp, Int32 parition_co
 
 std::optional<UInt64> Kafka::totalRows(const Settings & settings_ref)
 {
+    if (!support_count_optimization)
+        return {};
+
     auto consumer = getConsumer();
     auto topic = RdKafka::Topic(*consumer->getHandle(), topicName());
     auto shards_to_query = getShardsToQuery(settings_ref.shards.value, topic.getPartitionCount());

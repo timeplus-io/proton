@@ -111,6 +111,8 @@ private:
     std::vector<Int32> shards_from_settings;
     fs::path broker_ca_file;
 
+    bool support_count_optimization = false;
+
     ConfPtr conf;
     UInt64 poll_timeout_ms = 0;
 
