@@ -113,12 +113,13 @@ private:
     String message_key_column_name;
 
     /// For constructing the message batch
+    UInt64 rows_in_current_message{0};
     nlog::ByteVector pending_data;
     std::vector<rd_kafka_message_t> current_batch;
     std::vector<nlog::ByteVector> batch_payload;
     std::vector<StringRef> keys_for_current_batch;
-    size_t current_batch_row {0};
-    Int32 next_partition {0};
+    size_t current_batch_row{0};
+    Int32 next_partition{0};
 
     struct State
     {

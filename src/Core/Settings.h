@@ -800,7 +800,8 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(Int64, record_consume_timeout_ms, 100, "Timeout of consuming record", 0) \
     M(Int64, kafka_fetch_wait_max_ms, 100, "When reading from Kafka, max wait time", 0) \
     M(Int64, kafka_fetch_max_bytes, 52428800, "When reading from Kafka, max bytes to fetch per read", 0) \
-    M(Int64, kafka_max_message_size, 1024 * 1024, "When writing to Kafka, the max size of a message in bytes", 0) \
+    M(UInt64, kafka_max_message_size, 1024 * 1024, "When writing to Kafka, the max size of a message in bytes. This setting only works when a row based output format is used. It works together with `kafka_max_message_rows`, when one of these limits is reached, a message will be created.", 0) \
+    M(UInt64, kafka_max_message_rows, DEFAULT_INSERT_BLOCK_SIZE, "When writing to Kafka, the max number of rows of data can be written into one message. This setting only works when a row based output format is used. It works together with `kafka_max_message_size`, when one of these limits is reached, a message will be created.", 0) \
     M(Int64, kafka_client_queued_min_message, 100000, "Minimum number of messages per topic partition to buffer on librdkafka client queue ", 0) \
     M(Int64, kafka_client_queued_max_bytes, 1024 * 1024 * 1024, "Maximum bytes per topic partition to buffer on librdkafka client queue ", 0) \
     M(UInt64, max_streaming_view_cached_block_count, 100, "Maximum count of block cached in streaming view", 0) \

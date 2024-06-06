@@ -165,8 +165,16 @@ KafkaSink::KafkaSink(
     }
     else
     {
+        auto max_rows_per_message = context->getSettingsRef().kafka_max_message_rows.value;
         writer = FormatFactory::instance().getOutputFormat(
-            data_format, *wb, header, context, [this](auto & /*column*/, auto /*row*/) { wb->markOffset(); }, kafka.getFormatSettings(context));
+            data_format, *wb, header, context, [this, max_rows_per_message](auto & /*column*/, auto /*row*/) {
+                wb->markOffset();
+                if (++rows_in_current_message % max_rows_per_message == 0)
+                {
+                    external_stream_counter->addToMessagesByRow(1);
+                    wb->next();
+                }
+            }, kafka.getFormatSettings(context));
     }
     writer->setAutoFlush();
 
@@ -256,6 +264,7 @@ void KafkaSink::addMessageToBatch(char * pos, size_t len, size_t total_len)
 
         pending_data.resize(0);
         pending_size = 0;
+        rows_in_current_message = 0;
     }
 
     if (len == total_len)
@@ -266,6 +275,8 @@ void KafkaSink::addMessageToBatch(char * pos, size_t len, size_t total_len)
     auto remaining = total_len - len;
     pending_data.resize(pending_size + remaining);
     memcpy(pending_data.data() + pending_size, pos + len, remaining);
+
+    external_stream_counter->addToMessagesBySize(1);
 }
 
 void KafkaSink::tryCarryOverPendingData()
