@@ -169,7 +169,7 @@ KafkaSink::KafkaSink(
         writer = FormatFactory::instance().getOutputFormat(
             data_format, *wb, header, context, [this, max_rows_per_message](auto & /*column*/, auto /*row*/) {
                 wb->markOffset();
-                if (++rows_in_current_message % max_rows_per_message == 0)
+                if (++rows_in_current_message >= max_rows_per_message)
                 {
                     external_stream_counter->addToMessagesByRow(1);
                     wb->next();
