@@ -165,7 +165,7 @@ KafkaSink::KafkaSink(
     }
     else
     {
-        auto max_rows_per_message = context->getSettingsRef().kafka_max_message_rows.value;
+        auto max_rows_per_message = context->getSettingsRef().max_insert_block_size.value;
         writer = FormatFactory::instance().getOutputFormat(
             data_format, *wb, header, context, [this, max_rows_per_message](auto & /*column*/, auto /*row*/) {
                 wb->markOffset();
