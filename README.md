@@ -98,7 +98,7 @@ You should see data like the following:
 ### ⏩ What's next?
 To see more examples of using Timeplus Proton, check out the [examples](https://github.com/timeplus-io/proton/tree/develop/examples) folder.
 
-To access more features, such as sources, sinks, dashboards, alerts, and data lineage, create a workspace on [Timeplus Cloud](https://us.timeplus.cloud) or try [Timeplus Enterprise](https://www.timeplus.com/pricing) locally.
+To access more features, such as sources, sinks, dashboards, alerts, and data lineage, create a workspace on [Timeplus Cloud](https://us.timeplus.cloud) or try [Timeplus Enterprise](https://www.timeplus.com/product#selfhosted) locally.
 
 What features are available with Timeplus Proton versus Timeplus Enterprise?
 
@@ -141,9 +141,11 @@ We also encourage you to join our [Timeplus Community Slack](https://timeplus.co
 
 ## Need help?
 
-Join our [Timeplus Community Slack](https://timeplus.com/slack) to connect with Timeplus engineers and other Timeplus Proton users.
+Please use [GitHub Discussions](https://github.com/timeplus-io/proton/discussions) to share your feedbacks or questions for Timeplus Proton.
 
-For filing bugs, suggesting improvements, or requesting new features, see the [open issues](https://github.com/timeplus-io/proton/issues) here on GitHub.
+For filing bugs, suggesting improvements, or requesting new features, open [GitHub Issues](https://github.com/timeplus-io/proton/issues).
+
+To connect with Timeplus engineers or inquire about Timeplus Enterprise, join our [Timeplus Community Slack](https://timeplus.com/slack).
 
 ## Licensing
 
