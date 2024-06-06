@@ -264,9 +264,11 @@ Kafka::Kafka(
     if (data_format == "RawBLOB" && !settings->isChanged("one_message_per_row"))
         settings->set("one_message_per_row", true);
 
+    /// Only optimize trivial count on some specific formats, and settings.
     support_count_optimization = data_format == "RawBLOB" ||
         data_format == "ProtobufSingle" ||
-        (data_format == "Avro" && (!settings->format_schema.value.empty() || !settings->kafka_schema_registry_url.value.empty()));
+        (data_format == "Avro" && (!settings->format_schema.value.empty() || !settings->kafka_schema_registry_url.value.empty())) ||
+        settings->one_message_per_row.value;
 
     cacheVirtualColumnNamesAndTypes();
 
