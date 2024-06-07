@@ -140,8 +140,8 @@ KafkaSink::KafkaSink(
 {
     /// If the buffer_size (kafka_max_message_size) is reached, the buffer will be forced to flush.
     wb = std::make_unique<WriteBufferFromKafkaSink>(
-        [this](char * pos, size_t len, size_t total_len) { addMessageToBatch(pos, len, total_len); },
-        [this]() { tryCarryOverPendingData(); },
+        /*on_next=*/ [this](char * pos, size_t len, size_t total_len) { addMessageToBatch(pos, len, total_len); },
+        /*after_next=*/ [this]() { tryCarryOverPendingData(); },
         /*buffer_size=*/ context->getSettingsRef().kafka_max_message_size.value);
 
     const auto & data_format = kafka.dataFormat();
@@ -235,20 +235,28 @@ KafkaSink::KafkaSink(
 /// However, it's still possible that, one single row is still too big and it exceeds that limit. There is nothing we can do about it for now.
 void KafkaSink::addMessageToBatch(char * pos, size_t len, size_t total_len)
 {
-    auto pending_size = pending_data.size();
+    auto pending_size = pending_data.offset();
 
     /// There are complete data to consume.
     if (len > 0)
     {
         StringRef key = message_key_expr ? keys_for_current_batch[current_batch_row++] : "";
 
+        nlog::ByteVector payload;
+
         /// Data at pos (which is in the WriteBuffer) will be overwritten, thus it must be kept somewhere else (in `batch_payload`).
         auto msg_size = pending_size + len;
-        nlog::ByteVector payload{msg_size};
+        if (!oversized_payload.empty()) [[unlikely]]
+        {
+            msg_size += oversized_payload.size();
+            payload.swap(oversized_payload);
+        }
         payload.resize(msg_size); /// set the size to the right value
+
         if (pending_size)
-            memcpy(payload.data(), pending_data.data(), pending_size);
-        memcpy(payload.data() + pending_size, pos, len);
+            memcpy(payload.data() + (msg_size - len - pending_size), pending_data.buffer().begin(), pending_size);
+
+        memcpy(payload.data() + (msg_size - len) + pending_size, pos, len);
 
         current_batch.push_back(rd_kafka_message_t{
             .partition = next_partition,
@@ -262,7 +270,7 @@ void KafkaSink::addMessageToBatch(char * pos, size_t len, size_t total_len)
         batch_payload.push_back(std::move(payload));
         ++state.outstandings;
 
-        pending_data.resize(0);
+        pending_data.next(); /// reset pending_data
         pending_size = 0;
         rows_in_current_message = 0;
     }
@@ -273,21 +281,29 @@ void KafkaSink::addMessageToBatch(char * pos, size_t len, size_t total_len)
 
     /// There are some remaining incomplete data, copy them to pending_data.
     auto remaining = total_len - len;
-    pending_data.resize(pending_size + remaining);
-    memcpy(pending_data.data() + pending_size, pos + len, remaining);
+    pending_data.write(pos + len, remaining);
 
     external_stream_counter->addToMessagesBySize(1);
 }
 
 void KafkaSink::tryCarryOverPendingData()
 {
-    /// If there are pending data and it can be fit into the buffer, then write the data back to the buffer,
-    /// so that we can use the buffer to limit the message size.
-    /// If the pending data are too big, that means we get a over-size row.
-    if (!pending_data.empty() && pending_data.size() < wb->available())
+    if (auto pending_size = pending_data.offset(); pending_size)
     {
-        wb->write(pending_data.data(), pending_data.size());
-        pending_data.resize(0);
+        /// If there are pending data and it can be fit into the buffer, then switch the data to the buffer,
+        /// so that we can use the buffer to limit the message size.
+        if (pending_size < wb->available()) [[likely]]
+            wb->swap(pending_data);
+        else
+        {
+            /// If the pending data are too big, that means we get a over-size row (i.e. a single row exceeds the message size limit).
+            /// In this case, we don't resize pending_data, because we want to keep it the same size as `wb`, so that we can swap them
+            /// when it needs to avoid extra data copying (having pending data should happen way more often than having oversized row).
+            auto oversized_size = oversized_payload.size();
+            oversized_payload.resize(oversized_size + pending_data.offset());
+            memcpy(oversized_payload.data() + oversized_size, pending_data.buffer().begin(), pending_data.offset());
+            pending_data.next(); /// reset pending_data
+        }
     }
 }
 
