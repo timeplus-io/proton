@@ -154,17 +154,23 @@ void KafkaSource::readAndProcess()
 
     auto current_batch_last_sn = consumer->consumeBatch(*topic, shard, record_consume_batch_count, record_consume_timeout_ms, callback, error_callback);
 
-    if (!current_batch.empty())
+    if (current_batch_last_sn >= 0) /// There are new messages
     {
-        auto rows = current_batch[0]->size();
-        assert(current_batch_last_sn >= 0);
-        result_chunks_with_sns.emplace_back(Chunk{std::move(current_batch), rows}, current_batch_last_sn);
-
-        /// All available messages up to the moment when the query was executed have been consumed, no need to read the messages beyond that point.
-        /// `high_watermark` is the next available offset, i.e. the offset that will be assigned to the next message, thus need to use `high_watermark - 1`.
-        if (current_batch_last_sn >= high_watermark - 1)
-            reached_the_end = true;
+        /// However, current_batch can still have no data in it because the messages are invalid, i.e. the input format fails to parse them.
+        /// And in such case, we still want to report the last SN.
+        if (current_batch.empty())
+            result_chunks_with_sns.emplace_back(header_chunk.clone(), current_batch_last_sn);
+        else
+        {
+            auto rows = current_batch[0]->size();
+            result_chunks_with_sns.emplace_back(Chunk{std::move(current_batch), rows}, current_batch_last_sn);
+        }
     }
+
+    /// All available messages up to the moment when the query was executed have been consumed, no need to read the messages beyond that point.
+    /// `high_watermark` is the next available offset, i.e. the offset that will be assigned to the next message, thus need to use `high_watermark - 1`.
+    if (current_batch_last_sn >= high_watermark - 1)
+        reached_the_end = true;
 
     iter = result_chunks_with_sns.begin();
 }
