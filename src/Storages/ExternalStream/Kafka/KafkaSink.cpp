@@ -250,6 +250,7 @@ void KafkaSink::addMessageToBatch(char * pos, size_t len, size_t total_len)
         {
             msg_size += oversized_payload.size();
             payload.swap(oversized_payload);
+            external_stream_counter->addToOversizedMessageCount(1);
         }
         payload.resize(msg_size); /// set the size to the right value
 
@@ -270,6 +271,9 @@ void KafkaSink::addMessageToBatch(char * pos, size_t len, size_t total_len)
         batch_payload.push_back(std::move(payload));
         ++state.outstandings;
 
+        if (len < total_len)
+            external_stream_counter->addToMessagesBySize(1);
+
         pending_data.next(); /// reset pending_data
         pending_size = 0;
         rows_in_current_message = 0;
@@ -279,32 +283,40 @@ void KafkaSink::addMessageToBatch(char * pos, size_t len, size_t total_len)
         /// Nothing left
         return;
 
-    /// There are some remaining incomplete data, copy them to pending_data.
+    /// There are some remaining incomplete data, a few scenarios need to handle
     auto remaining = total_len - len;
-    pending_data.write(pos + len, remaining);
+    auto * remaining_pos = pos + len;
 
-    external_stream_counter->addToMessagesBySize(1);
+    /// Scenario 1 - There is buffered oversized data, then it should append the remaining data to it.
+    if (!oversized_payload.empty()) [[unlikely]]
+    {
+        auto n = oversized_payload.size();
+        oversized_payload.resize(n + remaining);
+        memcpy(oversized_payload.data() + n, remaining_pos, remaining);
+        return;
+    }
+
+    /// Scenario 2 - No buffered oversized data, but pending data will be full after appending the remaining data.
+    ///              In this case, we move all the data to oversized_payload, so that we don't need to resize pending_data.
+    ///              This is important because keeping pending_data have the same size as `wb` allows us to swap them
+    ///              instead of copying data from pending_data to `wb` again.
+    if (pending_size + remaining >= pending_data.available()) [[unlikely]]
+    {
+        oversized_payload.resize(pending_size + remaining);
+        memcpy(oversized_payload.data(), pending_data.buffer().begin(), pending_size);
+        memcpy(oversized_payload.data() + pending_size, remaining_pos, remaining);
+        pending_data.next(); /// reset pending_data
+        return;
+    }
+
+    /// Scenario 3 - No buffered oversized data, and the remaining can fit into pending_data.
+    pending_data.write(remaining_pos, remaining);
 }
 
 void KafkaSink::tryCarryOverPendingData()
 {
-    if (auto pending_size = pending_data.offset(); pending_size)
-    {
-        /// If there are pending data and it can be fit into the buffer, then switch the data to the buffer,
-        /// so that we can use the buffer to limit the message size.
-        if (pending_size < wb->available()) [[likely]]
-            wb->swap(pending_data);
-        else
-        {
-            /// If the pending data are too big, that means we get a over-size row (i.e. a single row exceeds the message size limit).
-            /// In this case, we don't resize pending_data, because we want to keep it the same size as `wb`, so that we can swap them
-            /// when it needs to avoid extra data copying (having pending data should happen way more often than having oversized row).
-            auto oversized_size = oversized_payload.size();
-            oversized_payload.resize(oversized_size + pending_data.offset());
-            memcpy(oversized_payload.data() + oversized_size, pending_data.buffer().begin(), pending_data.offset());
-            pending_data.next(); /// reset pending_data
-        }
-    }
+    if (pending_data.offset())
+        wb->swap(pending_data);
 }
 
 void KafkaSink::consume(Chunk chunk)
