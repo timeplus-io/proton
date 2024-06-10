@@ -174,28 +174,38 @@ void tryTranslateToParametricAggregateFunction(
     }
     else if (lower_name.starts_with("quantile") && !lower_name.ends_with("if"))
     { 
+        size_t arg_size = arguments.size();
         if (lower_name.ends_with("deterministic") || lower_name.ends_with("weighted"))
         {
             /// for qunatile_deterministic, quantiles_deterministic, qunatile_weighted, qunatiles_weighted.
             /// qunatile_deterministic(expr, determinator, level) -> qunatile_deterministic(level)(expr, determinator)
             ASTPtr expression_list = std::make_shared<ASTExpressionList>();
-            if (arguments.size() >= 3)
+            if (arg_size >= 2)
             {
-                for (size_t i = 2; i < arguments.size(); ++i)
-                    expression_list->children.push_back(arguments[i]);
-                parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+                if (arg_size >= 3)
+                {
+                    for (size_t i = 2; i < arg_size; ++i)
+                        expression_list->children.push_back(arguments[i]);
+                    parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+                    
+                }
+                argument_names = {argument_names[0], argument_names[1]};
+                types = {types[0], types[1]};
             }
-            argument_names = {argument_names[0], argument_names[1]};
-            types = {types[0], types[1]};
+            else
+            {
+                argument_names = {argument_names[0]};
+                types = {types[0]};
+            }
         }
         else 
         {
             /// For functions: quantile, quantiles, quantile_extract, quantiles_extract, quantile_exact_low, quantiles_exact_low....
             ///Translate `quantile(key, level)` to `quantile(level)(key)`,and the default level is 0.5, median fucntion is the alias of quantile(key, 0.5)
-            if (arguments.size() >= 2)
+            if (arg_size >= 2)
             {
                 ASTPtr expression_list = std::make_shared<ASTExpressionList>();
-                for (size_t i = 1; i < arguments.size(); ++i)
+                for (size_t i = 1; i < arg_size; ++i)
                     expression_list->children.push_back(arguments[i]);
                 parameters = getAggregateFunctionParametersArray(expression_list, "", context);
             }
