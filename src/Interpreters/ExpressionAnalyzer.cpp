@@ -32,6 +32,7 @@
 #include <Processors/QueryPlan/ExpressionStep.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
 #include <AggregateFunctions/parseAggregateFunctionParameters.h>
 
 #include <Storages/StorageDistributed.h>
@@ -122,6 +123,9 @@ void tryTranslateToParametricAggregateFunction(
     if (!parameters.empty() || argument_names.empty())
         return;
 
+    if (AggregateFunctionCombinatorFactory::instance().tryFindSuffix(node->name))
+        return;
+
     assert(node->arguments);
     const ASTs & arguments = node->arguments->children;
     const auto & lower_name = node->name;
@@ -172,7 +176,7 @@ void tryTranslateToParametricAggregateFunction(
         argument_names = {argument_names[0], argument_names[1]};
         types = {types[0], types[1]};
     }
-    else if (lower_name.starts_with("quantile") && !lower_name.ends_with("if"))
+    else if (lower_name.starts_with("quantile"))
     { 
         size_t arg_size = arguments.size();
         if (lower_name.ends_with("deterministic") || lower_name.ends_with("weighted"))
