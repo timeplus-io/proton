@@ -1,9 +1,9 @@
-SELECT 'Array min ', (array_min(array(1,2,3,4,5,6)));
-SELECT 'Array max ', (array_max(array(1,2,3,4,5,6)));
-SELECT 'Array sum ', (array_sum(array(1,2,3,4,5,6)));
-SELECT 'Array avg ', (array_avg(array(1,2,3,4,5,6)));
+SELECT 'Array min ', (array_min(array_cast(1,2,3,4,5,6)));
+SELECT 'Array max ', (array_max(array_cast(1,2,3,4,5,6)));
+SELECT 'Array sum ', (array_sum(array_cast(1,2,3,4,5,6)));
+SELECT 'Array avg ', (array_avg(array_cast(1,2,3,4,5,6)));
 
-DROP TABLE IF STREAM test_aggregation;
+DROP STREAM IF EXISTS test_aggregation;
 CREATE STREAM test_aggregation (x array(int)) ENGINE=Memory;
 
 INSERT INTO test_aggregation(x) VALUES ([1,2,3,4,5,6]), ([]), ([1,2,3]);
@@ -15,7 +15,7 @@ SELECT array_max(x) FROM test_aggregation;
 SELECT 'Table array int sum';
 SELECT array_sum(x) FROM test_aggregation;
 SELECT 'Table array int avg';
-SELECT array_avg(x) FROM test_aggregation;s
+SELECT array_avg(x) FROM test_aggregation;
 
 DROP STREAM test_aggregation;
 
