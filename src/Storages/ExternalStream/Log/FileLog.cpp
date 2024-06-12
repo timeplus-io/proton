@@ -130,21 +130,21 @@ FileLogSource::FileContainer FileLog::searchForCandidates()
             if (file_regex->Match(filename, 0, filename.size(), re2::RE2::ANCHOR_BOTH, nullptr, 0))
             {
                 auto last_modified = lastModifiedTime(dir_entry.path());
-                if (last_modified >= start_timestamp)
-                    candidates.emplace(last_modified, std::filesystem::canonical(dir_entry.path()));
+                // Add all candidates, not just the most recently modified ones
+                candidates.emplace(last_modified, std::filesystem::canonical(dir_entry.path()));
 
                 break;
             }
         }
     }
 
-    if (start_timestamp == nlog::LATEST_SN)
-    {
-        /// Tail the log last file
-        /// Remove all other files except the last one
-        for (; !candidates.empty() && candidates.size() != 1;)
-            candidates.erase(candidates.begin());
-    }
+    // if (start_timestamp == nlog::LATEST_SN)
+    // {
+    //     /// Tail the log last file
+    //     /// Remove all other files except the last one
+    //     for (; !candidates.empty() && candidates.size() != 1;)
+    //         candidates.erase(candidates.begin());
+    // }
 
     LOG_INFO(
         log,
