@@ -1,9 +1,7 @@
-#include <string>
 #include <Storages/ExternalStream/BreakLines.h>
 
 #include <re2/re2.h>
 #include <gtest/gtest.h>
-#include <re2/stringpiece.h>
 
 TEST(BreakLines, BreakLinesAtBeginning)
 {
