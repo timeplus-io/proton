@@ -23,6 +23,8 @@ public:
     FileLog(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context);
     ~FileLog() override = default;
 
+    String getName() const override { return "FileLogExternalStream"; }
+
     void startup() override { }
     void shutdown() override { }
 

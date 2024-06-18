@@ -25,9 +25,9 @@ public:
 
     bool isRemote() const override;
     bool supportsSubcolumns() const override;
-    bool supportsStreamingQuery() const override { return true; }
-    bool supportsAccurateSeekTo() const noexcept override { return true; }
-    bool squashInsert() const noexcept override { return false; }
+    bool supportsStreamingQuery() const override;
+    bool supportsAccurateSeekTo() const noexcept override;
+    bool squashInsert() const noexcept override;
 
     NamesAndTypesList getVirtuals() const override;
     std::optional<UInt64> totalRows(const Settings &) const override;

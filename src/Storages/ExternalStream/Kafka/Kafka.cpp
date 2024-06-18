@@ -294,6 +294,12 @@ bool Kafka::hasCustomShardingExpr() const
     return true;
 }
 
+String Kafka::getLoggerName() const
+{
+    const auto storage_id = getStorageID();
+    return storage_id.getDatabaseName() == "default" ? storage_id.getTableName() : storage_id.getFullNameNotQuoted();
+}
+
 NamesAndTypesList Kafka::getVirtuals() const
 {
     return virtual_column_names_and_types;
@@ -456,12 +462,15 @@ std::vector<Int32> getShardsToQuery(const String & shards_exp, Int32 parition_co
 }
 }
 
-std::optional<UInt64> Kafka::totalRows(const Settings & settings_ref)
+std::optional<UInt64> Kafka::totalRows(const Settings & settings_ref) const
 {
     if (!support_count_optimization)
         return {};
 
-    auto consumer = getConsumer();
+    /// Not using getConsumer:
+    /// 1. getConsumer is not a const function
+    /// 2. just a short-live consumer is needed to fetch the offsets
+    auto consumer = std::make_shared<RdKafka::Consumer>(*conf, poll_timeout_ms, getLoggerName());
     auto topic = RdKafka::Topic(*consumer->getHandle(), topicName());
     auto shards_to_query = getShardsToQuery(settings_ref.shards.value, topic.getPartitionCount());
     LOG_INFO(logger, "Counting number of messages topic={} partitions=[{}]", topicName(), fmt::join(shards_to_query, ","));

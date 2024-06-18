@@ -11,11 +11,14 @@ namespace ExternalStream
 
 Proton::Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context_)
 : StorageExternalStreamImpl(storage, std::move(settings_), context_)
-, logger(&Poco::Logger::get("ProtonExternalStream"))
+, remote_stream_id(StorageID::createEmpty())
+, logger(&Poco::Logger::get(getName()))
 {
-    String cluster_description; /// FIXME
+    LOG_INFO(logger, "Creating ...");
+    String cluster_description = "127.0.0.1"; /// FIXME
     std::vector<String> shards = parseRemoteDescription(cluster_description, 0, cluster_description.size(), ',', /*max_addresses=*/ 10);
 
+    LOG_INFO(logger, "shards' size = {}", shards.size());
     std::vector<std::vector<String>> names;
     names.reserve(shards.size());
     for (const auto & shard : shards)
@@ -23,8 +26,9 @@ Proton::Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setti
 
     auto maybe_secure_port = context->getTCPPortSecure();
 
-    bool treat_local_as_remote = false;
-    bool treat_local_port_as_remote = context->getApplicationType() == Context::ApplicationType::LOCAL;
+    /// FIXME
+    // bool treat_local_as_remote = false;
+    // bool treat_local_port_as_remote = context->getApplicationType() == Context::ApplicationType::LOCAL;
 
     cluster = std::make_shared<Cluster>(
         context->getSettings(),
@@ -32,8 +36,8 @@ Proton::Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setti
         /*username=*/ "default", // FIXME
         /*password=*/ "", /// FIXME
         (secure ? (maybe_secure_port ? *maybe_secure_port : DBMS_DEFAULT_SECURE_PORT) : context->getTCPPort()),
-        treat_local_as_remote,
-        treat_local_port_as_remote,
+        true, /*treat_local_as_remote,*/
+        true, /*treat_local_port_as_remote,*/
         secure);
 
     remote_stream_id.database_name = "default"; /// FIXME
@@ -44,7 +48,7 @@ Proton::Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setti
     cached_columns = getStructureOfRemoteTable(*cluster, remote_stream_id, context, /*table_func_ptr=*/ nullptr);
 
     storage_ptr = StorageDistributed::create(
-        storage_id,
+        getStorageID(),
         cached_columns,
         ConstraintsDescription{},
         String{},
@@ -72,24 +76,30 @@ void Proton::shutdown()
     storage_ptr->shutdown();
 }
 
-Pipe Proton::read(
-    const Names &  /*column_names*/,
-    const StorageSnapshotPtr &  /*storage_snapshot*/,
-    SelectQueryInfo &  /*query_info*/,
-    ContextPtr  /*context*/,
-    QueryProcessingStage::Enum  /*processed_stage*/,
-    size_t  /*max_block_size*/,
-    size_t  /*num_streams*/)
+bool Proton::supportsSubcolumns() const
 {
-    return {};
+    return storage_ptr->supportsSubcolumns();
+}
+
+void Proton::read(
+    QueryPlan & query_plan,
+    const Names & column_names,
+    const StorageSnapshotPtr & storage_snapshot,
+    SelectQueryInfo & query_info,
+    ContextPtr context_,
+    QueryProcessingStage::Enum processed_stage,
+    size_t max_block_size,
+    size_t num_streams)
+{
+    storage_ptr->read(query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
 }
 
 SinkToStoragePtr Proton::write(
-    const ASTPtr &  /*query*/,
-    const StorageMetadataPtr &  /*metadata_snapshot*/,
-    ContextPtr  /*context*/)
+    const ASTPtr & query,
+    const StorageMetadataPtr & metadata_snapshot,
+    ContextPtr context_)
 {
-    return nullptr;
+    return storage_ptr->write(query, metadata_snapshot, context_);
 }
 }
 

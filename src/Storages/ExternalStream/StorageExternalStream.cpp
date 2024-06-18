@@ -65,15 +65,19 @@ std::unique_ptr<StorageExternalStreamImpl> createExternalStream(
     if (settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA)
         return std::make_unique<Kafka>(storage, std::move(settings), engine_args, attach, external_stream_counter, std::move(context_));
 
-    if (settings->type.value == StreamTypes::PROTON)
+    if (settings->type.value == StreamTypes::TIMEPLUS)
+    {
+        auto * logger = &Poco::Logger::get("ExternalStream");
+        LOG_INFO(logger, "Creating timeplus external stream");
         return std::make_unique<ExternalStream::Proton>(storage, std::move(settings), std::move(context_));
+    }
 
 #ifdef OS_LINUX
-    else if (settings->type.value == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)
+    if (settings->type.value == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)
         return std::make_unique<FileLog>(storage, std::move(settings), std::move(context_));
-    else
+
 #endif
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} external stream is not supported yet", settings->type.value);
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} external stream is not supported yet", settings->type.value);
 }
 }
 
@@ -95,6 +99,21 @@ void StorageExternalStream::shutdown()
 bool StorageExternalStream::supportsSubcolumns() const
 {
     return external_stream->supportsSubcolumns();
+}
+
+bool StorageExternalStream::supportsStreamingQuery() const
+{
+    return external_stream->supportsStreamingQuery();
+}
+
+bool StorageExternalStream::supportsAccurateSeekTo() const noexcept
+{
+    return external_stream->supportsAccurateSeekTo();
+}
+
+bool StorageExternalStream::squashInsert() const noexcept
+{
+    return external_stream->squashInsert();
 }
 
 NamesAndTypesList StorageExternalStream::getVirtuals() const

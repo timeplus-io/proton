@@ -17,12 +17,14 @@ public:
     Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context);
     ~Proton() override = default;
 
+    String getName() const override { return "TimeplusExternalStream"; }
+
     void startup() override;
     void shutdown() override;
+    bool supportsSubcolumns() const override;
 
-    bool supportsSubcolumns() const override { return true; }
-
-    Pipe read(
+    void read(
+        QueryPlan & query_plan,
         const Names & column_names,
         const StorageSnapshotPtr & storage_snapshot,
         SelectQueryInfo & query_info,
