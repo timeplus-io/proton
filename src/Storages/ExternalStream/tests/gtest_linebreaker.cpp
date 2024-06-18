@@ -3,8 +3,6 @@
 #include <re2/re2.h>
 #include <gtest/gtest.h>
 
-
-
 TEST(BreakLines, BreakLinesAtBeginning)
 {
     std::string line1{"2022.04.14 18:04:43.028648 [ 4273 ] {} <Information> TablesLoader: Parsed metadata of 0 tables in 2 databases in 0.000351319 sec\n"};
