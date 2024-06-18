@@ -36,7 +36,7 @@ TEST(BreakLines, BreakLinesAtBeginning)
 TEST(BreakLines, BreakLinesAtEnd)
 {
     std::string line1{"2022.04.14 18:04:43.028648 [ 4273 ] {} <Information> TablesLoader: Parsed metadata of 0 tables in 2 databases in 0.000351319 sec\n"};
-    std::string line2{"2022.04.14 18:04:43.028801 [ 4273 ] {} <Information> DatabaseAtomic (default): Starting up tables."};
+    std::string line2{"2022.04.14 18:04:43.028801 [ 4273 ] {} <Information> DatabaseAtomic (default): Starting up tables.\n"};
 
     std::string pattern = R"((\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2}\.\d+))";
     re2::RE2 line_breaker{pattern};
@@ -89,8 +89,7 @@ TEST(BreakLines, BreakLinesLastLineIsNotClosedAtEnd)
 
 TEST(BreakLines, BreakLinesLastLineIsNotClosedAtBeginning)
 {
-    std::string line1{"2022.04.14 18:04:43.028648 [ 4273 ] {} <Information> TablesLoader: Parsed metadata of 0 tables in 2 databases in "
-                      "0.000351319 sec\n"};
+    std::string line1{"2022.04.14 18:04:43.028648 [ 4273 ] {} <Information> TablesLoader: Parsed metadata of 0 tables in 2 databases in 0.000351319 sec\n"};
     std::string line2{"2022.04.14 18:04:43.028801 [ 4273 ] {} <Information> DatabaseAtomic (default): Starting up tables.\n"};
     std::string line3{"2022.04.14 18:04:43.028801 [ 4273 ] {} <Information> DatabaseAtomic (default): Starting up tables."};
 
@@ -161,8 +160,7 @@ TEST(BreakLines, BreakLinesMaxLineSizeForceFlush)
 
 TEST(BreakLines, BreakLinesMultipleLineRecord)
 {
-    std::string line1{"2022.04.14 18:04:43.028648 [ 4273 ] {} <Information> TablesLoader: Parsed metadata of 0 tables in 2 databases in "
-                      "0.000351319 sec\nException: abc\nstack trace:\n"};
+    std::string line1{"2022.04.14 18:04:43.028648 [ 4273 ] {} <Information> TablesLoader: Parsed metadata of 0 tables in 2 databases in 0.000351319 sec\nException: abc\nstack trace:\n"};
     std::string line2{"2022.04.14 18:04:43.028801 [ 4273 ] {} <Information> DatabaseAtomic (default): Starting up tables.\n"};
 
     std::string pattern = R"((\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2}\.\d+) \[ \d+ \] \{)";
