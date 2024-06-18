@@ -1,7 +1,8 @@
 #include <Storages/ExternalStream/BreakLines.h>
 
-#include <gtest/gtest.h>
 #include <re2/re2.h>
+#include <gtest/gtest.h>
+
 
 TEST(BreakLines, BreakLinesAtBeginning)
 {
@@ -36,7 +37,7 @@ TEST(BreakLines, BreakLinesAtEnd)
     std::string line1{"2022.04.14 18:04:43.028648 [ 4273 ] {} <Information> TablesLoader: Parsed metadata of 0 tables in 2 databases in 0.000351319 sec"};
     std::string line2{"2022.04.14 18:04:43.028801 [ 4273 ] {} <Information> DatabaseAtomic (default): Starting up tables."};
 
-    std::string pattern = R"((\d{4}\.\d{2}\.\d{2})";
+    std::string pattern = R"((\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2}\.\d+))";
     re2::RE2 line_breaker{pattern};
 
     re2::StringPiece input{line1};
@@ -67,7 +68,7 @@ TEST(BreakLines, BreakLinesLastLineIsNotClosedAtEnd)
     std::string line2{"2022.04.14 18:04:43.028801 [ 4273 ] {} <Information> DatabaseAtomic (default): Starting up tables."};
     std::string line3{"2022.04.14 18:04:43.028801 [ 4273 ] {} <Information> DatabaseAtomic (default): Starting up tables."};
 
-    std::string pattern = R"((\d{4}\.\d{2}\.\d{2})";
+    std::string pattern = R"((\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2}\.\d+))";
     re2::RE2 line_breaker{pattern};
 
     re2::StringPiece input{line1};
@@ -209,7 +210,7 @@ TEST(BreakLines, BreakLinesHasConfigInfo)
     re2::RE2 line_breaker{pattern};
 
     re2::StringPiece input{line1};
-    ASSERT_FALSE(re2::RE2::FindAndConsume(&input, line_breaker));
+    EXPECT_FALSE(re2::RE2::FindAndConsume(&input, line_breaker));
 
     {
         std::string data(line1 + line2 + line3);

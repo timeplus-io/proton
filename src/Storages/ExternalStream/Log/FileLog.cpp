@@ -104,16 +104,18 @@ Pipe FileLog::read(
     assert(query_info.seek_to_info);
     auto saved_start_timestamp = query_info.seek_to_info->getSeekPoints()[0];
 
+    bool table_query = context->getSettings().query_mode.value == "table";
+
     /// SeekToInfo parsed with UTC timezone, we should re-parse with local timezone.
     /// FIXME better implementation
     if (query_info.seek_to_info->getSeekToType() == SeekToType::RELATIVE_TIME)
         saved_start_timestamp = SeekToInfo::parse(query_info.seek_to_info->getSeekTo(), false).second[0];
 
     return Pipe(std::make_shared<FileLogSource>(
-        this, std::move(header), std::move(context), max_block_size, saved_start_timestamp, searchForCandidates(), log));
+        this, std::move(header), std::move(context), max_block_size, saved_start_timestamp, searchForCandidates(table_query), log));
 }
 
-FileLogSource::FileContainer FileLog::searchForCandidates()
+FileLogSource::FileContainer FileLog::searchForCandidates(bool table_query)
 {
     FileLogSource::FileContainer candidates;
 
@@ -130,21 +132,27 @@ FileLogSource::FileContainer FileLog::searchForCandidates()
             if (file_regex->Match(filename, 0, filename.size(), re2::RE2::ANCHOR_BOTH, nullptr, 0))
             {
                 auto last_modified = lastModifiedTime(dir_entry.path());
-                // Add all candidates, not just the most recently modified ones
-                candidates.emplace(last_modified, std::filesystem::canonical(dir_entry.path()));
+                if (table_query)
+                {
+                    /// Historic query: use all files to query
+                    candidates.emplace(last_modified, std::filesystem::canonical(dir_entry.path()));
+                }
+                else if (last_modified >= start_timestamp)
+                    /// Streaming query: use the latest file to tail
+                    candidates.emplace(last_modified, std::filesystem::canonical(dir_entry.path()));
 
                 break;
             }
         }
     }
 
-    // if (start_timestamp == nlog::LATEST_SN)
-    // {
-    //     /// Tail the log last file
-    //     /// Remove all other files except the last one
-    //     for (; !candidates.empty() && candidates.size() != 1;)
-    //         candidates.erase(candidates.begin());
-    // }
+    if (table_query && start_timestamp == nlog::LATEST_SN)
+    {
+        /// Tail the log last file
+        /// Remove all other files except the last one
+        for (; !candidates.empty() && candidates.size() != 1;)
+            candidates.erase(candidates.begin());
+    }
 
     LOG_INFO(
         log,
