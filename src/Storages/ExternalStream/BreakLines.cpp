@@ -41,7 +41,12 @@ std::vector<std::string_view> breakLines(const char * data, size_t & length, con
             {
                 /// [data in the middle][breaker][next start...][breaker][next start...
                 /// data in the middle + breaker are composed into a line
-                /// update: Force the prefix information into a line; there may be some configuration messages
+                /// Force the prefix information into a line
+                /// example:
+                ///     Processing configuration file 'config.xml'.
+                ///     There is no file 'config.xml', will use embedded config.
+                ///     Env variable is not set: TELEMETRY_ENABLED
+                ///     2024.06.03 14:19:48.818674 [ 374515 ] {} <Information> SentryWriter: Sending crash reports is disabled
                 lines.emplace_back(data, static_cast<size_t>(breaker.data() - data));
                 last_breaker = breaker;
             }

@@ -146,7 +146,7 @@ FileLogSource::FileContainer FileLog::searchForCandidates(bool table_query)
         }
     }
 
-    if (table_query && start_timestamp == nlog::LATEST_SN)
+    if (!table_query && start_timestamp == nlog::LATEST_SN)
     {
         /// Tail the log last file
         /// Remove all other files except the last one
