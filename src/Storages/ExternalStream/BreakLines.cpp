@@ -22,8 +22,6 @@ std::vector<std::string_view> breakLines(const char * data, size_t & length, con
 
     while (re2::RE2::FindAndConsume(&input, line_breaker, &breaker))
     {
-
-
         /// re2 moves input to next starting position beyond the current match automatically
         /// [.....breaker][....
         /// ^             ^
@@ -41,7 +39,9 @@ std::vector<std::string_view> breakLines(const char * data, size_t & length, con
             }
             else
             {
-                /// Force the prefix information into a line; there may be some configuration messages
+                /// [data in the middle][breaker][next start...][breaker][next start...
+                /// data in the middle + breaker are composed into a line
+                /// update: Force the prefix information into a line; there may be some configuration messages
                 lines.emplace_back(data, static_cast<size_t>(breaker.data() - data));
                 last_breaker = breaker;
             }
