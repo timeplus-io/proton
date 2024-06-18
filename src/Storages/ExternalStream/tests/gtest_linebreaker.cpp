@@ -198,12 +198,13 @@ TEST(BreakLines, BreakLinesNoMatch)
     }
 }
 
-TEST(BreakLines,BreakLinesHasConfigInfo)
+TEST(BreakLines, BreakLinesHasConfigInfo)
 {
-    std::string line1{"Processing configuration file 'config.xml'.There is no file 'config.xml', will use embedded config.Env variable is not set: TELEMETRY_ENABLED\n"};
+    std::string line1{"Processing configuration file 'config.xml'.There is no file 'config.xml', will use embedded config.Env variable is "
+                      "not set: TELEMETRY_ENABLED\n"};
     std::string line2{"2024.06.03 14:19:48.818674 [ 374515 ] {} <Information> SentryWriter: Sending crash reports is disabled"};
     std::string line3{"2024.06.03 14:19:49.402200 [ 374515 ] {} <Information> Application: starting up"};
-    
+
     std::string pattern = R"((\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2}\.\d+) \[ \d+ \] \{)";
     re2::RE2 line_breaker{pattern};
 
@@ -213,11 +214,10 @@ TEST(BreakLines,BreakLinesHasConfigInfo)
     {
         std::string data(line1 + line2 + line3);
         auto remaining = data.size();
-        auto lines{DB::breakLines(data.data(), remaining, pattern,4096)};
+        auto lines{DB::breakLines(data.data(), remaining, pattern, 4096)};
         EXPECT_EQ(lines.size(), 2);
         EXPECT_EQ(lines[0], line1);
-        EXPECT_EQ(lines[1],line2);
+        EXPECT_EQ(lines[1], line2);
         EXPECT_EQ(remaining, line3.size());
     }
-
 }
