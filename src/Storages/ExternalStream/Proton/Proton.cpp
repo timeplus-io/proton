@@ -29,11 +29,13 @@ StorageID getRemoteStreamStorageID(const StorageID & externalStreamStorageID, co
 namespace ExternalStream
 {
 
-Proton::Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context)
+Proton::Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, bool attach, ContextPtr context)
 : StorageExternalStreamImpl(storage, std::move(settings_), context)
 , remote_stream_id(getRemoteStreamStorageID(getStorageID(), *settings))
 , logger(&Poco::Logger::get(getName()))
 {
+    LOG_INFO(logger, "attach = {}", attach);
+
     String hosts = settings->hosts.value;
     if (hosts.empty())
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Setting `hosts` cannot be empty.");

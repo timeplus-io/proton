@@ -14,7 +14,7 @@ class Proton final : public StorageExternalStreamImpl
 {
 
 public:
-    Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context);
+    Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, bool attach, ContextPtr context);
     ~Proton() override = default;
 
     String getName() const override { return "TimeplusExternalStream"; }

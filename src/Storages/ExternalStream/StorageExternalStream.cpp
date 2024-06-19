@@ -63,14 +63,10 @@ std::unique_ptr<StorageExternalStreamImpl> createExternalStream(
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream type is required in settings");
 
     if (settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA)
-        return std::make_unique<Kafka>(storage, std::move(settings), engine_args, attach, external_stream_counter, std::move(context_));
+        return std::make_unique<Kafka>(storage, std::move(settings), engine_args, attach, std::move(external_stream_counter), std::move(context_));
 
     if (settings->type.value == StreamTypes::TIMEPLUS)
-    {
-        auto * logger = &Poco::Logger::get("ExternalStream");
-        LOG_INFO(logger, "Creating timeplus external stream");
-        return std::make_unique<ExternalStream::Proton>(storage, std::move(settings), std::move(context_));
-    }
+        return std::make_unique<ExternalStream::Proton>(storage, std::move(settings), attach, std::move(context_));
 
 #ifdef OS_LINUX
     if (settings->type.value == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)
@@ -79,56 +75,6 @@ std::unique_ptr<StorageExternalStreamImpl> createExternalStream(
 #endif
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{} external stream is not supported yet", settings->type.value);
 }
-}
-
-bool StorageExternalStream::isRemote() const
-{
-    return external_stream->isRemote();
-}
-
-void StorageExternalStream::startup()
-{
-    external_stream->startup();
-}
-
-void StorageExternalStream::shutdown()
-{
-    external_stream->shutdown();
-}
-
-bool StorageExternalStream::supportsSubcolumns() const
-{
-    return external_stream->supportsSubcolumns();
-}
-
-bool StorageExternalStream::supportsStreamingQuery() const
-{
-    return external_stream->supportsStreamingQuery();
-}
-
-bool StorageExternalStream::supportsAccurateSeekTo() const noexcept
-{
-    return external_stream->supportsAccurateSeekTo();
-}
-
-bool StorageExternalStream::squashInsert() const noexcept
-{
-    return external_stream->squashInsert();
-}
-
-NamesAndTypesList StorageExternalStream::getVirtuals() const
-{
-    return external_stream->getVirtuals();
-}
-
-std::optional<UInt64> StorageExternalStream::totalRows(const Settings & settings) const
-{
-    return external_stream->totalRows(settings);
-}
-
-ExternalStreamCounterPtr StorageExternalStream::getExternalStreamCounter()
-{
-    return external_stream->getExternalStreamCounter();
 }
 
 void StorageExternalStream::read(
@@ -157,15 +103,16 @@ StorageExternalStream::StorageExternalStream(
     std::unique_ptr<ExternalStreamSettings> external_stream_settings_,
     const String & comment,
     bool attach)
-    : IStorage(table_id_)
+    : StorageProxy(table_id_)
     , WithContext(context_->getGlobalContext())
+    , external_stream_counter({})
 {
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
     storage_metadata.setComment(comment);
     setInMemoryMetadata(storage_metadata);
 
-    auto stream = createExternalStream(this, std::move(external_stream_settings_), context_, engine_args, attach, std::make_shared<ExternalStreamCounter>(), std::move(context_));
+    auto stream = createExternalStream(this, std::move(external_stream_settings_), context_, engine_args, attach, external_stream_counter, std::move(context_));
     external_stream.swap(stream);
 }
 

@@ -16,8 +16,6 @@ class StorageExternalStreamImpl : public std::enable_shared_from_this<StorageExt
 public:
     StorageExternalStreamImpl(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ContextPtr & context);
 
-    virtual ExternalStreamCounterPtr getExternalStreamCounter() const { return nullptr; }
-
     FormatSettings getFormatSettings(const ContextPtr & context) const;
 
     /// Some implementations have its own logic to infer the format.
