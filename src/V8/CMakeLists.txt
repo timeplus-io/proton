@@ -1,6 +1,7 @@
 include("${proton_SOURCE_DIR}/cmake/dbms_glob_sources.cmake")
 
 add_headers_and_sources(V8 .)
+add_headers_and_sources(V8 Modules)
 
 add_library(V8 ${V8_headers} ${V8_sources})
 

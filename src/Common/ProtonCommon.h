@@ -65,7 +65,9 @@ const String JSON_VALUES_PREFIX = "__json_values_";
 /// PREFIX of UDF config files
 const String UDF_XML_PATTERN = "*_function.xml";
 /// UDF VERSION used by this version of proton
-const uint32_t UDF_VERSION = 1;
+constexpr uint32_t UDF_VERSION = 1;
+/// Prefix for all Javascript UDF or UDA loggers
+const String PROTON_FUNC_LOGGER_PREFIX = "JavaScriptUDF";
 
 /// Storage modes
 const String APPEND_MODE = "append";
