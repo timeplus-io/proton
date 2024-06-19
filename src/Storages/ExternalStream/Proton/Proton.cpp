@@ -6,19 +6,40 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+extern const int INVALID_SETTING_VALUE;
+}
+
+namespace
+{
+
+StorageID getRemoteStreamStorageID(const StorageID & externalStreamStorageID, const ExternalStreamSettings & settings)
+{
+    auto db = settings.db.value;
+    auto stream = settings.stream.value;
+    return {
+        db.empty() ? externalStreamStorageID.getDatabaseName() : db,
+        stream.empty() ? externalStreamStorageID.getTableName() : stream
+    };
+}
+
+}
+
 namespace ExternalStream
 {
 
-Proton::Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context_)
-: StorageExternalStreamImpl(storage, std::move(settings_), context_)
-, remote_stream_id(StorageID::createEmpty())
+Proton::Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context)
+: StorageExternalStreamImpl(storage, std::move(settings_), context)
+, remote_stream_id(getRemoteStreamStorageID(getStorageID(), *settings))
 , logger(&Poco::Logger::get(getName()))
 {
-    LOG_INFO(logger, "Creating ...");
-    String cluster_description = "127.0.0.1"; /// FIXME
-    std::vector<String> shards = parseRemoteDescription(cluster_description, 0, cluster_description.size(), ',', /*max_addresses=*/ 10);
+    String hosts = settings->hosts.value;
+    if (hosts.empty())
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Setting `hosts` cannot be empty.");
 
-    LOG_INFO(logger, "shards' size = {}", shards.size());
+    std::vector<String> shards = parseRemoteDescription(hosts, 0, hosts.size(), ',', /*max_addresses=*/ 10);
+
     std::vector<std::vector<String>> names;
     names.reserve(shards.size());
     for (const auto & shard : shards)
@@ -27,21 +48,19 @@ Proton::Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setti
     auto maybe_secure_port = context->getTCPPortSecure();
 
     /// FIXME
-    // bool treat_local_as_remote = false;
-    // bool treat_local_port_as_remote = context->getApplicationType() == Context::ApplicationType::LOCAL;
+    bool treat_local_as_remote = false;
+    bool treat_local_port_as_remote = context->getApplicationType() == Context::ApplicationType::LOCAL;
 
+    auto user = settings->user.value;
     cluster = std::make_shared<Cluster>(
         context->getSettings(),
         names,
-        /*username=*/ "default", // FIXME
-        /*password=*/ "", /// FIXME
+        /*username=*/ user.empty() ? "default" : user,
+        /*password=*/ settings->password.value,
         (secure ? (maybe_secure_port ? *maybe_secure_port : DBMS_DEFAULT_SECURE_PORT) : context->getTCPPort()),
-        true, /*treat_local_as_remote,*/
-        true, /*treat_local_port_as_remote,*/
+        /*true,*/ treat_local_as_remote,
+        /*true,*/ treat_local_port_as_remote,
         secure);
-
-    remote_stream_id.database_name = "default"; /// FIXME
-    remote_stream_id.table_name = "foo"; /// FIXME
 
     /// StorageDistributed supports mismatching structure of remote table, so we can use outdated structure for CREATE ... AS remote(...)
     /// without additional conversion in StorageTableFunctionProxy
@@ -62,23 +81,6 @@ Proton::Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setti
         DistributedSettings{},
         false,
         cluster);
-}
-
-void Proton::startup()
-{
-    LOG_INFO(logger, "Starting");
-    storage_ptr->startup();
-}
-
-void Proton::shutdown()
-{
-    LOG_INFO(logger, "Shutting down");
-    storage_ptr->shutdown();
-}
-
-bool Proton::supportsSubcolumns() const
-{
-    return storage_ptr->supportsSubcolumns();
 }
 
 void Proton::read(

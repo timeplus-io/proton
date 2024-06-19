@@ -14,9 +14,9 @@ class ASTStorage;
 #define KAFKA_EXTERNAL_STREAM_SETTINGS(M) \
     M(String, brokers, "", "A comma-separated list of brokers, for example Kafka brokers.", 0) \
     M(String, topic, "", "topic, for example Kafka topic name.", 0) \
-    M(String, security_protocol, "plaintext", "The protocol to connection external logstore", 0) \
-    M(String, username, "", "The username of external logstore", 0) \
-    M(String, password, "", "The password of external logstore", 0) \
+    M(String, security_protocol, "plaintext", "The protocol to connection to Kafka.", 0) \
+    M(String, username, "", "User name.", 0) \
+    M(String, password, "", "User password", 0) \
     M(String, sasl_mechanism, "PLAIN", "SASL mechanism to use for authentication. Supported: PLAIN, SCRAM-SHA-256, SCRAM-SHA-512. Default to PLAIN when SASL is enabled.", 0) \
     M(String, ssl_ca_cert_file, "", "The path of ssl ca cert file", 0) \
     M(String, ssl_ca_pem, "", "CA certificate string (PEM format) for verifying the server's key.", 0) \
@@ -37,10 +37,17 @@ class ASTStorage;
     M(String, row_delimiter, "\n", "The string to be considered as a delimiter in raw message.", 0) \
     M(UInt64, max_row_length, 4096, "Max row length", 0)
 
+#define TIMEPLUS_EXTERNAL_STREAM_SETTINGS(M) \
+    M(String, hosts, "", "A remote server address or an expression that generates multiple addresses of remote servers. Format: host or host:port.", 0) \
+    M(String, db, "", "Database name.", 0) \
+    M(String, stream, "", "Stream name. If not specified, The external stream name is used.", 0) \
+    M(String, user, "", "User name. If not specified, `default` is be used`", 0)
+
 #define ALL_EXTERNAL_STREAM_SETTINGS(M) \
     M(String, type, "", "External stream type", 0) \
     KAFKA_EXTERNAL_STREAM_SETTINGS(M) \
-    LOG_FILE_EXTERNAL_STREAM_SETTINGS(M)
+    LOG_FILE_EXTERNAL_STREAM_SETTINGS(M) \
+    TIMEPLUS_EXTERNAL_STREAM_SETTINGS(M)
 
 #define LIST_OF_EXTERNAL_STREAM_SETTINGS(M) \
     ALL_EXTERNAL_STREAM_SETTINGS(M) \

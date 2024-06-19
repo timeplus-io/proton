@@ -19,9 +19,13 @@ public:
 
     String getName() const override { return "TimeplusExternalStream"; }
 
-    void startup() override;
-    void shutdown() override;
-    bool supportsSubcolumns() const override;
+    void startup() override { storage_ptr->startup(); }
+    void shutdown() override { storage_ptr->shutdown(); }
+    bool supportsSampling() const override { return storage_ptr->supportsSampling(); }
+    bool supportsFinal() const override { return storage_ptr->supportsFinal(); }
+    bool supportsPrewhere() const override { return storage_ptr->supportsPrewhere(); }
+    bool supportsSubcolumns() const override { return storage_ptr->supportsSubcolumns(); }
+    bool supportsDynamicSubcolumns() const override { return true; }
 
     void read(
         QueryPlan & query_plan,
@@ -43,7 +47,6 @@ private:
     ClusterPtr cluster;
     StorageID remote_stream_id;
     StoragePtr storage_ptr;
-    ContextPtr context;
     Poco::Logger * logger;
 
     ColumnsDescription cached_columns;
