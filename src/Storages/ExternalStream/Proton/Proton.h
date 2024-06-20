@@ -14,7 +14,10 @@ class Proton final : public StorageExternalStreamImpl
 {
 
 public:
-    Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, bool attach, ContextPtr context);
+    static StoragePtr create(IStorage * storage, StorageInMemoryMetadata & storage_metadata, std::unique_ptr<ExternalStreamSettings> settings_, bool attach, ContextPtr context);
+
+    // Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, bool attach, ContextPtr context);
+    Proton() = delete;
     ~Proton() override = default;
 
     String getName() const override { return "TimeplusExternalStream"; }
@@ -43,13 +46,13 @@ public:
         ContextPtr context) override;
 
 private:
-    bool secure{ false };
-    ClusterPtr cluster;
-    StorageID remote_stream_id;
-    StoragePtr storage_ptr;
-    Poco::Logger * logger;
+    [[maybe_unused]] bool secure{ false };
+    [[maybe_unused]] ClusterPtr cluster;
+    [[maybe_unused]] StorageID remote_stream_id;
+    [[maybe_unused]] StoragePtr storage_ptr;
+    [[maybe_unused]] Poco::Logger * logger;
 
-    ColumnsDescription cached_columns;
+    [[maybe_unused]] ColumnsDescription cached_columns;
 
 };
 

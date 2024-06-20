@@ -29,14 +29,13 @@ StorageID getRemoteStreamStorageID(const StorageID & externalStreamStorageID, co
 namespace ExternalStream
 {
 
-Proton::Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, bool attach, ContextPtr context)
-: StorageExternalStreamImpl(storage, std::move(settings_), context)
-, remote_stream_id(getRemoteStreamStorageID(getStorageID(), *settings))
-, logger(&Poco::Logger::get(getName()))
+StoragePtr Proton::create(IStorage * storage, StorageInMemoryMetadata & storage_metadata, std::unique_ptr<ExternalStreamSettings> settings_, bool attach, ContextPtr context)
 {
+    auto * logger = &Poco::Logger::get("TimeplusExternalStream");
     LOG_INFO(logger, "attach = {}", attach);
 
-    String hosts = settings->hosts.value;
+    auto remote_stream_id = getRemoteStreamStorageID(storage->getStorageID(), *settings_);
+    String hosts = settings_->hosts.value;
     if (hosts.empty())
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Setting `hosts` cannot be empty.");
 
@@ -49,16 +48,17 @@ Proton::Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setti
 
     auto maybe_secure_port = context->getTCPPortSecure();
 
+    bool secure = settings_->secure;
     /// FIXME
     bool treat_local_as_remote = false;
     bool treat_local_port_as_remote = context->getApplicationType() == Context::ApplicationType::LOCAL;
 
-    auto user = settings->user.value;
-    cluster = std::make_shared<Cluster>(
+    auto user = settings_->user.value;
+    auto cluster = std::make_shared<Cluster>(
         context->getSettings(),
         names,
         /*username=*/ user.empty() ? "default" : user,
-        /*password=*/ settings->password.value,
+        /*password=*/ settings_->password.value,
         (secure ? (maybe_secure_port ? *maybe_secure_port : DBMS_DEFAULT_SECURE_PORT) : context->getTCPPort()),
         /*true,*/ treat_local_as_remote,
         /*true,*/ treat_local_port_as_remote,
@@ -66,10 +66,11 @@ Proton::Proton(IStorage * storage, std::unique_ptr<ExternalStreamSettings> setti
 
     /// StorageDistributed supports mismatching structure of remote table, so we can use outdated structure for CREATE ... AS remote(...)
     /// without additional conversion in StorageTableFunctionProxy
-    cached_columns = getStructureOfRemoteTable(*cluster, remote_stream_id, context, /*table_func_ptr=*/ nullptr);
+    auto cached_columns = getStructureOfRemoteTable(*cluster, remote_stream_id, context, /*table_func_ptr=*/ nullptr);
+    storage_metadata.setColumns(cached_columns);
 
-    storage_ptr = StorageDistributed::create(
-        getStorageID(),
+    return StorageDistributed::create(
+        storage->getStorageID(),
         cached_columns,
         ConstraintsDescription{},
         String{},

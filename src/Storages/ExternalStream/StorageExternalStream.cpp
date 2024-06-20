@@ -27,6 +27,7 @@ namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 extern const int INCORRECT_NUMBER_OF_COLUMNS;
+extern const int INCORRECT_QUERY;
 extern const int NOT_IMPLEMENTED;
 extern const int TYPE_MISMATCH;
 }
@@ -57,7 +58,7 @@ void validateEngineArgs(ContextPtr context, ASTs & engine_args, const ColumnsDes
 }
 
 StoragePtr createExternalStream(
-    IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings, ContextPtr context [[maybe_unused]], const ASTs & engine_args, bool attach, ExternalStreamCounterPtr external_stream_counter, ContextPtr context_)
+    IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings, ContextPtr context [[maybe_unused]], const ASTs & engine_args, StorageInMemoryMetadata & storage_metadata, bool attach, ExternalStreamCounterPtr external_stream_counter, ContextPtr context_)
 {
     if (settings->type.value.empty())
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream type is required in settings");
@@ -66,7 +67,7 @@ StoragePtr createExternalStream(
         return std::make_unique<Kafka>(storage, std::move(settings), engine_args, attach, std::move(external_stream_counter), std::move(context_));
 
     if (settings->type.value == StreamTypes::TIMEPLUS)
-        return std::make_unique<ExternalStream::Proton>(storage, std::move(settings), attach, std::move(context_));
+        return ExternalStream::Proton::create(storage, storage_metadata, std::move(settings), attach, std::move(context_));
 
 #ifdef OS_LINUX
     if (settings->type.value == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)
@@ -89,13 +90,19 @@ StorageExternalStream::StorageExternalStream(
     , WithContext(context_->getGlobalContext())
     , external_stream_counter(std::make_shared<ExternalStreamCounter>())
 {
-    StorageInMemoryMetadata storage_metadata;
-    storage_metadata.setColumns(columns_);
-    storage_metadata.setComment(comment);
-    setInMemoryMetadata(storage_metadata);
+    if (columns_.empty() && external_stream_settings_->type.value != StreamTypes::TIMEPLUS)
+        /// This is the same error reported by InterpreterCreateQuery
+        throw Exception(ErrorCodes::INCORRECT_QUERY, "Incorrect CREATE query: required list of column descriptions or AS section or SELECT.");
 
-    auto stream = createExternalStream(this, std::move(external_stream_settings_), context_, engine_args, attach, external_stream_counter, std::move(context_));
+    StorageInMemoryMetadata storage_metadata;
+    storage_metadata.setComment(comment);
+    if (!columns_.empty())
+        storage_metadata.setColumns(columns_);
+
+    auto stream = createExternalStream(this, std::move(external_stream_settings_), context_, engine_args, storage_metadata, attach, external_stream_counter, std::move(context_));
     external_stream.swap(stream);
+
+    setInMemoryMetadata(storage_metadata);
 }
 
 void registerStorageExternalStream(StorageFactory & factory)
@@ -123,6 +130,7 @@ void registerStorageExternalStream(StorageFactory & factory)
         creator_fn,
         StorageFactory::StorageFeatures{
             .supports_settings = true,
+            .supports_schema_inference = true,
         });
 }
 
