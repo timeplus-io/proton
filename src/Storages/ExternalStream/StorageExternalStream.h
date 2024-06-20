@@ -24,29 +24,10 @@ public:
 
     String getName() const override { return "ExternalStream"; }
 
-    void startup() override { external_stream->startup(); }
-    void shutdown() override { external_stream->shutdown(); }
-
-    bool isRemote() const override { return external_stream->isRemote(); }
     bool supportsSubcolumns() const override { return external_stream->supportsSubcolumns(); }
     bool supportsStreamingQuery() const override { return external_stream->supportsStreamingQuery(); }
     bool supportsAccurateSeekTo() const noexcept override { return external_stream->supportsAccurateSeekTo(); }
     bool squashInsert() const noexcept override { return external_stream->squashInsert(); }
-
-    NamesAndTypesList getVirtuals() const override { return external_stream->getVirtuals(); }
-    std::optional<UInt64> totalRows(const Settings & settings) const override { return external_stream->totalRows(settings); }
-
-    void read(
-        QueryPlan & query_plan,
-        const Names & column_names,
-        const StorageSnapshotPtr & storage_snapshot,
-        SelectQueryInfo & query_info,
-        ContextPtr context,
-        QueryProcessingStage::Enum processed_stage,
-        size_t max_block_size,
-        size_t num_streams) override;
-
-    SinkToStoragePtr write(const ASTPtr & /*query*/, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr /*context*/) override;
 
     friend class KafkaSource;
 

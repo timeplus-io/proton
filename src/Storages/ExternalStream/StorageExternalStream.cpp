@@ -56,7 +56,7 @@ void validateEngineArgs(ContextPtr context, ASTs & engine_args, const ColumnsDes
             ErrorCodes::TYPE_MISMATCH, "Sharding expression has type {}, but should be one of integer type", type->getName());
 }
 
-std::unique_ptr<StorageExternalStreamImpl> createExternalStream(
+StoragePtr createExternalStream(
     IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings, ContextPtr context [[maybe_unused]], const ASTs & engine_args, bool attach, ExternalStreamCounterPtr external_stream_counter, ContextPtr context_)
 {
     if (settings->type.value.empty())
@@ -77,24 +77,6 @@ std::unique_ptr<StorageExternalStreamImpl> createExternalStream(
 }
 }
 
-void StorageExternalStream::read(
-    QueryPlan & query_plan,
-    const Names & column_names,
-    const StorageSnapshotPtr & storage_snapshot,
-    SelectQueryInfo & query_info,
-    ContextPtr context_,
-    QueryProcessingStage::Enum processed_stage,
-    size_t max_block_size,
-    size_t num_streams)
-{
-    external_stream->read(query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
-}
-
-SinkToStoragePtr StorageExternalStream::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_)
-{
-    return external_stream->write(query, metadata_snapshot, context_);
-}
-
 StorageExternalStream::StorageExternalStream(
     const ASTs & engine_args,
     const StorageID & table_id_,
@@ -105,7 +87,7 @@ StorageExternalStream::StorageExternalStream(
     bool attach)
     : StorageProxy(table_id_)
     , WithContext(context_->getGlobalContext())
-    , external_stream_counter({})
+    , external_stream_counter(std::make_shared<ExternalStreamCounter>())
 {
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
