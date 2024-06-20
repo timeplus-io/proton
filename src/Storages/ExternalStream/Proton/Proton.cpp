@@ -1,4 +1,6 @@
 #include <Common/parseRemoteDescription.h>
+#include <Interpreters/getHeaderForProcessingStage.h>
+#include <Processors/QueryPlan/ExpressionStep.h>
 #include <Storages/Distributed/DistributedSettings.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/ExternalStream/Proton/Proton.h>
@@ -8,6 +10,7 @@ namespace DB
 
 namespace ErrorCodes
 {
+extern const int INCOMPATIBLE_COLUMNS;
 extern const int INVALID_SETTING_VALUE;
 }
 
@@ -29,12 +32,13 @@ StorageID getRemoteStreamStorageID(const StorageID & externalStreamStorageID, co
 namespace ExternalStream
 {
 
-StoragePtr Proton::create(IStorage * storage, StorageInMemoryMetadata & storage_metadata, std::unique_ptr<ExternalStreamSettings> settings_, bool attach, ContextPtr context)
+Proton::Proton(IStorage * storage, StorageInMemoryMetadata & storage_metadata, std::unique_ptr<ExternalStreamSettings> settings_, bool attach, ContextPtr context)
+: StorageProxy(storage->getStorageID())
+, remote_stream_id(getRemoteStreamStorageID(storage->getStorageID(), *settings_))
+, logger(&Poco::Logger::get(getName()))
 {
-    auto * logger = &Poco::Logger::get("TimeplusExternalStream");
     LOG_INFO(logger, "attach = {}", attach);
 
-    auto remote_stream_id = getRemoteStreamStorageID(storage->getStorageID(), *settings_);
     String hosts = settings_->hosts.value;
     if (hosts.empty())
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Setting `hosts` cannot be empty.");
@@ -48,7 +52,7 @@ StoragePtr Proton::create(IStorage * storage, StorageInMemoryMetadata & storage_
 
     auto maybe_secure_port = context->getTCPPortSecure();
 
-    bool secure = settings_->secure;
+    auto secure = settings_->secure;
     /// FIXME
     bool treat_local_as_remote = false;
     bool treat_local_port_as_remote = context->getApplicationType() == Context::ApplicationType::LOCAL;
@@ -66,12 +70,12 @@ StoragePtr Proton::create(IStorage * storage, StorageInMemoryMetadata & storage_
 
     /// StorageDistributed supports mismatching structure of remote table, so we can use outdated structure for CREATE ... AS remote(...)
     /// without additional conversion in StorageTableFunctionProxy
-    auto cached_columns = getStructureOfRemoteTable(*cluster, remote_stream_id, context, /*table_func_ptr=*/ nullptr);
-    storage_metadata.setColumns(cached_columns);
+    auto columns = getStructureOfRemoteTable(*cluster, remote_stream_id, context, /*table_func_ptr=*/ nullptr);
+    storage_metadata.setColumns(columns);
 
-    return StorageDistributed::create(
+    storage_ptr = StorageDistributed::create(
         storage->getStorageID(),
-        cached_columns,
+        columns,
         ConstraintsDescription{},
         String{},
         remote_stream_id.database_name,
@@ -87,16 +91,40 @@ StoragePtr Proton::create(IStorage * storage, StorageInMemoryMetadata & storage_
 }
 
 void Proton::read(
-    QueryPlan & query_plan,
-    const Names & column_names,
-    const StorageSnapshotPtr & storage_snapshot,
-    SelectQueryInfo & query_info,
-    ContextPtr context_,
-    QueryProcessingStage::Enum processed_stage,
-    size_t max_block_size,
-    size_t num_streams)
+        QueryPlan & query_plan,
+        const Names & column_names,
+        const StorageSnapshotPtr & storage_snapshot,
+        SelectQueryInfo & query_info,
+        ContextPtr context_,
+        QueryProcessingStage::Enum processed_stage,
+        size_t max_block_size,
+        size_t num_streams)
 {
-    storage_ptr->read(query_plan, column_names, storage_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
+    String cnames;
+    for (const auto & c : column_names)
+        cnames += c + " ";
+    auto nested_snapshot = storage_ptr->getStorageSnapshot(storage_ptr->getInMemoryMetadataPtr(), context_);
+    storage_ptr->read(query_plan, column_names, nested_snapshot, query_info, context_,
+                              processed_stage, max_block_size, num_streams);
+    bool add_conversion{true}; /// TBD
+    if (add_conversion)
+    {
+        auto from_header = query_plan.getCurrentDataStream().header;
+        auto to_header = getHeaderForProcessingStage(column_names, storage_snapshot,
+                                                     query_info, context_, processed_stage);
+
+        auto convert_actions_dag = ActionsDAG::makeConvertingActions(
+                from_header.getColumnsWithTypeAndName(),
+                to_header.getColumnsWithTypeAndName(),
+                ActionsDAG::MatchColumnsMode::Name);
+
+        auto step = std::make_unique<ExpressionStep>(
+            query_plan.getCurrentDataStream(),
+            convert_actions_dag);
+
+        step->setStepDescription("Converting columns");
+        query_plan.addStep(std::move(step));
+    }
 }
 
 SinkToStoragePtr Proton::write(
@@ -104,8 +132,16 @@ SinkToStoragePtr Proton::write(
     const StorageMetadataPtr & metadata_snapshot,
     ContextPtr context_)
 {
+    auto cached_structure = metadata_snapshot->getSampleBlock();
+    auto actual_structure = storage_ptr->getInMemoryMetadataPtr()->getSampleBlock();
+    auto add_conversion{true}; /// TBD
+    if (!blocksHaveEqualStructure(actual_structure, cached_structure) && add_conversion)
+    {
+        throw Exception("Source storage and table function have different structure", ErrorCodes::INCOMPATIBLE_COLUMNS);
+    }
     return storage_ptr->write(query, metadata_snapshot, context_);
 }
+
 }
 
 }

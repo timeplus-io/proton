@@ -67,7 +67,7 @@ StoragePtr createExternalStream(
         return std::make_unique<Kafka>(storage, std::move(settings), engine_args, attach, std::move(external_stream_counter), std::move(context_));
 
     if (settings->type.value == StreamTypes::TIMEPLUS)
-        return ExternalStream::Proton::create(storage, storage_metadata, std::move(settings), attach, std::move(context_));
+        return std::make_unique<ExternalStream::Proton>(storage, storage_metadata, std::move(settings), attach, std::move(context_));
 
 #ifdef OS_LINUX
     if (settings->type.value == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)
