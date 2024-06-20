@@ -1,7 +1,7 @@
 services:
 
   proton:
-    image: ghcr.io/timeplus-io/proton:latest
+    image: ghcr.io/timeplus-io/proton::1.5.8-rc
     pull_policy: always
     ports:
       - 8463:8463
