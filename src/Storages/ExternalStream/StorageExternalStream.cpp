@@ -98,11 +98,12 @@ StorageExternalStream::StorageExternalStream(
     storage_metadata.setComment(comment);
     if (!columns_.empty())
         storage_metadata.setColumns(columns_);
-
-    auto stream = createExternalStream(this, std::move(external_stream_settings_), context_, engine_args, storage_metadata, attach, external_stream_counter, std::move(context_));
-    external_stream.swap(stream);
-
     setInMemoryMetadata(storage_metadata);
+
+    auto metadata = getInMemoryMetadata();
+    auto stream = createExternalStream(this, std::move(external_stream_settings_), context_, engine_args, metadata, attach, external_stream_counter, std::move(context_));
+    external_stream.swap(stream);
+    setInMemoryMetadata(metadata);
 }
 
 void registerStorageExternalStream(StorageFactory & factory)
