@@ -120,26 +120,49 @@ const google::protobuf::Descriptor * ProtobufSchemas::getMessageTypeForFormatSch
 }
 
 /// proton: starts
-/// Overrides google::protobuf::io::ErrorCollector:
-void ProtobufSchemas::AddError(int line, google::protobuf::io::ColumnNumber column, const std::string & message)
+namespace
 {
-    /// Protobuf library code is not exception safe, we should
-    /// remember the error and throw it later from our side.
-    if (!error) /// Only remember the first error.
-        error = ErrorInfo{"", line, column, message};
+
+class ErrorCollector : public google::protobuf::io::ErrorCollector
+{
+public:
+    ErrorCollector() = default;
+
+    void AddError(int line, google::protobuf::io::ColumnNumber column, const std::string & message) override
+    {
+        /// Protobuf library code is not exception safe, we should
+        /// remember the error and throw it later from our side.
+        if (!error_) /// Only remember the first error.
+            error_ = {"", line, column, message};
+    }
+
+    std::optional<ProtobufSchemas::ErrorInfo> error()
+    {
+        return error_;
+    }
+
+private:
+    std::optional<ProtobufSchemas::ErrorInfo> error_;
+};
+
 }
 
 void ProtobufSchemas::validateSchema(std::string_view schema)
 {
+    DB::ErrorCollector error_collector{};
+
     google::protobuf::io::ArrayInputStream input{schema.data(), static_cast<int>(schema.size())};
-    google::protobuf::io::Tokenizer tokenizer(&input, this);
+    google::protobuf::io::Tokenizer tokenizer(&input, &error_collector);
     google::protobuf::FileDescriptorProto descriptor;
     google::protobuf::compiler::Parser parser;
 
-    parser.RecordErrorsTo(this);
+    parser.RecordErrorsTo(&error_collector);
+
+    std::lock_guard lock(mutex);
+    error.reset();
     parser.Parse(&tokenizer, &descriptor);
 
-    if (error)
+    if (auto error = error_collector.error(); error)
         throw Exception(ErrorCodes::CANNOT_PARSE_PROTOBUF_SCHEMA,
             "Cannot parse schema, found an error at line {}, column {}, error: {}", error->line, error->column, error->message);
 }

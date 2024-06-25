@@ -101,10 +101,6 @@ public:
     explicit ProtobufSchemaWriter(std::string_view schema_body_, const FormatSettings & settings_);
 
     void validate() override;
-    bool write(bool replace_if_exist) override;
-
-private:
-    FormatSchemaInfo schema_info;
 };
 /// proton: ends
 

@@ -32,7 +32,7 @@ class FormatSchemaInfo;
 /** Keeps parsed google protobuf schemas parsed from files.
   * This class is used to handle the "Protobuf" input/output formats.
   */
-class ProtobufSchemas : public google::protobuf::io::ErrorCollector /* proton: updated */
+class ProtobufSchemas
 {
 public:
     enum class WithEnvelope
@@ -89,10 +89,6 @@ private:
     class ImporterWithSourceTree;
     std::unordered_map<String, std::unique_ptr<ImporterWithSourceTree>> importers;
     std::mutex mutex;
-
-    /// proton: starts
-    std::optional<ErrorInfo> error;
-    /// proton: ends
 };
 
 }

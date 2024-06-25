@@ -3,7 +3,6 @@
 #if USE_AVRO
 
 #include <fstream> /// proton: updated
-#include <numeric>
 
 #include <Core/Field.h>
 
@@ -1069,8 +1068,7 @@ DataTypePtr AvroSchemaReader::avroNodeToDataType(avro::NodePtr node)
 
 /// proton: starts
 AvroSchemaWriter::AvroSchemaWriter(std::string_view schema_body_, const FormatSettings & settings_)
-    : IExternalSchemaWriter(schema_body_, settings_)
-    , schema_info(settings.schema.format_schema, "Avro", false, settings.schema.is_server, settings.schema.format_schema_path)
+    : IExternalSchemaWriter("Avro", schema_body_, settings_)
 {
 }
 
@@ -1084,17 +1082,6 @@ void AvroSchemaWriter::validate()
     {
       throw Exception(e.what(), ErrorCodes::INCORRECT_DATA);
     }
-}
-
-bool AvroSchemaWriter::write(bool replace_if_exist)
-{
-    if (std::filesystem::exists(schema_info.absoluteSchemaPath()))
-        if (!replace_if_exist)
-            return false;
-
-    WriteBufferFromFile write_buffer{schema_info.absoluteSchemaPath()};
-    write_buffer.write(schema_body.data(), schema_body.size());
-    return true;
 }
 /// proton: ends
 

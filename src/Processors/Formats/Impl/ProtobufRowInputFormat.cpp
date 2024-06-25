@@ -321,25 +321,13 @@ bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadE
 }
 
 ProtobufSchemaWriter::ProtobufSchemaWriter(std::string_view schema_body_, const FormatSettings & settings_)
-    : IExternalSchemaWriter(schema_body_, settings_)
-    , schema_info(settings.schema.format_schema, "Protobuf", false, settings.schema.is_server, settings.schema.format_schema_path)
+    : IExternalSchemaWriter("Protobuf", schema_body_, settings_)
 {
 }
 
 void ProtobufSchemaWriter::validate()
 {
     ProtobufSchemas::instance().validateSchema(schema_body);
-}
-
-bool ProtobufSchemaWriter::write(bool replace_if_exist)
-{
-    if (std::filesystem::exists(schema_info.absoluteSchemaPath()))
-        if (!replace_if_exist)
-            return false;
-
-    WriteBufferFromFile write_buffer{schema_info.absoluteSchemaPath()};
-    write_buffer.write(schema_body.data(), schema_body.size());
-    return true;
 }
 /// proton: ends
 

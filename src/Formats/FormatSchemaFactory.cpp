@@ -1,6 +1,7 @@
 #include <Formats/FormatFactory.h>
 #include <Formats/FormatSchemaFactory.h>
 #include <Formats/FormatSchemaInfo.h>
+#include <Formats/ProtobufSchemas.h>
 #include <IO/ReadBufferFromString.h>
 #include <Processors/Formats/ISchemaWriter.h>
 
@@ -85,6 +86,9 @@ void FormatSchemaFactory::unregisterSchema(const String & schema_name, const Str
     }
 
     std::filesystem::remove(schema_path);
+
+    if (format.empty() || format == "Protobuf")
+        ProtobufSchemas::instance().clear();
 }
 
 std::vector<FormatSchemaFactory::SchemaEntry> FormatSchemaFactory::getSchemasList(const String & format, const ContextPtr & context) const
