@@ -43,8 +43,19 @@ public:
             return descriptor;
 
         const auto * file_descriptor = importer.Import(schema_path);
-        // If there are parsing errors, AddError() throws an exception and in this case the following line
-        // isn't executed.
+        if (error)
+        {
+            auto info = error.value();
+            error.reset();
+            throw Exception(
+                ErrorCodes::CANNOT_PARSE_PROTOBUF_SCHEMA,
+                "Cannot parse '{}' file, found an error at line {}, column {}, {}",
+                info.filename,
+                std::to_string(info.line),
+                std::to_string(info.column),
+                info.message);
+        }
+
         assert(file_descriptor);
 
         if (with_envelope == WithEnvelope::No)
@@ -76,14 +87,19 @@ private:
     // Overrides google::protobuf::compiler::MultiFileErrorCollector:
     void AddError(const String & filename, int line, int column, const String & message) override
     {
-        throw Exception(ErrorCodes::CANNOT_PARSE_PROTOBUF_SCHEMA,
-            "Cannot parse '{}' file, found an error at line {}, column {}, {}",
-            filename, std::to_string(line), std::to_string(column), message);
+        /// Protobuf library code is not exception safe, we should
+        /// remember the error and throw it later from our side.
+        error = ErrorInfo{filename, line, column, message};
     }
 
     google::protobuf::compiler::DiskSourceTree disk_source_tree;
     google::protobuf::compiler::Importer importer;
     const WithEnvelope with_envelope;
+
+    /// proton: starts
+    /// We moved `ErrorInfo` to `ProtobufSchemas`.
+    std::optional<ErrorInfo> error;
+    /// proton: ends
 };
 
 
@@ -101,8 +117,10 @@ const google::protobuf::Descriptor * ProtobufSchemas::getMessageTypeForFormatSch
 /// Overrides google::protobuf::io::ErrorCollector:
 void ProtobufSchemas::AddError(int line, google::protobuf::io::ColumnNumber column, const std::string & message)
 {
-    throw Exception(ErrorCodes::CANNOT_PARSE_PROTOBUF_SCHEMA,
-        "Cannot parse schema, found an error at line {}, column {}, error: {}", line, column, message);
+    /// Protobuf library code is not exception safe, we should
+    /// remember the error and throw it later from our side.
+    if (!error) /// Only remember the first error.
+        error = ErrorInfo{"", line, column, message};
 }
 
 void ProtobufSchemas::validateSchema(std::string_view schema)
@@ -114,6 +132,10 @@ void ProtobufSchemas::validateSchema(std::string_view schema)
 
     parser.RecordErrorsTo(this);
     parser.Parse(&tokenizer, &descriptor);
+
+    if (error)
+        throw Exception(ErrorCodes::CANNOT_PARSE_PROTOBUF_SCHEMA,
+            "Cannot parse schema, found an error at line {}, column {}, error: {}", error->line, error->column, error->message);
 }
 /// proton: ends
 

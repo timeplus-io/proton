@@ -60,6 +60,16 @@ public:
         Yes
     };
 
+    /// proton: starts
+    struct ErrorInfo
+    {
+        String filename;
+        int line;
+        int column;
+        String message;
+    };
+    /// proton: ends
+
     static ProtobufSchemas & instance();
 
     /// Parses the format schema, then parses the corresponding proto file, and returns the descriptor of the message type.
@@ -77,6 +87,10 @@ private:
     class ImporterWithSourceTree;
     std::unordered_map<String, std::unique_ptr<ImporterWithSourceTree>> importers;
     std::mutex mutex;
+
+    /// proton: starts
+    std::optional<ErrorInfo> error;
+    /// proton: ends
 };
 
 }
