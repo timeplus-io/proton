@@ -147,31 +147,9 @@ namespace
     // Should we pack repeated values while storing them.
     bool shouldPackRepeated(const FieldDescriptor & field_descriptor)
     {
-        if (!field_descriptor.is_repeated())
-            return false;
-        switch (field_descriptor.type())
-        {
-            case FieldTypeId::TYPE_INT32:
-            case FieldTypeId::TYPE_UINT32:
-            case FieldTypeId::TYPE_SINT32:
-            case FieldTypeId::TYPE_INT64:
-            case FieldTypeId::TYPE_UINT64:
-            case FieldTypeId::TYPE_SINT64:
-            case FieldTypeId::TYPE_FIXED32:
-            case FieldTypeId::TYPE_SFIXED32:
-            case FieldTypeId::TYPE_FIXED64:
-            case FieldTypeId::TYPE_SFIXED64:
-            case FieldTypeId::TYPE_FLOAT:
-            case FieldTypeId::TYPE_DOUBLE:
-            case FieldTypeId::TYPE_BOOL:
-            case FieldTypeId::TYPE_ENUM:
-                break;
-            default:
-                return false;
-        }
-        if (field_descriptor.options().has_packed())
-            return field_descriptor.options().packed();
-        return field_descriptor.file()->syntax() == google::protobuf::FileDescriptor::SYNTAX_PROTO3;
+        /// proton: starts
+        return field_descriptor.is_packed();
+        /// proton: ends
     }
 
     WriteBuffer & writeIndent(WriteBuffer & out, size_t size) { return out << String(size * 4, ' '); }
