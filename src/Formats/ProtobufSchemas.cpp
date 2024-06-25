@@ -2,7 +2,6 @@
 
 #if USE_PROTOBUF
 #    include <Common/Exception.h>
-#    include <Common/LRUCache.h>
 #    include <Formats/FormatSchemaInfo.h>
 #    include <Formats/KafkaSchemaRegistry.h>
 #    include <Formats/ProtobufSchemas.h>
