@@ -71,6 +71,8 @@ public:
     /// proton: ends
 
     static ProtobufSchemas & instance();
+    // Clear cached protobuf schemas
+    void clear();
 
     /// Parses the format schema, then parses the corresponding proto file, and returns the descriptor of the message type.
     /// The function never returns nullptr, it throws an exception if it cannot load or parse the file.
