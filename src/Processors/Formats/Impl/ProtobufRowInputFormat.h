@@ -98,9 +98,13 @@ private:
 class ProtobufSchemaWriter : public IExternalSchemaWriter
 {
 public:
-    explicit ProtobufSchemaWriter(std::string_view schema_body_, const FormatSettings & settings_);
+    explicit ProtobufSchemaWriter(const FormatSettings & settings_);
 
-    void validate() override;
+    void validate(std::string_view schema_body) override;
+
+protected:
+    void onReplaced() override;
+    void onDeleted() override;
 };
 /// proton: ends
 

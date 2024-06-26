@@ -1067,12 +1067,12 @@ DataTypePtr AvroSchemaReader::avroNodeToDataType(avro::NodePtr node)
 }
 
 /// proton: starts
-AvroSchemaWriter::AvroSchemaWriter(std::string_view schema_body_, const FormatSettings & settings_)
-    : IExternalSchemaWriter("Avro", schema_body_, settings_)
+AvroSchemaWriter::AvroSchemaWriter(const FormatSettings & settings)
+    : IExternalSchemaWriter("Avro", settings)
 {
 }
 
-void AvroSchemaWriter::validate()
+void AvroSchemaWriter::validate(std::string_view schema_body)
 {
     try
     {

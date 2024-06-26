@@ -60,16 +60,6 @@ public:
         Yes
     };
 
-    /// proton: starts
-    struct ErrorInfo
-    {
-        String filename;
-        int line;
-        int column;
-        String message;
-    };
-    /// proton: ends
-
     static ProtobufSchemas & instance();
     // Clear cached protobuf schemas
     void clear();
@@ -79,8 +69,6 @@ public:
     const google::protobuf::Descriptor * getMessageTypeForFormatSchema(const FormatSchemaInfo & info, WithEnvelope with_envelope);
 
     /// proton: starts
-    void AddError(int line, google::protobuf::io::ColumnNumber column, const std::string & message) override;
-
     /// Validates the given schema and throw a DB::Exception if the schema is invalid.
     /// The exception will contain the first error encountered when validating the schema, i.e. there could be more errors.
     void validateSchema(std::string_view schema);

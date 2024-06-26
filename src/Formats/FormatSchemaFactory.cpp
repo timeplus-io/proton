@@ -1,11 +1,11 @@
 #include <Formats/FormatFactory.h>
 #include <Formats/FormatSchemaFactory.h>
 #include <Formats/FormatSchemaInfo.h>
-#include <Formats/ProtobufSchemas.h>
 #include <IO/ReadBufferFromString.h>
 #include <Processors/Formats/ISchemaWriter.h>
 
 #include <format>
+#include <fstream>
 
 namespace DB
 {
@@ -42,12 +42,12 @@ void FormatSchemaFactory::registerSchema(const String & schema_name, const Strin
     format_settings.schema.is_server = true;
 
     std::lock_guard lock(mutex);
-    auto writer = FormatFactory::instance().getExternalSchemaWriter(format, schema_body, context, format_settings);
+    auto writer = FormatFactory::instance().getExternalSchemaWriter(format, context, format_settings);
     assert(writer); /* confirmed with checkSchemaType */
 
     try
     {
-        writer->validate();
+        writer->validate(schema_body);
     }
     catch (DB::Exception & e)
     {
@@ -55,13 +55,12 @@ void FormatSchemaFactory::registerSchema(const String & schema_name, const Strin
         e.rethrow();
     }
 
-
-    auto result = writer->write(exists_op == ExistsOP::Replace);
+    auto result = writer->write(schema_body, exists_op == ExistsOP::Replace);
     if (!result && exists_op == ExistsOP::Throw)
         throw Exception(ErrorCodes::FORMAT_SCHEMA_ALREADY_EXISTS, "Format schema {} of type {} already exists", schema_name, format);
 }
 
-void FormatSchemaFactory::unregisterSchema(const String & schema_name, const String & format, bool throw_if_not_exists, const ContextPtr & context)
+void FormatSchemaFactory::unregisterSchema(const String & schema_name, const String & format, bool throw_if_not_exists, ContextPtr & context)
 {
     assert(!schema_name.empty());
 
@@ -87,8 +86,9 @@ void FormatSchemaFactory::unregisterSchema(const String & schema_name, const Str
 
     std::filesystem::remove(schema_path);
 
-    if (format.empty() || format == "Protobuf")
-        ProtobufSchemas::instance().clear();
+    auto writer = FormatFactory::instance().getExternalSchemaWriter(format, context, format_settings);
+    assert(writer); /* confirmed with checkSchemaType */
+    writer->onDeleted();
 }
 
 std::vector<FormatSchemaFactory::SchemaEntry> FormatSchemaFactory::getSchemasList(const String & format, const ContextPtr & context) const

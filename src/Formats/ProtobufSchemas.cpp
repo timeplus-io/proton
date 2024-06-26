@@ -102,10 +102,15 @@ private:
     google::protobuf::compiler::Importer importer;
     const WithEnvelope with_envelope;
 
-    /// proton: starts
-    /// We moved `ErrorInfo` to `ProtobufSchemas`.
+    struct ErrorInfo
+    {
+        String filename;
+        int line;
+        int column;
+        String message;
+    };
+
     std::optional<ErrorInfo> error;
-    /// proton: ends
 };
 
 
@@ -123,33 +128,41 @@ const google::protobuf::Descriptor * ProtobufSchemas::getMessageTypeForFormatSch
 namespace
 {
 
-class ErrorCollector : public google::protobuf::io::ErrorCollector
+class ErrorCollectorImpl : public google::protobuf::io::ErrorCollector
 {
 public:
-    ErrorCollector() = default;
+    struct ErrorInfo
+    {
+        int line;
+        int column;
+        String message;
+    };
+
+    ErrorCollectorImpl() = default;
 
     void AddError(int line, google::protobuf::io::ColumnNumber column, const std::string & message) override
     {
         /// Protobuf library code is not exception safe, we should
         /// remember the error and throw it later from our side.
         if (!error_) /// Only remember the first error.
-            error_ = {"", line, column, message};
+            error_ = {line, column, message};
     }
 
-    std::optional<ProtobufSchemas::ErrorInfo> error()
+    std::optional<ErrorInfo> error()
     {
         return error_;
     }
 
 private:
-    std::optional<ProtobufSchemas::ErrorInfo> error_;
+
+    std::optional<ErrorInfo> error_;
 };
 
 }
 
 void ProtobufSchemas::validateSchema(std::string_view schema)
 {
-    DB::ErrorCollector error_collector{};
+    ErrorCollectorImpl error_collector{};
 
     google::protobuf::io::ArrayInputStream input{schema.data(), static_cast<int>(schema.size())};
     google::protobuf::io::Tokenizer tokenizer(&input, &error_collector);
@@ -158,8 +171,6 @@ void ProtobufSchemas::validateSchema(std::string_view schema)
 
     parser.RecordErrorsTo(&error_collector);
 
-    std::lock_guard lock(mutex);
-    error.reset();
     parser.Parse(&tokenizer, &descriptor);
 
     if (auto error = error_collector.error(); error)

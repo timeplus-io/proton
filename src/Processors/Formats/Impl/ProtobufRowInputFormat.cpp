@@ -320,14 +320,24 @@ bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadE
     return true;
 }
 
-ProtobufSchemaWriter::ProtobufSchemaWriter(std::string_view schema_body_, const FormatSettings & settings_)
-    : IExternalSchemaWriter("Protobuf", schema_body_, settings_)
+ProtobufSchemaWriter::ProtobufSchemaWriter(const FormatSettings & settings)
+    : IExternalSchemaWriter("Protobuf", settings)
 {
 }
 
-void ProtobufSchemaWriter::validate()
+void ProtobufSchemaWriter::validate(std::string_view schema_body)
 {
     ProtobufSchemas::instance().validateSchema(schema_body);
+}
+
+void ProtobufSchemaWriter::onReplaced()
+{
+    ProtobufSchemas::instance().clear();
+}
+
+void ProtobufSchemaWriter::onDeleted()
+{
+    ProtobufSchemas::instance().clear();
 }
 /// proton: ends
 

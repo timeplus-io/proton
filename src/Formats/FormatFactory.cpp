@@ -1,6 +1,5 @@
 #include <Formats/FormatFactory.h>
 
-#include <algorithm>
 #include <Core/Settings.h>
 #include <Formats/FormatSettings.h>
 #include <Interpreters/Context.h>
@@ -582,7 +581,6 @@ bool FormatFactory::checkIfFormatHasExternalSchemaWriter(const String & name)
 
 ExternalSchemaWriterPtr FormatFactory::getExternalSchemaWriter(
     const String & name,
-    std::string_view body,
     ContextPtr & context,
     const std::optional<FormatSettings> & _format_settings) const
 {
@@ -591,7 +589,7 @@ ExternalSchemaWriterPtr FormatFactory::getExternalSchemaWriter(
         throw Exception(ErrorCodes::LOGICAL_ERROR, "FormatFactory: Format {} doesn't support schema creation.", name);
 
     auto format_settings = _format_settings ? *_format_settings : getFormatSettings(context);
-    return external_schema_writer_creator(body, format_settings);
+    return external_schema_writer_creator(format_settings);
 }
 /// proton: ends
 

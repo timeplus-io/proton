@@ -198,9 +198,9 @@ private:
 class AvroSchemaWriter : public IExternalSchemaWriter
 {
 public:
-    explicit AvroSchemaWriter(std::string_view schema_body_, const FormatSettings & settings_);
+    explicit AvroSchemaWriter(const FormatSettings & settings_);
 
-    void validate() override;
+    void validate(std::string_view schema_body) override;
 };
 /// proton: ends
 
