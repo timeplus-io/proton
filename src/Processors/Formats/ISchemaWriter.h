@@ -12,9 +12,9 @@ namespace DB
 class IExternalSchemaWriter
 {
 public:
-    IExternalSchemaWriter(const String & format, const FormatSettings & settings)
-        : schema_info(settings.schema.format_schema, format, false, settings.schema.is_server, settings.schema.format_schema_path)
-        {}
+    explicit IExternalSchemaWriter(FormatSettings settings_)
+    : settings(std::move(settings_))
+    {}
 
     virtual ~IExternalSchemaWriter() = default;
 
@@ -26,6 +26,7 @@ public:
     /// It throws exceptions if it fails to write.
     bool write(std::string_view schema_body, bool replace_if_exist)
     {
+        auto schema_info = getSchemaInfo();
         auto already_exists = std::filesystem::exists(schema_info.absoluteSchemaPath());
         if (already_exists && !replace_if_exist)
             return false;
@@ -42,10 +43,17 @@ public:
     virtual void onDeleted() {}
 
 protected:
+    virtual String getFormatName() const = 0;
+
     /// A callback will be called when an existing schema gets replaced.
     virtual void onReplaced() {}
 
-    FormatSchemaInfo schema_info;
+    FormatSchemaInfo getSchemaInfo() const
+    {
+        return {settings.schema.format_schema, getFormatName(), false, settings.schema.is_server, settings.schema.format_schema_path};
+    }
+
+    FormatSettings settings;
 };
 
 }

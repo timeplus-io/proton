@@ -201,6 +201,9 @@ public:
     explicit AvroSchemaWriter(const FormatSettings & settings_);
 
     void validate(std::string_view schema_body) override;
+
+protected:
+    String getFormatName() const override;
 };
 /// proton: ends
 

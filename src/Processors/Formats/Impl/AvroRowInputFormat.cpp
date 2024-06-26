@@ -1067,9 +1067,14 @@ DataTypePtr AvroSchemaReader::avroNodeToDataType(avro::NodePtr node)
 }
 
 /// proton: starts
-AvroSchemaWriter::AvroSchemaWriter(const FormatSettings & settings)
-    : IExternalSchemaWriter("Avro", settings)
+AvroSchemaWriter::AvroSchemaWriter(const FormatSettings & settings_)
+    : IExternalSchemaWriter(settings_)
 {
+}
+
+String AvroSchemaWriter::getFormatName() const
+{
+    return "Avro";
 }
 
 void AvroSchemaWriter::validate(std::string_view schema_body)
@@ -1130,8 +1135,8 @@ void registerAvroSchemaReader(FormatFactory & factory)
     /// proton: starts
     factory.registerSchemaFileExtension("avsc", "Avro");
 
-    factory.registerExternalSchemaWriter("Avro", [](std::string_view schema_body, const FormatSettings & settings) {
-        return std::make_shared<AvroSchemaWriter>(schema_body, settings);
+    factory.registerExternalSchemaWriter("Avro", [](const FormatSettings & settings) {
+        return std::make_shared<AvroSchemaWriter>(settings);
     });
     /// proton: ends
 }

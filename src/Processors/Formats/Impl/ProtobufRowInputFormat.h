@@ -103,6 +103,7 @@ public:
     void validate(std::string_view schema_body) override;
 
 protected:
+    String getFormatName() const override;
     void onReplaced() override;
     void onDeleted() override;
 };

@@ -579,17 +579,16 @@ bool FormatFactory::checkIfFormatHasExternalSchemaWriter(const String & name)
     return static_cast<bool>(target.external_schema_writer_creator);
 }
 
-ExternalSchemaWriterPtr FormatFactory::getExternalSchemaWriter(
-    const String & name,
+ExternalSchemaWriterPtr FormatFactory::getExternalSchemaWriter(const String & name,
     ContextPtr & context,
-    const std::optional<FormatSettings> & _format_settings) const
+    std::optional<FormatSettings> _format_settings) const
 {
     const auto & external_schema_writer_creator = dict.at(name).external_schema_writer_creator;
     if (!external_schema_writer_creator)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "FormatFactory: Format {} doesn't support schema creation.", name);
 
     auto format_settings = _format_settings ? *_format_settings : getFormatSettings(context);
-    return external_schema_writer_creator(format_settings);
+    return external_schema_writer_creator(std::move(format_settings));
 }
 /// proton: ends
 

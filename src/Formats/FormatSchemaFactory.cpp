@@ -42,7 +42,7 @@ void FormatSchemaFactory::registerSchema(const String & schema_name, const Strin
     format_settings.schema.is_server = true;
 
     std::lock_guard lock(mutex);
-    auto writer = FormatFactory::instance().getExternalSchemaWriter(format, context, format_settings);
+    auto writer = FormatFactory::instance().getExternalSchemaWriter(format, context, std::move(format_settings));
     assert(writer); /* confirmed with checkSchemaType */
 
     try
@@ -86,7 +86,13 @@ void FormatSchemaFactory::unregisterSchema(const String & schema_name, const Str
 
     std::filesystem::remove(schema_path);
 
-    auto writer = FormatFactory::instance().getExternalSchemaWriter(format, context, format_settings);
+    String format_name = format;
+    if (format_name.empty())
+        format_name = FormatFactory::instance().getFormatFromSchemaFileName(schema_path);
+
+    if (format_name.empty())
+        return;
+    auto writer = FormatFactory::instance().getExternalSchemaWriter(format_name, context, std::move(format_settings));
     assert(writer); /* confirmed with checkSchemaType */
     writer->onDeleted();
 }
