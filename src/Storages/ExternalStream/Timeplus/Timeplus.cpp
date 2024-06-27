@@ -72,16 +72,16 @@ Timeplus::Timeplus(IStorage * storage, StorageInMemoryMetadata & storage_metadat
         storage->getStorageID(),
         columns,
         ConstraintsDescription{},
-        String{},
+        /*comment=*/ String{},
         remote_stream_id.database_name,
         remote_stream_id.table_name,
-        String{},
+        /*cluster_name_=*/ String{},
         context,
-        /*sharding_key=*/ nullptr, /// FIXME
-        String{},
-        String{},
+        /*sharding_key=*/ nullptr, /// TODO: issues#782
+        /*storage_policy_name_=*/ String{},
+        /*relative_data_path_=*/ String{},
         DistributedSettings{},
-        false,
+        /*attach_=*/ false,
         cluster);
 }
 
@@ -101,25 +101,23 @@ void Timeplus::read(
     auto nested_snapshot = storage_ptr->getStorageSnapshot(storage_ptr->getInMemoryMetadataPtr(), context_);
     storage_ptr->read(query_plan, column_names, nested_snapshot, query_info, context_,
                               processed_stage, max_block_size, num_streams);
-    bool add_conversion{true}; /// TBD
-    if (add_conversion)
-    {
-        auto from_header = query_plan.getCurrentDataStream().header;
-        auto to_header = getHeaderForProcessingStage(column_names, storage_snapshot,
-                                                     query_info, context_, processed_stage);
 
-        auto convert_actions_dag = ActionsDAG::makeConvertingActions(
-                from_header.getColumnsWithTypeAndName(),
-                to_header.getColumnsWithTypeAndName(),
-                ActionsDAG::MatchColumnsMode::Name);
+    /// add_conversion
+    auto from_header = query_plan.getCurrentDataStream().header;
+    auto to_header = getHeaderForProcessingStage(column_names, storage_snapshot,
+                                                 query_info, context_, processed_stage);
 
-        auto step = std::make_unique<ExpressionStep>(
-            query_plan.getCurrentDataStream(),
-            convert_actions_dag);
+    auto convert_actions_dag = ActionsDAG::makeConvertingActions(
+            from_header.getColumnsWithTypeAndName(),
+            to_header.getColumnsWithTypeAndName(),
+            ActionsDAG::MatchColumnsMode::Name);
 
-        step->setStepDescription("Converting columns");
-        query_plan.addStep(std::move(step));
-    }
+    auto step = std::make_unique<ExpressionStep>(
+        query_plan.getCurrentDataStream(),
+        convert_actions_dag);
+
+    step->setStepDescription("Converting columns");
+    query_plan.addStep(std::move(step));
 }
 
 SinkToStoragePtr Timeplus::write(
@@ -129,11 +127,9 @@ SinkToStoragePtr Timeplus::write(
 {
     auto cached_structure = metadata_snapshot->getSampleBlock();
     auto actual_structure = storage_ptr->getInMemoryMetadataPtr()->getSampleBlock();
-    auto add_conversion{true}; /// TBD
-    if (!blocksHaveEqualStructure(actual_structure, cached_structure) && add_conversion)
-    {
-        throw Exception("Source storage and table function have different structure", ErrorCodes::INCOMPATIBLE_COLUMNS);
-    }
+    if (!blocksHaveEqualStructure(actual_structure, cached_structure))
+        throw Exception(ErrorCodes::INCOMPATIBLE_COLUMNS, "Source storage and table function have different structure");
+
     return storage_ptr->write(query, metadata_snapshot, context_);
 }
 
