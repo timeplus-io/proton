@@ -17,14 +17,11 @@ extern const int INVALID_SETTING_VALUE;
 namespace
 {
 
-StorageID getRemoteStreamStorageID(const StorageID & externalStreamStorageID, const ExternalStreamSettings & settings)
+StorageID getRemoteStreamStorageID(const ExternalStreamSettings & settings)
 {
-    auto db = settings.db.value;
-    auto stream = settings.stream.value;
-    return {
-        db.empty() ? externalStreamStorageID.getDatabaseName() : db,
-        stream.empty() ? externalStreamStorageID.getTableName() : stream
-    };
+    if (settings.stream.value.empty())
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Setting `stream` cannot be empty.");
+    return {settings.db.value, settings.stream.value};
 }
 
 }
@@ -32,28 +29,26 @@ StorageID getRemoteStreamStorageID(const StorageID & externalStreamStorageID, co
 namespace ExternalStream
 {
 
-Proton::Proton(IStorage * storage, StorageInMemoryMetadata & storage_metadata, std::unique_ptr<ExternalStreamSettings> settings_, bool attach, ContextPtr context)
+Proton::Proton(IStorage * storage, StorageInMemoryMetadata & storage_metadata, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context)
 : StorageProxy(storage->getStorageID())
-, remote_stream_id(getRemoteStreamStorageID(storage->getStorageID(), *settings_))
+, remote_stream_id(getRemoteStreamStorageID(*settings_))
 , logger(&Poco::Logger::get(getName()))
 {
-    LOG_INFO(logger, "attach = {}", attach);
-
     String hosts = settings_->hosts.value;
     if (hosts.empty())
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Setting `hosts` cannot be empty.");
 
-    std::vector<String> shards = parseRemoteDescription(hosts, 0, hosts.size(), ',', /*max_addresses=*/ 10);
+    auto secure = settings_->secure;
+    auto maybe_secure_port = context->getTCPPortSecure();
+    auto default_port = secure ? (maybe_secure_port ? *maybe_secure_port : DBMS_DEFAULT_SECURE_PORT) : context->getTCPPort();
+
+    auto addresses = parseRemoteDescriptionForExternalDatabase(hosts, /*max_addresses=*/ 10, /*default_port=*/ default_port);
 
     std::vector<std::vector<String>> names;
-    names.reserve(shards.size());
-    for (const auto & shard : shards)
-        names.push_back(parseRemoteDescription(shard, 0, shard.size(), '|', /*max_addresses=*/ 10));
+    names.reserve(addresses.size());
+    for (const auto & addr : addresses)
+        names.push_back({fmt::format("{}:{}", addr.first, addr.second)});
 
-    auto maybe_secure_port = context->getTCPPortSecure();
-
-    auto secure = settings_->secure;
-    /// FIXME
     bool treat_local_as_remote = false;
     bool treat_local_port_as_remote = context->getApplicationType() == Context::ApplicationType::LOCAL;
 
@@ -63,7 +58,7 @@ Proton::Proton(IStorage * storage, StorageInMemoryMetadata & storage_metadata, s
         names,
         /*username=*/ user.empty() ? "default" : user,
         /*password=*/ settings_->password.value,
-        (secure ? (maybe_secure_port ? *maybe_secure_port : DBMS_DEFAULT_SECURE_PORT) : context->getTCPPort()),
+        default_port,
         /*true,*/ treat_local_as_remote,
         /*true,*/ treat_local_port_as_remote,
         secure);

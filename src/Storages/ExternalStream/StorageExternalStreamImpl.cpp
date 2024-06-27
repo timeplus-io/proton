@@ -11,22 +11,11 @@ namespace ErrorCodes
 extern const int CANNOT_CREATE_DIRECTORY;
 }
 
-namespace
-{
-StorageID getID(IStorage * storage) {
-    auto * logger = &Poco::Logger::get("getStorageID");
-    LOG_INFO(logger, "Called!");
-    return storage->getStorageID();
-}
-}
-
 StorageExternalStreamImpl::StorageExternalStreamImpl(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, const ContextPtr & context)
-    : IStorage(getID(storage))
+    : IStorage(storage->getStorageID())
     , settings(std::move(settings_))
     , tmpdir(fs::path(context->getConfigRef().getString("tmp_path", fs::temp_directory_path())) / "external_streams" / toString(getStorageID().uuid))
     {
-    auto * logger = &Poco::Logger::get("ExternalStreamImpl");
-    LOG_INFO(logger, "Creating!!!");
     /// Make it easier for people to ingest data from external streams. A lot of times people didn't see data coming
     /// only because the external stream does not have all the fields.
     if (!settings->input_format_skip_unknown_fields.changed)

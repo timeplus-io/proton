@@ -15,12 +15,13 @@ class Proton final : public StorageProxy
 {
 
 public:
-    Proton(IStorage * storage, StorageInMemoryMetadata & storage_metadata, std::unique_ptr<ExternalStreamSettings> settings_, bool attach, ContextPtr context);
+    Proton(IStorage * storage, StorageInMemoryMetadata & storage_metadata, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context);
     ~Proton() override = default;
 
     String getName() const override { return "TimeplusExternalStream"; }
     StoragePtr getNested() const override { return storage_ptr; }
 
+    bool squashInsert() const noexcept override { return false; }
     bool supportsSubcolumns() const override { return storage_ptr->supportsSubcolumns(); }
     bool supportsStreamingQuery() const override { return true; }
 

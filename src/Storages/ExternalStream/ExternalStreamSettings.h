@@ -39,7 +39,7 @@ class ASTStorage;
 
 #define TIMEPLUS_EXTERNAL_STREAM_SETTINGS(M) \
     M(String, hosts, "", "A remote server address or an expression that generates multiple addresses of remote servers. Format: host or host:port.", 0) \
-    M(String, db, "", "Database name.", 0) \
+    M(String, db, "default", "Database name.", 0) \
     M(String, stream, "", "Stream name. If not specified, The external stream name is used.", 0) \
     M(String, user, "", "User name. If not specified, `default` is be used.", 0) \
     M(Bool, secure, false, "Use secure connection.", 0)

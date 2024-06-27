@@ -43,7 +43,7 @@ ColumnsDescription getStructureOfRemoteTableInShard(
         }
 
         auto table_func_name = queryToString(table_func_ptr);
-        query = "DESC TABLE " + table_func_name;
+        query = "DESC STREAM " + table_func_name; /// proton: updated
     }
     else
     {
@@ -54,7 +54,7 @@ ColumnsDescription getStructureOfRemoteTableInShard(
         }
 
         /// Request for a table description
-        query = "DESC TABLE " + table_id.getFullTableName();
+        query = "DESC STREAM " + table_id.getFullTableName(); /// proton: updated
     }
 
     ColumnsDescription res;
