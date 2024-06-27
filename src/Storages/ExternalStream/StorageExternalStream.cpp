@@ -98,11 +98,13 @@ StorageExternalStream::StorageExternalStream(
     storage_metadata.setComment(comment);
     if (!columns_.empty())
         storage_metadata.setColumns(columns_);
+    /// Some external streams require the column information, thus we need to set the metadata before creating the stream.
     setInMemoryMetadata(storage_metadata);
 
     auto metadata = getInMemoryMetadata();
     auto stream = createExternalStream(this, std::move(external_stream_settings_), context_, engine_args, metadata, attach, external_stream_counter, std::move(context_));
     external_stream.swap(stream);
+    /// Some external streams fetch the structure in other ways, thus need to set the metadata again here in case it's updated.
     setInMemoryMetadata(metadata);
 }
 
