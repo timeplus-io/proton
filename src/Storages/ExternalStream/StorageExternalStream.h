@@ -2,8 +2,6 @@
 
 #include <Storages/IStorage.h>
 #include <Common/SettingsChanges.h>
-#include <Interpreters/getHeaderForProcessingStage.h>
-#include <Processors/QueryPlan/ExpressionStep.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
 #include <Storages/StorageProxy.h>
 
