@@ -3,7 +3,7 @@
 #include <Processors/QueryPlan/ExpressionStep.h>
 #include <Storages/Distributed/DistributedSettings.h>
 #include <Storages/StorageDistributed.h>
-#include <Storages/ExternalStream/Proton/Proton.h>
+#include <Storages/ExternalStream/Timeplus/Timeplus.h>
 
 namespace DB
 {
@@ -29,7 +29,7 @@ StorageID getRemoteStreamStorageID(const ExternalStreamSettings & settings)
 namespace ExternalStream
 {
 
-Proton::Proton(IStorage * storage, StorageInMemoryMetadata & storage_metadata, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context)
+Timeplus::Timeplus(IStorage * storage, StorageInMemoryMetadata & storage_metadata, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context)
 : StorageProxy(storage->getStorageID())
 , remote_stream_id(getRemoteStreamStorageID(*settings_))
 , logger(&Poco::Logger::get(getName()))
@@ -85,7 +85,7 @@ Proton::Proton(IStorage * storage, StorageInMemoryMetadata & storage_metadata, s
         cluster);
 }
 
-void Proton::read(
+void Timeplus::read(
         QueryPlan & query_plan,
         const Names & column_names,
         const StorageSnapshotPtr & storage_snapshot,
@@ -122,7 +122,7 @@ void Proton::read(
     }
 }
 
-SinkToStoragePtr Proton::write(
+SinkToStoragePtr Timeplus::write(
     const ASTPtr & query,
     const StorageMetadataPtr & metadata_snapshot,
     ContextPtr context_)

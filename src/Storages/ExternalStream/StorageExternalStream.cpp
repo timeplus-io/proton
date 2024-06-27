@@ -16,7 +16,7 @@
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 #include <Storages/ExternalStream/Kafka/Kafka.h>
-#include <Storages/ExternalStream/Proton/Proton.h>
+#include <Storages/ExternalStream/Timeplus/Timeplus.h>
 
 #include <re2/re2.h>
 #include <string>
@@ -67,7 +67,7 @@ StoragePtr createExternalStream(
         return std::make_unique<Kafka>(storage, std::move(settings), engine_args, attach, std::move(external_stream_counter), std::move(context_));
 
     if (settings->type.value == StreamTypes::TIMEPLUS)
-        return std::make_unique<ExternalStream::Proton>(storage, storage_metadata, std::move(settings), std::move(context_));
+        return std::make_unique<ExternalStream::Timeplus>(storage, storage_metadata, std::move(settings), std::move(context_));
 
 #ifdef OS_LINUX
     if (settings->type.value == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)

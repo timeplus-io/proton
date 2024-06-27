@@ -11,12 +11,12 @@ namespace DB
 namespace ExternalStream
 {
 
-class Proton final : public StorageProxy
+class Timeplus final : public StorageProxy
 {
 
 public:
-    Proton(IStorage * storage, StorageInMemoryMetadata & storage_metadata, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context);
-    ~Proton() override = default;
+    Timeplus(IStorage * storage, StorageInMemoryMetadata & storage_metadata, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context);
+    ~Timeplus() override = default;
 
     String getName() const override { return "TimeplusExternalStream"; }
     StoragePtr getNested() const override { return storage_ptr; }
