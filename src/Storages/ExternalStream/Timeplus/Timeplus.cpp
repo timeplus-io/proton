@@ -1,4 +1,5 @@
 #include <Common/parseRemoteDescription.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/getHeaderForProcessingStage.h>
 #include <Processors/QueryPlan/ExpressionStep.h>
 #include <Storages/Distributed/DistributedSettings.h>
@@ -29,7 +30,7 @@ StorageID getRemoteStreamStorageID(const ExternalStreamSettings & settings)
 namespace ExternalStream
 {
 
-Timeplus::Timeplus(IStorage * storage, StorageInMemoryMetadata & storage_metadata, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context)
+Timeplus::Timeplus(IStorage * storage, StorageInMemoryMetadata & storage_metadata, std::unique_ptr<ExternalStreamSettings> settings_, bool attach, ContextPtr context)
 : StorageProxy(storage->getStorageID())
 , remote_stream_id(getRemoteStreamStorageID(*settings_))
 , logger(&Poco::Logger::get(getName()))
@@ -65,7 +66,26 @@ Timeplus::Timeplus(IStorage * storage, StorageInMemoryMetadata & storage_metadat
 
     /// StorageDistributed supports mismatching structure of remote table, so we can use outdated structure for CREATE ... AS remote(...)
     /// without additional conversion in StorageTableFunctionProxy
-    auto columns = getStructureOfRemoteTable(*cluster, remote_stream_id, context, /*table_func_ptr=*/ nullptr);
+    ColumnsDescription columns;
+    try {
+        columns = getStructureOfRemoteTable(*cluster, remote_stream_id, context, /*table_func_ptr=*/ nullptr);
+    } catch (Exception & e)
+    {
+        if (!attach)
+            e.rethrow();
+
+        /// When attach, like proton restarts, it should not throw any exception,
+        /// otherwise proton will crash. It can't keep retrying neither, or it will
+        /// block proton becoming ready.
+        auto error_msg = fmt::format("Failed to get structure of remote stream: {}", e.message());
+        LOG_ERROR(logger, "{}", error_msg);
+
+        /// A stream can't have no columns, thus add a dummy column to show the error as comment.
+        auto col = ColumnDescription("_error", DataTypeFactory::instance().get(TypeIndex::String));
+        col.comment = error_msg;
+        columns.add(col);
+    }
+
     storage_metadata.setColumns(columns);
 
     storage_ptr = StorageDistributed::create(

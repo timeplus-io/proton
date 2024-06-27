@@ -15,7 +15,7 @@ class Timeplus final : public StorageProxy
 {
 
 public:
-    Timeplus(IStorage * storage, StorageInMemoryMetadata & storage_metadata, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context);
+    Timeplus(IStorage * storage, StorageInMemoryMetadata & storage_metadata, std::unique_ptr<ExternalStreamSettings> settings_, bool attach, ContextPtr context);
     ~Timeplus() override = default;
 
     String getName() const override { return "TimeplusExternalStream"; }
