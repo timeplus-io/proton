@@ -478,7 +478,7 @@ tests:
             query_id: '1364'
             depends_on_stream: test13_multishard_7
             query_type: stream
-            query: select sum_distinct(val), sum(val) from v2;
+            query: select sum_distinct(val), sum(val) from test13_multishard_7;
 
           - client: python
             query_type: table
