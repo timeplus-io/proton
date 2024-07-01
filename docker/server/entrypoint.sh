@@ -121,7 +121,7 @@ if [ -n "$(ls /docker-entrypoint-initdb.d/)" ] || [ -n "$PROTON_DB" ]; then
     # check if proton is ready to accept connections
     # will try to send ping proton via http_port (max 12 retries by default, with 1 sec timeout and 1 sec delay between retries)
     tries=${PROTON_INIT_TIMEOUT:-12}
-    while ! wget --spider -T 1 -q "http://127.0.0.1:$HTTP_PORT/ping" 2>/dev/null; do
+    while ! wget --spider -T 1 -q "http://127.0.0.1:$HTTP_PORT/timeplusd/ping" 2>/dev/null; do
         if [ "$tries" -le "0" ]; then
             echo >&2 'Proton init process failed.'
             exit 1

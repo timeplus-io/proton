@@ -1,6 +1,6 @@
 services:
   proton:
-     image: ghcr.io/timeplus-io/proton:1.5.8-rc
+     image: ghcr.io/timeplus-io/proton:latest
      pull_policy: always
      ports:
        - 3218:3218 #http port for JDBC driver, default streaming mode
