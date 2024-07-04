@@ -128,9 +128,9 @@ jobs:
     needs: [Build_Linux_X86_64, Build_Linux_Arm64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: c5.4xlarge
+      ec2-instance-type: c5.large
       ec2-image-id: ami-042a37e33a285c22b
-      submodules: 'recursive'
+      submodules: false
       command: |
         cd $GITHUB_WORKSPACE
 
