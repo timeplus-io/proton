@@ -220,7 +220,7 @@ public:
 
     ExternalSchemaWriterPtr getExternalSchemaWriter(
         const String & name,
-        ContextPtr & context,
+        const ContextPtr & context,
         std::optional<FormatSettings> format_settings = std::nullopt) const;
     /// proton: ends
 

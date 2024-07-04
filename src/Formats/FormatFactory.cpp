@@ -579,8 +579,9 @@ bool FormatFactory::checkIfFormatHasExternalSchemaWriter(const String & name)
     return static_cast<bool>(target.external_schema_writer_creator);
 }
 
-ExternalSchemaWriterPtr FormatFactory::getExternalSchemaWriter(const String & name,
-    ContextPtr & context,
+ExternalSchemaWriterPtr FormatFactory::getExternalSchemaWriter(
+    const String & name,
+    const ContextPtr & context,
     std::optional<FormatSettings> _format_settings) const
 {
     const auto & external_schema_writer_creator = dict.at(name).external_schema_writer_creator;

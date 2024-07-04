@@ -29,7 +29,7 @@ String basename(const std::filesystem::path & path)
 
 }
 
-void FormatSchemaFactory::registerSchema(const String & schema_name, const String & format, std::string_view schema_body, ExistsOP exists_op, ContextPtr & context)
+void FormatSchemaFactory::registerSchema(const String & schema_name, const String & format, std::string_view schema_body, ExistsOP exists_op, const ContextPtr & context)
 {
     assert(!schema_name.empty());
     assert(!format.empty());
@@ -60,7 +60,7 @@ void FormatSchemaFactory::registerSchema(const String & schema_name, const Strin
         throw Exception(ErrorCodes::FORMAT_SCHEMA_ALREADY_EXISTS, "Format schema {} of type {} already exists", schema_name, format);
 }
 
-void FormatSchemaFactory::unregisterSchema(const String & schema_name, const String & format, bool throw_if_not_exists, ContextPtr & context)
+void FormatSchemaFactory::unregisterSchema(const String & schema_name, const String & format, bool throw_if_not_exists, const ContextPtr & context)
 {
     assert(!schema_name.empty());
 
