@@ -221,7 +221,7 @@ public:
     ExternalSchemaWriterPtr getExternalSchemaWriter(
         const String & name,
         const ContextPtr & context,
-        std::optional<FormatSettings> format_settings = std::nullopt) const;
+        std::optional<FormatSettings> format_settings_ = std::nullopt) const;
     /// proton: ends
 
     /// Register schema readers for format its name.

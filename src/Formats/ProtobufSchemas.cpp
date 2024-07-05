@@ -57,8 +57,8 @@ public:
                 ErrorCodes::CANNOT_PARSE_PROTOBUF_SCHEMA,
                 "Cannot parse '{}' file, found an error at line {}, column {}, {}",
                 info.filename,
-                std::to_string(info.line),
-                std::to_string(info.column),
+                info.line,
+                info.column,
                 info.message);
         }
 
