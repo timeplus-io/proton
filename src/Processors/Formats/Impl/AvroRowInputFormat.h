@@ -198,13 +198,12 @@ private:
 class AvroSchemaWriter : public IExternalSchemaWriter
 {
 public:
-    explicit AvroSchemaWriter(std::string_view schema_body_, const FormatSettings & settings_);
+    explicit AvroSchemaWriter(const FormatSettings & settings_);
 
-    void validate() override;
-    bool write(bool replace_if_exist) override;
+    void validate(std::string_view schema_body) override;
 
-private:
-    FormatSchemaInfo schema_info;
+protected:
+    String getFormatName() const override;
 };
 /// proton: ends
 
