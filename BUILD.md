@@ -5,14 +5,14 @@
 ### Build with docker container
 
 ```sh
-./docker/packager/packager --package-type binary --docker-image-version clang-16 --proton-build --enable-proton-local --output-dir `pwd`/build_output
+./docker/packager/packager --package-type binary --docker-image-version clang-17 --proton-build --enable-proton-local --output-dir `pwd`/build_output
 ```
 
 ### Bare metal build
 
 #### Install toolchain
 
-- clang-16 /clang++-16 or above
+- clang-17 /clang++-17 or above
 - cmake 3.20 or above
 - ninja
 
@@ -20,12 +20,12 @@
 apt install git cmake ccache python3 ninja-build wget apt-transport-https apt-utils ca-certificates dnsutils gnupg iputils-ping lsb-release gpg curl software-properties-common
 ```
 
-install llvm-16 compiler
+install llvm-17 compiler
 
 ```sh
 wget https://apt.llvm.org/llvm.sh
 chmod +x llvm.sh
-sudo ./llvm.sh 16
+sudo ./llvm.sh 17
 ```
 
 #### Build
@@ -45,7 +45,7 @@ $ ninja
 
 #### Install toolchain
 
-- clang-16 /clang++-16 or above
+- clang-17 /clang++-17 or above
 - cmake 3.20 or above
 - ninja
 
@@ -66,7 +66,7 @@ $ ninja
 
 #### Install toolchain
 
-- clang-16 /clang++-16 or above
+- clang-17 /clang++-17 or above
 - cmake 3.20 or above
 - ninja
 
@@ -87,7 +87,7 @@ $ ninja
 
 #### Install toolchain
 
-- clang-16 /clang++-16 or above
+- clang-17 /clang++-17 or above
 - cmake 3.20 or above
 - ninja
 
@@ -104,15 +104,17 @@ $ ninja
 
 ### Build with docker container
 
+Not supported.
+
 ### Bare metal build
 
 #### Install toolchain
 
 We don't support build Proton by using Apple Clang. Please use `brew install llvm` to install
-clang-16 / clang++-16.
+clang-17 / clang++-17.
 
 
-- clang-16 /clang++-16 or above
+- clang-17 /clang++-17 or above
 - cmake 3.20 or above
 - ninja
 
@@ -128,6 +130,8 @@ $ ninja
 ## MacOS - Apple Silicon
 
 ### Build with docker container
+
+Not supported.
 
 ### Bare metal build
 
@@ -156,40 +160,11 @@ Build version 15C5042i
 ```
 
 
-Below's a concise version of the Xcode installation steps:
-
-
-
-##### Install Xcode Beta 15.1 Beta 2
-
-1. **Download Xcode Beta:**
-   Download Xcode 15.1 Beta 2 from the official apple xcode link or choose another version from [xcodereleases.com](https://xcodereleases.com/).
-
-2. **Install Xcode Beta:**
-   Extract the XIP file by double-clicking it and then drag the `Xcode-beta` app into the `/Applications` folder.
-
-3. **Select Xcode Beta Version:**
-   In the terminal, run:
-   ```shell
-   sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer
-   ```
-
-4. **Verify Installation:**
-   Check the version to ensure it's correctly installed:
-   ```shell
-   /usr/bin/xcodebuild -version
-   ```
-   You should see:
-   ```plaintext
-   Xcode 15.1
-   Build version 15C5042i
-   ```
-
 #### Step 2: Install Dependencies with Homebrew
 
-Proton build is not supported with Apple Clang. Use Homebrew to install LLVM version 16 instead:
+Proton build is not supported with Apple Clang. Use Homebrew to install LLVM version 17 instead:
 ```shell
-brew install llvm@16
+brew install llvm@17
 ```
 
 First, if you haven't installed Homebrew yet, follow the instructions at [https://brew.sh/](https://brew.sh/).
@@ -197,16 +172,16 @@ First, if you haven't installed Homebrew yet, follow the instructions at [https:
 Next, install the required dependencies using the following commands:
 ```shell
 brew update
-brew install ccache cmake ninja libtool gettext llvm@16 gcc binutils grep findutils libiconv
+brew install ccache cmake ninja libtool gettext llvm@17 gcc binutils grep findutils libiconv
 ```
 
 #### Step 3: Build Proton Manually
 
 Set up the environment variables required for building Proton:
 ```shell
-export PATH=$(brew --prefix llvm@16)/bin:$PATH
-export CC=$(brew --prefix llvm@16)/bin/clang
-export CXX=$(brew --prefix llvm@16)/bin/clang++
+export PATH=$(brew --prefix llvm@17)/bin:$PATH
+export CC=$(brew --prefix llvm@17)/bin/clang
+export CXX=$(brew --prefix llvm@17)/bin/clang++
 ```
 
 Clone the Proton repository and initiate the build process:
