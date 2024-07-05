@@ -41,11 +41,14 @@ void perf(std::string_view map_name)
                   << " insert/second, anti_opt=" << s << "\n";
     }
 }
+
+template<typename Key, bool Flag>
+using CountedValueMap = DB::Streaming::CountedValueMap<Key, Flag, void>;
 }
 
 int main(int, char **)
 {
-    perf<DB::Streaming::CountedValueMap>("absl::btree_map");
+    perf<CountedValueMap>("absl::btree_map");
     perf<DB::Streaming::CountedValueMapStd>("std::map");
 
     return 0;
