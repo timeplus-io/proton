@@ -4,17 +4,22 @@ In my last [blog post](https://www.timeplus.com/post/analyzing-nginx-access-logs
 This article will remedy the lack of rich visualizations by showing how to do so using open source tools like [Grafana](https://grafana.com/) and [Metabase](https://www.metabase.com/).
 
 
-## Introduction
-The previous article used the following technologies: 
+## Prerequisities
+In addition to Timeplus Proton, the previous article used the following technologies: 
 * [Amazon Virtual Private Cloud](https://aws.amazon.com/vpc/) (VPC);
 * [Amazon Elastic Compute Cloud](https://aws.amazon.com/ec2/) (EC2);
 * [NFS](https://en.wikipedia.org/wiki/Network_File_System);
+* [IPinfo](https://ipinfo.io/);
 * [Ghost](https://ghost.org/);
 * [Nginx](https://nginx.org/en/).
   
-The first two products require access to an AWS account, if you didn't have one already. The last two products need to have been running in production, in order to have meaningful access log data to experiment with. 
+The first two require access to an AWS account, if you didn't have one already. The last two products need to have been running in production, in order to have meaningful access log data to experiment with. 
 
-To make this article super easy to follow, while building on the clear analysis shown in the previous article, you only need to have [Docker](https://docs.docker.com/engine/install/) installed. Timeplus Proton has a handy feature [`CREATE RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) which we will use to generate all the access log data that we will use for experimentation in this article.
+To make this article super easy to follow, while building on the same analysis used in the previous article, you only need: 
+* [Docker](https://docs.docker.com/engine/install/);
+* [IPinfo](https://ipinfo.io/). 
+
+Timeplus Proton has a handy feature [`RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) which we will use to generate all the access log data that we will use for experimentation in this article.
 
 Let's dive in!
 
