@@ -4,6 +4,8 @@
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
 
+#include <pulsar/Client.h>
+
 namespace Poco
 {
 class Logger;
@@ -35,6 +37,12 @@ public:
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
         size_t num_streams) override;
+
+    SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) override;
+
+    const String & serviceUrl() const { return settings->service_url.value; }
+    const String & topic() const { return settings->topic.value; }
+    pulsar::Consumer & getConsumer();
 private:
     void calculateDataFormat(const IStorage * storage);
     void cacheVirtualColumnNamesAndTypes();
@@ -44,6 +52,7 @@ private:
     Poco::Logger * logger;
     ExternalStreamCounterPtr external_stream_counter;
     String data_format;
+    pulsar::Client* client;
 
     NamesAndTypesList virtual_column_names_and_types;
 

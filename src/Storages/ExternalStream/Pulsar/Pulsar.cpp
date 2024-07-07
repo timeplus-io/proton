@@ -9,6 +9,7 @@
 #include <Parsers/ExpressionListParsers.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/ExternalStream/Pulsar/Pulsar.h>
+#include <Storages/ExternalStream/Pulsar/PulsarSink.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Common/ProtonCommon.h>
@@ -99,13 +100,55 @@ void Pulsar::validate()
 {
     std::scoped_lock lock(shards_mutex);
     /// We haven't describe the topic yet
-    pulsar::Client client(settings->service_url.value);
+    pulsar::Client _client(settings->service_url.value);
 
     std::vector<std::string> partitions;
-    pulsar::Result res = client.getPartitionsForTopic(settings->topic, partitions);
+    pulsar::Result res = _client.getPartitionsForTopic(settings->topic, partitions);
     if (res != pulsar::ResultOk) {
         throw Exception(ErrorCodes::RESOURCE_NOT_FOUND, "{} topic doesn't exist", settings->topic.value);
     }
+}
+
+//std::vector<Int64> Pulsar::getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const
+//{
+//    assert(seek_to_info);
+//    seek_to_info->replicateForShards(shards_to_query.size());
+//    if (!seek_to_info->isTimeBased())
+//    {
+//        return seek_to_info->getSeekPoints();
+//    }
+//    else
+//    {
+//        std::vector<klog::PartitionTimestamp> partition_timestamps;
+//        partition_timestamps.reserve(shards_to_query.size());
+//        auto seek_timestamps{seek_to_info->getSeekPoints()};
+//        assert(shards_to_query.size() == seek_timestamps.size());
+//
+//        for (auto [shard, timestamp] : std::ranges::views::zip(shards_to_query, seek_timestamps))
+//            partition_timestamps.emplace_back(shard, timestamp);
+//
+//        return getConsumer()->offsetsForTimestamps(settings->topic.value, partition_timestamps);
+//    }
+//}
+
+pulsar::Consumer & Pulsar::getConsumer() {
+    static pulsar::Consumer consumer;
+
+    if (consumer.isConnected()) {
+        LOG_INFO(logger, "Consumer is already connected!");
+        return consumer;
+    }
+
+    LOG_INFO(logger, "Consumer is already connected!");
+
+    pulsar::ConsumerConfiguration config;
+    config.setSubscriptionInitialPosition(pulsar::InitialPositionEarliest);
+    client = new pulsar::Client(serviceUrl());
+    pulsar::Result result = client->subscribe(topic(), "consumer-1", config, consumer);
+    if (result != pulsar::ResultOk) {
+        LOG_ERROR(logger, "Failed to initialize consumer");
+    }
+    return consumer;
 }
 
 Pipe Pulsar::read(
@@ -119,17 +162,26 @@ Pipe Pulsar::read(
 {
     Block header;
 
-    if (!column_names.empty())
+    LOG_INFO(logger, "In Pulsar::read");
+    if (!column_names.empty()) {
+        for (const std::string& s: column_names) {
+            LOG_INFO(logger, "column_name: {}", s);
+        }
         header = storage_snapshot->getSampleBlockForColumns(column_names);
-    else
-    {
-        auto physical_columns{storage_snapshot->getColumns(GetColumnsOptions(GetColumnsOptions::Ordinary))};
-        const auto & any_one_column = physical_columns.front();
-        header.insert({any_one_column.type->createColumn(), any_one_column.type, any_one_column.name});
+    } else {
+        header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_APPEND_TIME});
     }
+    // auto offsets = 0; // getOffsets(query_info.seek_to_info, shards_to_query);
     return Pipe(std::make_shared<PulsarSource>(
-        this, std::move(header), storage_snapshot, std::move(context), logger, external_stream_counter, max_block_size));
+        this, header, storage_snapshot, std::move(context), logger, external_stream_counter, max_block_size));
 }
-}
+
+SinkToStoragePtr Pulsar::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr context)
+{
+    /// always validate before actual use
+    validate();
+    return std::make_shared<PulsarSink>(
+        this, metadata_snapshot->getSampleBlock(), shards, message_key_ast, context, logger, external_stream_counter);
+}}
 
 

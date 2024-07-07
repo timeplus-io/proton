@@ -116,7 +116,10 @@ void SerializationString::deserializeBinary(IColumn & column, ReadBuffer & istr,
 
 void SerializationString::serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const
 {
+    std::cout << "IN serializeBinaryBulk" << std::endl;
+    std::cout << "Column name: " << column.getName() << std::endl;
     const ColumnString & column_string = typeid_cast<const ColumnString &>(column);
+    std::cout << "Converted to columnString!" << std::endl;
     const ColumnString::Chars & data = column_string.getChars();
     const ColumnString::Offsets & offsets = column_string.getOffsets();
 

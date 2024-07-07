@@ -66,6 +66,7 @@ static void writeData(const ISerialization & serialization, const ColumnPtr & co
 
 void NativeWriter::write(const Block & block)
 {
+    // LOG_INFO(log, "IN NativeWriter");
     /// Additional information about the block.
     if (client_revision > 0)
         block.info.write(ostr);
@@ -92,6 +93,7 @@ void NativeWriter::write(const Block & block)
 
     for (size_t i = 0; i < columns; ++i)
     {
+        // LOG_INFO(log, "idx: {}", i);
         /// For the index.
         MarkInCompressedFile mark{0, 0};
 
@@ -132,6 +134,8 @@ void NativeWriter::write(const Block & block)
             column.column = recursiveRemoveSparse(column.column);
         }
 
+        std::cout << "about to write data" << std::endl;
+        // LOG_INFO(log, "about to write data");
         /// Data
         if (rows)    /// Zero items of data is always represented as zero number of bytes.
             writeData(*serialization, column.column, ostr, 0, 0);

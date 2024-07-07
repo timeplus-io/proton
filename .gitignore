@@ -161,3 +161,4 @@ website/package-lock.json
 /tests/stream/.status
 .gdb_history
 report_*.html
+contrib

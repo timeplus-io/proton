@@ -708,7 +708,7 @@ void TCPHandler::processOrdinaryQueryWithProcessors()
     }
 
     LOG_INFO(log, "process 0");
-    
+
     /// Send header-block, to allow client to prepare output format for data to send.
     {
         const auto & header = pipeline.getHeader();
@@ -1739,6 +1739,10 @@ void TCPHandler::sendData(const Block & block)
     for (const auto &y: x) {
         LOG_INFO(log, "sendData");
         LOG_INFO(log, "{}", y);
+    }
+    LOG_INFO(log, "rows: {}", block.rows());
+    if (block.rows() > 0) {
+        LOG_INFO(log, "type: {}", block.getByPosition(0).type->getName());
     }
 
     try

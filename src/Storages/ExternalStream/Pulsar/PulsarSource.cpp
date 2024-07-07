@@ -1,5 +1,8 @@
 #include "Pulsar.h"
 #include "PulsarSource.h"
+
+//#include <Checkpoint/CheckpointContext.h>
+//#include <Checkpoint/CheckpointCoordinator.h>
 #include <Processors/Executors/StreamingFormatExecutor.h>
 #include <Common/logger_useful.h>
 
@@ -13,13 +16,15 @@ PulsarSource::PulsarSource(
     Poco::Logger * log_,
     ExternalStreamCounterPtr external_stream_counter_,
     size_t max_block_size_
+    // Int64 /* offset */
     )
-    : ISource(header_, true, ProcessorID::FileLogSourceID)
+    : ISource(header_, true, ProcessorID::PulsarSourceID)
     , pulsar(pulsar_)
     , query_context(query_context_)
     , log(log_)
-    , column_type(header_.getByPosition(0).type)
+    , header(header_)
     , virtual_col_value_functions(header.columns(), nullptr)
+    , virtual_col_types(header.columns(), nullptr)
     , external_stream_counter(external_stream_counter_)
     , max_block_size(max_block_size_)
     , read_buffer("", 0)
@@ -27,22 +32,49 @@ PulsarSource::PulsarSource(
     , non_virtual_header(storage_snapshot->metadata->getSampleBlockNonMaterialized())
 {
     is_streaming = true;
-    initConsumer(/*pulsar*/);
+    calculateColumnPositions();
+    initConsumer(pulsar);
     initFormatExecutor(pulsar);
+
+    /// If there is no data format, physical headers shall always contain 1 column
+    assert((physical_header.columns() == 1 && !format_executor) || format_executor);
+
+    header_chunk = Chunk(header.getColumns(), 0);
+    iter = result_chunks.begin();
 }
 
 PulsarSource::~PulsarSource() = default;
 
-void PulsarSource::initConsumer(/*const Pulsar * pulsar*/)
+void PulsarSource::calculateColumnPositions()
 {
-    pulsar::ConsumerConfiguration config;
-    config.setSubscriptionInitialPosition(pulsar::InitialPositionEarliest);
-    pulsar::Client client("pulsar://localhost:6650");
-    pulsar::Result result = client.subscribe("persistent://public/default/my-topic", "consumer-1", config, consumer);
-    if (result != pulsar::ResultOk) {
-        LOG_ERROR(log, "Failed to initialize consumer");
-        return;
+    for (const auto & column : header)
+    {
+        /// If a virtual column is explicitely defined as a physical column in the stream definition, we should honor it,
+        /// just as the virutal columns document says, and users are not recommended to do this (and they still can).
+        if (std::any_of(non_virtual_header.begin(), non_virtual_header.end(), [&column](auto & non_virtual_column) { return non_virtual_column.name == column.name; }))
+        {
+            physical_header.insert(column);
+        }
+        else
+        {
+            physical_header.insert(column);
+        }
     }
+
+    request_virtual_columns = std::any_of(virtual_col_types.begin(), virtual_col_types.end(), [](auto type) { return type != nullptr; });
+
+    /// Clients like to read virtual columns only, add the first physical column, then we know how many rows
+    if (physical_header.columns() == 0)
+    {
+        const auto & physical_columns = storage_snapshot->getColumns(GetColumnsOptions::Ordinary);
+        const auto & physical_column = physical_columns.front();
+        physical_header.insert({physical_column.type->createColumn(), physical_column.type, physical_column.name});
+    }
+}
+
+void PulsarSource::initConsumer(Pulsar * pulsar_)
+{
+    consumer = &pulsar_->getConsumer();
 }
 
 void PulsarSource::initFormatExecutor(const Pulsar * pulsar_)
@@ -50,6 +82,7 @@ void PulsarSource::initFormatExecutor(const Pulsar * pulsar_)
     const auto & data_format = pulsar_->dataFormat();
 
     LOG_INFO(log, "IN format 1");
+    LOG_INFO(log, "data_format: {}", data_format);
 
     auto input_format = FormatFactory::instance().getInputFormat(
         data_format,
@@ -103,40 +136,33 @@ Chunk PulsarSource::generate()
         }
     }
 
+    LOG_INFO(log, "OUT generate");
     return std::move(*iter++);
-//    auto col = column_type->createColumn();
-//    col->insertData("kartik", 6);
-//    return Chunk(Columns(1, std::move(col)), 1);
 }
 
 void PulsarSource::readAndProcess()
 {
-    pulsar::ConsumerConfiguration config;
-    config.setSubscriptionInitialPosition(pulsar::InitialPositionEarliest);
-    pulsar::Client client("pulsar://localhost:6650");
-    pulsar::Result result = client.subscribe("persistent://public/default/my-topic", "consumer-1", config, consumer);
-
-    if (result != pulsar::ResultOk) {
-        LOG_ERROR(log, "Failed to initialize consumer");
-        return;
-    }
     LOG_INFO(log, "IN readAndProcess");
     result_chunks.clear();
     current_batch.clear();
     current_batch.reserve(header.columns());
 
     pulsar::Messages messages;
-    consumer.batchReceive(messages);
+    consumer->batchReceive(messages);
     LOG_INFO(log, "message count: {}", messages.size());
 
     for (const auto &message: messages) {
         int message_len = message.getLength();
         LOG_INFO(log, "message len: {}", message_len);
+        LOG_INFO(log, "message: {}", message.getDataAsString());
+        LOG_INFO(log, "message[0]: {}", static_cast<const char *>(message.getData()));
         ReadBufferFromMemory buffer(static_cast<const char *>(message.getData()), message_len);
         LOG_INFO(log, "_1");
         auto new_rows = format_executor->execute(buffer);
         external_stream_counter->addToReadBytes(message_len);
         external_stream_counter->addToReadCounts(new_rows);
+        LOG_INFO(log, "count: {}", external_stream_counter->getReadCounts());
+        LOG_INFO(log, "bytes: {}", external_stream_counter->getReadBytes());
         LOG_INFO(log, "_2");
         if (format_error)
         {
@@ -147,13 +173,14 @@ void PulsarSource::readAndProcess()
         auto result_block = non_virtual_header.cloneWithColumns(format_executor->getResultColumns());
         convert_non_virtual_to_physical_action->execute(result_block);
         MutableColumns new_data(result_block.mutateColumns());
-        LOG_INFO(log, "_4");
+        LOG_INFO(log, "_4: {}", new_data[0]->getName());
         if (!request_virtual_columns)
         {
             if (!current_batch.empty())
             {
 		LOG_INFO(log, "_5");
                 /// Merge all data in the current batch into the same chunk to avoid too many small chunks
+                    LOG_INFO(log, "type {}", typeid(current_batch[0]).name());
                 for (size_t pos = 0; pos < current_batch.size(); ++pos)
                     current_batch[pos]->insertRangeFrom(*new_data[pos], 0, new_rows);
             }
@@ -204,6 +231,7 @@ void PulsarSource::readAndProcess()
                 }
             }
         }
+        consumer->acknowledge(message);
     }
     LOG_INFO(log, "_5");
     if (!current_batch.empty())
