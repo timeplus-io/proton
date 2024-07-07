@@ -24,5 +24,56 @@ Timeplus Proton has a handy feature [`RANDOM STREAM`](https://docs.timeplus.com/
 Let's dive in!
 
 ## Docker Environment Overview
+The [`docker-compose.yaml`](docker-compose.yaml) file defines 3 containers:
+* a Timeplus Proton container;
+* a Grafana container;
+* a third container that seeds the Timeplus Proton container with access log data.
+
+The 3rd container uses the `proton client` to execute an SQL file [`01_nginx_access_log.sql`](01_nginx_access_log.sql) used to seed Timeplus Proton with access log. That SQL file uses the [`CREATE RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) DDL to create a stream named `nginx_access_log`. 
+
+### Random Streams
+There is a very important note about the design of random streams in Timeplus Proton mentioned in the documentation that is worth highlighting here:
+> [!NOTE]
+> The data of random stream is kept in memory during the query time. If you are not querying the random stream, there is no data generated or kept in memory.
+
+Essentially, each time you run a query like `SELECT remote_ip, rfc1413_ident, remote_user, date_time, http_verb, path, http_ver, status, size, referer, user_agent, malicious_request FROM nginx_access_log LIMIT 1;`, you'll get a different (random) result from the random stream.
+
+For instance, running that query yields the following output:
+```sql
+SELECT
+  remote_ip, rfc1413_ident, remote_user, date_time, http_verb, path, http_ver, status, size, referer, user_agent, malicious_request
+FROM
+  nginx_access_log
+LIMIT 1
+
+Query id: d4b7f92c-bcd8-42ec-94ef-655eae86861b
+
+┌─remote_ip─────┬─rfc1413_ident─┬─remote_user─┬───────────────date_time─┬─http_verb─┬─path─────────┬─http_ver─┬─status─┬──size─┬─referer─┬─user_agent────┬─malicious_request─┐
+│ 181.12.95.134 │ -             │ -           │ 2024-05-02 00:00:00.000 │           │ /sitemap.xml │          │    302 │ 21345 │ -       │ Plenary/4.6.2 │                   │
+└───────────────┴───────────────┴─────────────┴─────────────────────────┴───────────┴──────────────┴──────────┴────────┴───────┴─────────┴───────────────┴───────────────────┘
+
+1 row in set. Elapsed: 0.012 sec.
+```
+
+Running it again, yields this output:
+```sql
+SELECT
+  remote_ip, rfc1413_ident, remote_user, date_time, http_verb, path, http_ver, status, size, referer, user_agent, malicious_request
+FROM
+  nginx_access_log
+LIMIT 1
+
+Query id: 11d071e4-6028-47da-826d-9db42176f8e5
+
+┌─remote_ip──────┬─rfc1413_ident─┬─remote_user─┬───────────────date_time─┬─http_verb─┬─path─────────┬─http_ver─┬─status─┬──size─┬─referer────────────┬─user_agent─────────────────────────────────────────┬─malicious_request─┐
+│ 204.25.223.210 │ -             │ -           │ 2024-05-15 00:00:00.000 │ POST      │ /favicon.ico │ HTTP/1.1 │    301 │ 32062 │ https://ayewo.com/ │ NetNewsWire (RSS Reader; https://netnewswire.com/) │                   │
+└────────────────┴───────────────┴─────────────┴─────────────────────────┴───────────┴──────────────┴──────────┴────────┴───────┴────────────────────┴────────────────────────────────────────────────────┴───────────────────┘
+
+1 row in set. Elapsed: 0.013 sec. 
+```
+
+Due to this design decision, we will need to first take a snapshot from the random stream. This snapshot will represent our access log data so we can reliably geolocate the latitude and longitude of each (randomly generated) IP address before we can correctly visualize them in Grafana.
+
+Afterwards, the article will use the random stream to illustrate streaming queries in Grafana.
 
 
