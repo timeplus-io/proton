@@ -13,14 +13,16 @@ In addition to Timeplus Proton, the previous article used the following technolo
 * [Ghost](https://ghost.org/);
 * [Nginx](https://nginx.org/en/).
   
-The first two require access to an AWS account, if you didn't have one already. The last two products need to have been running in production, in order to have meaningful access log data to experiment with. 
+The first two require access to an AWS account. The last two products need to have been running in production, in order to have meaningful access log data to experiment with. 
 
-To make this article super easy to follow, while building on the same analysis used in the previous article, you only need: 
-* [Docker](https://docs.docker.com/engine/install/);
-* [IPinfo](https://ipinfo.io/). 
+This article does away with most of those prerequisities making it easier to get started. It builds on the same analysis of the previous article but you only need: 
+* [Docker](https://docs.docker.com/engine/install/) installed;
+* an [IPinfo](https://ipinfo.io/) account. 
 
 Timeplus Proton has a handy feature [`RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) which we will use to generate all the access log data that we will use for experimentation in this article.
 
 Let's dive in!
+
+## Docker Environment Overview
 
 
