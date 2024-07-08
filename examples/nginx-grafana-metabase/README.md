@@ -4,7 +4,7 @@ In my last [blog post](https://www.timeplus.com/post/analyzing-nginx-access-logs
 This article will remedy the lack of rich visualizations by showing how to do so using open source tools like [Grafana](https://grafana.com/) and [Metabase](https://www.metabase.com/).
 
 
-## Prerequisities
+## Prerequisites
 In addition to Timeplus Proton, the previous article used the following technologies: 
 * [Amazon Virtual Private Cloud](https://aws.amazon.com/vpc/) (VPC);
 * [Amazon Elastic Compute Cloud](https://aws.amazon.com/ec2/) (EC2);
@@ -15,11 +15,11 @@ In addition to Timeplus Proton, the previous article used the following technolo
   
 The first two require access to an AWS account. The last two products need to have been running in production, in order to have meaningful access log data to experiment with. 
 
-This article does away with most of those prerequisities making it easier to get started. It builds on the same analysis of the previous article but you only need: 
+This article does away with most of those prerequisites making it easier to get started. It builds on the same analysis of the previous article but you only need: 
 * [Docker](https://docs.docker.com/engine/install/) installed;
 * an [IPinfo](https://ipinfo.io/) account. 
 
-Timeplus Proton has a handy feature [`RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) which we will use to generate all the access log data that we will use for experimentation in this article.
+Timeplus Proton has a handy feature [`RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) which we will use to generate all the access log data needed for experimentation in this article.
 
 Let's dive in!
 
@@ -29,10 +29,26 @@ The [`docker-compose.yaml`](docker-compose.yaml) file defines 3 containers:
 * a Grafana container;
 * a third container that seeds the Timeplus Proton container with access log data.
 
-The 3rd container uses the `proton client` to execute an SQL file [`01_nginx_access_log.sql`](01_nginx_access_log.sql) used to seed Timeplus Proton with access log. That SQL file uses the [`CREATE RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) DDL to create a stream named `nginx_access_log`. 
+### DDL Overview
+The 3rd container uses the `proton client` to seed the Timeplus Proton database with access log data from an SQL file [`01_nginx_access_log.sql`](01_nginx_access_log.sql). 
+
+The SQL file contains the following DDL:
+![SQL code screenshot with line numbers](01_nginx_access_log.png)
+
+On line 3, the [`CREATE RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) DDL is used to create a random stream named `nginx_access_log`. The stream has 11 columns, each of which is randomly assigned a `default` value as you can see on lines 4 - 30.
+
+Using line numbers 4 - 30, the table below goes over each column and the database [functions](https://docs.timeplus.com/functions) used to generate its `default` value.
+|      | Column | Database Function | Explanation |
+|------|--------|------------------|---------------|
+| Line 4 | `remote_ip` | [`random_in_type('ipv4')`](https://docs.timeplus.com/functions_for_random#random_in_type) | Returns a random [ipv4](https://docs.timeplus.com/datatypes) representing a user's IP address |
+| Line 5 | `rfc1413_ident` |  N/A | Defaults to '-'. Unused but should be a string conforming to [RFC1413](https://datatracker.ietf.org/doc/html/rfc1413) |
+| Line 6 | `remote_user` | N/A | Defaults to '-' since most blog traffic is from unauthenticated users |
+| Line 7 | `date_time` | [`random_in_type('datetime64', 365, y -> to_time('2023-6-17') + interval y day)`](https://docs.timeplus.com/functions_for_random#random_in_type) | Returns a random [datetime64](https://docs.timeplus.com/datatypes) between 2023-6-17 plus a 365-day interval i.e. the date will fall between June 17, 2023 and June 16, 2024 |
+
+
 
 ### Random Streams
-There is a very important note about the design of random streams in Timeplus Proton mentioned in the documentation that is worth highlighting here:
+There is an important note about the design of random streams in Timeplus Proton mentioned in the [`CREATE RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) documentation that is worth highlighting here:
 > [!NOTE]
 > The data of random stream is kept in memory during the query time. If you are not querying the random stream, there is no data generated or kept in memory.
 
