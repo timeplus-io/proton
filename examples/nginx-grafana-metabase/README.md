@@ -38,21 +38,31 @@ The SQL file contains the following DDL:
 On line 3, the [`CREATE RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) DDL is used to create a random stream named `nginx_access_log`. The stream has 11 columns, each of which is randomly assigned a `default` value as you can see on lines 4 - 30.
 
 Using line numbers 4 - 30, the table below goes over each column and the database [functions](https://docs.timeplus.com/functions) used to generate its `default` value.
-|      | Column | Database Function | Explanation |
-|------|--------|------------------|---------------|
-| Line 4 | `remote_ip` | [`random_in_type('ipv4')`](https://docs.timeplus.com/functions_for_random#random_in_type) | Returns a random [ipv4](https://docs.timeplus.com/datatypes) representing a user's IP address |
-| Line 5 | `rfc1413_ident` |  N/A | Defaults to '-'. Unused but should be a string conforming to [RFC1413](https://datatracker.ietf.org/doc/html/rfc1413) |
-| Line 6 | `remote_user` | N/A | Defaults to '-' since most blog traffic is from unauthenticated users |
-| Line 7 | `date_time` | [`random_in_type('datetime64', 365, y -> to_time('2023-6-17') + interval y day)`](https://docs.timeplus.com/functions_for_random#random_in_type) | Returns a random [datetime64](https://docs.timeplus.com/datatypes) between 2023-6-17 plus a 365-day interval i.e. the date will fall between June 17, 2023 and June 16, 2024 |
+| Line  | Column | `default` | 
+|------|--------|------------------|
+| 4 | `remote_ip` | [`random_in_type('ipv4')`](https://docs.timeplus.com/functions_for_random#random_in_type): returns a random [ipv4](https://docs.timeplus.com/datatypes) representing a user's IP address. |
+| 5 | `rfc1413_ident` | `default`s to '-' but should be a string conforming to [RFC1413](https://datatracker.ietf.org/doc/html/rfc1413). Currently unused. |
+| 6 | `remote_user` | `default`s to '-' since most blog traffic is from unauthenticated users. Currently unused. |
+| 7 | `date_time` | [`random_in_type('datetime64', 365, y -> to_time('2023-6-17') + interval y day)`](https://docs.timeplus.com/functions_for_random#random_in_type): random [datetime64](https://docs.timeplus.com/datatypes) between 2023-6-17 plus a 365-day interval i.e. between [2023-06-17, 2024-06-16]. |
+| 8 | `http_verb` | `['GET', 'POST', 'PUT', 'DELETE', 'HEAD'][rand()%5]`: uses [`rand()`](https://docs.timeplus.com/functions_for_random#rand) to return a random index between [0, 5) in this 5-element array. The array samples 5 of the [39 HTTP verbs](https://stackoverflow.com/questions/41411152/how-many-http-verbs-are-there). |
+| 9 | `path` | `['/rss/', '/', '/sitemap.xml', '/favicon.ico', '/robots.txt', ...][rand()%11]`: uses [`rand()`](https://docs.timeplus.com/functions_for_random#rand) to return a random index between [0, 11) in this 11-element array of sample URL subpaths. |
+| 10 | `http_ver` | `['HTTP/1.0', 'HTTP/1.1', 'HTTP/2.0'][rand()%3]`: similar to `path`. |
+| 11 | `status` | `[200, 301, 302, 304, 400, 404][rand()%6]`: similar to `path`. |
+| 12 | `size` | `rand()%50000000`: uses `rand()` to return a random [content-length](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Length), up to `~5MB`. |
+| 13 | `referer` | `['-', 'https://ayewo.com/', '...', 'https://google.com/'][rand()%4]`: similar to `path`. |
+| 14 | `user_agent` | `['...', '...', ...][rand()%14]`: similar to `path`. |
+| 30 | `malicious_request` | `if(rand()%100 < 5, '\x16\...', '')`: returns a malformed sequence whenever `rand()%100` is < 5. |
+  
+
 
 
 
 ### Random Streams
-There is an important note about the design of random streams in Timeplus Proton mentioned in the [`CREATE RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) documentation that is worth highlighting here:
+There is an important note about the design of random streams in Timeplus Proton mentioned in the [`RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) documentation that is worth highlighting here:
 > [!NOTE]
 > The data of random stream is kept in memory during the query time. If you are not querying the random stream, there is no data generated or kept in memory.
 
-Essentially, each time you run a query like `SELECT remote_ip, rfc1413_ident, remote_user, date_time, http_verb, path, http_ver, status, size, referer, user_agent, malicious_request FROM nginx_access_log LIMIT 1;`, you'll get a different (random) result from the random stream.
+Essentially, each time you run a query like `SELECT remote_ip, rfc1413_ident, remote_user, date_time, http_verb, path, http_ver, status, size, referer, user_agent, malicious_request FROM nginx_access_log LIMIT 1;`, you'll get a different (random) result from the stream.
 
 For instance, running that query yields the following output:
 ```sql
