@@ -19,7 +19,48 @@ This article does away with most of those prerequisites making it easier to get 
 * [Docker](https://docs.docker.com/engine/install/) installed;
 * an [IPinfo](https://ipinfo.io/) account. 
 
-Timeplus Proton has a handy feature [`RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) which we will use to generate all the access log data needed for experimentation in this article.
+Timeplus Proton has a handy feature [`RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) which we will use to generate all the access log data needed for experimentation in this article. 
+
+Before I dive into the article proper, we'll review the format used by Nginx to record access log data so that the data we'll generate will mimic its shape and properties.
+
+## The Shape of Nginx's Access Log Data
+Nginx's access logs are typically written to the file `/var/log/nginx/access.log`. Here's an excerpt from my blog's access logs:
+```bash
+161.35.230.x - - [26/Jun/2023:06:33:53 +0000] "\x00\x0E8uON\x85J\xCF\xC5\x93\x00\x00\x00\x00\x00" 400 182 "-" "-"
+51.79.29.xx - - [26/Jun/2023:06:37:04 +0000] "POST / HTTP/1.1" 301 57 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36"
+179.43.177.xxx - - [26/Jun/2023:06:45:28 +0000] "GET / HTTP/1.1" 301 60 "-" "Hello World"
+87.236.176.xxx - - [26/Jun/2023:07:58:36 +0000] "GET / HTTP/1.1" 200 6364 "https://www.ayewo.com/" "Mozilla/5.0 (compatible; InternetMeasurement/1.0; +https://internet-measurement.com/)"
+87.236.176.xxx - - [26/Jun/2023:07:58:38 +0000] "GET /favicon.png HTTP/2.0" 200 7636 "-" "Mozilla/5.0 (compatible; InternetMeasurement/1.0; +https://internet-measurement.com/)"
+93.126.72.xxx - - [26/Jun/2023:08:29:38 +0000] "GET /how-to-install-rsync-on-windows/ HTTP/2.0" 200 6394 "https://www.google.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+```
+
+The access log format is specified in `/etc/nginx/nginx.conf` and it broadly looks like this:
+```bash
+http {
+    log_format compression '$remote_addr - $remote_user [$time_local] '
+                           '"$request" $status $body_bytes_sent '
+                           '"$http_referer" "$http_user_agent"';
+
+    server {
+        access_log /var/log/nginx/access.log;
+        ...
+    }
+}
+```
+The first line in the access log (from the IP address `161.35.230.x`) is actually a maliciously crafted request that doesn't even specify a HTTP method (i.e. `GET` or `OPTIONS`) to the server which is why the server responded with a HTTP 400 code (Bad Request). There are several of such malformed requests in the access logs that are tricky to parse which is why a separate column `malicious_request` was added to the `nginx_access_log` stream.
+
+
+This is why the data parsed from each line was stored in 12 individual columns as follows:
+* `$remote_addr` was stored in column `remote_ip` of type `ipv4`;
+* `-` was stored in column `rfc1413_ident` of type `string`;
+* `$remote_user` was stored in column `remote_user` of type `string`;
+* `$time_local` was stored in column `date_time` of type `datetime64`;
+* `$request` was split into 3 columns each of type `string`: `http_verb`, `path` and `http_ver`, to make our analysis easier;
+* `$status` was stored in column `status` of type `int`;
+* `$body_bytes_sent` was stored in column `size` of type `int`;
+* `$http_referer` was stored in column `referer` of type `string`;
+* `$http_user_agent` was stored in column `user_agent` of type `string`;
+* any lines that fail to parse correctly is stored in column `malicious_request` of type `string`.
 
 Let's dive in!
 
@@ -43,12 +84,12 @@ Using line numbers 4 - 30, the table below goes over each column and the databas
 | 4 | `remote_ip` | [`random_in_type('ipv4')`](https://docs.timeplus.com/functions_for_random#random_in_type): returns a random [ipv4](https://docs.timeplus.com/datatypes) representing a user's IP address. |
 | 5 | `rfc1413_ident` | `default`s to '-' but should be a string conforming to [RFC1413](https://datatracker.ietf.org/doc/html/rfc1413). Currently unused. |
 | 6 | `remote_user` | `default`s to '-' since most blog traffic is from unauthenticated users. Currently unused. |
-| 7 | `date_time` | [`random_in_type('datetime64', 365, y -> to_time('2023-6-17') + interval y day)`](https://docs.timeplus.com/functions_for_random#random_in_type): random [datetime64](https://docs.timeplus.com/datatypes) between 2023-6-17 plus a 365-day interval i.e. between [2023-06-17, 2024-06-16]. |
+| 7 | `date_time` | [`random_in_type('datetime64', 365, y -> to_time('2023-6-17') + interval y day)`](https://docs.timeplus.com/functions_for_random#random_in_type): random [datetime64](https://docs.timeplus.com/datatypes) between 2023-6-17 & a 1-yr interval i.e. between [2023-06-17, 2024-06-17). |
 | 8 | `http_verb` | `['GET', 'POST', 'PUT', 'DELETE', 'HEAD'][rand()%5]`: uses [`rand()`](https://docs.timeplus.com/functions_for_random#rand) to return a random index between [0, 5) in this 5-element array. The array samples 5 of the [39 HTTP verbs](https://stackoverflow.com/questions/41411152/how-many-http-verbs-are-there). |
 | 9 | `path` | `['/rss/', '/', '/sitemap.xml', '/favicon.ico', '/robots.txt', ...][rand()%11]`: uses [`rand()`](https://docs.timeplus.com/functions_for_random#rand) to return a random index between [0, 11) in this 11-element array of sample URL subpaths. |
 | 10 | `http_ver` | `['HTTP/1.0', 'HTTP/1.1', 'HTTP/2.0'][rand()%3]`: similar to `path`. |
 | 11 | `status` | `[200, 301, 302, 304, 400, 404][rand()%6]`: similar to `path`. |
-| 12 | `size` | `rand()%50000000`: uses `rand()` to return a random [content-length](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Length), up to `~5MB`. |
+| 12 | `size` | `rand()%5000000`: uses `rand()` to return a random [bytes sent](https://stackoverflow.com/a/30837653), up to `~5MB`. |
 | 13 | `referer` | `['-', 'https://ayewo.com/', '...', 'https://google.com/'][rand()%4]`: similar to `path`. |
 | 14 | `user_agent` | `['...', '...', ...][rand()%14]`: similar to `path`. |
 | 30 | `malicious_request` | `if(rand()%100 < 5, '\x16\...', '')`: returns a malformed sequence whenever `rand()%100` is < 5. |
