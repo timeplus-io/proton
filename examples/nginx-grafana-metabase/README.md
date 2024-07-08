@@ -34,7 +34,9 @@ The access logs for Nginx are typically written to the file `/var/log/nginx/acce
 93.126.72.xxx - - [26/Jun/2023:08:29:38 +0000] "GET /how-to-install-rsync-on-windows/ HTTP/2.0" 200 6394 "https://www.google.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
 ```
 
-The first line in the access log (from the IP address `161.35.230.x`) is actually a maliciously crafted request that doesn't even specify a HTTP method (i.e. `GET` or `OPTIONS`) to the server which is why the server responded with a HTTP 400 code (Bad Request). There are several of such malformed requests in the access logs that are tricky to parse which is why a separate column `malicious_request` was added to the `nginx_historical_access_log` stream which was created in the [previous article](https://www.timeplus.com/post/analyzing-nginx-access-logs).
+The first line in the access log (from the IP address `161.35.230.x`) is actually a maliciously crafted request that doesn't even specify a HTTP method (i.e. `GET` or `OPTIONS`) to the server which is why the server responded with a HTTP 400 code (Bad Request). 
+
+There are several of such malformed requests in the access logs that are tricky to parse which is why a separate column `malicious_request` was added to the `nginx_historical_access_log` stream which was created in the [previous article](https://www.timeplus.com/post/analyzing-nginx-access-logs).
 
 
 Nginx's [access log format](https://docs.nginx.com/nginx/admin-guide/monitoring/logging/#setting-up-the-access-log) is specified in `/etc/nginx/nginx.conf` and it broadly looks like this:
@@ -51,9 +53,9 @@ http {
 }
 ```
 
-The previous article created a total of 12 individual columns which we will reuse in this article. 
+The previous article created a stream with a total of 12 columns to take advantage of Timeplus Proton's fast aggregation for our analysis. We will reuse the same approach in this article. 
 
-Below is a brief explanation of how each line from the access logs was parsed into those 12 columns:
+Below is a brief explanation of how each access log line is split across those 12 columns:
 * `$remote_addr` is stored in column `remote_ip` of type `ipv4`;
 * `-` is stored in column `rfc1413_ident` of type `string`;
 * `$remote_user` is stored in column `remote_user` of type `string`;
@@ -90,7 +92,7 @@ Using line numbers 4 - 30, the table below goes over each column and the databas
 | 4 | `remote_ip` | [`random_in_type('ipv4')`](https://docs.timeplus.com/functions_for_random#random_in_type): returns a random [ipv4](https://docs.timeplus.com/datatypes) representing a user's IP address. |
 | 5 | `rfc1413_ident` | `default`s to '-' but should be a string conforming to [RFC1413](https://datatracker.ietf.org/doc/html/rfc1413). Currently unused. |
 | 6 | `remote_user` | `default`s to '-' since most blog traffic is from unauthenticated users. Currently unused. |
-| 7 | `date_time` | [`random_in_type('datetime64', 365, y -> to_time('2023-6-17') + interval y day)`](https://docs.timeplus.com/functions_for_random#random_in_type): random [datetime64](https://docs.timeplus.com/datatypes) between 2023-6-17 & a 1-yr interval i.e. between [2023-06-17, 2024-06-17). |
+| 7 | `date_time` | `random_in_type('datetime64', 365, y -> to_time('2023-6-17') + interval y day)`: [`random_in_type`](https://docs.timeplus.com/functions_for_random#random_in_type) [datetime64](https://docs.timeplus.com/datatypes) between 2023-6-17 & a 1-yr interval i.e. between [2023-06-17, 2024-06-17). |
 | 8 | `http_verb` | `['GET', 'POST', 'PUT', 'DELETE', 'HEAD'][rand()%5]`: uses [`rand()`](https://docs.timeplus.com/functions_for_random#rand) to return a random index between [0, 5) in this 5-element array. The array samples 5 of the [39 HTTP verbs](https://stackoverflow.com/questions/41411152/how-many-http-verbs-are-there). |
 | 9 | `path` | `['/rss/', '/', '/sitemap.xml', '/favicon.ico', '/robots.txt', ...][rand()%11]`: uses [`rand()`](https://docs.timeplus.com/functions_for_random#rand) to return a random index between [0, 11) in this 11-element array of sample URL subpaths. |
 | 10 | `http_ver` | `['HTTP/1.0', 'HTTP/1.1', 'HTTP/2.0'][rand()%3]`: similar to `path`. |
