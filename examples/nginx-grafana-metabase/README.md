@@ -15,13 +15,13 @@ In addition to Timeplus Proton, the previous article used the following technolo
   
 The first two require access to an AWS account. The last two products need to have been running in production, in order to have meaningful access log data to experiment with. 
 
-This article does away with most of those prerequisites making it easier to get started. It builds on the same analysis of the previous article but you only need: 
+This article builds on the same analysis of the previous article but is quicker to get started as you only need: 
 * [Docker](https://docs.docker.com/engine/install/) installed;
 * an [IPinfo](https://ipinfo.io/) account. 
 
 Timeplus Proton has a handy feature [`RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) which we will use to generate all the access log data needed for experimentation in this article. 
 
-Before I dive into the article proper, we'll review the format used by Nginx to record access log data so that the data we'll generate will mimic its shape and properties.
+Before I dive into the article proper, I will first revisit the format used by Nginx to record access log data so that the data we'll generate will mimic its shape and properties.
 
 ## The Shape of Nginx's Access Log Data
 In the [previous article](https://www.timeplus.com/post/analyzing-nginx-access-logs), we briefly touched on the Nginx access logs but did not dwell on its location or how the data it contains should be parsed.
@@ -76,21 +76,25 @@ The previous article created a stream with a total of 12 columns to take advanta
 With that out of the way, let's dive into this article proper!
 
 
-## Docker Environment Overview
+## Docker Environment
 The [`docker-compose.yaml`](docker-compose.yaml) file defines 3 containers:
 * a Timeplus Proton container;
 * a Grafana container;
 * a third container that seeds the Timeplus Proton container with access log data.
 
 ### DDL Overview
-The 3rd container uses the `proton client` to seed the Timeplus Proton database with access log data from an SQL file [`01_nginx_access_log.sql`](01_nginx_access_log.sql). 
+The 3rd container uses the `proton client` to seed the Timeplus Proton database with access log data from an SQL file: 
+* [`01_nginx_access_log.sql`](01_nginx_access_log.sql). 
 
 The SQL file contains the following DDL:
 ![SQL code screenshot with line numbers](01_nginx_access_log.png)
 
-On line 3, the [`CREATE RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) DDL is used to create a random stream named `nginx_access_log`. The stream has 11 columns, each of which is randomly assigned a `default` value as you can see on lines 4 - 30.
+### Generating Data to Mimic Nginx Access Data
+On line 3, the [`CREATE RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) DDL is used to create a random stream named `nginx_access_log`. 
 
-Using line numbers 4 - 30, the table below goes over each column and the database [functions](https://docs.timeplus.com/functions) used to generate its `default` value.
+Just like in the previous article, the stream also has 12 columns. Each column is randomly assigned a `default` value as you can see on lines 4 - 30.
+
+Using the line numbers 4 - 30 as reference, the table below goes over each column and the database [functions](https://docs.timeplus.com/functions) used to generate its `default` value.
 | Line  | Column | `default` | 
 |------|--------|------------------|
 | 4 | `remote_ip` | [`random_in_type('ipv4')`](https://docs.timeplus.com/functions_for_random#random_in_type): returns a random [ipv4](https://docs.timeplus.com/datatypes) representing a user's IP address. |
@@ -101,7 +105,7 @@ Using line numbers 4 - 30, the table below goes over each column and the databas
 | 9 | `path` | `['/rss/', '/', '/sitemap.xml', '/favicon.ico', '/robots.txt', ...][rand()%11]`: uses [`rand()`](https://docs.timeplus.com/functions_for_random#rand) to return a random index between [0, 11) in this 11-element array of sample URL subpaths. |
 | 10 | `http_ver` | `['HTTP/1.0', 'HTTP/1.1', 'HTTP/2.0'][rand()%3]`: similar to `path`. |
 | 11 | `status` | `[200, 301, 302, 304, 400, 404][rand()%6]`: similar to `path`. |
-| 12 | `size` | `rand()%5000000`: uses `rand()` to return a random [bytes sent](https://stackoverflow.com/a/30837653), up to `~5MB`. |
+| 12 | `size` | `rand()%5000000`: uses `rand()` to generate a random amount of [bytes sent](https://stackoverflow.com/a/30837653), up to `~5MB`. |
 | 13 | `referer` | `['-', 'https://ayewo.com/', '...', 'https://google.com/'][rand()%4]`: similar to `path`. |
 | 14 | `user_agent` | `['...', '...', ...][rand()%14]`: similar to `path`. |
 | 30 | `malicious_request` | `if(rand()%100 < 5, '\x16\...', '')`: returns a malformed sequence whenever `rand()%100` is < 5. |
