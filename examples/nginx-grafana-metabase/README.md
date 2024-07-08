@@ -24,7 +24,7 @@ Timeplus Proton has a handy feature [`RANDOM STREAM`](https://docs.timeplus.com/
 Before I dive into the article proper, we'll review the format used by Nginx to record access log data so that the data we'll generate will mimic its shape and properties.
 
 ## The Shape of Nginx's Access Log Data
-Nginx's access logs are typically written to the file `/var/log/nginx/access.log`. Here's an excerpt from my blog's access logs:
+The access logs for Nginx are typically written to the file `/var/log/nginx/access.log`. Here's an excerpt from my blog's access logs:
 ```bash
 161.35.230.x - - [26/Jun/2023:06:33:53 +0000] "\x00\x0E8uON\x85J\xCF\xC5\x93\x00\x00\x00\x00\x00" 400 182 "-" "-"
 51.79.29.xx - - [26/Jun/2023:06:37:04 +0000] "POST / HTTP/1.1" 301 57 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36"
@@ -34,7 +34,10 @@ Nginx's access logs are typically written to the file `/var/log/nginx/access.log
 93.126.72.xxx - - [26/Jun/2023:08:29:38 +0000] "GET /how-to-install-rsync-on-windows/ HTTP/2.0" 200 6394 "https://www.google.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
 ```
 
-The access log format is specified in `/etc/nginx/nginx.conf` and it broadly looks like this:
+The first line in the access log (from the IP address `161.35.230.x`) is actually a maliciously crafted request that doesn't even specify a HTTP method (i.e. `GET` or `OPTIONS`) to the server which is why the server responded with a HTTP 400 code (Bad Request). There are several of such malformed requests in the access logs that are tricky to parse which is why a separate column `malicious_request` was added to the `nginx_historical_access_log` stream which was created in the [previous article](https://www.timeplus.com/post/analyzing-nginx-access-logs).
+
+
+Nginx's [access log format](https://docs.nginx.com/nginx/admin-guide/monitoring/logging/#setting-up-the-access-log) is specified in `/etc/nginx/nginx.conf` and it broadly looks like this:
 ```bash
 http {
     log_format compression '$remote_addr - $remote_user [$time_local] '
@@ -47,22 +50,25 @@ http {
     }
 }
 ```
-The first line in the access log (from the IP address `161.35.230.x`) is actually a maliciously crafted request that doesn't even specify a HTTP method (i.e. `GET` or `OPTIONS`) to the server which is why the server responded with a HTTP 400 code (Bad Request). There are several of such malformed requests in the access logs that are tricky to parse which is why a separate column `malicious_request` was added to the `nginx_access_log` stream.
 
+The previous article created a total of 12 individual columns which we will reuse in this article. 
 
-This is why the data parsed from each line was stored in 12 individual columns as follows:
-* `$remote_addr` was stored in column `remote_ip` of type `ipv4`;
-* `-` was stored in column `rfc1413_ident` of type `string`;
-* `$remote_user` was stored in column `remote_user` of type `string`;
-* `$time_local` was stored in column `date_time` of type `datetime64`;
-* `$request` was split into 3 columns each of type `string`: `http_verb`, `path` and `http_ver`, to make our analysis easier;
-* `$status` was stored in column `status` of type `int`;
-* `$body_bytes_sent` was stored in column `size` of type `int`;
-* `$http_referer` was stored in column `referer` of type `string`;
-* `$http_user_agent` was stored in column `user_agent` of type `string`;
-* any lines that fail to parse correctly is stored in column `malicious_request` of type `string`.
+Below is a brief explanation of how each line from the access logs was parsed into those 12 columns:
+* `$remote_addr` is stored in column `remote_ip` of type `ipv4`;
+* `-` is stored in column `rfc1413_ident` of type `string`;
+* `$remote_user` is stored in column `remote_user` of type `string`;
+* `$time_local` os stored in column `date_time` of type `datetime64`;
+* `$request` is split into 4 columns each of type `string` to make our analysis easier:
+  * column `http_verb` of type `string`;
+  * column `path` of type `string` and;
+  * column `http_ver` of type `string`;
+  * column `malicious_request` of type `string` for any `$request` that fails to parse correctly; 
+* `$status` is stored in column `status` of type `int`;
+* `$body_bytes_sent` is stored in column `size` of type `int`;
+* `$http_referer` is stored in column `referer` of type `string`;
+* `$http_user_agent` is stored in column `user_agent` of type `string`.
 
-Let's dive in!
+With that out of the way, let's dive in!
 
 ## Docker Environment Overview
 The [`docker-compose.yaml`](docker-compose.yaml) file defines 3 containers:
