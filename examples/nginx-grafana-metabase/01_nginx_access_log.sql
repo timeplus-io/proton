@@ -1,6 +1,7 @@
--- nginx_access_log
+-- 01_nginx_access_log.sql
 
-CREATE RANDOM STREAM nginx_access_log (
+DROP STREAM IF EXISTS nginx_access_log;
+CREATE RANDOM STREAM IF NOT EXISTS nginx_access_log (
   remote_ip ipv4 default random_in_type('ipv4'),
   rfc1413_ident string default '-',
   remote_user string default '-',
@@ -9,7 +10,7 @@ CREATE RANDOM STREAM nginx_access_log (
   path string default ['/rss/', '/', '/programmatic-creation-of-the-ghost-admin-user/', '/sitemap.xml', '/favicon.ico', '/Core/Skin/Login.aspx', '/Public/home/js/check.js', '/robots.txt', '/engineering-vs-technology-company/', '/switching-to-a-newer-version-of-rsync-on-macos/', '/.env'][rand()%11],
   http_ver string default ['HTTP/1.0', 'HTTP/1.1', 'HTTP/2.0'][rand()%3],
   status int default [200, 301, 302, 304, 400, 404][rand()%6],
-  size int default rand()%50000,
+  size int default rand()%5000000,
   referer string default ['-', 'https://ayewo.com/', 'https://ayewo.com/rss/', 'https://google.com/'][rand()%4],
   user_agent string default [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/' || to_string(rand()%30 + 100) || '.0.0.0 Safari/537.36',
@@ -29,3 +30,42 @@ CREATE RANDOM STREAM nginx_access_log (
   ][rand()%14],
   malicious_request string default if(rand()%100 < 5, '\x16\x03\x01\x00\xEA\x01\x00\x00\xE6\x03\x03', '')
 );
+
+
+DROP STREAM IF EXISTS nginx_historical_access_log;
+CREATE STREAM IF NOT EXISTS nginx_historical_access_log
+(
+	remote_ip ipv4, 
+	rfc1413_ident string,
+	remote_user string,
+	date_time_string string,
+	date_time datetime64 default now64(),
+	http_verb string,
+	path string,
+	http_ver string,
+	status uint32,
+	size uint32,
+	referer string,
+	user_agent string,
+	malicious_request string
+) 
+ORDER BY remote_ip
+SETTINGS event_time_column='date_time';
+
+
+DROP STREAM IF EXISTS nginx_ipinfo;
+CREATE STREAM IF NOT EXISTS nginx_ipinfo 
+(    
+    ip ipv4,
+    city string,
+    region string,
+    country string,
+    country_name string,
+    country_flag_emoji string,
+    country_flag_unicode string,
+    continent_name string,
+    isEU bool,
+    loc string
+)
+PRIMARY KEY ip
+ORDER BY ip;
