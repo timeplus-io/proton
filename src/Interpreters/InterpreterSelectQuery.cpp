@@ -3745,7 +3745,12 @@ void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()
     String unique_window_name;
     for (const auto * function_node : data.window_functions)
     {
-        assert(function_node->is_window_function);
+        /// Not supported syntax:
+        /// 1) SELECT func(...) OVER window_name FROM stream WINDOW window_name AS ();
+        if (!function_node->is_window_function || !function_node->window_definition)
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED, "No support that use predefined window '{}' in streaming queries", function_node->window_name);
+
         const auto & definition = function_node->window_definition->as<const ASTWindowDefinition &>();
         /// Not support follows syntax:
         /// 1) select func(...) OVER window_name from stream WINDOW window_name as (partition by ...)
