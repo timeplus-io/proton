@@ -1,0 +1,98 @@
+test_suite_name: udf3_create_remote_func
+tag: smoke
+test_suite_config:
+  tests_2_run:
+    ids_2_run:
+      - all
+    tags_2_run: [ ]
+    tags_2_skip:
+      default:
+        - todo
+        - to_support
+        - change
+        - bug
+        - sample
+      cluster:
+        - view
+        - cluster_table_bug
+comments: Test SQL to create remote udf
+
+tests:
+  - id: 0
+    tags:
+     - udf3_create_remote_func
+    name: create remote udf
+    description: SQL - remote UDF
+    steps:
+      - statements:
+          - client: python
+            wait: 1
+            query: DROP FUNCTION IF EXISTS ip_lookup;
+          
+          - client: python
+            query_type: table
+            query_id: udf-29-0
+            wait: 1
+            query: |
+              CREATE FUNCTION ip_lookup(ip string) RETURNS string 
+              TYPE Remote 
+              URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/';
+          
+          - client: python
+            query_id: udf-29-1
+            query_end_timer: 7
+            depends_on_done: udf-29-0
+            query_type: table
+            wait: 5
+            query: |
+              select ip_lookup('1.1.1.1');
+          
+          - client: python
+            query_id: udf-29-2
+            query_end_timer: 7
+            depends_on_done: udf-29-0
+            query_type: table
+            wait: 5
+            query: |
+              select ip_lookup('1');
+          
+          - client: python
+            query_type: table
+            query_id: udf-29-3
+            depends_on_done: udf-29-0
+            wait: 1
+            query: |
+              DROP FUNCTION ip_lookup; 
+    
+    expected_results:
+      - query_id: udf-29-1
+        expected_results:
+          - [ '{"ip":"1.1.1.1","hostname":"one.one.one.one","anycast":true,"city":"Englewood","region":"Colorado","country":"US","loc":"39.6123,-104.8799","org":"AS13335 Cloudflare, Inc.","postal":"80111","timezone":"America/Denver"}' ]
+      - query_id: udf-29-2
+        expected_results:
+          - [ '{"status":404,"error":{"title":"Wrong ip","message":"Please provide a valid IP address"}}']
+  
+  - id: 1
+    tags:
+     - udf3_create_remote_func
+    name: create remote uda
+    description: create remote uda failed 
+    steps:
+      - statements:
+          - client: python
+            wait: 1
+            query: DROP FUNCTION IF EXISTS ip_lookup;
+          
+          - client: python
+            query_type: table
+            query_id: udf-30-0
+            wait: 1
+            query: |
+              CREATE AGGREGATE FUNCTION ip_lookup(ip string) RETURNS string 
+              TYPE Remote 
+              URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/';
+    expected_results:
+      - query_id: udf-30-0
+        expected_results: "error_code:154"
+
+
