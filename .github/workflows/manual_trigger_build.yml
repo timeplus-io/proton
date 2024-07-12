@@ -237,7 +237,7 @@ jobs:
           ORIGINAL_BINARY=${{ env.build_directory }}/programs/proton
           STRIPPED_BINARY=${{ env.build_directory }}/programs/proton_${COMMIT_HASH}_${ARCH}
           ls -lh $ORIGINAL_BINARY
-          /opt/homebrew/opt/llvm@16/bin/llvm-strip $ORIGINAL_BINARY
+          /opt/homebrew/opt/llvm@17/bin/llvm-strip $ORIGINAL_BINARY
           mv $ORIGINAL_BINARY $STRIPPED_BINARY
           ls -lh $STRIPPED_BINARY
 
