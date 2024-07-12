@@ -71,7 +71,7 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
     if (is_remote)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << fmt::format("\nTYPE Remote \n")<< (settings.hilite ? hilite_none : "");
-        settings.ostr << fmt::format("URL '{}'\n",static_cast<String>(payload->get("URL")));
+        settings.ostr << fmt::format("URL '{}'\n", payload->get("AUTH_METHOD").toString());
         settings.ostr << fmt::format("AUTH_METHOD '{}'\n",payload->has("AUTH_METHOD") ? payload->get("AUTH_METHOD").toString(): "none");
         settings.ostr << fmt::format("AUTH_HEADER '{}'\n",payload->has("AUTH_HEADER") ? payload->get("AUTH_HEADER").toString() : "none");
         settings.ostr << fmt::format("AUTH_KEY '{}'\n",payload->has("AUTH_KEY") ? payload->get("AUTH_KEY").toString() : "none");
