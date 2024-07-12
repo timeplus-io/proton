@@ -84,8 +84,7 @@ BlockIO InterpreterCreateFunctionQuery::handleRemoteUDF(bool throw_if_exists, bo
     assert(create.isRemote());
     const auto func_name = create.getFunctionName();
     Poco::JSON::Object::Ptr func = create.toJSON();
-    UserDefinedFunctionFactory::instance().registerFunction(
-        getContext(), func_name, func, throw_if_exists , replace_if_exists);
+    UserDefinedFunctionFactory::instance().registerFunction(getContext(), func_name, func, throw_if_exists, replace_if_exists);
     return {};
 }
 /// proton: ends

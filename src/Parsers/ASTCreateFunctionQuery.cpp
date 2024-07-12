@@ -70,11 +70,11 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
     /// proton: starts
     if (is_remote)
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << fmt::format("\nTYPE Remote \n")<< (settings.hilite ? hilite_none : "");
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << fmt::format("\nTYPE Remote \n") << (settings.hilite ? hilite_none : "");
         settings.ostr << fmt::format("URL '{}'\n", payload->get("AUTH_METHOD").toString());
-        settings.ostr << fmt::format("AUTH_METHOD '{}'\n",payload->has("AUTH_METHOD") ? payload->get("AUTH_METHOD").toString(): "none");
-        settings.ostr << fmt::format("AUTH_HEADER '{}'\n",payload->has("AUTH_HEADER") ? payload->get("AUTH_HEADER").toString() : "none");
-        settings.ostr << fmt::format("AUTH_KEY '{}'\n",payload->has("AUTH_KEY") ? payload->get("AUTH_KEY").toString() : "none");
+        settings.ostr << fmt::format("AUTH_METHOD '{}'\n", payload->has("AUTH_METHOD") ? payload->get("AUTH_METHOD").toString() : "none");
+        settings.ostr << fmt::format("AUTH_HEADER '{}'\n", payload->has("AUTH_HEADER") ? payload->get("AUTH_HEADER").toString() : "none");
+        settings.ostr << fmt::format("AUTH_KEY '{}'\n", payload->has("AUTH_KEY") ? payload->get("AUTH_KEY").toString() : "none");
         return;
     }
     /// proton: ends
@@ -145,14 +145,16 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     inner_func->set("return_type", return_buf.str());
 
     /// remote functio
-    if (is_remote){
-        inner_func->set("url",payload->get("URL").toString());
+    if (is_remote)
+    {
+        inner_func->set("url", payload->get("URL").toString());
         // auth
-        if (payload->has("AUTH_METHOD")){
+        if (payload->has("AUTH_METHOD"))
+        {
             inner_func->set("auth_method", payload->get("AUTH_METHOD").toString());
             Poco::JSON::Object::Ptr auth_context = new Poco::JSON::Object();
             auth_context->set("key_name", payload->get("AUTH_HEADER").toString());
-            auth_context->set("key_value",payload->get("AUTH_KEY").toString());
+            auth_context->set("key_value", payload->get("AUTH_KEY").toString());
             inner_func->set("auth_context", auth_context);
         }
         func->set("function", inner_func);
