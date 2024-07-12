@@ -3,7 +3,7 @@
 #include <boost/core/noncopyable.hpp>
 #include <Interpreters/Context_fwd.h>
 
-#include <fstream>
+#include <mutex>
 
 namespace DB
 {
@@ -20,7 +20,7 @@ public:
 
     static FormatSchemaFactory & instance();
 
-    void registerSchema(const String & schema_name, const String & format, std::string_view schema_body, ExistsOP exists_op, ContextPtr & context);
+    void registerSchema(const String & schema_name, const String & format, std::string_view schema_body, ExistsOP exists_op, const ContextPtr & context);
 
     void unregisterSchema(const String & schema_name, const String & format, bool throw_if_not_exists, const ContextPtr & context);
 
