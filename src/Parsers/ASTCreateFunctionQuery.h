@@ -15,6 +15,7 @@ class ASTCreateFunctionQuery : public IAST, public ASTQueryWithOnCluster
 public:
     ASTPtr function_name;
     ASTPtr function_core;
+    Poco::JSON::Object::Ptr payload;
 
     bool or_replace = false;
     bool if_not_exists = false;
@@ -41,6 +42,9 @@ public:
 
     /// If it is a JavaScript UDF
     bool isJavaScript() const noexcept { return lang == "JavaScript"; }
+
+    /// If it is a JavaScript UDF
+    bool isRemote() const noexcept{return lang == "remote";}
     /// proton: ends
 };
 

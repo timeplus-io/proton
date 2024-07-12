@@ -8,6 +8,8 @@
 #include <Parsers/formatAST.h>
 #include <Parsers/ASTNameTypePair.h>
 #include <Parsers/ASTLiteral.h>
+
+#include <boost/algorithm/string/case_conv.hpp>
 /// proton: ends
 
 
@@ -24,6 +26,7 @@ ASTPtr ASTCreateFunctionQuery::clone() const
 
     res->function_core = function_core->clone();
     res->children.push_back(res->function_core);
+    res->payload = res->payload;
     return res;
 }
 
@@ -50,7 +53,8 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
 
     /// proton: starts
     bool is_javascript_func = isJavaScript();
-    if (is_javascript_func)
+    bool is_remote = isRemote();
+    if (is_javascript_func || is_remote)
     {
         /// arguments
         arguments->formatImpl(settings, state, frame);
@@ -63,6 +67,17 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
 
     formatOnCluster(settings);
 
+    /// proton: starts
+    if (is_remote)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << fmt::format("\nTYPE Remote \n")<< (settings.hilite ? hilite_none : "");
+        settings.ostr << fmt::format("URL '{}'\n",static_cast<String>(payload->get("URL")));
+        settings.ostr << fmt::format("AUTH_METHOD '{}'\n",payload->has("AUTH_METHOD") ? payload->get("AUTH_METHOD").toString(): "none");
+        settings.ostr << fmt::format("AUTH_HEADER '{}'\n",payload->has("AUTH_HEADER") ? payload->get("AUTH_HEADER").toString() : "none");
+        settings.ostr << fmt::format("AUTH_KEY '{}'\n",payload->has("AUTH_KEY") ? payload->get("AUTH_KEY").toString() : "none");
+        return;
+    }
+    /// proton: ends
     settings.ostr << (settings.hilite ? hilite_keyword : "") << " AS " << (settings.hilite ? hilite_none : "");
 
     /// proton: starts. Do not format the source of JavaScript UDF
@@ -89,7 +104,8 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     Poco::JSON::Object::Ptr func = new Poco::JSON::Object(Poco::JSON_PRESERVE_KEY_ORDER);
     Poco::JSON::Object::Ptr inner_func = new Poco::JSON::Object(Poco::JSON_PRESERVE_KEY_ORDER);
     inner_func->set("name", getFunctionName());
-    if (!isJavaScript())
+    bool is_remote = isRemote();
+    if (!isJavaScript() && !isRemote())
     {
         WriteBufferFromOwnString source_buf;
         formatAST(*function_core, source_buf, false);
@@ -116,7 +132,9 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     inner_func->set("arguments", json_args);
 
     /// type
-    inner_func->set("type", "javascript");
+    auto type = lang;
+    boost::to_lower(type);
+    inner_func->set("type", lang);
 
     /// is_aggregation
     inner_func->set("is_aggregation", is_aggregation);
@@ -125,6 +143,22 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     WriteBufferFromOwnString return_buf;
     formatAST(*return_type, return_buf, false);
     inner_func->set("return_type", return_buf.str());
+
+    /// remote functio
+    if (is_remote){
+        inner_func->set("url",payload->get("URL").toString());
+        // auth
+        if (payload->has("AUTH_METHOD")){
+            inner_func->set("auth_method", payload->get("AUTH_METHOD").toString());
+            Poco::JSON::Object::Ptr auth_context = new Poco::JSON::Object();
+            auth_context->set("key_name", payload->get("AUTH_HEADER").toString());
+            auth_context->set("key_value",payload->get("AUTH_KEY").toString());
+            inner_func->set("auth_context", auth_context);
+        }
+        func->set("function", inner_func);
+        /// Remote function don't have source, return early.
+        return func;
+    }
 
     /// source
     ASTLiteral * js_src = function_core->as<ASTLiteral>();
