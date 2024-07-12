@@ -26,7 +26,7 @@ ASTPtr ASTCreateFunctionQuery::clone() const
 
     res->function_core = function_core->clone();
     res->children.push_back(res->function_core);
-    res->payload = res->payload;
+    res->payload = payload;
     return res;
 }
 
@@ -134,7 +134,7 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     /// type
     auto type = lang;
     boost::to_lower(type);
-    inner_func->set("type", lang);
+    inner_func->set("type", type);
 
     /// is_aggregation
     inner_func->set("is_aggregation", is_aggregation);
