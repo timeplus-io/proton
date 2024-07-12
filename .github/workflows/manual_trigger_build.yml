@@ -27,11 +27,19 @@ on: # yamllint disable-line rule:truthy
         required: true
         type: string
         default: 'manual'
+      enable_native_build_for_macOS:
+        description: 'Experimental try to build macos binary native'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - true
+          - false
 
 jobs:
   prepare_sanitizer:
     runs-on: ubuntu-latest
-    if: github.event.inputs.build_type != 'release'
+    if: github.event.inputs.enable_native_build_for_macOS == 'false' && github.event.inputs.build_type != 'release'
     outputs:
       command: |
         cd $GITHUB_WORKSPACE
@@ -74,7 +82,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_release:
     runs-on: ubuntu-latest
-    if: github.event.inputs.build_type == 'release'
+    if:  github.event.inputs.enable_native_build_for_macOS == 'false' && github.event.inputs.build_type == 'release'
     outputs:
       command: |
         cd $GITHUB_WORKSPACE
@@ -197,3 +205,52 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  build_native_macOS_arm:
+    runs-on: [self-hosted, macOS, ARM64]
+    env:
+      build_directory: ${{ github.workspace }}/build
+      build_type: Release
+    if: github.event.inputs.enable_native_build_for_macOS == 'true' && github.event.inputs.arch == 'arm'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.1.7
+        with:
+          token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+          fetch-depth: 1
+          submodules: true
+
+      - name: Create and Configure Build
+        run: |
+          mkdir -p ${{ env.build_directory }}
+          export CC=$(brew --prefix llvm@17)/bin/clang
+          export CXX=$(brew --prefix llvm@17)/bin/clang++
+          export PATH=$(brew --prefix llvm@17)/bin:$PATH
+          cmake -B ${{ env.build_directory }} -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.build_type }} -DENABLE_TESTS=OFF -DENABLE_UTILS=OFF -DENABLE_EXAMPLES=OFF
+
+      - name: Build with Ninja
+        run: cmake --build ${{ env.build_directory }}
+
+      - name: Strip and Rename binary
+        run: |
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          ARCH=$(uname -m)
+          ORIGINAL_BINARY=${{ env.build_directory }}/programs/proton
+          STRIPPED_BINARY=${{ env.build_directory }}/programs/proton_${COMMIT_HASH}_${ARCH}
+          ls -lh $ORIGINAL_BINARY
+          /opt/homebrew/opt/llvm@17/bin/llvm-strip $ORIGINAL_BINARY
+          mv $ORIGINAL_BINARY $STRIPPED_BINARY
+          ls -lh $STRIPPED_BINARY
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4.0.2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Upload Artifact To S3
+        run: |
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          ARCH=$(uname -m)
+          STRIPPED_BINARY=${{ env.build_directory }}/programs/proton_${COMMIT_HASH}_${ARCH}
+          aws s3 cp --no-progress $STRIPPED_BINARY s3://tp-internal/proton/native_build_macOS/

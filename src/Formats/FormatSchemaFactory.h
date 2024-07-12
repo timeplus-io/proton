@@ -3,6 +3,8 @@
 #include <boost/core/noncopyable.hpp>
 #include <Interpreters/Context_fwd.h>
 
+#include <mutex>
+
 namespace DB
 {
 /// Manages format schemas.
