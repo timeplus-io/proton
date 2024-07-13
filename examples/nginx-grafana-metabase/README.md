@@ -94,7 +94,7 @@ On line 3, the [`CREATE RANDOM STREAM`](https://docs.timeplus.com/proton-create-
 
 Just like in the previous article, the stream also has 12 columns. Each column is randomly assigned a `default` value as you can see on lines 4 - 30.
 
-Using the line numbers 4 - 30 as reference, the table below goes over each column and the database [functions](https://docs.timeplus.com/functions) used to generate its `default` value.
+Using the line numbers 4 - 30 as reference, the table below goes over each column and the database [functions](https://docs.timeplus.com/functions) used to generate test data.
 | Line  | Column | `default` | 
 |------|--------|------------------|
 | 4 | `remote_ip` | [`random_in_type('ipv4')`](https://docs.timeplus.com/functions_for_random#random_in_type): returns a random [ipv4](https://docs.timeplus.com/datatypes) representing a user's IP address. |
@@ -155,7 +155,7 @@ Query id: 11d071e4-6028-47da-826d-9db42176f8e5
 1 row in set. Elapsed: 0.013 sec. 
 ```
 
-Due to this design decision, we will need to first take a snapshot from the random stream. This snapshot will represent our access log data so we can reliably geolocate the latitude and longitude of each (randomly generated) IP address before we can correctly visualize them in Grafana.
+Due to this design decision, we will need to create a snapshot from the random stream to serve as our test data. This snapshot will represent our access log data so we can reliably geolocate the latitude and longitude of each (randomly generated) IP address before we can correctly visualize them in Grafana.
 
 Afterwards, the article will use the random stream to illustrate streaming queries in Grafana.
 
