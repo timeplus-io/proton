@@ -1,3 +1,4 @@
+#include <utility>
 #include <Parsers/ParserCreateFunctionQuery.h>
 
 #include <Parsers/ASTCreateFunctionQuery.h>
@@ -147,6 +148,7 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
         {
             if (!value.parse(pos, auth_method, expected))
                 return false;
+            url->children.push_back(auth_method);
             auto method_str = auth_method->as<ASTLiteral>()->value.safeGet<String>();
             if (method_str == "auth_header")
             {
@@ -158,17 +160,15 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
                     return false;
                 if (!value.parse(pos, auth_key, expected))
                     return false;
-                remote_func_settings->set("AUTH_HEADER", auth_header->as<ASTLiteral>()->value.safeGet<String>());
-                remote_func_settings->set("AUTH_KEY", auth_key->as<ASTLiteral>()->value.safeGet<String>());
+                url->children.push_back(auth_header);
+                url->children.push_back(auth_key);
             }
             else if (method_str != "none")
             {
                 throw Exception("Auth_method must be 'none' or 'auth_header'", ErrorCodes::UNKNOWN_FUNCTION);
             }
-            remote_func_settings->set("AUTH_METHOD", method_str);
         }
-        
-        function_core = std::make_shared<ASTLiteral>(Field());
+        function_core = std::move(url);
     }
     /// proton: ends
 
@@ -179,6 +179,12 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     create_function_query->children.push_back(function_name);
 
     create_function_query->function_core = function_core;
+    if (function_core){
+        auto url_str = function_core->as<ASTLiteral>()->value.safeGet<String>();
+        for (const auto & child:function_core->children){
+            auto x = child->as<ASTLiteral>()->value.safeGet<String>();
+        }
+    }
     create_function_query->children.push_back(function_core);
 
     create_function_query->or_replace = or_replace;
@@ -190,7 +196,6 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     create_function_query->lang = is_javascript_func ? "JavaScript" : is_remote ? "Remote" : "SQL";
     create_function_query->arguments = std::move(arguments);
     create_function_query->return_type = std::move(return_type);
-    create_function_query->remote_func_settings = remote_func_settings;
     /// proton: ends
 
     return true;

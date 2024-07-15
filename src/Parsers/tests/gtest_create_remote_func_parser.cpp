@@ -15,9 +15,6 @@
 
 #include <gtest/gtest.h>
 #include <Poco/JSON/Parser.h>
-#include "Common/Exception.h"
-#include "Parsers/IParser.h"
-
 using namespace DB;
 
 TEST(ParserCreateRemoteFunctionQuery, UDFNoHeaderMethod)
@@ -40,11 +37,11 @@ TEST(ParserCreateRemoteFunctionQuery, UDFNoHeaderMethod)
     String ret = queryToString(*create->return_type.get(), true);
     EXPECT_EQ(ret, "string");
 
-    auto remote_func_settings = create->remote_func_settings;
-    EXPECT_EQ(remote_func_settings->get("URL").toString(), "https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/");
-    EXPECT_FALSE(remote_func_settings->has("AUTH_METHOD"));
-    EXPECT_FALSE(remote_func_settings->has("AUTH_HEADER"));
-    EXPECT_FALSE(remote_func_settings->has("AUTH_KEY"));
+    auto remote_func_settings = create->function_core;
+    EXPECT_EQ(
+        remote_func_settings->as<ASTLiteral>()->value.safeGet<String>(),
+        "https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/");
+    EXPECT_TRUE(remote_func_settings->children.empty());
 }
 
 TEST(ParserCreateRemoteFunctionQuery, UDFHeaderMethodIsNone)
@@ -67,12 +64,12 @@ TEST(ParserCreateRemoteFunctionQuery, UDFHeaderMethodIsNone)
     /// Check return type
     String ret = queryToString(*create->return_type.get(), true);
     EXPECT_EQ(ret, "string");
-
-    auto remote_func_settings = create->remote_func_settings;
-    EXPECT_EQ(remote_func_settings->get("URL").toString(), "https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/");
-    EXPECT_EQ(remote_func_settings->get("AUTH_METHOD").toString(), "none");
-    EXPECT_FALSE(remote_func_settings->has("AUTH_HEADER"));
-    EXPECT_FALSE(remote_func_settings->has("AUTH_KEY"));
+    auto remote_func_settings = create->function_core;
+    EXPECT_EQ(
+        remote_func_settings->as<ASTLiteral>()->value.safeGet<String>(),
+        "https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/");
+    EXPECT_EQ(remote_func_settings->children.size(), 1);
+    EXPECT_EQ(remote_func_settings->children[0]->as<ASTLiteral>()->value.safeGet<String>(), "none"); // Auth method
 }
 
 TEST(ParserCreateRemoteFunctionQuery, UDFHeaderMethodIsAuthHeader)
@@ -80,13 +77,13 @@ TEST(ParserCreateRemoteFunctionQuery, UDFHeaderMethodIsAuthHeader)
     String input = "CREATE REMOTE  FUNCTION ip_lookup(ip string) RETURNS string "
                    "URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/'"
                    "AUTH_METHOD 'auth_header'"
-                    "AUTH_HEADER 'auth'"
-                    "AUTH_KEY 'proton'";
+                   "AUTH_HEADER 'auth'"
+                   "AUTH_KEY 'proton'";
     ParserCreateFunctionQuery parser;
     ASTPtr ast = parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0);
     ASTCreateFunctionQuery * create = ast->as<ASTCreateFunctionQuery>();
     EXPECT_EQ(create->getFunctionName(), "ip_lookup");
-    EXPECT_EQ(std::string(magic_enum::enum_name(create->lang));, "Remote");
+    EXPECT_EQ(create->lang, "Remote");
     EXPECT_NE(create->function_core, nullptr);
     EXPECT_NE(create->arguments, nullptr);
 
@@ -98,13 +95,14 @@ TEST(ParserCreateRemoteFunctionQuery, UDFHeaderMethodIsAuthHeader)
     String ret = queryToString(*create->return_type.get(), true);
     EXPECT_EQ(ret, "string");
 
-    auto remote_func_settings = create->remote_func_settings;
-    EXPECT_EQ(remote_func_settings->get("URL").toString(), "https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/");
-    EXPECT_EQ(remote_func_settings->get("AUTH_METHOD").toString(), "auth_header");
-    EXPECT_TRUE(remote_func_settings->has("AUTH_HEADER"));
-    EXPECT_TRUE(remote_func_settings->has("AUTH_KEY"));
-    EXPECT_EQ(remote_func_settings->get("AUTH_HEADER"), "auth");
-    EXPECT_EQ(remote_func_settings->get("AUTH_KEY"), "proton");
+    auto remote_func_settings = create->function_core;
+    EXPECT_EQ(
+        remote_func_settings->as<ASTLiteral>()->value.safeGet<String>(),
+        "https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/");
+    EXPECT_EQ(remote_func_settings->children.size(), 3);
+    EXPECT_EQ(remote_func_settings->children[0]->as<ASTLiteral>()->value.safeGet<String>(), "auth_header"); /// Auth method
+    EXPECT_EQ(remote_func_settings->children[1]->as<ASTLiteral>()->value.safeGet<String>(), "auth"); /// auth_header
+    EXPECT_EQ(remote_func_settings->children[2]->as<ASTLiteral>()->value.safeGet<String>(), "proton"); /// auth key
 }
 
 
@@ -115,5 +113,4 @@ TEST(ParserCreateRemoteFunctionQuery, UDFHeaderMethodIsOther)
                    "AUTH_METHOD 'token'";
     ParserCreateFunctionQuery parser;
     EXPECT_THROW(parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0), Exception);
-
 }

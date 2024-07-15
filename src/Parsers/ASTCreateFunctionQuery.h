@@ -15,7 +15,6 @@ class ASTCreateFunctionQuery : public IAST, public ASTQueryWithOnCluster
 public:
     ASTPtr function_name;
     ASTPtr function_core;
-    Poco::JSON::Object::Ptr remote_func_settings;
 
     bool or_replace = false;
     bool if_not_exists = false;

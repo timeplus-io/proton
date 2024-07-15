@@ -26,7 +26,7 @@ ASTPtr ASTCreateFunctionQuery::clone() const
 
     res->function_core = function_core->clone();
     res->children.push_back(res->function_core);
-    res->remote_func_settings = remote_func_settings;
+
     return res;
 }
 
@@ -72,16 +72,16 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
     /// proton: starts
     if (is_remote)
     {
-        settings.ostr << fmt::format("\nURL '{}'\n", remote_func_settings->get("URL").toString());
-        auto auth_method = remote_func_settings->has("AUTH_METHOD") ? remote_func_settings->get("AUTH_METHOD").toString() : "none";
+        settings.ostr << fmt::format("\nURL '{}'\n", function_core->as<ASTLiteral>()->value.safeGet<String>());
+        auto auth_method = !function_core->children.empty() ? function_core->children[0]->as<ASTLiteral>()->value.safeGet<String>() : "none";
         settings.ostr << fmt::format("AUTH_METHOD '{}'\n", auth_method);
         if (auth_method != "none")
         {
             settings.ostr << fmt::format(
                 "AUTH_HEADER '{}'\n",
-                remote_func_settings->has("AUTH_HEADER") ? remote_func_settings->get("AUTH_HEADER").toString() : "none");
+                function_core->children[1]->as<ASTLiteral>()->value.safeGet<String>());
             settings.ostr << fmt::format(
-                "AUTH_KEY '{}'\n", remote_func_settings->has("AUTH_KEY") ? remote_func_settings->get("AUTH_KEY").toString() : "none");
+                "AUTH_KEY '{}'\n", function_core->children[2]->as<ASTLiteral>()->value.safeGet<String>());
         }
         return;
     }
@@ -155,17 +155,16 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     /// remote function
     if (is_remote)
     {
-        inner_func->set("url", remote_func_settings->get("URL").toString());
+        inner_func->set("url", function_core->as<ASTLiteral>()->value.safeGet<String>());
         // auth
-        if (remote_func_settings->has("AUTH_METHOD"))
-        {
-            auto auth_method(remote_func_settings->get("AUTH_METHOD").toString());
+        if (!function_core->children.empty()){
+            auto auth_method = function_core->children[0]->as<ASTLiteral>()->value.safeGet<String>();
             inner_func->set("auth_method", auth_method);
             if (auth_method == "auth_header")
             {
                 Poco::JSON::Object::Ptr auth_context = new Poco::JSON::Object();
-                auth_context->set("key_name", remote_func_settings->get("AUTH_HEADER").toString());
-                auth_context->set("key_value", remote_func_settings->get("AUTH_KEY").toString());
+                auth_context->set("key_name", function_core->children[1]->as<ASTLiteral>()->value.safeGet<String>());
+                auth_context->set("key_value", function_core->children[2]->as<ASTLiteral>()->value.safeGet<String>());
                 inner_func->set("auth_context", auth_context);
             }
         }
