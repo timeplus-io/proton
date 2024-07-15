@@ -132,7 +132,6 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
         if (!lambda_p.parse(pos, function_core, expected))
             return false;
     }
-    Poco::JSON::Object::Ptr remote_func_settings = new Poco::JSON::Object();
     if (is_remote)
     {
         if (is_aggregation)
@@ -164,7 +163,7 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
             }
             else if (method_str != "none")
             {
-                throw Exception("Auth_method must be 'none' or 'auth_header'", ErrorCodes::UNKNOWN_FUNCTION);
+                throw Exception("AUTH_METHOD must be 'none' or 'auth_header'", ErrorCodes::UNKNOWN_FUNCTION);
             }
         }
         function_core = std::move(url);

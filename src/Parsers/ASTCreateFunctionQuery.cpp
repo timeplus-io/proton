@@ -1,3 +1,4 @@
+#include <cassert>
 #include <IO/Operators.h>
 #include <Parsers/ASTCreateFunctionQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -155,6 +156,7 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     /// remote function
     if (is_remote)
     {
+        assert(function_core != nullptr);
         inner_func->set("url", function_core->as<ASTLiteral>()->value.safeGet<String>());
         // auth
         if (!function_core->children.empty())
