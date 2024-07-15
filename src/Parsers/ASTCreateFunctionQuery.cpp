@@ -30,7 +30,8 @@ ASTPtr ASTCreateFunctionQuery::clone() const
     return res;
 }
 
-void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, IAST::FormatState & state, IAST::FormatStateStacked frame) const
+void ASTCreateFunctionQuery::formatImpl(
+    const IAST::FormatSettings & settings, IAST::FormatState & state, IAST::FormatStateStacked frame) const
 {
     settings.ostr << (settings.hilite ? hilite_keyword : "") << "CREATE ";
 
@@ -52,7 +53,8 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
 
     settings.ostr << (settings.hilite ? hilite_none : "");
 
-    settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(getFunctionName()) << (settings.hilite ? hilite_none : "");
+    settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(getFunctionName())
+                  << (settings.hilite ? hilite_none : "");
 
     /// proton: starts
     bool is_javascript_func = isJavaScript();
@@ -73,15 +75,13 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
     if (is_remote)
     {
         settings.ostr << fmt::format("\nURL '{}'\n", function_core->as<ASTLiteral>()->value.safeGet<String>());
-        auto auth_method = !function_core->children.empty() ? function_core->children[0]->as<ASTLiteral>()->value.safeGet<String>() : "none";
+        auto auth_method
+            = !function_core->children.empty() ? function_core->children[0]->as<ASTLiteral>()->value.safeGet<String>() : "none";
         settings.ostr << fmt::format("AUTH_METHOD '{}'\n", auth_method);
         if (auth_method != "none")
         {
-            settings.ostr << fmt::format(
-                "AUTH_HEADER '{}'\n",
-                function_core->children[1]->as<ASTLiteral>()->value.safeGet<String>());
-            settings.ostr << fmt::format(
-                "AUTH_KEY '{}'\n", function_core->children[2]->as<ASTLiteral>()->value.safeGet<String>());
+            settings.ostr << fmt::format("AUTH_HEADER '{}'\n", function_core->children[1]->as<ASTLiteral>()->value.safeGet<String>());
+            settings.ostr << fmt::format("AUTH_KEY '{}'\n", function_core->children[2]->as<ASTLiteral>()->value.safeGet<String>());
         }
         return;
     }
@@ -157,7 +157,8 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     {
         inner_func->set("url", function_core->as<ASTLiteral>()->value.safeGet<String>());
         // auth
-        if (!function_core->children.empty()){
+        if (!function_core->children.empty())
+        {
             auto auth_method = function_core->children[0]->as<ASTLiteral>()->value.safeGet<String>();
             inner_func->set("auth_method", auth_method);
             if (auth_method == "auth_header")
