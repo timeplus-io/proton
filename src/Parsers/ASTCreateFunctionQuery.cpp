@@ -1,13 +1,13 @@
-#include <Common/quoteString.h>
 #include <IO/Operators.h>
 #include <Parsers/ASTCreateFunctionQuery.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
+#include <Common/quoteString.h>
 
 /// proton: starts
-#include <Parsers/formatAST.h>
-#include <Parsers/ASTNameTypePair.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTNameTypePair.h>
+#include <Parsers/formatAST.h>
 
 #include <boost/algorithm/string/case_conv.hpp>
 /// proton: ends
@@ -26,7 +26,7 @@ ASTPtr ASTCreateFunctionQuery::clone() const
 
     res->function_core = function_core->clone();
     res->children.push_back(res->function_core);
-    res->payload = payload;
+    res->remote_func_settings = remote_func_settings;
     return res;
 }
 
@@ -38,8 +38,11 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
         settings.ostr << "OR REPLACE ";
 
     /// proton: starts
+    bool is_remote = isRemote();
     if (is_aggregation)
         settings.ostr << "AGGREGATE FUNCTION ";
+    else if (is_remote)
+        settings.ostr << "REMOTE FUNCTION ";
     else
         settings.ostr << "FUNCTION ";
     /// proton: ends
@@ -53,7 +56,6 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
 
     /// proton: starts
     bool is_javascript_func = isJavaScript();
-    bool is_remote = isRemote();
     if (is_javascript_func || is_remote)
     {
         /// arguments
@@ -70,11 +72,17 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
     /// proton: starts
     if (is_remote)
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << fmt::format("\nTYPE Remote \n") << (settings.hilite ? hilite_none : "");
-        settings.ostr << fmt::format("URL '{}'\n", payload->get("AUTH_METHOD").toString());
-        settings.ostr << fmt::format("AUTH_METHOD '{}'\n", payload->has("AUTH_METHOD") ? payload->get("AUTH_METHOD").toString() : "none");
-        settings.ostr << fmt::format("AUTH_HEADER '{}'\n", payload->has("AUTH_HEADER") ? payload->get("AUTH_HEADER").toString() : "none");
-        settings.ostr << fmt::format("AUTH_KEY '{}'\n", payload->has("AUTH_KEY") ? payload->get("AUTH_KEY").toString() : "none");
+        settings.ostr << fmt::format("\nURL '{}'\n", remote_func_settings->get("URL").toString());
+        auto auth_method = remote_func_settings->has("AUTH_METHOD") ? remote_func_settings->get("AUTH_METHOD").toString() : "none";
+        settings.ostr << fmt::format("AUTH_METHOD '{}'\n", auth_method);
+        if (auth_method != "none")
+        {
+            settings.ostr << fmt::format(
+                "AUTH_HEADER '{}'\n",
+                remote_func_settings->has("AUTH_HEADER") ? remote_func_settings->get("AUTH_HEADER").toString() : "none");
+            settings.ostr << fmt::format(
+                "AUTH_KEY '{}'\n", remote_func_settings->has("AUTH_KEY") ? remote_func_settings->get("AUTH_KEY").toString() : "none");
+        }
         return;
     }
     /// proton: ends
@@ -144,18 +152,22 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     formatAST(*return_type, return_buf, false);
     inner_func->set("return_type", return_buf.str());
 
-    /// remote functio
+    /// remote function
     if (is_remote)
     {
-        inner_func->set("url", payload->get("URL").toString());
+        inner_func->set("url", remote_func_settings->get("URL").toString());
         // auth
-        if (payload->has("AUTH_METHOD"))
+        if (remote_func_settings->has("AUTH_METHOD"))
         {
-            inner_func->set("auth_method", payload->get("AUTH_METHOD").toString());
-            Poco::JSON::Object::Ptr auth_context = new Poco::JSON::Object();
-            auth_context->set("key_name", payload->get("AUTH_HEADER").toString());
-            auth_context->set("key_value", payload->get("AUTH_KEY").toString());
-            inner_func->set("auth_context", auth_context);
+            auto auth_method(remote_func_settings->get("AUTH_METHOD").toString());
+            inner_func->set("auth_method", auth_method);
+            if (auth_method == "auth_header")
+            {
+                Poco::JSON::Object::Ptr auth_context = new Poco::JSON::Object();
+                auth_context->set("key_name", remote_func_settings->get("AUTH_HEADER").toString());
+                auth_context->set("key_value", remote_func_settings->get("AUTH_KEY").toString());
+                inner_func->set("auth_context", auth_context);
+            }
         }
         func->set("function", inner_func);
         /// Remote function don't have source, return early.

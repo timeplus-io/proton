@@ -8,9 +8,9 @@
 #include <Parsers/ExpressionListParsers.h>
 
 /// proton: starts
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/Streaming/ParserArguments.h>
-#include <Parsers/ASTLiteral.h>
 
 #include <Poco/JSON/Object.h>
 /// proton: ends
@@ -21,9 +21,10 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int AGGREGATE_FUNCTION_NOT_APPLICABLE;
+extern const int AGGREGATE_FUNCTION_NOT_APPLICABLE;
+extern const int UNKNOWN_FUNCTION;
 }
-bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
+bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[maybe_unused]] bool hint)
 {
     ParserKeyword s_create("CREATE");
     ParserKeyword s_function("FUNCTION");
@@ -32,7 +33,7 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     ParserKeyword s_aggr_function("AGGREGATE FUNCTION");
     ParserKeyword s_returns("RETURNS");
     ParserKeyword s_javascript_type("LANGUAGE JAVASCRIPT");
-    ParserKeyword s_type_remote("TYPE Remote");
+    ParserKeyword s_remote("REMOTE FUNCTION");
     ParserKeyword s_url("URL");
     ParserKeyword s_auth_method("AUTH_METHOD");
     ParserKeyword s_auth_header("AUTH_HEADER");
@@ -79,10 +80,12 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     /// proton: starts
     if (!s_function.ignore(pos, expected))
     {
-        if(!s_aggr_function.ignore(pos, expected))
+        if (s_aggr_function.ignore(pos, expected))
+            is_aggregation = true;
+        else if (s_remote.ignore(pos, expected))
+            is_remote = true;
+        else
             return false;
-
-        is_aggregation = true;
     }
     /// proton: ends
 
@@ -106,14 +109,11 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     /// proton: starts
     if (is_new_syntax && s_returns.ignore(pos, expected))
     {
-        if(!return_p.parse(pos, return_type, expected))
+        if (!return_p.parse(pos, return_type, expected))
             return false;
 
         if (s_javascript_type.ignore(pos, expected))
             is_javascript_func = true;
-        else if (s_type_remote.ignore(pos,expected)){
-            is_remote = true;
-        }
 
         if (!is_remote && !s_as.ignore(pos, expected))
             return false;
@@ -131,32 +131,44 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
         if (!lambda_p.parse(pos, function_core, expected))
             return false;
     }
-    Poco::JSON::Object::Ptr payload = new Poco::JSON::Object();
-    if (is_remote){
-        if (is_aggregation){
-            throw Exception("Remote udf can not be an aggregate function",ErrorCodes::AGGREGATE_FUNCTION_NOT_APPLICABLE);
+    Poco::JSON::Object::Ptr remote_func_settings = new Poco::JSON::Object();
+    if (is_remote)
+    {
+        if (is_aggregation)
+        {
+            throw Exception("Remote udf can not be an aggregate function", ErrorCodes::AGGREGATE_FUNCTION_NOT_APPLICABLE);
         }
-        if (!s_url.ignore(pos,expected))
+        if (!s_url.ignore(pos, expected))
             return false;
         if (!value.parse(pos, url, expected))
             return false;
-        function_core = std::make_shared<ASTLiteral>(Field());
-        payload->set("URL", url->as<ASTLiteral>()->value.safeGet<String>());
-        if (s_auth_method.ignore(pos,expected)){
+        remote_func_settings->set("URL", url->as<ASTLiteral>()->value.safeGet<String>());
+        if (s_auth_method.ignore(pos, expected))
+        {
             if (!value.parse(pos, auth_method, expected))
                 return false;
-            if (!s_auth_header.ignore(pos, expected))
-                return false;
-            if (!value.parse(pos, auth_header, expected))
-                return false;
-            if (!s_auth_key.ignore(pos, expected))
-                return false;
-            if (!value.parse(pos, auth_key, expected))
-                return false;
-            payload->set("AUTH_METHOD", auth_method->as<ASTLiteral>()->value.safeGet<String>());
-            payload->set("AUTH_HEADER", auth_header->as<ASTLiteral>()->value.safeGet<String>());
-            payload->set("AUTH_KEY", auth_key->as<ASTLiteral>()->value.safeGet<String>());
+            auto method_str = auth_method->as<ASTLiteral>()->value.safeGet<String>();
+            if (method_str == "auth_header")
+            {
+                if (!s_auth_header.ignore(pos, expected))
+                    return false;
+                if (!value.parse(pos, auth_header, expected))
+                    return false;
+                if (!s_auth_key.ignore(pos, expected))
+                    return false;
+                if (!value.parse(pos, auth_key, expected))
+                    return false;
+                remote_func_settings->set("AUTH_HEADER", auth_header->as<ASTLiteral>()->value.safeGet<String>());
+                remote_func_settings->set("AUTH_KEY", auth_key->as<ASTLiteral>()->value.safeGet<String>());
+            }
+            else if (method_str != "none")
+            {
+                throw Exception("Auth_method must be 'none' or 'auth_header'", ErrorCodes::UNKNOWN_FUNCTION);
+            }
+            remote_func_settings->set("AUTH_METHOD", method_str);
         }
+        
+        function_core = std::make_shared<ASTLiteral>(Field());
     }
     /// proton: ends
 
@@ -175,10 +187,10 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
 
     /// proton: starts
     create_function_query->is_aggregation = is_aggregation;
-    create_function_query->lang = is_javascript_func ? "JavaScript" : is_remote ? "remote" : "SQL";
+    create_function_query->lang = is_javascript_func ? "JavaScript" : is_remote ? "Remote" : "SQL";
     create_function_query->arguments = std::move(arguments);
     create_function_query->return_type = std::move(return_type);
-    create_function_query->payload = payload;
+    create_function_query->remote_func_settings = remote_func_settings;
     /// proton: ends
 
     return true;
