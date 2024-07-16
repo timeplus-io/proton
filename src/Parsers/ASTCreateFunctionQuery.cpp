@@ -54,7 +54,7 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
     settings.ostr << (settings.hilite ? hilite_none : "");
 
     settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(getFunctionName()) << (settings.hilite ? hilite_none : "");
-    
+
     /// proton: starts
     bool is_javascript_func = isJavaScript();
     if (is_javascript_func || is_remote)
