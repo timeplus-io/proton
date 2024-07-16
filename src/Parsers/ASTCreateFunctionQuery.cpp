@@ -27,7 +27,6 @@ ASTPtr ASTCreateFunctionQuery::clone() const
 
     res->function_core = function_core->clone();
     res->children.push_back(res->function_core);
-
     return res;
 }
 
