@@ -1,8 +1,8 @@
+#include <Common/quoteString.h>
 #include <IO/Operators.h>
 #include <Parsers/ASTCreateFunctionQuery.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
-#include <Common/quoteString.h>
 
 /// proton: starts
 #include <Parsers/ASTLiteral.h>
