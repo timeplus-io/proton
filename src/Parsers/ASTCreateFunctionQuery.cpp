@@ -1,4 +1,3 @@
-#include <cassert>
 #include <IO/Operators.h>
 #include <Parsers/ASTCreateFunctionQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -10,6 +9,7 @@
 #include <Parsers/ASTNameTypePair.h>
 #include <Parsers/formatAST.h>
 
+#include <cassert>
 #include <boost/algorithm/string/case_conv.hpp>
 /// proton: ends
 
@@ -31,8 +31,7 @@ ASTPtr ASTCreateFunctionQuery::clone() const
     return res;
 }
 
-void ASTCreateFunctionQuery::formatImpl(
-    const IAST::FormatSettings & settings, IAST::FormatState & state, IAST::FormatStateStacked frame) const
+void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, IAST::FormatState & state, IAST::FormatStateStacked frame) const
 {
     settings.ostr << (settings.hilite ? hilite_keyword : "") << "CREATE ";
 
@@ -54,9 +53,8 @@ void ASTCreateFunctionQuery::formatImpl(
 
     settings.ostr << (settings.hilite ? hilite_none : "");
 
-    settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(getFunctionName())
-                  << (settings.hilite ? hilite_none : "");
-
+    settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(getFunctionName()) << (settings.hilite ? hilite_none : "");
+    
     /// proton: starts
     bool is_javascript_func = isJavaScript();
     if (is_javascript_func || is_remote)

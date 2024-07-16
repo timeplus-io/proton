@@ -1,4 +1,3 @@
-#include <utility>
 #include <Parsers/ParserCreateFunctionQuery.h>
 
 #include <Parsers/ASTCreateFunctionQuery.h>
@@ -20,12 +19,14 @@
 namespace DB
 {
 
+/// proton: starts
 namespace ErrorCodes
 {
 extern const int AGGREGATE_FUNCTION_NOT_APPLICABLE;
 extern const int UNKNOWN_FUNCTION;
 }
-bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[maybe_unused]] bool hint)
+/// proton: ends
+bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_create("CREATE");
     ParserKeyword s_function("FUNCTION");
