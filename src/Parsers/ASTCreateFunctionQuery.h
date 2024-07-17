@@ -41,6 +41,9 @@ public:
 
     /// If it is a JavaScript UDF
     bool isJavaScript() const noexcept { return lang == "JavaScript"; }
+
+    /// If it is a JavaScript UDF
+    bool isRemote() const noexcept { return lang == "Remote"; }
     /// proton: ends
 };
 

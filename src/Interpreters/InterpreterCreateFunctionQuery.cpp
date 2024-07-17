@@ -54,8 +54,8 @@ BlockIO InterpreterCreateFunctionQuery::execute()
     bool replace_if_exists = create_function_query.or_replace;
 
     /// proton: starts. Handle javascript UDF
-    if (create_function_query.isJavaScript())
-        return handleJavaScriptUDF(throw_if_exists, replace_if_exists);
+    if (create_function_query.isJavaScript() || create_function_query.isRemote())
+        return handleUDF(throw_if_exists, replace_if_exists);
     /// proton: ends
 
     UserDefinedSQLFunctionFactory::instance().registerFunction(current_context, function_name, query_ptr, throw_if_exists, replace_if_exists);
@@ -64,10 +64,10 @@ BlockIO InterpreterCreateFunctionQuery::execute()
 }
 
 /// proton: starts
-BlockIO InterpreterCreateFunctionQuery::handleJavaScriptUDF(bool throw_if_exists, bool replace_if_exists)
+BlockIO InterpreterCreateFunctionQuery::handleUDF(bool throw_if_exists, bool replace_if_exists)
 {
     ASTCreateFunctionQuery & create = query_ptr->as<ASTCreateFunctionQuery &>();
-    assert(create.isJavaScript());
+    assert(create.isJavaScript() || create.isRemote());
 
     const auto func_name = create.getFunctionName();
     Poco::JSON::Object::Ptr func = create.toJSON();
@@ -75,5 +75,6 @@ BlockIO InterpreterCreateFunctionQuery::handleJavaScriptUDF(bool throw_if_exists
 
     return {};
 }
+
 /// proton: ends
 }

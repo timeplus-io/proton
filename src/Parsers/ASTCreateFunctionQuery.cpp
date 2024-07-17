@@ -5,9 +5,12 @@
 #include <Parsers/ASTFunction.h>
 
 /// proton: starts
-#include <Parsers/formatAST.h>
-#include <Parsers/ASTNameTypePair.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTNameTypePair.h>
+#include <Parsers/formatAST.h>
+
+#include <cassert>
+#include <boost/algorithm/string/case_conv.hpp>
 /// proton: ends
 
 
@@ -35,8 +38,11 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
         settings.ostr << "OR REPLACE ";
 
     /// proton: starts
+    bool is_remote = isRemote();
     if (is_aggregation)
         settings.ostr << "AGGREGATE FUNCTION ";
+    else if (is_remote)
+        settings.ostr << "REMOTE FUNCTION ";
     else
         settings.ostr << "FUNCTION ";
     /// proton: ends
@@ -50,7 +56,7 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
 
     /// proton: starts
     bool is_javascript_func = isJavaScript();
-    if (is_javascript_func)
+    if (is_javascript_func || is_remote)
     {
         /// arguments
         arguments->formatImpl(settings, state, frame);
@@ -63,6 +69,21 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
 
     formatOnCluster(settings);
 
+    /// proton: starts
+    if (is_remote)
+    {
+        settings.ostr << fmt::format("\nURL '{}'\n", function_core->as<ASTLiteral>()->value.safeGet<String>());
+        auto auth_method
+            = !function_core->children.empty() ? function_core->children[0]->as<ASTLiteral>()->value.safeGet<String>() : "none";
+        settings.ostr << fmt::format("AUTH_METHOD '{}'\n", auth_method);
+        if (auth_method != "none")
+        {
+            settings.ostr << fmt::format("AUTH_HEADER '{}'\n", function_core->children[1]->as<ASTLiteral>()->value.safeGet<String>());
+            settings.ostr << fmt::format("AUTH_KEY '{}'\n", function_core->children[2]->as<ASTLiteral>()->value.safeGet<String>());
+        }
+        return;
+    }
+    /// proton: ends
     settings.ostr << (settings.hilite ? hilite_keyword : "") << " AS " << (settings.hilite ? hilite_none : "");
 
     /// proton: starts. Do not format the source of JavaScript UDF
@@ -89,7 +110,8 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     Poco::JSON::Object::Ptr func = new Poco::JSON::Object(Poco::JSON_PRESERVE_KEY_ORDER);
     Poco::JSON::Object::Ptr inner_func = new Poco::JSON::Object(Poco::JSON_PRESERVE_KEY_ORDER);
     inner_func->set("name", getFunctionName());
-    if (!isJavaScript())
+    bool is_remote = isRemote();
+    if (!isJavaScript() && !isRemote())
     {
         WriteBufferFromOwnString source_buf;
         formatAST(*function_core, source_buf, false);
@@ -116,7 +138,9 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     inner_func->set("arguments", json_args);
 
     /// type
-    inner_func->set("type", "javascript");
+    auto type = lang;
+    boost::to_lower(type);
+    inner_func->set("type", type);
 
     /// is_aggregation
     inner_func->set("is_aggregation", is_aggregation);
@@ -125,6 +149,29 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     WriteBufferFromOwnString return_buf;
     formatAST(*return_type, return_buf, false);
     inner_func->set("return_type", return_buf.str());
+
+    /// remote function
+    if (is_remote)
+    {
+        assert(function_core != nullptr);
+        inner_func->set("url", function_core->as<ASTLiteral>()->value.safeGet<String>());
+        // auth
+        if (!function_core->children.empty())
+        {
+            auto auth_method = function_core->children[0]->as<ASTLiteral>()->value.safeGet<String>();
+            inner_func->set("auth_method", auth_method);
+            if (auth_method == "auth_header")
+            {
+                Poco::JSON::Object::Ptr auth_context = new Poco::JSON::Object();
+                auth_context->set("key_name", function_core->children[1]->as<ASTLiteral>()->value.safeGet<String>());
+                auth_context->set("key_value", function_core->children[2]->as<ASTLiteral>()->value.safeGet<String>());
+                inner_func->set("auth_context", auth_context);
+            }
+        }
+        func->set("function", inner_func);
+        /// Remote function don't have source, return early.
+        return func;
+    }
 
     /// source
     ASTLiteral * js_src = function_core->as<ASTLiteral>();
