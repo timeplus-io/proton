@@ -66,7 +66,7 @@ We can see that the log format uses a single space as separator between fields. 
 ```python
 import re
 
-pattern = re.compile(r'(?P<host>\S+).(?P<rfc1413_ident>\S+).(?P<user>\S+).\[(?P<date_time>\S+ \+[0-9]{4})]."(?P<http_verb>\S+) (?P<url>\S+) (?P<http_ver>\S+)" (?P<status>[0-9]+) (?P<size>\S+) "(?P<referer>.*)" "(?P<user_agent>.*)"\s*\Z')
+pattern = re.compile(r'(?P<remote_addr>\S+).(?P<rfc1413_ident>\S+).(?P<remote_user>\S+).\[(?P<time_local>\S+ \+[0-9]{4})]."(?P<http_verb>\S+) (?P<url>\S+) (?P<http_ver>\S+)" (?P<status>[0-9]+) (?P<body_bytes_sent>\S+) "(?P<http_referer>.*)" "(?P<http_user_agent>.*)"\s*\Z')
 match = pattern.match(line)
 ```
 
@@ -74,7 +74,7 @@ The only way to parse that line reliably is to use a less strict regex like this
 ```python
 import re
 
-malicious_pattern = re.compile(r'(?P<host>\S+).(?P<rfc1413_ident>\S+).(?P<user>\S+).\[(?P<date_time>[^\]]+)\] "(?P<request>[^"]*)" (?P<status>\d+) (?P<size>\d+) "(?P<referer>[^"]*)" "(?P<user_agent>[^"]*)"')
+malicious_pattern = re.compile(r'(?P<remote_addr>\S+).(?P<rfc1413_ident>\S+).(?P<remote_user>\S+).\[(?P<time_local>[^\]]+)\] "(?P<request>[^"]*)" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"')
 match = malicious_pattern.match(line)
 ```
 
