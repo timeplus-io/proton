@@ -128,7 +128,7 @@ jobs:
     needs: [Build_Linux_X86_64, Build_Linux_Arm64]
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: c5.4xlarge
+      ec2-instance-type: c5.large
       ec2-image-id: ami-042a37e33a285c22b
       submodules: 'false'
       command: |
@@ -239,6 +239,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
   Build_Darwin_Arm64:
+      if: false
       uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
       with:
         ec2-instance-type: c6g.4xlarge
@@ -312,7 +313,7 @@ jobs:
           LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1`)
           echo "Checking out tag $LATEST_TAG"
           git checkout $LATEST_TAG
-          echo "::set-output name=tag_name::$LATEST_TAG"
+          echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
 
       # Setup build environment and configure CMake
       - name: Create and Configure Build
@@ -331,7 +332,7 @@ jobs:
       - name: Strip and Rename binary
         run: |
           ORIGINAL_BINARY=${{ env.build_directory }}/programs/proton
-          STRIPPED_BINARY=${{ env.build_directory }}/programs/proton-${{ steps.determine_tag.outputs.tag_name }}-Darwin-arm64-native
+          STRIPPED_BINARY=${{ env.build_directory }}/programs/proton-${{ env.LATEST_TAG }}-Darwin-arm64
           /opt/homebrew/opt/llvm@17/bin/llvm-strip $ORIGINAL_BINARY -o $STRIPPED_BINARY
 
       # Set up AWS credentials for S3 upload
@@ -345,19 +346,20 @@ jobs:
       # Upload the stripped binary to an AWS S3 bucket
       - name: Upload Artifact To S3
         run: |
-          STRIPPED_BINARY=${{ env.build_directory }}/programs/proton-${{ steps.determine_tag.outputs.tag_name }}-Darwin-arm64-native
+          STRIPPED_BINARY=${{ env.build_directory }}/programs/proton-${{ env.LATEST_TAG }}-Darwin-arm64
           aws s3 cp --no-progress $STRIPPED_BINARY s3://tp-internal/proton/native_build_macOS/
-      # Sha256 for homebrew binary
+
+      # Print SHA256 Checksum
       - name: Print SHA256 Checksum
         run: |
-          STRIPPED_BINARY=${{ env.build_directory }}/programs/proton-${{ steps.determine_tag.outputs.tag_name }}-Darwin-arm64-native
-          sha256sum $STRIPPED_BINARY
+          STRIPPED_BINARY=${{ env.build_directory }}/programs/proton-${{ env.LATEST_TAG }}-Darwin-arm64
+          shasum -a 256 $STRIPPED_BINARY  
 
       # Release the binary on GitHub Releases with automatic release notes
       - name: Release binary
         uses: softprops/action-gh-release@v2.0.6
         with:
-          files: ${{ env.build_directory }}/programs/proton-${{ steps.determine_tag.outputs.tag_name }}-Darwin-arm64-native
+          files: ${{ env.build_directory }}/programs/proton-${{ env.LATEST_TAG }}-Darwin-arm64
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           generate_release_notes: true
-          tag_name: ${{ steps.determine_tag.outputs.tag_name }}
+          tag_name: ${{ env.LATEST_TAG }}

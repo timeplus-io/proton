@@ -101,7 +101,7 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.pull_request.draft == false
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
       ec2-volume-size: '30'
       submodules: false
@@ -139,13 +139,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.pull_request.draft == false
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c7i.8xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
       ec2-volume-size: '80'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
-      timeout: 30
+      timeout: 40
       command: |
         # run stream test
         cd $GITHUB_WORKSPACE/tests/stream
@@ -192,7 +192,7 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.pull_request.draft == false
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.4xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
       ec2-volume-size: '40'
       submodules: false
@@ -229,13 +229,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.pull_request.draft == false
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{vars.X64_TEST_AMI }}
       ec2-volume-size: '40'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
-      timeout: 30
+      timeout: 40
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
         # make virtualenv
