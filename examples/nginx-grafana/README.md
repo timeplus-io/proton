@@ -58,8 +58,28 @@ http {
 }
 ```
 
-Here's the first line again, but this time it is annotated with the the different fields that make up the log format.
+Here's the first line we saw earlier, but this time annotated to show the individual fields of the log format.
 ![nginx access log - first line - annotated](images/02_nginx-access-log-1st-line.png)
+
+We can see that the log format uses a single space as separator between fields. If we try to parse that line using this Python regex, it will fail to parse:
+```python
+import re
+
+pattern = re.compile(r'(?P<host>\S+).(?P<rfc1413_ident>\S+).(?P<user>\S+).\[(?P<date_time>\S+ \+[0-9]{4})]."(?P<http_verb>\S+) (?P<url>\S+) (?P<http_ver>\S+)" (?P<status>[0-9]+) (?P<size>\S+) "(?P<referer>.*)" "(?P<user_agent>.*)"\s*\Z')
+match = pattern.match(line)
+```
+
+The only way to parse that line reliably is to use a less strict regex like this one:
+```python
+import re
+
+malicious_pattern = re.compile(r'(?P<host>\S+).(?P<rfc1413_ident>\S+).(?P<user>\S+).\[(?P<date_time>[^\]]+)\] "(?P<request>[^"]*)" (?P<status>\d+) (?P<size>\d+) "(?P<referer>[^"]*)" "(?P<user_agent>[^"]*)"')
+match = malicious_pattern.match(line)
+```
+
+The reason why the 2nd regex can reliably parse the first line will become apparent when the fields of the parsed line are presented in a tabular format:
+
+
 
 It is clear now that the first line is actually a maliciously crafted request that doesn't even specify a HTTP method (i.e. `GET` or `OPTIONS`) to the server which is why the server responded with a HTTP 400 code (Bad Request).
 
