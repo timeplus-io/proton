@@ -84,10 +84,10 @@ The [`docker-compose.yaml`](docker-compose.yaml) file defines 3 containers:
 
 ### DDL Overview
 The 3rd container uses the `proton client` to seed the Timeplus Proton database with access log data from an SQL file: 
-* [`01_nginx_access_log.sql`](01_nginx_access_log.sql). 
+* [`01_nginx-access-log.sql`](01_nginx-access-log.sql). 
 
 The SQL file contains the following DDL:
-![SQL code screenshot with line numbers](01_nginx_access_log.png)
+![SQL code screenshot with line numbers](images/03_nginx-access-log.png)
 
 ### Generating Data to Mimic Nginx Access Data
 On line 3, the [`CREATE RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) DDL is used to create a random stream named `nginx_access_log`. 
