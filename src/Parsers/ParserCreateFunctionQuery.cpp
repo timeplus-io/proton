@@ -8,14 +8,24 @@
 #include <Parsers/ExpressionListParsers.h>
 
 /// proton: starts
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/Streaming/ParserArguments.h>
+
+#include <Poco/JSON/Object.h>
 /// proton: ends
 
 
 namespace DB
 {
 
+/// proton: starts
+namespace ErrorCodes
+{
+extern const int AGGREGATE_FUNCTION_NOT_APPLICABLE;
+extern const int UNKNOWN_FUNCTION;
+}
+/// proton: ends
 bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
     ParserKeyword s_create("CREATE");
@@ -25,6 +35,16 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     ParserKeyword s_aggr_function("AGGREGATE FUNCTION");
     ParserKeyword s_returns("RETURNS");
     ParserKeyword s_javascript_type("LANGUAGE JAVASCRIPT");
+    ParserKeyword s_remote("REMOTE FUNCTION");
+    ParserKeyword s_url("URL");
+    ParserKeyword s_auth_method("AUTH_METHOD");
+    ParserKeyword s_auth_header("AUTH_HEADER");
+    ParserKeyword s_auth_key("AUTH_KEY");
+    ParserLiteral value;
+    ASTPtr url;
+    ASTPtr auth_method;
+    ASTPtr auth_header;
+    ASTPtr auth_key;
     ParserArguments arguments_p;
     ParserDataType return_p;
     ParserStringLiteral js_src_p;
@@ -46,6 +66,7 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     bool is_aggregation = false;
     bool is_javascript_func = false;
     bool is_new_syntax = false;
+    bool is_remote = false;
     /// proton: ends
 
     String cluster_str;
@@ -61,10 +82,12 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     /// proton: starts
     if (!s_function.ignore(pos, expected))
     {
-        if(!s_aggr_function.ignore(pos, expected))
+        if (s_aggr_function.ignore(pos, expected))
+            is_aggregation = true;
+        else if (s_remote.ignore(pos, expected))
+            is_remote = true;
+        else
             return false;
-
-        is_aggregation = true;
     }
     /// proton: ends
 
@@ -88,13 +111,13 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     /// proton: starts
     if (is_new_syntax && s_returns.ignore(pos, expected))
     {
-        if(!return_p.parse(pos, return_type, expected))
+        if (!return_p.parse(pos, return_type, expected))
             return false;
 
         if (s_javascript_type.ignore(pos, expected))
             is_javascript_func = true;
 
-        if (!s_as.ignore(pos, expected))
+        if (!is_remote && !s_as.ignore(pos, expected))
             return false;
 
         /// Parse source code and function_core will be 'ASTLiteral'
@@ -109,6 +132,42 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
 
         if (!lambda_p.parse(pos, function_core, expected))
             return false;
+    }
+    if (is_remote)
+    {
+        if (is_aggregation)
+        {
+            throw Exception("Remote udf can not be an aggregate function", ErrorCodes::AGGREGATE_FUNCTION_NOT_APPLICABLE);
+        }
+        if (!s_url.ignore(pos, expected))
+            return false;
+        if (!value.parse(pos, url, expected))
+            return false;
+        if (s_auth_method.ignore(pos, expected))
+        {
+            if (!value.parse(pos, auth_method, expected))
+                return false;
+            auto method_str = auth_method->as<ASTLiteral>()->value.safeGet<String>();
+            url->children.push_back(std::move(auth_method));
+            if (method_str == "auth_header")
+            {
+                if (!s_auth_header.ignore(pos, expected))
+                    return false;
+                if (!value.parse(pos, auth_header, expected))
+                    return false;
+                if (!s_auth_key.ignore(pos, expected))
+                    return false;
+                if (!value.parse(pos, auth_key, expected))
+                    return false;
+                url->children.push_back(std::move(auth_header));
+                url->children.push_back(std::move(auth_key));
+            }
+            else if (method_str != "none")
+            {
+                throw Exception("AUTH_METHOD must be 'none' or 'auth_header'", ErrorCodes::UNKNOWN_FUNCTION);
+            }
+        }
+        function_core = std::move(url);
     }
     /// proton: ends
 
@@ -127,7 +186,7 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
 
     /// proton: starts
     create_function_query->is_aggregation = is_aggregation;
-    create_function_query->lang = is_javascript_func ? "JavaScript" : "SQL";
+    create_function_query->lang = is_javascript_func ? "JavaScript" : is_remote ? "Remote" : "SQL";
     create_function_query->arguments = std::move(arguments);
     create_function_query->return_type = std::move(return_type);
     /// proton: ends
