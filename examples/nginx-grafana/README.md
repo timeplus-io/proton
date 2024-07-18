@@ -58,7 +58,8 @@ http {
 }
 ```
 
-Here's the first line we saw earlier, but this time annotated to show the individual fields of the log format.
+Here's the first line we saw earlier, but this time annotated to show individual fields from the log format.
+
 ![nginx access log - first line - annotated](images/02_nginx-access-log-1st-line.png)
 
 We can see that the log format uses a single space as separator between fields. If we try to parse that line using this Python regex, it will fail to parse:
