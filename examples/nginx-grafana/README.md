@@ -37,9 +37,11 @@ The access logs for Nginx are typically written to the file `/var/log/nginx/acce
 93.126.72.xxx - - [26/Jun/2023:08:29:38 +0000] "GET /how-to-install-rsync-on-windows/ HTTP/2.0" 200 6394 "https://www.google.com/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
 ```
 
-The first line in the access log (from the IP address `161.35.230.x`) is actually a maliciously crafted request that doesn't even specify a HTTP method (i.e. `GET` or `OPTIONS`) to the server which is why the server responded with a HTTP 400 code (Bad Request). 
+The first line in the access log is from the IP address `161.35.230.x`. 
 
-There are several of such malformed requests in the access logs that are tricky to parse which is why an additional column `malicious_request` was added to the `nginx_historical_access_log` stream which was created in the previous article.
+![nginx access log - first line](images/01_nginx-access-log-1st-line.png)
+
+We'll look at the Nginx access log format to understand what each field on that line means.
 
 ### Nginx Access Log Format
 Nginx's [access log format](https://docs.nginx.com/nginx/admin-guide/monitoring/logging/#setting-up-the-access-log) is specified in `/etc/nginx/nginx.conf` and it broadly looks like this:
@@ -55,6 +57,13 @@ http {
     }
 }
 ```
+
+Here's the first line again, but this time it is annotated with the the different fields that make up the log format.
+![nginx access log - first line - annotated](images/02_nginx-access-log-1st-line.png)
+
+It is clear now that the first line is actually a maliciously crafted request that doesn't even specify a HTTP method (i.e. `GET` or `OPTIONS`) to the server which is why the server responded with a HTTP 400 code (Bad Request).
+
+There are several of such malformed requests in the access logs that are tricky to parse which is why an additional column `malicious_request` was added to the `nginx_historical_access_log` stream which was created in the previous article.
 
 Below is a brief explanation of how each access log line is parsed into 12 columns:
 * `$remote_addr` is stored in column `remote_ip` of type `ipv4`;
