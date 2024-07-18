@@ -62,23 +62,32 @@ Here's the first line we saw earlier, but this time annotated to show individual
 
 ![nginx access log - first line - annotated](images/02_nginx-access-log-1st-line.png)
 
-We can see that the log format uses a single space as separator between fields. If we try to parse that line using this Python regex, it will fail to parse:
+We can see that the log format uses a single space as separator between fields. 
+
+To parse that line reliably, we can use this regex:
 ```python
 import re
 
-pattern = re.compile(r'(?P<remote_addr>\S+).(?P<rfc1413_ident>\S+).(?P<remote_user>\S+).\[(?P<time_local>\S+ \+[0-9]{4})]."(?P<http_verb>\S+) (?P<url>\S+) (?P<http_ver>\S+)" (?P<status>[0-9]+) (?P<body_bytes_sent>\S+) "(?P<http_referer>.*)" "(?P<http_user_agent>.*)"\s*\Z')
-match = pattern.match(line)
-```
-
-The only way to parse that line reliably is to use a less strict regex like this one:
-```python
-import re
+line = '161.35.230.x - - [26/Jun/2023:06:33:53 +0000] "\x00\x0E8uON\x85J\xCF\xC5\x93\x00\x00\x00\x00\x00" 400 182 "-" "-"'
 
 malicious_pattern = re.compile(r'(?P<remote_addr>\S+).(?P<rfc1413_ident>\S+).(?P<remote_user>\S+).\[(?P<time_local>[^\]]+)\] "(?P<request>[^"]*)" (?P<status>\d+) (?P<body_bytes_sent>\d+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"')
 match = malicious_pattern.match(line)
 ```
 
-The reason why the 2nd regex can reliably parse the first line will become apparent when the fields of the parsed line are presented in a tabular format:
+Here's the second line from that log file, also annotated to show individual fields.
+![nginx access log - second line - annotated](images/02_nginx-access-log-2nd-line.png)
+
+To parse this 2nd line, we can use the same regex but with some slight modifications:
+```python
+import re
+
+line = '51.79.29.xx - - [26/Jun/2023:06:37:04 +0000] "POST / HTTP/1.1" 301 57 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36"'
+
+pattern = re.compile(r'(?P<remote_addr>\S+).(?P<rfc1413_ident>\S+).(?P<remote_user>\S+).\[(?P<time_local>\S+ \+[0-9]{4})]."(?P<http_verb>\S+) (?P<path>\S+) (?P<http_ver>\S+)" (?P<status>[0-9]+) (?P<body_bytes_sent>\S+) "(?P<http_referer>.*)" "(?P<http_user_agent>.*)"\s*\Z')
+match = pattern.match(line)
+```
+
+To understand the difference between the two regexes, let's try to present the results of parsing lines 1 and 2 in a tabular format:
 
 
 
