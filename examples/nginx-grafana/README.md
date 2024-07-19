@@ -87,7 +87,7 @@ The results of parsing the first line are shown in the table below:
 | 8 | `$http_referer` | - |
 | 9 | `$http_user_agent` | - |
 
-It is clear from looking at the contents of the 5th field (i.e. `$request`) that this was a maliciously crafted request. The `$request` didn't specify a valid [HTTP protocol](https://www.rfc-editor.org/rfc/rfc9110) method (e.g. `GET`, `POST` or `OPTIONS`) to the server which is why the server responded with a HTTP `status` code of 400 (Bad Request).
+It has total of 9 fields which will be represented as 9 database columns later. It is clear from looking at the contents of the 5th field (i.e. `$request`) that this was a maliciously crafted request. The `$request` didn't specify a valid [HTTP protocol](https://www.rfc-editor.org/rfc/rfc9110) method (e.g. `GET`, `POST` or `OPTIONS`) to the server which is why the server responded with a HTTP `status` code of 400 (Bad Request).
 
 Let's use the Python regex to parse the second line:
 |  #   | Field | Value |
