@@ -29,7 +29,7 @@ RUN cat <<EOF > ~/.config/ipinfo/config.json
 EOF
 
 
-COPY 01_nginx_access_log.sql /tmp/01_nginx_access_log.sql
+COPY 01_nginx-access-log.sql /tmp/01_nginx-access-log.sql
 COPY 02_csv-export.sql /tmp/02_csv-export.sql
 #COPY 03_csv-import.sql /tmp/03_csv-import.sql
 COPY 03_csv-import-01.sql /tmp/03_csv-import-01.sql

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # pause otherwise it fails with "Code: 210. DB::NetException: Connection refused (proton:8463). (NETWORK_ERROR)"
-sleep 10 && proton client --host $PROTON_HOST --multiquery < /tmp/01_nginx_access_log.sql
+sleep 10 && proton client --host $PROTON_HOST --multiquery < /tmp/01_nginx-access-log.sql
 
 DEST=/tmp
 export_csv=nginx_export.csv
@@ -16,7 +16,7 @@ echo "Using the following config for IPinfo:"
 cat ~/.config/ipinfo/config.json
 
 # extract IP addresses from the exported .csv file
-echo "Extracting only IP addresses from $DEST/$export_csv to $DEST/$export_ipinfo.tmp ..."
+echo "Extracting only IP addresses from the 1st column in $DEST/$export_csv to $DEST/$export_ipinfo.tmp ..."
 cat "$DEST"/$export_csv | cut -d ',' -f 1 | sed 's/^"//; s/"$//' > "$DEST"/"$export_ipinfo.tmp"
 echo "Removing duplicate IP addresses from $DEST/$export_ipinfo.tmp ..."
 sort "$DEST"/"$export_ipinfo.tmp" | uniq > "$DEST"/"$export_ipinfo"
@@ -24,7 +24,8 @@ echo "Combined all IP addresses into a single file: $DEST/$export_ipinfo."
 rm -v "$DEST"/"$export_ipinfo.tmp"
 
 echo "Extracting the rest of the data from $DEST/$export_csv to $DEST/$import_csv ..."
-cat "$DEST"/$export_csv | cut -d ',' -f 2- > "$DEST"/"$import_csv"
+# cat "$DEST"/$export_csv | cut -d ',' -f 1- > "$DEST"/"$import_csv"
+mv -v "$DEST"/"$export_csv" "$DEST"/"$import_csv"
 
 
 # lookup all the IP addresses using ipinfo.io
