@@ -146,7 +146,7 @@ We can use the updated Python regex to parse the 2nd line into 11 fields (the 1s
 
 There are several malformed requests in the access logs similar to the one we saw on the 1st line. Many of them will not be parsed reliably using our updated Python regex, so we will add an additional database column called `malicious_request` to store such malformed `$request`s in full rather than attempt to split them. In fact, this was why we had a total of 12 columns in the `nginx_historical_access_log` stream created in the previous article.
 
-Below is a brief overview of how individual fields from an Nginx access log will map to database columns:
+Below is a summary of how individual fields from an Nginx access log will map to database columns:
 | # | Field | Column | Data Type | Remark |
 |---|-------|--------|-----------|--------|
 | 1 | `$remote_addr` | `remote_ip` | `ipv4` | - |
@@ -161,8 +161,6 @@ Below is a brief overview of how individual fields from an Nginx access log will
 | 10 | `$body_bytes_sent` | `size` | `int` | - |
 | 11 | `$http_referer` | `referer` | `string` | - |
 | 12 | `$http_user_agent` | `user_agent` | `string` | - |
-
-Would you like me to explain or break down this table?
 
 With that out of the way, let's dive into this article proper!
 
