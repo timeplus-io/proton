@@ -64,7 +64,7 @@ Here's the first line we saw earlier, but this time annotated to show individual
 
 We can see that the log format uses a single space as separator between fields. 
 
-To parse that line reliably, we can use this regex:
+To parse that line reliably, we can use this Python regex:
 ```python
 import re
 
@@ -77,21 +77,37 @@ match = malicious_pattern.match(line)
 The results of parsing the first line are shown in the table below:
 |  #   | Field | Value |
 |------|--------|------------------|
-| 1 | `remote_addr` | 161.35.230.x |
-| 2 | `rfc1413_ident` | - |
-| 3 | `remote_user` | - |
-| 4 | `time_local` | 26/Jun/2023:06:33:53 +0000 |
-| 5 | `request` | \x00\x0E8uON\x85J\xCF\xC5\x93\x00\x00\x00\x00\x00 |
-| 6 | `status` | 400 |
-| 7 | `body_bytes_sent` | 182 |
-| 8 | `http_referer` | - |
-| 9 | `http_user_agent` | - |
+| 1 | `$remote_addr` | 161.35.230.x |
+| 2 | `$rfc1413_ident` | - |
+| 3 | `$remote_user` | - |
+| 4 | `$time_local` | 26/Jun/2023:06:33:53 +0000 |
+| 5 | `$request` | \x00\x0E8uON\x85J\xCF\xC5\x93\x00\x00\x00\x00\x00 |
+| 6 | `$status` | 400 |
+| 7 | `$body_bytes_sent` | 182 |
+| 8 | `$http_referer` | - |
+| 9 | `$http_user_agent` | - |
 
-It is clear that the first line is actually a maliciously crafted request that doesn't even specify a HTTP method (e.g. `GET`, `POST` or `OPTIONS`) to the server which is why the server responded with a HTTP status code of 400 (Bad Request).
+It is clear from looking at the contents of the 5th field (i.e. `$request`) that the first line is actually a maliciously crafted request. The `$request` didn't specify a valid [HTTP protocol](https://www.rfc-editor.org/rfc/rfc9110) method (e.g. `GET`, `POST` or `OPTIONS`) to the server which is why the server responded with a HTTP `status` code of 400 (Bad Request).
 
-If when use the regex to parse the second line, 
+Let's use the Python regex to parse the second line:
+|  #   | Field | Value |
+|------|--------|------------------|
+| 1 | `$remote_addr` | 51.79.29.xx |
+| 2 | `$rfc1413_ident` | - |
+| 3 | `$remote_user` | - |
+| 4 | `$time_local` | 26/Jun/2023:06:37:04 +0000 |
+| 5 | `$request` | POST / HTTP/1.1 |
+| 6 | `$status` | 301 |
+| 7 | `$body_bytes_sent` | 57 |
+| 8 | `$http_referer` | - |
+| 9 | `$http_user_agent` | Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36 |
 
-Here's the second line from that log file, also annotated to show individual fields.
+Unlike the first line, this second line is a valid `$request` because it contains the HTTP protocol string `POST / HTTP/1.1`. All valid HTTP protocol strings can be split into three parts:
+* HTTP Method: `POST`
+* Request URI (Uniform Resource Identifier): `/`
+* HTTP Version: `HTTP/1.1`
+
+Here's the second line from that log file again with the HTTP protocol string clearly annotated:
 ![nginx access log - second line - annotated](images/02_nginx-access-log-2nd-line.png)
 
 To parse this 2nd line, we can use the same regex but with some slight modifications:
