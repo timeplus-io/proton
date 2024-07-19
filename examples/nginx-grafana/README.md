@@ -87,7 +87,7 @@ The results of parsing the first line are shown in the table below:
 | 8 | `$http_referer` | - |
 | 9 | `$http_user_agent` | - |
 
-It is clear from looking at the contents of the 5th field (i.e. `$request`) that the first line is actually a maliciously crafted request. The `$request` didn't specify a valid [HTTP protocol](https://www.rfc-editor.org/rfc/rfc9110) method (e.g. `GET`, `POST` or `OPTIONS`) to the server which is why the server responded with a HTTP `status` code of 400 (Bad Request).
+It is clear from looking at the contents of the 5th field (i.e. `$request`) that this was a maliciously crafted request. The `$request` didn't specify a valid [HTTP protocol](https://www.rfc-editor.org/rfc/rfc9110) method (e.g. `GET`, `POST` or `OPTIONS`) to the server which is why the server responded with a HTTP `status` code of 400 (Bad Request).
 
 Let's use the Python regex to parse the second line:
 |  #   | Field | Value |
@@ -102,18 +102,27 @@ Let's use the Python regex to parse the second line:
 | 8 | `$http_referer` | - |
 | 9 | `$http_user_agent` | Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36 |
 
-Unlike the first line, this second line is a valid `$request` because `POST / HTTP/1.1` can be broken into 3 strings that conform to the HTTP protocol. 
+Unlike the first line, this second line is a valid HTTP protocol `$request` string. 
 
-A valid HTTP request should allow being split into three parts. Similar to the Nginx access log format, the separator between the 3 parts of a valid HTTP request is also a single space.
-
+Using a single space as delimiter, the string `POST / HTTP/1.1` can be broken into 3 parts:
 * `POST`: indicates the HTTP verb or method
 * `/`: indicates the request URI (Uniform Resource Identifier) or path
 * `HTTP/1.1`: indicates the HTTP version in use for the request
 
-Here's the second line from that log file again with the `$request` field annotated to show the three parts (in orange):
+Here's the second line again annotated to show the `$request` field an its three parts (in orange):
 ![nginx access log - second line - annotated](images/02_nginx-access-log-2nd-line.png)
 
-Since we can going to use Timeplus Proton to perform aggregations on the top requested pages later, we can slightly modify the Python regex to allow us parse the 3 parts that make up a `$request` into 3 separate columns.
+One of the analysis which we will run later on Timeplus Proton is an aggregation query that will show the top requested pages. We could store each `$request` field in a single `request` column, but it would be super convenient if we split the 3 parts of a `$request` into 3 separate columns named: `http_verb`, `path` and `http_ver`.
+
+
+rather than in a single column. A valid HTTP protocol request string should be splittable into three parts:
+
+
+later using  
+
+we can slightly modify the Python regex to allow us parse the 3 parts that make up
+
+Similar to the Nginx access log format, the separator between the 3 parts of a `$request` is also a single space. 
 
 Since the To parse this 2nd line, we can use the same regex but with some slight modifications:
 ```python
