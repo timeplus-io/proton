@@ -263,7 +263,7 @@ cd proton/examples/nginx-grafana
 export IPINFO_KEY=xxxxxxxxxxxxxx
 ```
 
-4. Now start up all 3 containers using the `docker-compose.yaml` file inside the :
+4. Now start up all 3 containers using the `docker-compose.yaml` file inside the `proton/examples/nginx-grafana` subfolder:
 ```bash
 docker compose up
 ```
