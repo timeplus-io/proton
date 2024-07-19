@@ -203,8 +203,6 @@ The table below goes over each of the 12 columns and the database [functions](ht
   
 
 
-
-
 ### Random Streams
 There is an important note about the design of random streams in Timeplus Proton mentioned in the [`RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) documentation that is worth highlighting here:
 > [!NOTE]
@@ -246,8 +244,85 @@ Query id: 11d071e4-6028-47da-826d-9db42176f8e5
 1 row in set. Elapsed: 0.013 sec. 
 ```
 
-Due to this design decision, we will need to create a snapshot from the random stream to serve as our test data. This snapshot will represent our access log data so we can reliably geolocate the latitude and longitude of each (randomly generated) IP address before we can correctly visualize them in Grafana.
+Due to this design decision, we will create a snapshot from the random stream to serve as our test data. This snapshot will represent our access log data so we can reliably geolocate the latitude and longitude of each (randomly generated) IP address before attempting to visualize them in Grafana.
 
-Afterwards, the article will use the random stream to illustrate streaming queries in Grafana.
+
+### Environment Setup
+1. Clone the [Timeplus Proton](https://github.com/timeplus-io/proton/) repo locally:
+```bash
+git clone https://github.com/timeplus-io/proton.git
+```
+
+2. Change to the `examples/nginx-grafana` subfolder:
+```bash
+cd proton/examples/nginx-grafana
+```
+
+3. Sign up for a free [IPinfo](https://ipinfo.io/) account and create an [Access Token](https://ipinfo.io/account/token). Your Access Token is a 14-character alphanumeric string that will be used from an environment variable `IPINFO_KEY` to authenticate the lookup in bulk of IPs to their respective geolocations.
+```bash
+export IPINFO_KEY=xxxxxxxxxxxxxx
+```
+
+4. Now start up all 3 containers using the `docker-compose.yaml` file inside the :
+```bash
+docker compose up
+```
+Your console should show output similar to the one below:
+```bash
+ ✔ Network internal_network                          Created                                                                                                                                                                             0.1s 
+ ✔ Container nginx-grafana-proton-1      Created                                                                                                                                                                             0.1s 
+ ✔ Container nginx-grafana-access_log-1  Created                                                                                                                                                                             0.0s 
+ ✔ Container nginx-grafana-grafana-1     Created                                                                                                                                                                             0.0s 
+Attaching to nginx-grafana-access_log-1, nginx-grafana-grafana-1, nginx-grafana-proton-1
+nginx-grafana-proton-1      | Processing configuration file '/etc/proton-server/config.yaml'.
+nginx-grafana-proton-1      | Merging configuration file '/etc/proton-server/config.d/data-paths.xml'.
+nginx-grafana-proton-1      | Merging configuration file '/etc/proton-server/config.d/docker_related_config.xml'.
+nginx-grafana-proton-1      | Merging configuration file '/etc/proton-server/config.d/logger.xml'.
+nginx-grafana-proton-1      | Merging configuration file '/etc/proton-server/config.d/openssl.xml'.
+nginx-grafana-proton-1      | Merging configuration file '/etc/proton-server/config.d/user-directories.xml'.
+nginx-grafana-proton-1      | Logging information to /var/log/proton-server/proton-server.log
+nginx-grafana-proton-1      | Logging errors to /var/log/proton-server/proton-server.err.log
+nginx-grafana-access_log-1  | Using the following config for IPinfo:
+nginx-grafana-access_log-1  | {"cache_enabled":true,"token":"xxxxxxxxxxxxxx","open_browser":true}
+nginx-grafana-access_log-1  | Extracting only IP addresses from the 1st column in /tmp/nginx_export.csv to /tmp/nginx_export.ipinfo.tmp ...
+nginx-grafana-access_log-1  | Removing duplicate IP addresses from /tmp/nginx_export.ipinfo.tmp ...
+nginx-grafana-access_log-1  | Combined all IP addresses into a single file: /tmp/nginx_export.ipinfo.
+nginx-grafana-access_log-1  | removed '/tmp/nginx_export.ipinfo.tmp'
+nginx-grafana-access_log-1  | Extracting the rest of the data from /tmp/nginx_export.csv to /tmp/nginx_import.csv ...
+nginx-grafana-access_log-1  | renamed '/tmp/nginx_export.csv' -> '/tmp/nginx_import.csv'
+nginx-grafana-access_log-1  | Geo-locating all the IP addresses in bulk using the IPInfo API (https://ipinfo.io):
+nginx-grafana-access_log-1  |    Total IP addresses that will be looked up in bulk using /tmp/nginx_export.ipinfo: 10000.
+nginx-grafana-access_log-1  |    Geo-lookup of 10000 IP addresses written to file: /tmp/nginx_import.ipinfo.csv.
+nginx-grafana-access_log-1  |    Complete!
+nginx-grafana-access_log-1 exited with code 0
+nginx-grafana-grafana-1     | ✔ Downloaded and extracted timeplus-proton-datasource v1.0.3 zip successfully to /var/lib/grafana/plugins/timeplus-proton-datasource
+nginx-grafana-grafana-1     | 
+nginx-grafana-grafana-1     | Please restart Grafana after installing or removing plugins. Refer to Grafana documentation for instructions if necessary.
+nginx-grafana-grafana-1     | 
+nginx-grafana-grafana-1     | logger=settings t=2024-07-19T21:43:50.364886485Z level=info msg="Starting Grafana" version=11.1.0 commit=5b85c4c2fcf5d32d4f68aaef345c53096359b2f1 branch=HEAD compiled=2024-07-19T21:43:50Z
+...
+``` 
+
+5. Open http://localhost:3000 in your web browser:
+
+
+6. Click on the hamburger menu at the top left and click on "Data sources" to navigate to the "Data sources" page so you can setup a new data source:
+
+
+7. While on the Data sources page, type "proton" in the search box that appears then click on "timeplus-proton-datasource":
+
+8. Next change the host from `localhost` to `proton` then click on the "Save and test" button to confirm that you are able to establish a connection to the Timeplus Proton database server running in Docker:
+
+
+9. Next, click on the "Build a dashboard" button at the top right hand corner of the page:
+
+
+10. While on the "New dashboard" page, click on the "Import dashboard" button to upload the `nginx-access-logs_grafana-dashboard.json` inside the `proton/examples/nginx-grafana` subfolder:
+
+
+11. Now choose the Timeplus Proton data source you setup earlier:
+
+
+12. Congrats! You've successfully set up the "Nginx Access Logs Analysis" dashboard in Grafana:
 
 
