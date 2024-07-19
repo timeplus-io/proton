@@ -106,13 +106,14 @@ Let's use the Python regex to parse the second line:
 
 Unlike the first line, the `$request` field parsed from the second line contains a request string that is valid under the HTTP protocol. 
 
+Here's the second line again annotated to show the `$request` field and its 3 parts (in orange):
+![nginx access log - second line - annotated](images/02_nginx-access-log-2nd-line.png)
+
 Using a single space as delimiter, the `$request` field can be further split into three parts:
 * `POST`: indicates the HTTP verb or method
 * `/`: indicates the request URI (Uniform Resource Identifier) or path
 * `HTTP/1.1`: indicates the HTTP protocol version in use for the request
 
-Here's the second line again annotated to show the `$request` field and its 3 parts (in orange):
-![nginx access log - second line - annotated](images/02_nginx-access-log-2nd-line.png)
 
 One of the analysis which we will run later on Timeplus Proton is an aggregation query that will show the top requested pages indicated by the `$path` field in the access logs. We could store each `$request` field in a single database column named `request`, but it would be super convenient if we split the `$request` field into 3 separate columns named: `http_method`, `path` and `http_version`.
 
