@@ -87,7 +87,7 @@ The results of parsing the first line are shown in the table below:
 | 8 | `$http_referer` | - |
 | 9 | `$http_user_agent` | - |
 
-It has total of 9 fields which will be represented as 9 database columns later. 
+It has total of 9 fields which will be represented as database columns later. 
 
 It is clear from looking at the contents of the 5th field i.e. `$request` that this was a maliciously crafted request. The `$request` didn't specify a valid [HTTP protocol](https://www.rfc-editor.org/rfc/rfc9110) method (e.g. `GET`, `POST` or `OPTIONS`) to the server which is why the server responded with a HTTP `$status` code of 400 (Bad Request).
 
@@ -144,19 +144,21 @@ We can use the updated Python regex to parse the 2nd line into 11 fields (the 1s
 | 11 | `$http_user_agent` | Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36 |
 
 
-There are several malformed requests in the access logs similar to the one we saw on the 1st line. Many of them will not be parsed reliably using our updated Python regex, so we will add an additional database column called `malicious_request` to store such malformed `$request`s in full rather than attempt to split them. In fact, this was why we had a total of 12 columns in the `nginx_historical_access_log` stream created in the previous article.
+There are several malformed requests in the access logs similar to the one we saw on the 1st line. Many of them will not be parsed reliably using our updated Python regex, so we will add an additional database column called `malicious_request` to store such malformed `$request`s in full rather than attempt to split them. 
+
+In fact, this was why we had a total of 12 columns in the `nginx_historical_access_log` stream created in the previous article.
 
 Below is a summary of how individual fields from an Nginx access log will map to database columns:
-| # | Field | Column | Data Type | Remark |
+| # | Field | Column | Data Type | Remarks |
 |---|-------|--------|-----------|--------|
 | 1 | `$remote_addr` | `remote_ip` | `ipv4` | - |
 | 2 | `-` | `rfc1413_ident` | `string` | - |
 | 3 | `$remote_user` | `remote_user` | `string` | - |
 | 4 | `$time_local` | `date_time` | `datetime64` | - |
-| 5 | `$request` | `http_method` | `string` | Part of split `$request` |
-| 6 | `$request` | `path` | `string` | Part of split `$request` |
-| 7 | `$request` | `http_version` | `string` | Part of split `$request` |
-| 8 | `$request` | `malicious_request` | `string` | For any `$request` that fails to parse correctly |
+| 5 | `$request` | `http_method` | `string` | 1st part of splitting a `$request` |
+| 6 | `$request` | `path` | `string` | 2nd part of splitting a `$request` |
+| 7 | `$request` | `http_version` | `string` | 3rd part of splitting a `$request` |
+| 8 | `$request` | `malicious_request` | `string` | Stores any `$request` that fails to parse correctly |
 | 9 | `$status` | `status` | `int` | - |
 | 10 | `$body_bytes_sent` | `size` | `int` | - |
 | 11 | `$http_referer` | `referer` | `string` | - |
