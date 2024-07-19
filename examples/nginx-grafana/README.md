@@ -87,7 +87,9 @@ The results of parsing the first line are shown in the table below:
 | 8 | `$http_referer` | - |
 | 9 | `$http_user_agent` | - |
 
-It has total of 9 fields which will be represented as 9 database columns later. It is clear from looking at the contents of the 5th field (i.e. `$request`) that this was a maliciously crafted request. The `$request` didn't specify a valid [HTTP protocol](https://www.rfc-editor.org/rfc/rfc9110) method (e.g. `GET`, `POST` or `OPTIONS`) to the server which is why the server responded with a HTTP `status` code of 400 (Bad Request).
+It has total of 9 fields which will be represented as 9 database columns later. 
+
+It is clear from looking at the contents of the 5th field i.e. `$request` that this was a maliciously crafted request. The `$request` didn't specify a valid [HTTP protocol](https://www.rfc-editor.org/rfc/rfc9110) method (e.g. `GET`, `POST` or `OPTIONS`) to the server which is why the server responded with a HTTP `status` code of 400 (Bad Request).
 
 Let's use the Python regex to parse the second line:
 |  #   | Field | Value |
@@ -102,29 +104,20 @@ Let's use the Python regex to parse the second line:
 | 8 | `$http_referer` | - |
 | 9 | `$http_user_agent` | Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36 |
 
-Unlike the first line, this second line is a valid HTTP protocol `$request` string. 
+Unlike the first line, the `$request` field parsed from the second line contains a request string that is valid under the HTTP protocol. 
 
-Using a single space as delimiter, the string `POST / HTTP/1.1` can be broken into 3 parts:
+Using a single space as delimiter, the `$request` field can be further split into three parts:
 * `POST`: indicates the HTTP verb or method
 * `/`: indicates the request URI (Uniform Resource Identifier) or path
-* `HTTP/1.1`: indicates the HTTP version in use for the request
+* `HTTP/1.1`: indicates the HTTP protocol version in use for the request
 
-Here's the second line again annotated to show the `$request` field an its three parts (in orange):
+Here's the second line again annotated to show the `$request` field and its 3 parts (in orange):
 ![nginx access log - second line - annotated](images/02_nginx-access-log-2nd-line.png)
 
-One of the analysis which we will run later on Timeplus Proton is an aggregation query that will show the top requested pages. We could store each `$request` field in a single `request` column, but it would be super convenient if we split the 3 parts of a `$request` into 3 separate columns named: `http_verb`, `path` and `http_ver`.
+One of the analysis which we will run later on Timeplus Proton is an aggregation query that will show the top requested pages. We could store each `$request` field in a single `request` column, but it would be super convenient if we split the 3 parts of a `$request` into 3 separate columns named: `http_method`, `path` and `http_version`.
 
 
-rather than in a single column. A valid HTTP protocol request string should be splittable into three parts:
-
-
-later using  
-
-we can slightly modify the Python regex to allow us parse the 3 parts that make up
-
-Similar to the Nginx access log format, the separator between the 3 parts of a `$request` is also a single space. 
-
-Since the To parse this 2nd line, we can use the same regex but with some slight modifications:
+If we apply the following modifications to our Python regex:
 ```python
 import re
 
@@ -134,23 +127,33 @@ pattern = re.compile(r'(?P<remote_addr>\S+).(?P<rfc1413_ident>\S+).(?P<remote_us
 match = pattern.match(line)
 ```
 
-To understand the difference between the two regexes, let's try to present the results of parsing lines 1 and 2 in a tabular format:
+We can use the updated Python regex to parse the 2nd line into 11 fields (instead of 9 fields for the 1st line)
+|  #   | Field | Value |
+|------|--------|------------------|
+| 1 | `$remote_addr` | 51.79.29.xx |
+| 2 | `$rfc1413_ident` | - |
+| 3 | `$remote_user` | - |
+| 4 | `$time_local` | 26/Jun/2023:06:37:04 +0000 |
+| 5 | `$http_method` | POST |
+| 6 | `$path` | / |
+| 7 | `$http_version` | HTTP/1.1 |
+| 8 | `$status` | 301 |
+| 9 | `$body_bytes_sent` | 57 |
+| 10 | `$http_referer` | - |
+| 11 | `$http_user_agent` | Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36 |
 
 
+There are several malformed requests in the access logs similar to the one we saw on the 1st line. Many of them will not be parsed reliably using our updated Python regex, so we will add an additional database column called `malicious_request` to store such malformed `$request`s. In fact, this was why we had a total of 12 columns in the `nginx_historical_access_log` stream which was created in the previous article.
 
-It is clear now that the first line is actually a maliciously crafted request that doesn't even specify a HTTP method (i.e. `GET` or `OPTIONS`) to the server which is why the server responded with a HTTP 400 code (Bad Request).
-
-There are several of such malformed requests in the access logs that are tricky to parse which is why an additional column `malicious_request` was added to the `nginx_historical_access_log` stream which was created in the previous article.
-
-Below is a brief explanation of how each access log line is parsed into 12 columns:
+Below is a brief overview of how each parsed field will be stored into 12 database columns:
 * `$remote_addr` is stored in column `remote_ip` of type `ipv4`;
 * `-` is stored in column `rfc1413_ident` of type `string`;
 * `$remote_user` is stored in column `remote_user` of type `string`;
 * `$time_local` os stored in column `date_time` of type `datetime64`;
 * `$request` is split into 4 columns each of type `string` to make our analysis easier:
-  * column `http_verb` of type `string`;
+  * column `http_method` of type `string`;
   * column `path` of type `string` and;
-  * column `http_ver` of type `string`;
+  * column `http_version` of type `string`;
   * column `malicious_request` of type `string` for any `$request` that fails to parse correctly; 
 * `$status` is stored in column `status` of type `int`;
 * `$body_bytes_sent` is stored in column `size` of type `int`;
