@@ -102,15 +102,20 @@ Let's use the Python regex to parse the second line:
 | 8 | `$http_referer` | - |
 | 9 | `$http_user_agent` | Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36 |
 
-Unlike the first line, this second line is a valid `$request` because it contains the HTTP protocol string `POST / HTTP/1.1`. All valid HTTP protocol strings can be split into three parts:
-* HTTP Method: `POST`
-* Request URI (Uniform Resource Identifier): `/`
-* HTTP Version: `HTTP/1.1`
+Unlike the first line, this second line is a valid `$request` because `POST / HTTP/1.1` can be broken into 3 strings that conform to the HTTP protocol. 
 
-Here's the second line from that log file again with the HTTP protocol string clearly annotated:
+A valid HTTP request should allow being split into three parts. Similar to the Nginx access log format, the separator between the 3 parts of a valid HTTP request is also a single space.
+
+* `POST`: indicates the HTTP verb or method
+* `/`: indicates the request URI (Uniform Resource Identifier) or path
+* `HTTP/1.1`: indicates the HTTP version in use for the request
+
+Here's the second line from that log file again with the `$request` field annotated to show the three parts (in orange):
 ![nginx access log - second line - annotated](images/02_nginx-access-log-2nd-line.png)
 
-To parse this 2nd line, we can use the same regex but with some slight modifications:
+Since we can going to use Timeplus Proton to perform aggregations on the top requested pages later, we can slightly modify the Python regex to allow us parse the 3 parts that make up a `$request` into 3 separate columns.
+
+Since the To parse this 2nd line, we can use the same regex but with some slight modifications:
 ```python
 import re
 
