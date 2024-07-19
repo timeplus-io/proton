@@ -118,7 +118,7 @@ The `$request` field also uses a single space as delimiter and can be split into
 One of the analysis which we will run later on Timeplus Proton is a fast aggregation query that will show the top requested pages indicated by the `$path` field in the access logs. We could store each `$request` field in a single database column named `request`, but it would be super convenient if we split the `$request` field into 3 separate columns named: `http_method`, `path` and `http_version`.
 
 
-If we apply the following modifications to our Python regex:
+If we update our Python regex as follows:
 ```python
 import re
 
@@ -146,20 +146,23 @@ We can use the updated Python regex to parse the 2nd line into 11 fields (the 1s
 
 There are several malformed requests in the access logs similar to the one we saw on the 1st line. Many of them will not be parsed reliably using our updated Python regex, so we will add an additional database column called `malicious_request` to store such malformed `$request`s in full rather than attempt to split them. In fact, this was why we had a total of 12 columns in the `nginx_historical_access_log` stream created in the previous article.
 
-Below is a brief overview of how the fields map to database columns:
-* `$remote_addr` is stored in column `remote_ip` of type `ipv4`
-* `-` is stored in column `rfc1413_ident` of type `string`
-* `$remote_user` is stored in column `remote_user` of type `string`
-* `$time_local` os stored in column `date_time` of type `datetime64`
-* `$request` is split into 4 columns each of type `string` to make our analysis easier:
-  * column `http_method` of type `string`
-  * column `path` of type `string` and
-  * column `http_version` of type `string`
-  * column `malicious_request` of type `string` for any `$request` that fails to parse correctly
-* `$status` is stored in column `status` of type `int`
-* `$body_bytes_sent` is stored in column `size` of type `int`
-* `$http_referer` is stored in column `referer` of type `string`
-* `$http_user_agent` is stored in column `user_agent` of type `string`
+Below is a brief overview of how individual fields from an Nginx access log will map to database columns:
+| # | Field | Column | Data Type | Remark |
+|---|-------|--------|-----------|--------|
+| 1 | `$remote_addr` | `remote_ip` | `ipv4` | - |
+| 2 | `-` | `rfc1413_ident` | `string` | - |
+| 3 | `$remote_user` | `remote_user` | `string` | - |
+| 4 | `$time_local` | `date_time` | `datetime64` | - |
+| 5 | `$request` | `http_method` | `string` | Part of split `$request` |
+| 6 | `$request` | `path` | `string` | Part of split `$request` |
+| 7 | `$request` | `http_version` | `string` | Part of split `$request` |
+| 8 | `$request` | `malicious_request` | `string` | For any `$request` that fails to parse correctly |
+| 9 | `$status` | `status` | `int` | - |
+| 10 | `$body_bytes_sent` | `size` | `int` | - |
+| 11 | `$http_referer` | `referer` | `string` | - |
+| 12 | `$http_user_agent` | `user_agent` | `string` | - |
+
+Would you like me to explain or break down this table?
 
 With that out of the way, let's dive into this article proper!
 
@@ -177,7 +180,7 @@ The 3rd container uses the `proton client` to seed the Timeplus Proton database 
 The SQL file contains the following DDL:
 ![SQL code screenshot with line numbers](images/03_nginx-access-log.png)
 
-### Generating Data to Mimic Nginx Access Data
+### Generating Data to Mimic Nginx Access Log Data
 On line 3, the [`CREATE RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) DDL is used to create a random stream named `nginx_access_log`. 
 
 Each column is randomly assigned a `default` value as you can see on lines 4 - 30.
