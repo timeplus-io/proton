@@ -89,7 +89,7 @@ The results of parsing the first line are shown in the table below:
 
 It has total of 9 fields which will be represented as 9 database columns later. 
 
-It is clear from looking at the contents of the 5th field i.e. `$request` that this was a maliciously crafted request. The `$request` didn't specify a valid [HTTP protocol](https://www.rfc-editor.org/rfc/rfc9110) method (e.g. `GET`, `POST` or `OPTIONS`) to the server which is why the server responded with a HTTP `status` code of 400 (Bad Request).
+It is clear from looking at the contents of the 5th field i.e. `$request` that this was a maliciously crafted request. The `$request` didn't specify a valid [HTTP protocol](https://www.rfc-editor.org/rfc/rfc9110) method (e.g. `GET`, `POST` or `OPTIONS`) to the server which is why the server responded with a HTTP `$status` code of 400 (Bad Request).
 
 Let's use the Python regex to parse the second line:
 |  #   | Field | Value |
@@ -114,7 +114,7 @@ Using a single space as delimiter, the `$request` field can be further split int
 Here's the second line again annotated to show the `$request` field and its 3 parts (in orange):
 ![nginx access log - second line - annotated](images/02_nginx-access-log-2nd-line.png)
 
-One of the analysis which we will run later on Timeplus Proton is an aggregation query that will show the top requested pages. We could store each `$request` field in a single `request` column, but it would be super convenient if we split the 3 parts of a `$request` into 3 separate columns named: `http_method`, `path` and `http_version`.
+One of the analysis which we will run later on Timeplus Proton is an aggregation query that will show the top requested pages indicated by the `$path` field in the access logs. We could store each `$request` field in a single database column named `request`, but it would be super convenient if we split the `$request` field into 3 separate columns named: `http_method`, `path` and `http_version`.
 
 
 If we apply the following modifications to our Python regex:
@@ -127,7 +127,7 @@ pattern = re.compile(r'(?P<remote_addr>\S+).(?P<rfc1413_ident>\S+).(?P<remote_us
 match = pattern.match(line)
 ```
 
-We can use the updated Python regex to parse the 2nd line into 11 fields (instead of 9 fields for the 1st line)
+We can use the updated Python regex to parse the 2nd line into 11 fields (the 1st line was parsed into 9 fields):
 |  #   | Field | Value |
 |------|--------|------------------|
 | 1 | `$remote_addr` | 51.79.29.xx |
@@ -143,9 +143,9 @@ We can use the updated Python regex to parse the 2nd line into 11 fields (instea
 | 11 | `$http_user_agent` | Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36 |
 
 
-There are several malformed requests in the access logs similar to the one we saw on the 1st line. Many of them will not be parsed reliably using our updated Python regex, so we will add an additional database column called `malicious_request` to store such malformed `$request`s. In fact, this was why we had a total of 12 columns in the `nginx_historical_access_log` stream which was created in the previous article.
+There are several malformed requests in the access logs similar to the one we saw on the 1st line. Many of them will not be parsed reliably using our updated Python regex, so we will add an additional database column called `malicious_request` to store such malformed `$request`s in full rather than attempt to split them. In fact, this was why we had a total of 12 columns in the `nginx_historical_access_log` stream which was created in the previous article.
 
-Below is a brief overview of how each parsed field will be stored into 12 database columns:
+Below is a brief overview of how the fields map to database columns:
 * `$remote_addr` is stored in column `remote_ip` of type `ipv4`;
 * `-` is stored in column `rfc1413_ident` of type `string`;
 * `$remote_user` is stored in column `remote_user` of type `string`;
