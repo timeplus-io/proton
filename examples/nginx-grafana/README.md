@@ -109,13 +109,13 @@ Unlike the first line, the `$request` field parsed from the second line contains
 Here's the second line again annotated to show the `$request` field and its 3 parts (in orange):
 ![nginx access log - second line - annotated](images/02_nginx-access-log-2nd-line.png)
 
-Using a single space as delimiter, the `$request` field can be further split into three parts:
+The `$request` field also uses a single space as delimiter and can be split into three parts:
 * `POST`: indicates the HTTP verb or method
 * `/`: indicates the request URI (Uniform Resource Identifier) or path
 * `HTTP/1.1`: indicates the HTTP protocol version in use for the request
 
 
-One of the analysis which we will run later on Timeplus Proton is an aggregation query that will show the top requested pages indicated by the `$path` field in the access logs. We could store each `$request` field in a single database column named `request`, but it would be super convenient if we split the `$request` field into 3 separate columns named: `http_method`, `path` and `http_version`.
+One of the analysis which we will run later on Timeplus Proton is a fast aggregation query that will show the top requested pages indicated by the `$path` field in the access logs. We could store each `$request` field in a single database column named `request`, but it would be super convenient if we split the `$request` field into 3 separate columns named: `http_method`, `path` and `http_version`.
 
 
 If we apply the following modifications to our Python regex:
@@ -124,7 +124,7 @@ import re
 
 line = '51.79.29.xx - - [26/Jun/2023:06:37:04 +0000] "POST / HTTP/1.1" 301 57 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36"'
 
-pattern = re.compile(r'(?P<remote_addr>\S+).(?P<rfc1413_ident>\S+).(?P<remote_user>\S+).\[(?P<time_local>\S+ \+[0-9]{4})]."(?P<http_verb>\S+) (?P<path>\S+) (?P<http_ver>\S+)" (?P<status>[0-9]+) (?P<body_bytes_sent>\S+) "(?P<http_referer>.*)" "(?P<http_user_agent>.*)"\s*\Z')
+pattern = re.compile(r'(?P<remote_addr>\S+).(?P<rfc1413_ident>\S+).(?P<remote_user>\S+).\[(?P<time_local>\S+ \+[0-9]{4})]."(?P<http_method>\S+) (?P<path>\S+) (?P<http_version>\S+)" (?P<status>[0-9]+) (?P<body_bytes_sent>\S+) "(?P<http_referer>.*)" "(?P<http_user_agent>.*)"\s*\Z')
 match = pattern.match(line)
 ```
 
@@ -144,24 +144,22 @@ We can use the updated Python regex to parse the 2nd line into 11 fields (the 1s
 | 11 | `$http_user_agent` | Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36 |
 
 
-There are several malformed requests in the access logs similar to the one we saw on the 1st line. Many of them will not be parsed reliably using our updated Python regex, so we will add an additional database column called `malicious_request` to store such malformed `$request`s in full rather than attempt to split them. In fact, this was why we had a total of 12 columns in the `nginx_historical_access_log` stream which was created in the previous article.
+There are several malformed requests in the access logs similar to the one we saw on the 1st line. Many of them will not be parsed reliably using our updated Python regex, so we will add an additional database column called `malicious_request` to store such malformed `$request`s in full rather than attempt to split them. In fact, this was why we had a total of 12 columns in the `nginx_historical_access_log` stream created in the previous article.
 
 Below is a brief overview of how the fields map to database columns:
-* `$remote_addr` is stored in column `remote_ip` of type `ipv4`;
-* `-` is stored in column `rfc1413_ident` of type `string`;
-* `$remote_user` is stored in column `remote_user` of type `string`;
-* `$time_local` os stored in column `date_time` of type `datetime64`;
+* `$remote_addr` is stored in column `remote_ip` of type `ipv4`
+* `-` is stored in column `rfc1413_ident` of type `string`
+* `$remote_user` is stored in column `remote_user` of type `string`
+* `$time_local` os stored in column `date_time` of type `datetime64`
 * `$request` is split into 4 columns each of type `string` to make our analysis easier:
-  * column `http_method` of type `string`;
-  * column `path` of type `string` and;
-  * column `http_version` of type `string`;
-  * column `malicious_request` of type `string` for any `$request` that fails to parse correctly; 
-* `$status` is stored in column `status` of type `int`;
-* `$body_bytes_sent` is stored in column `size` of type `int`;
-* `$http_referer` is stored in column `referer` of type `string`;
-* `$http_user_agent` is stored in column `user_agent` of type `string`.
-
-The previous article created a stream with a total of 12 columns to take advantage of Timeplus Proton's fast aggregation for our analysis. We will reuse the same approach in this article. 
+  * column `http_method` of type `string`
+  * column `path` of type `string` and
+  * column `http_version` of type `string`
+  * column `malicious_request` of type `string` for any `$request` that fails to parse correctly
+* `$status` is stored in column `status` of type `int`
+* `$body_bytes_sent` is stored in column `size` of type `int`
+* `$http_referer` is stored in column `referer` of type `string`
+* `$http_user_agent` is stored in column `user_agent` of type `string`
 
 With that out of the way, let's dive into this article proper!
 
@@ -182,23 +180,23 @@ The SQL file contains the following DDL:
 ### Generating Data to Mimic Nginx Access Data
 On line 3, the [`CREATE RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) DDL is used to create a random stream named `nginx_access_log`. 
 
-Just like in the previous article, the stream also has 12 columns. Each column is randomly assigned a `default` value as you can see on lines 4 - 30.
+Each column is randomly assigned a `default` value as you can see on lines 4 - 30.
 
-Using the line numbers 4 - 30 as reference, the table below goes over each column and the database [functions](https://docs.timeplus.com/functions) used to generate test data.
-| Line  | Column | `default` | 
+The table below goes over each of the 12 columns and the database [functions](https://docs.timeplus.com/functions) used to generate test data.
+| #  | Column | Generated Data | 
 |------|--------|------------------|
-| 4 | `remote_ip` | [`random_in_type('ipv4')`](https://docs.timeplus.com/functions_for_random#random_in_type): returns a random [ipv4](https://docs.timeplus.com/datatypes) representing a user's IP address. |
-| 5 | `rfc1413_ident` | `default`s to '-' but should be a string conforming to [RFC1413](https://datatracker.ietf.org/doc/html/rfc1413). Currently unused. |
-| 6 | `remote_user` | `default`s to '-' since most blog traffic is from unauthenticated users. Currently unused. |
-| 7 | `date_time` | `random_in_type('datetime64', 365, y -> to_time('2023-6-17') + interval y day)`: [`random_in_type('datetime64')`](https://docs.timeplus.com/functions_for_random#random_in_type) between 2023-6-17 & a 1-yr interval i.e. [2023-06-17, 2024-06-17). |
-| 8 | `http_verb` | `['GET', 'POST', 'PUT', 'DELETE', 'HEAD'][rand()%5]`: uses [`rand()`](https://docs.timeplus.com/functions_for_random#rand) to return a random index between [0, 5) in this 5-element array. The array samples 5 of the [39 HTTP verbs](https://stackoverflow.com/questions/41411152/how-many-http-verbs-are-there). |
-| 9 | `path` | `['/rss/', '/', '/sitemap.xml', '/favicon.ico', '/robots.txt', ...][rand()%11]`: uses [`rand()`](https://docs.timeplus.com/functions_for_random#rand) to return a random index between [0, 11) in this 11-element array of sample URL subpaths. |
-| 10 | `http_ver` | `['HTTP/1.0', 'HTTP/1.1', 'HTTP/2.0'][rand()%3]`: similar to `path`. |
-| 11 | `status` | `[200, 301, 302, 304, 400, 404][rand()%6]`: similar to `path`. |
-| 12 | `size` | `rand()%5000000`: uses `rand()` to generate a random amount of [bytes sent](https://stackoverflow.com/a/30837653), up to `~5MB`. |
-| 13 | `referer` | `['-', 'https://ayewo.com/', '...', 'https://google.com/'][rand()%4]`: similar to `path`. |
-| 14 | `user_agent` | `['...', '...', ...][rand()%14]`: similar to `path`. |
-| 30 | `malicious_request` | `if(rand()%100 < 5, '\x16\...', '')`: returns a malformed sequence whenever `rand()%100` is < 5. |
+|1 | `remote_ip` | [`random_in_type('ipv4')`](https://docs.timeplus.com/functions_for_random#random_in_type): returns a random [ipv4](https://docs.timeplus.com/datatypes) representing a user's IP address. |
+| 2 | `rfc1413_ident` | `default`s to '-' but should be a string conforming to [RFC1413](https://datatracker.ietf.org/doc/html/rfc1413). Currently unused. |
+| 3 | `remote_user` | `default`s to '-' since most blog traffic is from unauthenticated users. Currently unused. |
+| 4 | `date_time` | `random_in_type('datetime64', 365, y -> to_time('2023-6-17') + interval y day)`: [`random_in_type('datetime64')`](https://docs.timeplus.com/functions_for_random#random_in_type) between 2023-6-17 & a 1-yr interval i.e. [2023-06-17, 2024-06-17). |
+| 5 | `http_method` | `['GET', 'POST', 'PUT', 'DELETE', 'HEAD'][rand()%5]`: uses [`rand()`](https://docs.timeplus.com/functions_for_random#rand) to return a random index between [0, 5) in this 5-element array. The array samples 5 of the [39 HTTP verbs](https://stackoverflow.com/questions/41411152/how-many-http-verbs-are-there). |
+| 6 | `path` | `['/rss/', '/', '/sitemap.xml', '/favicon.ico', '/robots.txt', ...][rand()%11]`: uses [`rand()`](https://docs.timeplus.com/functions_for_random#rand) to return a random index between [0, 11) in this 11-element array of sample URL subpaths. |
+| 7 | `http_version` | `['HTTP/1.0', 'HTTP/1.1', 'HTTP/2.0'][rand()%3]`: similar to `path`. |
+| 8 | `status` | `[200, 301, 302, 304, 400, 404][rand()%6]`: similar to `path`. |
+| 9 | `size` | `rand()%5000000`: uses `rand()` to generate a random amount of [bytes sent](https://stackoverflow.com/a/30837653), up to `~5MB`. |
+| 10 | `referer` | `['-', 'https://ayewo.com/', '...', 'https://google.com/'][rand()%4]`: similar to `path`. |
+| 11 | `user_agent` | `['...', '...', ...][rand()%14]`: similar to `path`. |
+| 12 | `malicious_request` | `if(rand()%100 < 5, '\x16\...', '')`: returns a malformed sequence whenever `rand()%100` is < 5. |
   
 
 
