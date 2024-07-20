@@ -304,25 +304,37 @@ nginx-grafana-grafana-1     | logger=settings t=2024-07-19T21:43:50.364886485Z l
 ``` 
 
 5. Open http://localhost:3000 in your web browser:
+![](images/05.jpeg)
 
 
-6. Click on the hamburger menu at the top left and click on "Data sources" to navigate to the "Data sources" page so you can setup a new data source:
+6. Click on the hamburger menu at the top left and click on "Connections" to navigate to the "Connections" page so you confirm that the Timeplus Proton plugin was installed successfully:
+![](images/06.jpeg)
 
 
-7. While on the Data sources page, type "proton" in the search box that appears then click on "timeplus-proton-datasource":
+7. While on the "Connections" page, type "proton" in the search box then click on the "Proton" data source:
+![](images/07.jpeg)
 
-8. Next change the host from `localhost` to `proton` then click on the "Save and test" button to confirm that you are able to establish a connection to the Timeplus Proton database server running in Docker:
+The Timeplus Proton plugin was correctly installed in the Docker container:
+![](images/07b.jpeg)
+Next click on the "Add new datasource" button at the top right hand corner of the page.
 
 
-9. Next, click on the "Build a dashboard" button at the top right hand corner of the page:
+8. While on the "Add data source" page, change the host from `localhost` to `proton` then click on the "Save and test" button to confirm that you are able to establish a connection to the Timeplus Proton database server running in Docker:
+![](images/08.jpeg)
+Next, click on the "Build a dashboard" button at the top right hand corner of the page.
+
+9. While on the "New dashboard" page, click on the "Import dashboard" button:
+![](images/09.jpeg)
 
 
-10. While on the "New dashboard" page, click on the "Import dashboard" button to upload the `nginx-access-logs_grafana-dashboard.json` inside the `proton/examples/nginx-grafana` subfolder:
-
+10. Next drag the [`nginx-access-logs_grafana-dashboard.json`](nginx-access-logs_grafana-dashboard.json) file inside the `proton/examples/nginx-grafana` subfolder and drop it on this page to upload it:
+![](images/10.jpeg)
+![](images/10b.jpeg)
 
 11. Now choose the Timeplus Proton data source you setup earlier:
-
+![](images/11.jpeg)
 
 12. Congrats! You've successfully set up the "Nginx Access Logs Analysis" dashboard in Grafana:
+![](images/12.jpeg)
 
 
