@@ -303,10 +303,79 @@ nginx-grafana-nginx-access-log-data-generator-1 exited with code 0
 7. Congrats! You've successfully set up the "Nginx Access Logs Analysis" dashboard in Grafana:
 ![](images/12.jpeg)
 
+## Quick Rundown of the Grafana Dashboard
+There are a total of 5 panels in the Grafana dashboard.
+
+### Panel 1: Geodistribution of Web Requests
+This panel uses a [`geomap`](https://grafana.com/docs/grafana/latest/panels-visualizations/visualizations/geomap/). 
+
+![](images/07.jpeg)
+
+This is the query backing this panel:
+```sql
+SELECT date_time_string, ipv4_num_to_string_class_c(nal.remote_ip) as remote_ip, nip.country_name as country, nip.country_flag_emoji as emoji, nip.loc as loc, 
+geohash_encode(to_float64(split_by_char(',', loc)[2]), to_float64(split_by_char(',', loc)[1])) as geohash 
+FROM table(nginx_historical_access_log) as nal JOIN table(nginx_ipinfo) as nip ON nal.remote_ip = nip.ip WHERE NOT empty(loc) 
+GROUP BY remote_ip, date_time_string, country, emoji, loc HAVING count() > 0 ORDER BY date_time_string DESC;
+```
+
+### Panel 2: Geolocation
+This panel uses a [`table`](https://grafana.com/docs/grafana/latest/panels-visualizations/visualizations/table/) to display the data shown in the `geomap` in tabular form. 
+
+![](images/08.jpeg)
+
+The query backing this panel is identical to the query for the `geomap`.
+
+### Panel 3: Top Traffic Sources
+This panel uses a [`bar-chart`](https://grafana.com/docs/grafana/latest/panels-visualizations/visualizations/bar-chart/) to display the countries that send the most traffic. 
+
+![](images/09.jpeg)
+
+This is the query backing this panel:
+```sql
+SELECT count() as page_views, nip.country_name as country, nip.country_flag_emoji as emoji 
+FROM table(nginx_historical_access_log) as nal 
+JOIN table(nginx_ipinfo) as nip ON nal.remote_ip = nip.ip 
+GROUP BY country, emoji HAVING count() > 0 ORDER BY page_views DESC;
+```
+
+### Panel 4: Page Traffic
+This panel also uses a `table` to display the web pages that receive the most amount of traffic from visitors. 
+
+![](images/10.jpeg)
+
+This is the query backing this panel:
+```sql
+SELECT path, count() as request_count
+FROM table(nginx_historical_access_log)
+WHERE (path NOT LIKE '%.js%')
+    AND (path NOT LIKE '%.css%')
+    AND (path NOT LIKE '%.png%')
+    AND (path NOT LIKE '%.gif%')
+    AND (path NOT LIKE '%.jpg')
+GROUP BY path
+ORDER BY count() DESC;
+```
+
+### Panel 5: HTTP Status Codes
+This panel also uses a `bar-chart` to visualize an aggregation of the HTTP status codes.
+
+![](images/11.jpeg)
+
+This is the query backing this panel:
+```sql
+SSELECT
+    multi_if(status >= 400, '40x - Error', status > 300, '30x - Notice', '200 - OK') AS status_code,
+    count() as frequency
+FROM table(nginx_historical_access_log)
+GROUP BY status_code;
+```
+
+
 
 ## Summary
-The post highlights Timeplus Proton's support for use as a data source to power adhoc queries that can be visualized using Grafana.
+This post showed how to use the [RANDOM STREAM](https://docs.timeplus.com/proton-create-stream#create-random-stream) feature of Timeplus Proton to generate Nginx access log data for some quick experimentation. 
 
-Timeplus Proton supports being used as a data source within Grafana via their open source [Grafana plugin](https://grafana.com/grafana/plugins/timeplus-proton-datasource/).
+It also highlights the use of Timeplus Proton as a data source for visualizing queries using Grafana. This is made possible by their open source [Grafana plugin](https://grafana.com/grafana/plugins/timeplus-proton-datasource/).
 
 My next blog post will explore the same analysis covered here using a different visualization tool: [Metabase](https://www.metabase.com/).
