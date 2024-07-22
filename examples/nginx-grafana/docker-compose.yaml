@@ -27,7 +27,7 @@ services:
     networks:
       - internal
       
-  access_log:
+  nginx-access-log-data-generator:
     build:
       context: .
       dockerfile: Dockerfile
