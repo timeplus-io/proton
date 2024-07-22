@@ -24,7 +24,7 @@ Timeplus Proton has a handy feature [`RANDOM STREAM`](https://docs.timeplus.com/
 Before I dive into the article proper, I will first revisit the format used by Nginx to record access log data so that the data we'll generate will mimic its shape and properties.
 
 ## The Shape of Nginx's Access Log Data
-In the [previous article](https://www.timeplus.com/post/analyzing-nginx-access-logs), we briefly touched on the Nginx access logs but did not dwell on its location or how the data it contains should be parsed.
+In the [previous article](https://www.timeplus.com/post/analyzing-nginx-access-logs), we briefly touched on the Nginx access logs but did not dwell on where it is stored on disk or how the data it contains should be parsed.
 
 ### Nginx Access Log Data
 The access logs for Nginx are typically written to the file `/var/log/nginx/access.log`. Here's an excerpt from my blog's access logs:
@@ -87,7 +87,7 @@ The results of parsing the first line are shown in the table below:
 | 8 | `$http_referer` | - |
 | 9 | `$http_user_agent` | - |
 
-It has total of 9 fields which will be represented as database columns later. 
+It has total of 9 fields which will be represented as Timeplus columns later. 
 
 It is clear from looking at the contents of the 5th field i.e. `$request` that this was a maliciously crafted request. The `$request` didn't specify a valid [HTTP protocol](https://www.rfc-editor.org/rfc/rfc9110) method (e.g. `GET`, `POST` or `OPTIONS`) to the server which is why the server responded with a HTTP `$status` code of 400 (Bad Request).
 
@@ -115,7 +115,7 @@ The `$request` field also uses a single space as delimiter and can be split into
 * `HTTP/1.1`: indicates the HTTP protocol version in use for the request
 
 
-One of the analysis which we will run later on Timeplus Proton is a fast aggregation query that will show the top requested pages indicated by the `$path` field in the access logs. We could store each `$request` field in a single database column named `request`, but it would be super convenient if we split the `$request` field into 3 separate columns named: `http_method`, `path` and `http_version`.
+One of the analysis which we will run later on Timeplus Proton is a fast aggregation query that will show the top requested pages indicated by the `$path` field in the access logs. We could store each `$request` field in a single Timeplus column named `request`, but it would be super convenient if we split the `$request` field into 3 separate columns named: `http_method`, `path` and `http_version`.
 
 
 If we update our Python regex as follows:
@@ -146,9 +146,9 @@ We can use the updated Python regex to parse the 2nd line into 11 fields (the 1s
 
 There are several malformed requests in the access logs similar to the one we saw on the 1st line. Many of them will not be parsed reliably using our updated Python regex, so we will add an additional database column called `malicious_request` to store such malformed `$request`s in full rather than attempt to split them. 
 
-In fact, this was why we had a total of 12 columns in the `nginx_historical_access_log` stream created in the previous article.
+In fact, this was why we had a total of 12 Timeplus columns in the `nginx_historical_access_log` stream created in the previous article.
 
-Below is a summary of how individual fields from an Nginx access log will map to database columns:
+Below is a summary of how individual fields from an Nginx access log will map to Timeplus columns:
 | # | Field | Column | Data Type | Remarks |
 |---|-------|--------|-----------|--------|
 | 1 | `$remote_addr` | `remote_ip` | `ipv4` | - |
@@ -185,7 +185,7 @@ On line 3, the [`CREATE RANDOM STREAM`](https://docs.timeplus.com/proton-create-
 
 Each column is randomly assigned a `default` value as you can see on lines 4 - 30.
 
-The table below goes over each of the 12 columns and the database [functions](https://docs.timeplus.com/functions) used to generate test data.
+The table below goes over each of the 12 Timeplus columns and the database [functions](https://docs.timeplus.com/functions) used to generate test data.
 | #  | Column | Generated Data | 
 |------|--------|------------------|
 |1 | `remote_ip` | [`random_in_type('ipv4')`](https://docs.timeplus.com/functions_for_random#random_in_type): returns a random [ipv4](https://docs.timeplus.com/datatypes) representing a user's IP address. |
@@ -206,7 +206,7 @@ The table below goes over each of the 12 columns and the database [functions](ht
 ### Random Streams
 There is an important note about the design of random streams in Timeplus Proton mentioned in the [`RANDOM STREAM`](https://docs.timeplus.com/proton-create-stream#create-random-stream) documentation that is worth highlighting here:
 > [!NOTE]
-> The data of random stream is kept in memory during the query time. If you are not querying the random stream, there is no data generated or kept in memory.
+> When you run a Timeplus SQL query with a random stream, the data will be generated and analyzed by the query engine. Depending on the query, all generated data or aggregated states can be kept in memory during the query time. If you are not querying the random stream, no data is generated or kept in memory.
 
 Essentially, each time you run a query like `SELECT remote_ip, rfc1413_ident, remote_user, date_time, http_verb, path, http_ver, status, size, referer, user_agent, malicious_request FROM nginx_access_log LIMIT 1;`, you'll get a different (random) result from the stream.
 
@@ -269,72 +269,38 @@ docker compose up
 ```
 Your console should show output similar to the one below:
 ```bash
- ✔ Network internal_network                          Created                                                                                                                                                                             0.1s 
- ✔ Container nginx-grafana-proton-1      Created                                                                                                                                                                             0.1s 
- ✔ Container nginx-grafana-access_log-1  Created                                                                                                                                                                             0.0s 
- ✔ Container nginx-grafana-grafana-1     Created                                                                                                                                                                             0.0s 
-Attaching to nginx-grafana-access_log-1, nginx-grafana-grafana-1, nginx-grafana-proton-1
-nginx-grafana-proton-1      | Processing configuration file '/etc/proton-server/config.yaml'.
-nginx-grafana-proton-1      | Merging configuration file '/etc/proton-server/config.d/data-paths.xml'.
-nginx-grafana-proton-1      | Merging configuration file '/etc/proton-server/config.d/docker_related_config.xml'.
-nginx-grafana-proton-1      | Merging configuration file '/etc/proton-server/config.d/logger.xml'.
-nginx-grafana-proton-1      | Merging configuration file '/etc/proton-server/config.d/openssl.xml'.
-nginx-grafana-proton-1      | Merging configuration file '/etc/proton-server/config.d/user-directories.xml'.
-nginx-grafana-proton-1      | Logging information to /var/log/proton-server/proton-server.log
-nginx-grafana-proton-1      | Logging errors to /var/log/proton-server/proton-server.err.log
-nginx-grafana-access_log-1  | Using the following config for IPinfo:
-nginx-grafana-access_log-1  | {"cache_enabled":true,"token":"xxxxxxxxxxxxxx","open_browser":true}
-nginx-grafana-access_log-1  | Extracting only IP addresses from the 1st column in /tmp/nginx_export.csv to /tmp/nginx_export.ipinfo.tmp ...
-nginx-grafana-access_log-1  | Removing duplicate IP addresses from /tmp/nginx_export.ipinfo.tmp ...
-nginx-grafana-access_log-1  | Combined all IP addresses into a single file: /tmp/nginx_export.ipinfo.
-nginx-grafana-access_log-1  | removed '/tmp/nginx_export.ipinfo.tmp'
-nginx-grafana-access_log-1  | Extracting the rest of the data from /tmp/nginx_export.csv to /tmp/nginx_import.csv ...
-nginx-grafana-access_log-1  | renamed '/tmp/nginx_export.csv' -> '/tmp/nginx_import.csv'
-nginx-grafana-access_log-1  | Geo-locating all the IP addresses in bulk using the IPInfo API (https://ipinfo.io):
-nginx-grafana-access_log-1  |    Total IP addresses that will be looked up in bulk using /tmp/nginx_export.ipinfo: 10000.
-nginx-grafana-access_log-1  |    Geo-lookup of 10000 IP addresses written to file: /tmp/nginx_import.ipinfo.csv.
-nginx-grafana-access_log-1  |    Complete!
-nginx-grafana-access_log-1 exited with code 0
-nginx-grafana-grafana-1     | ✔ Downloaded and extracted timeplus-proton-datasource v1.0.3 zip successfully to /var/lib/grafana/plugins/timeplus-proton-datasource
-nginx-grafana-grafana-1     | 
-nginx-grafana-grafana-1     | Please restart Grafana after installing or removing plugins. Refer to Grafana documentation for instructions if necessary.
-nginx-grafana-grafana-1     | 
-nginx-grafana-grafana-1     | logger=settings t=2024-07-19T21:43:50.364886485Z level=info msg="Starting Grafana" version=11.1.0 commit=5b85c4c2fcf5d32d4f68aaef345c53096359b2f1 branch=HEAD compiled=2024-07-19T21:43:50Z
+Attaching to nginx-grafana-grafana-1, nginx-grafana-nginx-access-log-data-generator-1, nginx-grafana-proton-1
+nginx-grafana-proton-1                           | Processing configuration file '/etc/proton-server/config.yaml'.
+nginx-grafana-proton-1                           | Merging configuration file '/etc/proton-server/config.d/data-paths.xml'.
+nginx-grafana-proton-1                           | Merging configuration file '/etc/proton-server/config.d/docker_related_config.xml'.
+nginx-grafana-proton-1                           | Merging configuration file '/etc/proton-server/config.d/logger.xml'.
+nginx-grafana-proton-1                           | Merging configuration file '/etc/proton-server/config.d/openssl.xml'.
+nginx-grafana-proton-1                           | Merging configuration file '/etc/proton-server/config.d/user-directories.xml'.
+nginx-grafana-proton-1                           | Logging information to /var/log/proton-server/proton-server.log
+nginx-grafana-proton-1                           | Logging errors to /var/log/proton-server/proton-server.err.log
+nginx-grafana-nginx-access-log-data-generator-1  | Using the following config for IPinfo:
+nginx-grafana-nginx-access-log-data-generator-1  | {"cache_enabled":true,"token":"xxxxxxxxxxxxxx","open_browser":true}
+nginx-grafana-nginx-access-log-data-generator-1  | Extracting only IP addresses from the 1st column in /tmp/nginx_export.csv to /tmp/nginx_export.ipinfo.tmp ...
+nginx-grafana-nginx-access-log-data-generator-1  | Removing duplicate IP addresses from /tmp/nginx_export.ipinfo.tmp ...
+nginx-grafana-nginx-access-log-data-generator-1  | Combined all IP addresses into a single file: /tmp/nginx_export.ipinfo.
+nginx-grafana-nginx-access-log-data-generator-1  | removed '/tmp/nginx_export.ipinfo.tmp'
+nginx-grafana-nginx-access-log-data-generator-1  | Extracting the rest of the data from /tmp/nginx_export.csv to /tmp/nginx_import.csv ...
+nginx-grafana-nginx-access-log-data-generator-1  | renamed '/tmp/nginx_export.csv' -> '/tmp/nginx_import.csv'
+nginx-grafana-nginx-access-log-data-generator-1  | Geo-locating all the IP addresses in bulk using the IPInfo API (https://ipinfo.io):
+nginx-grafana-nginx-access-log-data-generator-1  |    Total IP addresses that will be looked up in bulk using /tmp/nginx_export.ipinfo: 1000.
+nginx-grafana-nginx-access-log-data-generator-1  |    Geo-lookup of 1000 IP addresses written to file: /tmp/nginx_import.ipinfo.csv.
+nginx-grafana-nginx-access-log-data-generator-1  |    Complete!
+nginx-grafana-nginx-access-log-data-generator-1 exited with code 0
 ...
 ``` 
 
 5. Open http://localhost:3000 in your web browser:
 ![](images/05.jpeg)
 
-
-6. Click on the hamburger menu at the top left and click on "Connections" to navigate to the "Connections" page so you confirm that the Timeplus Proton plugin was installed successfully:
+6. On the bottom left of the screen, click on "Nginx Access Logs Analysis" to open the dashboard that has been automatically setup for you:
 ![](images/06.jpeg)
 
-
-7. While on the "Connections" page, type "proton" in the search box then click on the "Proton" data source:
-![](images/07.jpeg)
-
-The Timeplus Proton plugin was correctly installed in the Docker container:
-![](images/07b.jpeg)
-Next click on the "Add new datasource" button at the top right hand corner of the page.
-
-
-8. While on the "Add data source" page, change the host from `localhost` to `proton` then click on the "Save and test" button to confirm that you are able to establish a connection to the Timeplus Proton database server running in Docker:
-![](images/08.jpeg)
-Next, click on the "Build a dashboard" button at the top right hand corner of the page.
-
-9. While on the "New dashboard" page, click on the "Import dashboard" button:
-![](images/09.jpeg)
-
-
-10. Next drag the [`nginx-access-logs_grafana-dashboard.json`](nginx-access-logs_grafana-dashboard.json) file inside the `proton/examples/nginx-grafana` subfolder and drop it on this page to upload it:
-![](images/10.jpeg)
-![](images/10b.jpeg)
-
-11. Now choose the Timeplus Proton data source you setup earlier:
-![](images/11.jpeg)
-
-12. Congrats! You've successfully set up the "Nginx Access Logs Analysis" dashboard in Grafana:
+7. Congrats! You've successfully set up the "Nginx Access Logs Analysis" dashboard in Grafana:
 ![](images/12.jpeg)
 
 
