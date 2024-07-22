@@ -1,0 +1,510 @@
+{
+  "__elements": {},
+  "__requires": [
+    {
+      "type": "panel",
+      "id": "barchart",
+      "name": "Bar chart",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "geomap",
+      "name": "Geomap",
+      "version": ""
+    },
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "11.1.0"
+    },
+    {
+      "type": "panel",
+      "id": "table",
+      "name": "Table",
+      "version": ""
+    },
+    {
+      "type": "datasource",
+      "id": "timeplus-proton-datasource",
+      "name": "Proton",
+      "version": "1.0.3"
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "timeplus-proton-datasource",
+        "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "controls": {
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showDebug": false,
+          "showMeasure": false,
+          "showScale": false,
+          "showZoom": true
+        },
+        "layers": [
+          {
+            "config": {
+              "showLegend": true,
+              "style": {
+                "color": {
+                  "fixed": "dark-green"
+                },
+                "opacity": 0.4,
+                "rotation": {
+                  "fixed": 0,
+                  "max": 360,
+                  "min": -360,
+                  "mode": "mod"
+                },
+                "size": {
+                  "fixed": 5,
+                  "max": 15,
+                  "min": 2
+                },
+                "symbol": {
+                  "fixed": "img/icons/marker/circle.svg",
+                  "mode": "fixed"
+                },
+                "symbolAlign": {
+                  "horizontal": "center",
+                  "vertical": "center"
+                },
+                "textConfig": {
+                  "fontSize": 12,
+                  "offsetX": 0,
+                  "offsetY": 0,
+                  "textAlign": "center",
+                  "textBaseline": "middle"
+                }
+              }
+            },
+            "location": {
+              "mode": "auto"
+            },
+            "name": "Layer 1",
+            "tooltip": true,
+            "type": "markers"
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        },
+        "view": {
+          "allLayers": true,
+          "id": "zero",
+          "lat": 0,
+          "lon": 0,
+          "zoom": 1
+        }
+      },
+      "pluginVersion": "11.1.0",
+      "targets": [
+        {
+          "addNow": false,
+          "datasource": {
+            "type": "timeplus-proton-datasource",
+            "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
+          },
+          "queryText": "SELECT date_time_string, ipv4_num_to_string_class_c(nal.remote_ip) as remote_ip, nip.country_name as country, nip.country_flag_emoji as emoji, nip.loc as loc, \ngeohash_encode(to_float64(split_by_char(',', loc)[2]), to_float64(split_by_char(',', loc)[1])) as geohash \nFROM table(nginx_historical_access_log) as nal JOIN table(nginx_ipinfo) as nip ON nal.remote_ip = nip.ip WHERE NOT empty(loc) \nGROUP BY remote_ip, date_time_string, country, emoji, loc HAVING count() > 0 ORDER BY date_time_string DESC;\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Geodistribution of Web Requests",
+      "type": "geomap"
+    },
+    {
+      "datasource": {
+        "type": "timeplus-proton-datasource",
+        "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "id": 1,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "11.1.0",
+      "targets": [
+        {
+          "addNow": false,
+          "datasource": {
+            "type": "timeplus-proton-datasource",
+            "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
+          },
+          "queryText": "SELECT date_time_string, ipv4_num_to_string_class_c(nal.remote_ip) as remote_ip, nip.country_name as country, nip.country_flag_emoji as emoji, nip.loc as loc, \ngeohash_encode(to_float64(split_by_char(',', loc)[2]), to_float64(split_by_char(',', loc)[1])) as geohash \nFROM table(nginx_historical_access_log) as nal JOIN table(nginx_ipinfo) as nip ON nal.remote_ip = nip.ip WHERE NOT empty(loc) \nGROUP BY remote_ip, date_time_string, country, emoji, loc HAVING count() > 0 ORDER BY date_time_string DESC LIMIT 50;\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Geolocation",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "timeplus-proton-datasource",
+        "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "id": 4,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "colorByField": "emoji",
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "targets": [
+        {
+          "addNow": false,
+          "datasource": {
+            "type": "timeplus-proton-datasource",
+            "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
+          },
+          "queryText": "SELECT count() as page_views, nip.country_name as country, nip.country_flag_emoji as emoji \nFROM table(nginx_historical_access_log) as nal \nJOIN table(nginx_ipinfo) as nip ON nal.remote_ip = nip.ip \nGROUP BY country, emoji HAVING count() > 0 ORDER BY page_views DESC;",
+          "refId": "A"
+        }
+      ],
+      "title": "Top Traffic Sources",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "timeplus-proton-datasource",
+        "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "id": 5,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "11.1.0",
+      "targets": [
+        {
+          "addNow": false,
+          "datasource": {
+            "type": "timeplus-proton-datasource",
+            "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
+          },
+          "queryText": "SELECT path, count() as request_count\nFROM table(nginx_historical_access_log)\nWHERE (path NOT LIKE '%.js%')\n    AND (path NOT LIKE '%.css%')\n    AND (path NOT LIKE '%.png%')\n    AND (path NOT LIKE '%.gif%')\n    AND (path NOT LIKE '%.jpg')\nGROUP BY path\nORDER BY count() DESC;",
+          "refId": "A"
+        }
+      ],
+      "title": "Page Traffic",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "timeplus-proton-datasource",
+        "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "id": 3,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "11.1.0",
+      "targets": [
+        {
+          "addNow": false,
+          "datasource": {
+            "type": "timeplus-proton-datasource",
+            "uid": "c24e0faf-1490-4321-a373-7b2b07ca2e38"
+          },
+          "queryText": "SELECT\n    multi_if(status >= 400, '40x - Error', status > 300, '30x - Notice', '200 - OK') AS status_code,\n    count() as frequency\nFROM table(nginx_historical_access_log)\nGROUP BY status_code;\n",
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP Status Codes",
+      "type": "barchart"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": [],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Nginx Access Logs Analysis",
+  "uid": "fdrqzgwwbwv0gf",
+  "version": 10,
+  "weekStart": ""
+}
