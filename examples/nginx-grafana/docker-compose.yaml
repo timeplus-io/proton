@@ -1,0 +1,45 @@
+version: "3.5"
+services:
+  proton:
+    image: ghcr.io/timeplus-io/proton:latest
+    pull_policy: always
+    ports:
+      - 3218:3218 # HTTP Streaming
+      - 8463:8463 # TCP Streaming
+    environment:
+      TELEMETRY_ENABLED: false
+    networks:
+      - internal
+
+  grafana:
+    image: grafana/grafana:latest
+    pull_policy: always
+    ports:
+      - 3000:3000
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: 1
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_INSTALL_PLUGINS: timeplus-proton-datasource
+    volumes:
+      - ./provisioning:/etc/grafana/provisioning
+    depends_on:
+      - proton
+    networks:
+      - internal
+      
+  nginx-access-log-data-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - PROTON_HOST=proton
+        - IPINFO_KEY=$IPINFO_KEY
+    depends_on:
+      - proton
+    networks:
+      - internal
+        
+networks:
+  internal:
+    name: internal_network
+
