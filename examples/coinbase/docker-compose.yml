@@ -1,13 +1,12 @@
-version: '3.7'
 name: coinbase
 services:
   proton:
     image: ghcr.io/timeplus-io/proton:latest
     pull_policy: always
     ports:
-    - "3218:3218" # HTTP Streaming
+      - "3218:3218" # HTTP Streaming
     volumes:
-    - ./initdb.d:/docker-entrypoint-initdb.d
+      - ./initdb.d:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD", "curl", "http://localhost:3218/proton/ping"]
       interval: 5s
@@ -20,7 +19,7 @@ services:
     pull_policy: always
     command: streams
     ports:
-    - "4195:4195"
+      - "4195:4195"
 
   init-pipeline:
     image: ghcr.io/timeplus-io/proton:latest
@@ -30,9 +29,7 @@ services:
       - |
         curl http://benthos:4195/streams/test -X POST  -d  @/pipeline/pipeline.json
     volumes:
-    - ./pipeline:/pipeline
+      - ./pipeline:/pipeline
     depends_on:
       proton:
         condition: service_healthy
-
-

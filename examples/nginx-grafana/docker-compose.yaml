@@ -1,4 +1,3 @@
-version: "3.5"
 services:
   proton:
     image: ghcr.io/timeplus-io/proton:latest
@@ -6,8 +5,6 @@ services:
     ports:
       - 3218:3218 # HTTP Streaming
       - 8463:8463 # TCP Streaming
-    environment:
-      TELEMETRY_ENABLED: false
     networks:
       - internal
 
@@ -26,7 +23,7 @@ services:
       - proton
     networks:
       - internal
-      
+
   nginx-access-log-data-generator:
     build:
       context: .
@@ -38,8 +35,7 @@ services:
       - proton
     networks:
       - internal
-        
+
 networks:
   internal:
     name: internal_network
-

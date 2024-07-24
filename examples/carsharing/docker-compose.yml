@@ -1,9 +1,8 @@
-version: '3.7'
 name: proton-demo-carsharing
 services:
   proton:
-     image: ghcr.io/timeplus-io/proton:latest
-     pull_policy: always
+    image: ghcr.io/timeplus-io/proton:latest
+    pull_policy: always
 
   carsharing_datagen:
     image: timeplus/cardemo:latest

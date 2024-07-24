@@ -1,11 +1,10 @@
-version: '3.7'
 name: proton-ch-demo
 volumes:
   redpanda: null
 services:
   proton:
-     image: ghcr.io/timeplus-io/proton:latest
-     pull_policy: always
+    image: ghcr.io/timeplus-io/proton:latest
+    pull_policy: always
 
   clickhouse:
     image: clickhouse/clickhouse-server:latest
@@ -14,7 +13,7 @@ services:
     ulimits:
       nofile:
         soft: 262144
-        hard: 262144  
+        hard: 262144
 
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
