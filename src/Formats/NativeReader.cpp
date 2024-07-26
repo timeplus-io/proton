@@ -145,18 +145,20 @@ Block NativeReader::read()
         setVersionToAggregateFunctions(column.type, true, server_revision);
 
         SerializationPtr serialization;
-        if (server_revision >= DBMS_MIN_REVISION_WITH_CUSTOM_SERIALIZATION)
-        {
-            auto info = column.type->createSerializationInfo({});
-
-            UInt8 has_custom;
-            readBinary(has_custom, istr);
-            if (has_custom)
-                info->deserializeFromKindsBinary(istr);
-
-            serialization = column.type->getSerialization(*info);
-        }
-        else
+        /// proton: starts
+        /// if (server_revision >= DBMS_MIN_REVISION_WITH_CUSTOM_SERIALIZATION)
+        /// {
+        ///     auto info = column.type->createSerializationInfo({});
+        ///
+        ///     UInt8 has_custom;
+        ///     readBinary(has_custom, istr);
+        ///     if (has_custom)
+        ///         info->deserializeFromKindsBinary(istr);
+        ///
+        ///     serialization = column.type->getSerialization(*info);
+        /// }
+        /// else
+        /// proton: ends
         {
             serialization = column.type->getDefaultSerialization();
         }
