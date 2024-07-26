@@ -146,19 +146,22 @@ Block NativeReader::read()
 
         SerializationPtr serialization;
         /// proton: starts
-        /// if (server_revision >= DBMS_MIN_REVISION_WITH_CUSTOM_SERIALIZATION)
-        /// {
-        ///     auto info = column.type->createSerializationInfo({});
-        ///
-        ///     UInt8 has_custom;
-        ///     readBinary(has_custom, istr);
-        ///     if (has_custom)
-        ///         info->deserializeFromKindsBinary(istr);
-        ///
-        ///     serialization = column.type->getSerialization(*info);
-        /// }
-        /// else
-        /// proton: ends
+        /// Because our drivers does not support custom serialization, we can only check the serialization when `compatible_with_clickhouse` is `true`,
+        /// i.e. this reader is reading packets from clickhouse (for ClickHouse external tables).
+        if (compatible_with_clickhouse &&
+            /// proton: ends
+            server_revision >= DBMS_MIN_REVISION_WITH_CUSTOM_SERIALIZATION)
+        {
+            auto info = column.type->createSerializationInfo({});
+
+            UInt8 has_custom;
+            readBinary(has_custom, istr);
+            if (has_custom)
+                info->deserializeFromKindsBinary(istr);
+
+            serialization = column.type->getSerialization(*info);
+        }
+        else
         {
             serialization = column.type->getDefaultSerialization();
         }
