@@ -116,7 +116,12 @@ void NativeWriter::write(const Block & block)
 
         /// Serialization. Dynamic, if client supports it.
         SerializationPtr serialization;
-        if (client_revision >= DBMS_MIN_REVISION_WITH_CUSTOM_SERIALIZATION)
+        /// proton: starts
+        /// Because our drivers does not support custom serialization, we can only check the serialization when `compatible_with_clickhouse` is `true`,
+        /// i.e. this writer is writing packets to clickhouse (for ClickHouse external tables).
+        if (compatible_with_clickhouse &&
+            /// proton: ends
+            client_revision >= DBMS_MIN_REVISION_WITH_CUSTOM_SERIALIZATION)
         {
             auto info = column.type->getSerializationInfo(*column.column);
             serialization = column.type->getSerialization(*info);
