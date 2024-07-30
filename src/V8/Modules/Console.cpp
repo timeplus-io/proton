@@ -13,7 +13,47 @@ namespace V8
 void log(const v8::FunctionCallbackInfo<v8::Value> & args)
 {
     v8::Isolate * isolate = args.GetIsolate();
-    LOG_DEBUG(&Poco::Logger::get(V8::from_v8<String>(isolate, args.Data())), "{}", V8::from_v8<String>(isolate, args[0]));
+    assert(args.Length() >= 0);
+    std::vector<String> result(args.Length());
+    try
+    {
+        auto context = isolate->GetCurrentContext();
+        for (int i = 0; i < args.Length(); i++)
+        {
+            if (args[i]->IsString() || args[i]->IsNumber())
+            {
+                result[i] = from_v8<String>(isolate, args[i]);
+            }
+            else if (args[i]->IsObject())
+            {
+                /// trans Object to String
+                bool is_key_value = false;
+                auto obj = args[i].As<v8::Object>();
+                /// trans Map,Set to String
+                auto array = obj->PreviewEntries(&is_key_value);
+                if (!array.IsEmpty())
+                    result[i] = from_v8<String>(isolate, array.ToLocalChecked()->ToString(context).ToLocalChecked());
+                else if (obj->IsRegExp())
+                    result[i] = from_v8<String>(isolate, obj->ToString(context).ToLocalChecked());
+                else
+                    result[i] = from_v8<String>(isolate, v8::JSON::Stringify(context, obj).ToLocalChecked());
+            }
+            else
+            {
+                /// default trans to String
+                result[i] = from_v8<String>(isolate, args[i]->ToString(context).ToLocalChecked());
+            }
+        }
+        LOG_INFO(&Poco::Logger::get(from_v8<String>(isolate, args.Data())), "{}", fmt::join(result, " "));
+    }
+    catch (DB::Exception & e)
+    {
+        LOG_ERROR(&Poco::Logger::get(from_v8<String>(isolate, args.Data())), "Hit an udf/uda error : {}", e.what());
+    }
+    catch(...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
 }
 
 v8::Local<v8::Object> WrapObject(v8::Isolate * isolate, const std::string & func_name)
