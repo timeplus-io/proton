@@ -400,10 +400,6 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
         if (i != args.size())
             break;
 
-        /// They may be used in aggregation transform, so set an internal alias for them
-        start_condition->setAlias(ProtonConsts::STREAMING_SESSION_START);
-        end_condition->setAlias(ProtonConsts::STREAMING_SESSION_END);
-
         asts.emplace_back(std::move(table));
         asts.emplace_back(std::move(time_expr));
         asts.emplace_back(std::move(timeout_interval));
