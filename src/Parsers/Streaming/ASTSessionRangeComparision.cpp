@@ -34,7 +34,7 @@ void ASTSessionRangeComparision::formatImplWithoutAlias(const FormatSettings & s
 
     settings.ostr << (settings.hilite ? hilite_keyword : "") << (start_with_inclusion ? "[" : "(") << (settings.hilite ? hilite_none : "");
     children[0]->format(settings);
-    settings.ostr << (settings.hilite ? hilite_keyword : "") << "," << (settings.hilite ? hilite_none : "");
+    settings.ostr << (settings.hilite ? hilite_keyword : "") << ", " << (settings.hilite ? hilite_none : "");
     children[1]->format(settings);
     settings.ostr << (settings.hilite ? hilite_keyword : "") << (end_with_inclusion ? "]" : ")") << (settings.hilite ? hilite_none : "");
 }
