@@ -12,7 +12,7 @@ public:
 
     String getID(char) const override { return "SessionRangeComparision"; }
 
-    ASTPtr clone() const override { return std::make_shared<ASTSessionRangeComparision>(*this); }
+    ASTPtr clone() const override;
 
     void updateTreeHashImpl(SipHash & hash_state) const override;
 
