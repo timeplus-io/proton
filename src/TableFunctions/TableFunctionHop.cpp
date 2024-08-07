@@ -38,6 +38,9 @@ ASTs TableFunctionHop::checkAndExtractArguments(ASTFunction * node) const
 
 void TableFunctionHop::postArgs(ASTs & args) const
 {
+    /// __hop(timestamp_expr, hop_interval, win_interval, [timezone])
+    assert(args.size() == 4);
+
     //// [timezone]
     /// Prune the empty timezone if user doesn't specify one
     if (!args.back())
