@@ -143,7 +143,7 @@ tests:
         - client: python
           query_type: table
           depends_on_stream: test_31_multishards_stream
-          wait: 1
+          wait: 2
           query: |
             insert into test_31_multishards_stream(i, v) values(101, 'test');
 
@@ -151,7 +151,7 @@ tests:
           query_type: stream
           query_id: 3100-1
           depends_on_stream: test_31_multishards_stream
-          wait: 1
+          wait: 2
           query: |
             recover from '3100';
 
