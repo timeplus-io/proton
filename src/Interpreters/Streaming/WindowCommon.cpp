@@ -172,7 +172,7 @@ ASTs checkAndExtractTumbleArguments(const ASTFunction * func_ast)
 
     /// tumble(table, [timestamp_expr], win_interval, [timezone])
     if (func_ast->children.size() != 1)
-        throw Exception(HOP_HELP_MESSAGE, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(TUMBLE_HELP_MESSAGE, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     const auto & args = func_ast->arguments->children;
     if (args.size() < 2)
@@ -315,7 +315,7 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
 {
     assert(isTableFunctionSession(func_ast));
 
-    /// session(stream, [timestamp_expr], timeout_interval, [max_emit_interval], [range_comparision])
+    /// session(stream, [timestamp_expr], timeout_interval, [max_emit_interval], [range_comparision] | [start_prediction, end_prediction])
     if (func_ast->children.size() != 1)
         throw Exception(SESSION_HELP_MESSAGE, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
@@ -347,11 +347,6 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
             /// Case: session(stream, timestamp, INTERVAL 5 SECOND, ...)
             time_expr = args[i++];
         }
-        else
-        {
-            /// Case: session(stream, INTERVAL 5 SECOND, ...)
-            time_expr = std::make_shared<ASTIdentifier>(ProtonConsts::RESERVED_EVENT_TIME);
-        }
 
         if (isIntervalAST(args[i]))
         {
@@ -371,12 +366,6 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
             /// When the timestamp of the latest event is larger than session window_start + max_session_size,
             /// session will emit.
             max_session_size = args[i++];
-        }
-        else
-        {
-            /// Set default max session size.
-            auto [unit_nums, unit] = extractInterval(timeout_interval->as<ASTFunction>());
-            max_session_size = makeASTInterval(unit_nums * ProtonConsts::SESSION_SIZE_MULTIPLIER, unit);
         }
 
         /// Handle optional start_condition/end_condition
@@ -407,21 +396,9 @@ ASTs checkAndExtractSessionArguments(const ASTFunction * func_ast)
                 end_with_inclusion = std::make_shared<ASTLiteral>(true);
             }
         }
-        else
-        {
-            /// OPT-3: If range predication is not assigned, any incoming event should be able to start a session window.
-            start_condition = std::make_shared<ASTLiteral>(true);
-            start_with_inclusion = std::make_shared<ASTLiteral>(true);
-            end_condition = std::make_shared<ASTLiteral>(false);
-            end_with_inclusion = std::make_shared<ASTLiteral>(true);
-        }
 
         if (i != args.size())
             break;
-
-        /// They may be used in aggregation transform, so set an internal alias for them
-        start_condition->setAlias(ProtonConsts::STREAMING_SESSION_START);
-        end_condition->setAlias(ProtonConsts::STREAMING_SESSION_END);
 
         asts.emplace_back(std::move(table));
         asts.emplace_back(std::move(time_expr));

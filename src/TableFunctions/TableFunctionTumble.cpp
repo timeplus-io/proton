@@ -37,6 +37,9 @@ ASTs TableFunctionTumble::checkAndExtractArguments(ASTFunction * node) const
 
 void TableFunctionTumble::postArgs(ASTs & args) const
 {
+    /// __tumble(timestamp_expr, win_interval, [timezone])
+    assert(args.size() == 3);
+
     //// [timezone]
     /// Prune the empty timezone if user doesn't specify one
     if (!args.back())

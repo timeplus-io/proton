@@ -20,6 +20,7 @@ $CLICKHOUSE_CLIENT --query="SELECT * FROM table(csv) ORDER BY d settings asteris
 $CLICKHOUSE_CLIENT --query="DROP STREAM csv";
 
 $CLICKHOUSE_CLIENT --query="create stream csv (t datetime('Europe/Moscow'), s string) ";
+sleep 2s
 
 echo '"2016-01-01 01:02:03","1"
 2016-01-02 01:02:03, "2"
@@ -30,14 +31,16 @@ sleep 2s
 
 $CLICKHOUSE_CLIENT --query="SELECT * FROM table(csv) ORDER BY s settings asterisk_include_reserved_columns=false";
 $CLICKHOUSE_CLIENT --query="DROP STREAM csv";
+sleep 2s
 
 
 $CLICKHOUSE_CLIENT --query="create stream csv (t nullable(datetime('Europe/Moscow')), s nullable(string)) ";
+sleep 2s
 
 echo 'NULL, NULL
 "2016-01-01 01:02:03",NUL
 "2016-01-02 01:02:03",Nhello' | $CLICKHOUSE_CLIENT --format_csv_null_representation='NULL' --input_format_csv_empty_as_default=1 --query="INSERT INTO csv(t,s) FORMAT CSV";
-sleep 2s
+sleep 4s
 
 $CLICKHOUSE_CLIENT --query="SELECT * FROM table(csv) ORDER BY s NULLS LAST settings asterisk_include_reserved_columns=false";
 $CLICKHOUSE_CLIENT --query="DROP STREAM csv";
