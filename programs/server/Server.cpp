@@ -97,6 +97,8 @@
 #include <Server/RestRouterHandlers/RestRouterFactory.h>
 #include <Common/Config/ExternalGrokPatterns.h>
 
+#include <Poco/Net/NetworkInterface.h>
+
 #include <v8.h>
 
 namespace DB
@@ -104,6 +106,25 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int UNSUPPORTED;
+}
+
+
+bool networkInterfaceSupportsIPv6()
+{
+    try
+    {
+        for (const auto & ni : Poco::Net::NetworkInterface::list())
+        {
+            if (ni.supportsIPv6())
+                return true;
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
+
+    return false;
 }
 }
 /// proton: ends
@@ -415,8 +436,10 @@ std::vector<std::string> getListenHosts(const Poco::Util::AbstractConfiguration 
     auto listen_hosts = DB::getMultipleValuesFromConfig(config, "", "listen_host");
     if (listen_hosts.empty())
     {
-        listen_hosts.emplace_back("::1");
-        listen_hosts.emplace_back("127.0.0.1");
+        /// check system level support ipv6 and network interface level support ipv6
+        if (Poco::Net::Socket::supportsIPv6() && networkInterfaceSupportsIPv6())
+            listen_hosts.emplace_back("::1");
+        listen_hosts.emplace_back("0.0.0.0");
     }
     return listen_hosts;
 }
