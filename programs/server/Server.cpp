@@ -415,8 +415,9 @@ std::vector<std::string> getListenHosts(const Poco::Util::AbstractConfiguration 
     auto listen_hosts = DB::getMultipleValuesFromConfig(config, "", "listen_host");
     if (listen_hosts.empty())
     {
-        listen_hosts.emplace_back("::1");
-        listen_hosts.emplace_back("127.0.0.1");
+        if (Poco::Net::SecureServerSocket::supportsIPv6())
+            listen_hosts.emplace_back("::1");
+        listen_hosts.emplace_back("0.0.0.0");
     }
     return listen_hosts;
 }
