@@ -785,6 +785,7 @@ size_t insertFromBlockImpl(
 const HashJoin::SupportMatrix HashJoin::support_matrix = {
     /// <left_stroage_semantic, join_kind, join_strictness, right_storage_semantic> - supported
     /// Append ...
+    {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::All, StorageSemantic::Append}, true},
     {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::All, StorageSemantic::ChangelogKV}, true},
     {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::All, StorageSemantic::VersionedKV}, true},
     {{StorageSemantic::Append, JoinKind::Left, JoinStrictness::All, StorageSemantic::Changelog}, true},
@@ -927,15 +928,15 @@ void HashJoin::init()
 
     bidirectional_hash_join = !data_enrichment_join;
 
-    /// append-only inner join append-only on ... and date_diff_within(10s)
+    /// append-only inner/left join append-only on ... and date_diff_within(10s)
     /// In case when emitChangeLog()
     if (streaming_strictness == Strictness::Range
         && (left_data.join_stream_desc->data_stream_semantic != DataStreamSemantic::Append
             || right_data.join_stream_desc->data_stream_semantic != DataStreamSemantic::Append
-            || streaming_kind != Kind::Inner))
+            || (streaming_kind != Kind::Inner && streaming_kind != Kind::Left)))
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED,
-            "Only inner range join is supported and the left and right stream must be append-only streams in range join");
+            "Only inner/left range join is supported and the left and right stream must be append-only streams in range join");
 
     range_bidirectional_hash_join = bidirectional_hash_join && (streaming_strictness == Strictness::Range);
 
