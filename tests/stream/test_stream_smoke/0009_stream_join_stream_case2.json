@@ -203,15 +203,19 @@
                         {"client":"python", "query_type": "stream", "query_id":"1056", "wait":1, "terminate":"manual", "query":"select i, k, j, kk from test10_append_left_stream left join test10_append_right_stream on k == kk;"},
                         {"client":"python", "query_type": "table", "depends_on":"1056", "wait":1, "query": "insert into test10_append_right_stream (j, kk) values (1, 'a') (1, 'b');"},
                         {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_append_left_stream (i, k) values (2, 'a');"},
-                        {"client":"python", "query_type": "table", "wait":1, "query": "insert into test10_append_left_stream (i, k) values (2, 'b');"},
-                        {"client":"python", "query_type": "table", "kill":"1056", "kill_wait":3, "wait":1, "query": "insert into test10_append_left_stream (i, k) values (2, 'c');"}
+                        {"client":"python", "query_type": "table", "query": "insert into test10_append_left_stream (i, k) values (2, 'b');"},
+                        {"client":"python", "query_type": "table", "kill":"1056", "kill_wait":3, "query": "insert into test10_append_left_stream (i, k) values (2, 'c');"}
                     ]
                 }
             ],
             "expected_results": [
                 {
                     "query_id":"1056",
-                    "expected_results": "error_code:48"
+                    "expected_results":[
+                        [2, "a", 1, "a"],
+                        [2, "b", 1, "b"],
+                        [2, "c", 0, ""]
+                    ]
                 }
             ]
         },
