@@ -41,9 +41,9 @@ static ReturnType onError(const std::string & message [[maybe_unused]], int code
 
 template <typename ReturnType>
 static ReturnType checkColumnStructure(const ColumnWithTypeAndName & actual, const ColumnWithTypeAndName & expected,
-    std::string_view context_description, bool allow_materialize, int code)
+    std::string_view context_description, bool allow_materialize, bool ignore_name, int code)
 {
-    if (actual.name != expected.name)
+    if (!ignore_name && actual.name != expected.name)
         return onError<ReturnType>("Block structure mismatch in " + std::string(context_description) + " stream: different names of columns:\n"
             + actual.dumpStructure() + "\n" + expected.dumpStructure(), code);
 
@@ -107,7 +107,7 @@ static ReturnType checkColumnStructure(const ColumnWithTypeAndName & actual, con
 
 
 template <typename ReturnType>
-static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, std::string_view context_description, bool allow_materialize)
+static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, std::string_view context_description, bool allow_materialize, bool ignore_name)
 {
     size_t columns = rhs.columns();
     if (lhs.columns() != columns)
@@ -121,11 +121,11 @@ static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, std:
 
         if constexpr (std::is_same_v<ReturnType, bool>)
         {
-            if (!checkColumnStructure<ReturnType>(actual, expected, context_description, allow_materialize, ErrorCodes::LOGICAL_ERROR))
+            if (!checkColumnStructure<ReturnType>(actual, expected, context_description, allow_materialize, ignore_name, ErrorCodes::LOGICAL_ERROR))
                 return false;
         }
         else
-            checkColumnStructure<ReturnType>(actual, expected, context_description, allow_materialize, ErrorCodes::LOGICAL_ERROR);
+            checkColumnStructure<ReturnType>(actual, expected, context_description, allow_materialize, ignore_name, ErrorCodes::LOGICAL_ERROR);
     }
 
     return ReturnType(true);
@@ -166,7 +166,7 @@ void Block::insert(size_t position, ColumnWithTypeAndName elem)
     auto [new_it, inserted] = index_by_name.emplace(elem.name, position);
     if (!inserted)
         checkColumnStructure<void>(data[new_it->second], elem,
-            "(columns with identical name must have identical structure)", true, ErrorCodes::AMBIGUOUS_COLUMN_NAME);
+            "(columns with identical name must have identical structure)", true, false, ErrorCodes::AMBIGUOUS_COLUMN_NAME);
 
     for (auto it = index_by_name.begin(); it != index_by_name.end(); ++it)
     {
@@ -186,7 +186,7 @@ void Block::insert(ColumnWithTypeAndName elem)
     auto [it, inserted] = index_by_name.emplace(elem.name, data.size());
     if (!inserted)
         checkColumnStructure<void>(data[it->second], elem,
-            "(columns with identical name must have identical structure)", true, ErrorCodes::AMBIGUOUS_COLUMN_NAME);
+            "(columns with identical name must have identical structure)", true, false, ErrorCodes::AMBIGUOUS_COLUMN_NAME);
 
     data.emplace_back(std::move(elem));
 }
@@ -676,27 +676,31 @@ std::unordered_map<String, size_t> Block::getNamesToIndexesMap() const
 
 bool blocksHaveEqualStructure(const Block & lhs, const Block & rhs)
 {
-    return checkBlockStructure<bool>(lhs, rhs, "", false);
+    return checkBlockStructure<bool>(lhs, rhs, "", false, /*ignore_name=*/false);
 }
 
 
 void assertBlocksHaveEqualStructure(const Block & lhs, const Block & rhs, std::string_view context_description)
 {
-    checkBlockStructure<void>(lhs, rhs, context_description, false);
+    checkBlockStructure<void>(lhs, rhs, context_description, false, /*ignore_name=*/false);
 }
 
 
 bool isCompatibleHeader(const Block & actual, const Block & desired)
 {
-    return checkBlockStructure<bool>(actual, desired, "", true);
+    return checkBlockStructure<bool>(actual, desired, "", true, /*ignore_name=*/false);
 }
 
 
 void assertCompatibleHeader(const Block & actual, const Block & desired, std::string_view context_description)
 {
-    checkBlockStructure<void>(actual, desired, context_description, true);
+    checkBlockStructure<void>(actual, desired, context_description, true, /*ignore_name=*/false);
 }
 
+bool isCompatibleHeaderWithoutComparingColumnNames(const Block & actual, const Block & desired)
+{
+    return checkBlockStructure<bool>(actual, desired, "", true, /*ignore_name=*/true);
+}
 
 void getBlocksDifference(const Block & lhs, const Block & rhs, std::string & out_lhs_diff, std::string & out_rhs_diff)
 {
@@ -1056,6 +1060,17 @@ int Block::compareAt(size_t lhs_row, size_t rhs_row, const Block & rhs_block, co
     }
 
     return 0;
+}
+
+Columns Block::detachColumns()
+{
+    size_t num_columns = data.size();
+    Columns columns(num_columns);
+    for (size_t i = 0; i < num_columns; ++i)
+        columns[i] = std::move(data[i].column);
+
+    clear();
+    return columns;
 }
 /// proton: ends
 

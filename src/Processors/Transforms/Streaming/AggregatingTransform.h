@@ -75,7 +75,7 @@ SERDE struct ManyAggregatedData
     SERDE std::atomic<Int64> finalized_watermark = INVALID_WATERMARK;
     SERDE std::atomic<Int64> finalized_window_end = INVALID_WATERMARK;
 
-    SERDE std::atomic<Int64> emited_version = 0;
+    SERDE std::atomic<Int64> emitted_version = 0;
 
     SERDE std::vector<std::unique_ptr<std::atomic<UInt64>>> rows_since_last_finalizations;
 
@@ -197,9 +197,12 @@ private:
 
 protected:
     void emitVersion(Chunk & chunk);
+    void emitVersion(ChunkList & chunks);
     /// return {should_abort, need_finalization} pair
     virtual std::pair<bool, bool> executeOrMergeColumns(Chunk & chunk, size_t num_rows);
-    void setCurrentChunk(Chunk chunk, Chunk retracted_chunk = {});
+    void setAggregatedResult(Chunk & chunk);
+    void setAggregatedResult(ChunkList & chunks);
+    bool hasAggregatedResult() const noexcept { return !aggregated_chunks.empty(); }
 
     /// Quickly check if need finalization
     virtual bool needFinalization(Int64 /*min_watermark*/) const { return true; }
@@ -257,9 +260,7 @@ protected:
     bool read_current_chunk = false;
 
     /// Aggregated result which is pushed to downstream output
-    Chunk current_chunk_retracted;
-    Chunk current_chunk_aggregated;
-    bool has_input = false;
+    ChunkList aggregated_chunks;
 
     static constexpr auto finalizing_check_interval_ms = std::chrono::milliseconds(10);
 

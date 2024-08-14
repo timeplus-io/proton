@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Processors/ISource.h>
+#include <Processors/Streaming/ISource.h>
 #include <Storages/StorageInMemoryMetadata.h>
 
 #include <filesystem>
@@ -16,7 +16,7 @@ struct ExternalStreamSettings;
 
 class FileLog;
 
-class FileLogSource final : public ISource
+class FileLogSource final : public Streaming::ISource
 {
 public:
     using FileContainer = std::set<std::pair<Int64, std::filesystem::path>>;

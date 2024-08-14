@@ -74,14 +74,14 @@ private:
 
     Poco::Logger * logger;
 
-    mutable std::mutex mutex;
-
     /// When received request checkpoint, it's always empty chunk with checkpoint context
     NO_SERDE std::array<InputPortWithData, 2> input_ports_with_data;
     /// We always push output_chunks first, so we can assume no output_chunks when received request checkpoint
-    NO_SERDE std::list<Chunk> output_chunks;
+    NO_SERDE ChunkList output_chunks;
 
     SERDE int64_t watermark = INVALID_WATERMARK;
+
+    NO_SERDE Int64 last_log_ts = 0;
 };
 }
 }

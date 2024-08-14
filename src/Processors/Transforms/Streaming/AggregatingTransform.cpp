@@ -71,7 +71,7 @@ IProcessor::Status AggregatingTransform::prepare()
         return Status::PortFull;
     }
 
-    if (has_input)
+    if (hasAggregatedResult())
         return preparePushToOutput();
 
     /// Only possible while consuming.
@@ -172,7 +172,7 @@ void AggregatingTransform::consume(Chunk chunk)
 
     /// If the last attempt to finalize failed (because other threads were finalizing), then we will continue to try in this processing.
     /// But there is already output, we will try in the next `work()`
-    if (try_finalizing_watermark.has_value() && !has_input)
+    if (try_finalizing_watermark.has_value() && !hasAggregatedResult())
         finalizeAlignment(ChunkContext::create());
 
     /// Try propagate and garbage collect time bucketed memory by finalized watermark
@@ -206,57 +206,71 @@ void AggregatingTransform::emitVersion(Chunk & chunk)
         auto col = params->version_type->createColumn();
         col->reserve(rows);
         for (size_t i = 0; i < rows; i++)
-            col->insert(many_data->emited_version++);
+            col->insert(many_data->emitted_version++);
         chunk.addColumn(std::move(col));
     }
     else
     {
-        Int64 version = many_data->emited_version++;
+        Int64 version = many_data->emitted_version++;
         chunk.addColumn(params->version_type->createColumnConst(rows, version)->convertToFullColumnIfConst());
     }
 }
 
-void AggregatingTransform::setCurrentChunk(Chunk chunk, Chunk retracted_chunk)
+void AggregatingTransform::emitVersion(ChunkList & chunks)
 {
-    if (has_input)
-        throw Exception("Current chunk was already set.", ErrorCodes::LOGICAL_ERROR);
-
-    if (!chunk)
-        return;
-
-    has_input = true;
-    current_chunk_aggregated = std::move(chunk);
-
-    if (retracted_chunk.rows())
+    if (params->params.group_by == Aggregator::Params::GroupBy::USER_DEFINED)
     {
-        current_chunk_retracted = std::move(retracted_chunk);
-        current_chunk_retracted.setConsecutiveDataFlag();
+        for (auto & chunk : chunks)
+        {
+            auto rows = chunk.rows();
+            /// For UDA with own emit strategy, possibly a block can trigger multiple emits, each emit cause version+1
+            /// each emit only has one result, therefore we can count emit times by row number
+            auto col = params->version_type->createColumn();
+            col->reserve(rows);
+            for (size_t i = 0; i < rows; i++)
+                col->insert(many_data->emitted_version++);
+            chunk.addColumn(std::move(col));
+        }
     }
+    else
+    {
+        Int64 version = many_data->emitted_version++;
+        for (auto & chunk : chunks)
+            chunk.addColumn(params->version_type->createColumnConst(chunk.rows(), version)->convertToFullColumnIfConst());
+    }
+}
+
+void AggregatingTransform::setAggregatedResult(Chunk & chunk)
+{
+    if (hasAggregatedResult())
+        throw Exception("Aggregated chunks was already set.", ErrorCodes::LOGICAL_ERROR);
+
+    aggregated_chunks.emplace_back(std::move(chunk));
+}
+
+void AggregatingTransform::setAggregatedResult(ChunkList & chunks)
+{
+    if (hasAggregatedResult())
+        throw Exception("Aggregated chunks was already set.", ErrorCodes::LOGICAL_ERROR);
+
+    aggregated_chunks.swap(chunks);
 }
 
 IProcessor::Status AggregatingTransform::preparePushToOutput()
 {
     auto & output = outputs.front();
-
-    /// At first, push retracted data, then push aggregated data
-    if (current_chunk_retracted)
-    {
-        output.push(std::move(current_chunk_retracted));
-        return Status::PortFull;
-    }
-
-    output.push(std::move(current_chunk_aggregated));
-    has_input = false;
-
+    output.push(std::move(aggregated_chunks.front()));
+    aggregated_chunks.pop_front();
     return Status::PortFull;
 }
 
 bool AggregatingTransform::propagateHeartbeatChunk()
 {
-    if (has_input)
+    if (hasAggregatedResult())
         return false;
 
-    setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0});
+    Chunk res{getOutputs().front().getHeader().getColumns(), 0};
+    setAggregatedResult(res);
     return true;
 }
 
@@ -342,14 +356,14 @@ bool AggregatingTransform::propagateWatermarkAndClearExpiredStates()
     auto finalized_watermark = many_data->finalized_watermark.load(std::memory_order_relaxed);
     if (finalized_watermark > propagated_watermark)
     {
-        if (!has_input)
+        if (!hasAggregatedResult())
         {
-            auto chunk_ctx = ChunkContext::create();
-            chunk_ctx->setWatermark(finalized_watermark);
-            setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0, nullptr, std::move(chunk_ctx)});
+            Chunk res{getOutputs().front().getHeader().getColumns(), 0};
+            res.setWatermark(finalized_watermark);
+            setAggregatedResult(res);
         }
         else
-            assert(finalized_watermark == current_chunk_aggregated.getWatermark());
+            assert(finalized_watermark == aggregated_chunks.back().getWatermark());
 
         clearExpiredState(finalized_watermark);
         propagated_watermark = finalized_watermark;
@@ -384,15 +398,15 @@ void AggregatingTransform::checkpointAlignment(const CheckpointContextPtr & ckpt
 bool AggregatingTransform::propagateCheckpointAndReset()
 {
     /// Since checkpoint barrier is always standalone, it can't coexist with other contexts.
-    if (!ckpt_request || has_input)
+    if (!ckpt_request || hasAggregatedResult())
         return false;
 
     /// Only all checkpoints request done, then can reset and propagate current ckpt request
     if (many_data->ckpt_requested.load() == 0)
     {
-        auto chunk_ctx = ChunkContext::create();
-        chunk_ctx->setCheckpointContext(std::move(ckpt_request));
-        setCurrentChunk(Chunk{getOutputs().front().getHeader().getColumns(), 0, nullptr, std::move(chunk_ctx)});
+        Chunk res{getOutputs().front().getHeader().getColumns(), 0};
+        res.setCheckpointContext(std::move(ckpt_request));
+        setAggregatedResult(res);
         assert(!ckpt_request);
         return true;
     }
@@ -474,13 +488,13 @@ void AggregatingTransform::checkpoint(CheckpointContextPtr ckpt_ctx)
             UInt16 num_variants = many_data->variants.size();
             DB::writeIntBinary(num_variants, wb);
 
-            DB::writeIntBinary(many_data->finalized_watermark.load(std::memory_order_relaxed), wb);
-            DB::writeIntBinary(many_data->finalized_window_end.load(std::memory_order_relaxed), wb);
-            DB::writeIntBinary(many_data->emited_version.load(std::memory_order_relaxed), wb);
+            DB::writeIntBinary(many_data->finalized_watermark.load(), wb);
+            DB::writeIntBinary(many_data->finalized_window_end.load(), wb);
+            DB::writeIntBinary(many_data->emitted_version.load(), wb);
 
             assert(num_variants == many_data->rows_since_last_finalizations.size());
             for (const auto & last_row : many_data->rows_since_last_finalizations)
-                writeIntBinary<UInt64>(last_row->load(std::memory_order_relaxed), wb);
+                writeIntBinary<UInt64>(last_row->load(), wb);
 
             bool has_field = many_data->hasField();
             DB::writeBoolText(has_field, wb);
@@ -528,13 +542,17 @@ void AggregatingTransform::recover(CheckpointContextPtr ckpt_ctx)
 
             Int64 last_version = 0;
             DB::readIntBinary(last_version, rb);
-            many_data->emited_version = last_version;
+            many_data->emitted_version = last_version;
 
             assert(num_variants == many_data->rows_since_last_finalizations.size());
             for (auto & rows_since_last_finalization : many_data->rows_since_last_finalizations)
             {
                 UInt64 last_rows = 0;
                 DB::readIntBinary<UInt64>(last_rows, rb);
+                /// In case when for we had global aggregated some data, but done checkpoint request before finializing
+                if (last_rows > 0) [[unlikely]]
+                    LOG_WARNING(log, "Last checkpoint state don't be finalized, rows_since_last_finalization={}", last_rows);
+
                 *rows_since_last_finalization = last_rows;
             }
 

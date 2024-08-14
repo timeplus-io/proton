@@ -16,23 +16,21 @@ extern const int RECOVER_CHECKPOINT_FAILED;
 }
 
 StreamingStoreSourceBase::StreamingStoreSourceBase(
-    const Block & header, const StorageSnapshotPtr & storage_snapshot_, ContextPtr query_context_, Poco::Logger * log_, ProcessorID pid_)
-    : ISource(header, true, pid_)
+    const Block & header, const StorageSnapshotPtr & storage_snapshot_, ContextPtr query_context_, Poco::Logger * logger_, ProcessorID pid_)
+    : Streaming::ISource(header, true, pid_)
     , storage_snapshot(
           std::make_shared<StorageSnapshot>(*storage_snapshot_)) /// We like to make a copy of it since we will mutate the snapshot
     , query_context(std::move(query_context_))
-    , log(log_)
+    , logger(logger_)
     , header_chunk(header.getColumns(), 0)
     , columns_desc(header.getNames(), storage_snapshot)
 {
-    is_streaming = true;
-
     /// Reset current object description and update current storage snapshot for streaming source
     if (!columns_desc.physical_object_columns_to_read.empty())
         storage_snapshot->object_columns.set(std::make_unique<ColumnsDescription>(storage_snapshot->object_columns.get()->getByNames(
             GetColumnsOptions::AllPhysical, columns_desc.physical_object_columns_to_read.getNames())));
 
-    iter = result_chunks.begin();
+    iter = result_chunks_with_sns.begin();
 }
 
 ColumnPtr
@@ -138,10 +136,7 @@ Chunk StreamingStoreSourceBase::generate()
     if (isCancelled())
         return {};
 
-    if (auto current_ckpt_ctx = ckpt_request.poll(); current_ckpt_ctx)
-        return doCheckpoint(std::move(current_ckpt_ctx));
-
-    if (result_chunks.empty() || iter == result_chunks.end())
+    if (result_chunks_with_sns.empty() || iter == result_chunks_with_sns.end())
     {
         readAndProcess();
 
@@ -149,31 +144,21 @@ Chunk StreamingStoreSourceBase::generate()
             return {};
 
         /// After processing blocks, check again to see if there are new results
-        if (result_chunks.empty() || iter == result_chunks.end())
+        if (result_chunks_with_sns.empty() || iter == result_chunks_with_sns.end())
             /// Act as a heart beat
             return header_chunk.clone();
 
         /// result_blocks is not empty, fallthrough
     }
 
-    return std::move(*iter++);
-}
-
-/// It basically initiate a checkpoint
-/// Since the checkpoint method is called in a different thread (CheckpointCoordinator)
-/// We need make sure it is thread safe
-void StreamingStoreSourceBase::checkpoint(CheckpointContextPtr ckpt_ctx_)
-{
-    /// We assume the previous ckpt is already done
-    ckpt_request.setCheckpointRequestCtx(ckpt_ctx_);
+    setLastProcessedSN(iter->second);
+    return std::move((iter++)->first);
 }
 
 /// 1) Generate a checkpoint barrier
 /// 2) Checkpoint the sequence number just before the barrier
 Chunk StreamingStoreSourceBase::doCheckpoint(CheckpointContextPtr current_ckpt_ctx)
 {
-    assert(current_ckpt_ctx->epoch > last_epoch);
-
     /// Prepare checkpoint barrier chunk
     auto result = header_chunk.clone();
     result.setCheckpointContext(current_ckpt_ctx);
@@ -187,15 +172,17 @@ Chunk StreamingStoreSourceBase::doCheckpoint(CheckpointContextPtr current_ckpt_c
         writeIntBinary(processor_id, wb);
         writeStringBinary(stream_shard.first, wb);
         writeIntBinary(stream_shard.second, wb);
-        writeIntBinary(last_sn, wb);
+        writeIntBinary(lastProcessedSN(), wb);
     });
+
+    LOG_INFO(logger, "Saved checkpoint sn={}", lastProcessedSN());
 
     /// FIXME, if commit failed ?
     /// Propagate checkpoint barriers
     return result;
 }
 
-void StreamingStoreSourceBase::recover(CheckpointContextPtr ckpt_ctx_)
+void StreamingStoreSourceBase::doRecover(CheckpointContextPtr ckpt_ctx_)
 {
     ckpt_ctx_->coordinator->recover(getLogicID(), ckpt_ctx_, [&](VersionType /*version*/, ReadBuffer & rb) {
         UInt32 recovered_pid = 0;
@@ -221,10 +208,12 @@ void StreamingStoreSourceBase::recover(CheckpointContextPtr ckpt_ctx_)
                 current_stream_shard.first,
                 current_stream_shard.second);
 
-        readIntBinary(last_sn, rb);
+        Int64 recovered_last_sn = 0;
+        readIntBinary(recovered_last_sn, rb);
+        setLastProcessedSN(recovered_last_sn);
     });
 
-    LOG_INFO(log, "Recovered last_sn={}", last_sn);
+    LOG_INFO(logger, "Recovered last_sn={}", lastProcessedSN());
 }
 
 }

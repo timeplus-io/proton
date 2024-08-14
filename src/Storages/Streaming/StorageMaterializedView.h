@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Core/RecoveryPolicy.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/IAST_fwd.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
@@ -86,6 +87,9 @@ private:
 
     void checkDependencies() const;
 
+    template <typename Duration>
+    void waitFor(Duration && duration);
+
 private:
     Poco::Logger * log;
 
@@ -96,6 +100,9 @@ private:
     bool is_virtual = false;
 
     std::atomic_flag shutdown_called;
+
+    std::condition_variable wait_cv;
+    std::mutex wait_cv_mutex;
 
     /// Background state
     struct State
@@ -115,6 +122,8 @@ private:
         String err_msg;
         std::atomic_int32_t err; /// != 0, background thread has exception
         std::atomic_bool is_cancelled;
+
+        RecoveryPolicy recovery_policy;
 
         ~State();
         void terminate();

@@ -12,11 +12,6 @@ namespace re2
 class RE2;
 }
 
-namespace Poco
-{
-class Logger;
-}
-
 namespace DB
 {
 
@@ -25,7 +20,7 @@ class IStorage;
 class FileLog final : public StorageExternalStreamImpl
 {
 public:
-    FileLog(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_);
+    FileLog(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context);
     ~FileLog() override = default;
 
     void startup() override { }
@@ -46,10 +41,9 @@ public:
         size_t max_block_size,
         size_t num_streams) override;
 
-    FileLogSource::FileContainer searchForCandidates();
+    FileLogSource::FileContainer searchForCandidates(bool table_query = false);
 
 private:
-    StorageID storage_id;
     std::vector<std::unique_ptr<re2::RE2>> file_regexes;
     std::unique_ptr<re2::RE2> timestamp_regex;
     std::unique_ptr<re2::RE2> linebreaker_regex;

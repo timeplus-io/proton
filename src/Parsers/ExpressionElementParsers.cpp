@@ -670,6 +670,20 @@ namespace
         node = makeASTFunction("exists", subquery);
         return true;
     }
+
+    bool parseGrouping(IParser::Pos & pos, ASTPtr & node, Expected & expected)
+    {
+        ASTPtr expr_list;
+        if (!ParserExpressionList(false, false).parse(pos, expr_list, expected))
+            return false;
+
+        auto res = std::make_shared<ASTFunction>();
+        res->name = "grouping";
+        res->arguments = expr_list;
+        res->children.push_back(res->arguments);
+        node = std::move(res);
+        return true;
+    }
 }
 
 
@@ -751,6 +765,8 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[
         parsed_special_function = parseDateAdd("minus", pos, node, expected);
     else if (function_name_lowercase == "date_diff" || function_name_lowercase == "timestamp_diff")
         parsed_special_function = parseDateDiff(pos, node, expected);
+    else if (function_name_lowercase == "grouping")
+        parsed_special_function = parseGrouping(pos, node, expected);
 
     /// proton: starts. we shall show original name.
     /// e.g. for 'date_add(now(), 1s)', we don't show 'now() + 1s'.

@@ -1,10 +1,9 @@
-version: '3.7'
 name: proton-fraud-detection
 services:
   proton:
-     image: ghcr.io/timeplus-io/proton:latest
-     pull_policy: always
-     healthcheck:
+    image: ghcr.io/timeplus-io/proton:latest
+    pull_policy: always
+    healthcheck:
       test: ["CMD", "curl", "http://localhost:3218/proton/ping"]
       interval: 2s
       timeout: 10s
@@ -27,4 +26,3 @@ services:
       - 8888:8888
     volumes:
       - ./notebooks:/home/jovyan/work
-

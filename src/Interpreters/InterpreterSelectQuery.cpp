@@ -114,7 +114,6 @@
 #include <Processors/Transforms/Streaming/AggregatingHelper.h>
 #include <Processors/Transforms/Streaming/WatermarkStamper.h>
 #include <Storages/Streaming/ProxyStream.h>
-#include <Storages/Streaming/StorageStream.h>
 #include <Storages/Streaming/storageUtil.h>
 #include <Common/ProtonCommon.h>
 /// proton: ends
@@ -144,6 +143,7 @@ namespace ErrorCodes
     extern const int FUNCTION_NOT_ALLOWED;
     extern const int DATABASE_ACCESS_DENIED;
     extern const int UDA_NOT_APPLICABLE;
+    extern const int INVALID_SETTING_VALUE;
     /// proton: ends
 }
 
@@ -1625,8 +1625,10 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
             {
                 executeAggregation(
                     query_plan, expressions.before_aggregation, aggregate_overflow_row, aggregate_final, query_info.input_order_info);
-                /// We need to reset input order info, so that executeOrder can't use  it
+                /// We need to reset input order info, so that executeOrder can't use it
                 query_info.input_order_info.reset();
+                if (query_info.projection)
+                    query_info.projection->input_order_info.reset();
             }
 
             // Now we must execute:
@@ -1853,7 +1855,8 @@ static void executeMergeAggregatedImpl(
     bool has_grouping_sets,
     const Settings & settings,
     const NamesAndTypesList & aggregation_keys,
-    const AggregateDescriptions & aggregates)
+    const AggregateDescriptions & aggregates,
+    bool should_produce_results_in_order_of_bucket_number)
 {
     const auto & header_before_merge = query_plan.getCurrentDataStream().header;
 
@@ -1878,16 +1881,21 @@ static void executeMergeAggregatedImpl(
       *  but it can work more slowly.
       */
 
-    Aggregator::Params params(header_before_merge, keys, aggregates, overflow_row, settings.max_threads);
+    Aggregator::Params params(header_before_merge, keys, aggregates, overflow_row, settings.max_threads, settings.max_block_size);
 
-    auto transform_params = std::make_shared<AggregatingTransformParams>(params, final, false);
+    auto transform_params = std::make_shared<AggregatingTransformParams>(
+        params,
+        final,
+        /* only_merge_= */ false,
+        /* shuffled= */ false);
 
     auto merging_aggregated = std::make_unique<MergingAggregatedStep>(
         query_plan.getCurrentDataStream(),
         std::move(transform_params),
         settings.distributed_aggregation_memory_efficient && is_remote_storage,
         settings.max_threads,
-        settings.aggregation_memory_efficient_merge_threads);
+        settings.aggregation_memory_efficient_merge_threads,
+        should_produce_results_in_order_of_bucket_number);
 
     query_plan.addStep(std::move(merging_aggregated));
 }
@@ -1948,6 +1956,9 @@ void InterpreterSelectQuery::addEmptySourceToQueryPlan(
                 query_plan.addStep(std::move(expression_before_aggregation));
             }
 
+            // Let's just choose the safe option since we don't know the value of `to_stage` here.
+            const bool should_produce_results_in_order_of_bucket_number = true;
+
             executeMergeAggregatedImpl(
                 query_plan,
                 query_info.projection->aggregate_overflow_row,
@@ -1956,7 +1967,8 @@ void InterpreterSelectQuery::addEmptySourceToQueryPlan(
                 false,
                 context_->getSettingsRef(),
                 query_info.projection->aggregation_keys,
-                query_info.projection->aggregate_descriptions);
+                query_info.projection->aggregate_descriptions,
+                should_produce_results_in_order_of_bucket_number);
         }
     }
 }
@@ -2338,7 +2350,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
                 {
                     query_info.projection->order_optimizer = std::make_shared<ReadInOrderOptimizer>(
                         query_info.projection->group_by_elements_actions,
-                        getSortDescriptionFromGroupBy(query),
+                        query_info.projection->group_by_elements_order_descr,
                         query_info.syntax_analyzer_result);
                 }
                 else
@@ -2365,38 +2377,11 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         /// need replay operation
         if (settings.replay_speed > 0)
         {
-            /// So far, only support append-only stream (or proxyed)
-            StorageStream * storagestream = nullptr;
-            if (Streaming::isAppendStorage(storage->dataStreamSemantic()))
-            {
-                if (const auto * proxy = storage->as<Streaming::ProxyStream>())
-                {
-                    const auto & proxyed = proxy->getProxyStorageOrSubquery();
-                    const auto * nested_storage = std::get_if<StoragePtr>(&proxyed);
-                    if (nested_storage)
-                        storagestream = (*nested_storage)->as<StorageStream>();
-                }
-                else
-                    storagestream = storage->as<StorageStream>();
-
-                if (!storagestream)
-                    throw Exception("Replay Stream is only support append-only stream", ErrorCodes::NOT_IMPLEMENTED);
-            }
-            assert(storagestream);
-
-            if (std::ranges::none_of(required_columns, [](const auto & name) { return name == ProtonConsts::RESERVED_APPEND_TIME; }))
-                required_columns.emplace_back(ProtonConsts::RESERVED_APPEND_TIME);
-
-            if (std::ranges::none_of(
-                    required_columns, [](const auto & name) { return name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID; }))
-                required_columns.emplace_back(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID);
-
+            auto last_sns = checkReplaySettingsAndGetLastSN();
             storage->read(
                 query_plan, required_columns, storage_snapshot, query_info, context, processing_stage, max_block_size, max_streams);
-
             auto replay_step = std::make_unique<Streaming::ReplayStreamStep>(
-                query_plan.getCurrentDataStream(), settings.replay_speed, (storagestream)->getLastSNs());
-            replay_step->setStepDescription("Replay Stream");
+                query_plan.getCurrentDataStream(), settings.replay_speed, settings.replay_time_column, std::move(last_sns));
             query_plan.addStep(std::move(replay_step));
         }
         else
@@ -2500,6 +2485,8 @@ static Aggregator::Params getAggregatorParams(
         settings.min_free_disk_space_for_temporary_data,
         settings.compile_aggregate_expressions,
         settings.min_count_to_compile_aggregate_expression,
+        settings.max_block_size,
+        settings.enable_software_prefetch_in_aggregation,
         Block{},
         stats_collecting_params
     };
@@ -2599,11 +2586,15 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
 
     bool storage_has_evenly_distributed_read = storage && storage->hasEvenlyDistributedRead();
 
+    const bool should_produce_results_in_order_of_bucket_number
+        = options.to_stage == QueryProcessingStage::WithMergeableState && settings.distributed_aggregation_memory_efficient;
+
     auto aggregating_step = std::make_unique<AggregatingStep>(
         query_plan.getCurrentDataStream(),
         std::move(aggregator_params),
         std::move(grouping_sets_params),
         final,
+        /* only_merge_= */ false,
         settings.max_block_size,
         settings.aggregation_in_order_max_block_bytes,
         merge_threads,
@@ -2611,8 +2602,8 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
         storage_has_evenly_distributed_read,
         light_shuffled,
         std::move(group_by_info),
-        std::move(group_by_sort_description));
-
+        std::move(group_by_sort_description),
+        should_produce_results_in_order_of_bucket_number);
     query_plan.addStep(std::move(aggregating_step));
 }
 
@@ -2625,6 +2616,9 @@ void InterpreterSelectQuery::executeMergeAggregated(QueryPlan & query_plan, bool
     if (query_info.projection && query_info.projection->desc->type == ProjectionDescription::Type::Aggregate)
         return;
 
+    const bool should_produce_results_in_order_of_bucket_number = options.to_stage == QueryProcessingStage::WithMergeableState
+        && context->getSettingsRef().distributed_aggregation_memory_efficient;
+
     executeMergeAggregatedImpl(
         query_plan,
         overflow_row,
@@ -2633,7 +2627,8 @@ void InterpreterSelectQuery::executeMergeAggregated(QueryPlan & query_plan, bool
         has_grouping_sets,
         context->getSettingsRef(),
         query_analyzer->aggregationKeys(),
-        query_analyzer->aggregates());
+        query_analyzer->aggregates(),
+        should_produce_results_in_order_of_bucket_number);
 }
 
 
@@ -2652,8 +2647,11 @@ void InterpreterSelectQuery::executeTotalsAndHaving(
 {
     const Settings & settings = context->getSettingsRef();
 
+    const auto & header_before = query_plan.getCurrentDataStream().header;
+
     auto totals_having_step = std::make_unique<TotalsHavingStep>(
         query_plan.getCurrentDataStream(),
+        getAggregatesMask(header_before, query_analyzer->aggregates()),
         overflow_row,
         expression,
         has_having ? getSelectQuery().having()->getColumnName() : "",
@@ -2676,7 +2674,11 @@ void InterpreterSelectQuery::executeRollupOrCube(QueryPlan & query_plan, Modific
         keys.push_back(header_before_transform.getPositionByName(key.name));
 
     auto params = getAggregatorParams(query_ptr, *query_analyzer, *context, header_before_transform, keys, query_analyzer->aggregates(), false, settings, 0, 0);
-    auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), true, false);
+    auto transform_params = std::make_shared<AggregatingTransformParams>(
+        std::move(params),
+        /* final_= */ true,
+        /* only_merge_= */ false,
+        /* shuffled= */ false);
 
     QueryPlanStepPtr step;
     if (modificator == Modificator::ROLLUP)
@@ -3263,6 +3265,7 @@ void InterpreterSelectQuery::executeStreamingAggregation(
         settings.min_free_disk_space_for_temporary_data,
         settings.compile_aggregate_expressions,
         settings.min_count_to_compile_aggregate_expression,
+        settings.max_block_size,
         {},
         shouldKeepAggregateState(),
         settings.keep_windows,
@@ -3742,7 +3745,12 @@ void InterpreterSelectQuery::checkAndPrepareStreamingFunctions()
     String unique_window_name;
     for (const auto * function_node : data.window_functions)
     {
-        assert(function_node->is_window_function);
+        /// Not supported syntax:
+        /// 1) SELECT func(...) OVER window_name FROM stream WINDOW window_name AS ();
+        if (!function_node->is_window_function || !function_node->window_definition)
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED, "No support that use predefined window '{}' in streaming queries", function_node->window_name);
+
         const auto & definition = function_node->window_definition->as<const ASTWindowDefinition &>();
         /// Not support follows syntax:
         /// 1) select func(...) OVER window_name from stream WINDOW window_name as (partition by ...)
@@ -3834,6 +3842,48 @@ void InterpreterSelectQuery::checkUDA()
     if (!isStreamingQuery() && has_user_defined_emit_strategy)
         throw Exception(
             ErrorCodes::UDA_NOT_APPLICABLE, "User Defined Aggregate function with own emit strategy cannot be used in non-streaming query");
+}
+
+std::vector<nlog::RecordSN> InterpreterSelectQuery::checkReplaySettingsAndGetLastSN()
+{
+    const Settings & settings = context->getSettingsRef();
+
+    /// So far, only support append-only stream (or proxyed)
+    StorageStream * storagestream = nullptr;
+    if (Streaming::isAppendStorage(storage->dataStreamSemantic()))
+    {
+        if (const auto * proxy = storage->as<Streaming::ProxyStream>())
+        {
+            const auto & proxyed = proxy->getProxyStorageOrSubquery();
+            const auto * nested_storage = std::get_if<StoragePtr>(&proxyed);
+            if (nested_storage)
+                storagestream = (*nested_storage)->as<StorageStream>();
+        }
+        else
+            storagestream = storage->as<StorageStream>();
+    }
+
+    if (!storagestream)
+        throw Exception("Replay Stream is only support append-only stream", ErrorCodes::NOT_IMPLEMENTED);
+
+    const String & replay_time_col = settings.replay_time_column;
+
+    auto name_type = storage_snapshot->tryGetColumn(GetColumnsOptions(GetColumnsOptions::All).withVirtuals(), replay_time_col);
+    if (!name_type.has_value())
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Not found replay column {} in stream", replay_time_col);
+
+    const auto & type = name_type.value().type;
+    if (replay_time_col != ProtonConsts::RESERVED_APPEND_TIME && !isDateTime64(type) && !isDateTime(type))
+        throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "The setting replay_time_column must be DateTime64 or DateTim32 type, but got {}", type->getName());
+
+    if (std::ranges::none_of(required_columns, [&replay_time_col](const auto & name) { return name == replay_time_col; }))
+        required_columns.emplace_back(replay_time_col);
+
+    if (std::ranges::none_of(
+            required_columns, [](const auto & name) { return name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID; }))
+        required_columns.emplace_back(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID);
+
+    return storagestream->getLastSNs();
 }
 
 /// Preliminary LIMIT - is used in every source, if there are several sources, before they are combined.

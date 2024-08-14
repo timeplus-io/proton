@@ -87,7 +87,7 @@ public:
         {
             assert(this->levels.size() == 1);  /// default: 0.5
             /// Make level: 'p90' -> 0.90  'p95' -> 0.95  'p99' -> 0.99
-            this->levels.levels[0] = std::stod(fmt::format("0.{}", this->getName().substr(1)));
+            this->level = this->levels.levels[0] = std::stod(fmt::format("0.{}", this->getName().substr(1)));
         }
         /// proton: ends.
 

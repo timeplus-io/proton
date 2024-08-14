@@ -8,6 +8,9 @@
 #include <Common/logger_useful.h>
 #include <Common/Exception.h>
 
+/// proton: starts
+#include <Common/Stopwatch.h>
+/// proton: ends
 
 namespace DB
 {
@@ -167,18 +170,41 @@ public:
         return items.size();
     }
 
+    /// proton: starts
+    void waitForNoMoreInUse()
+    {
+        std::unique_lock lock(mutex);
+        while (true)
+        {
+            bool all_freed = true;
+            for (const auto & item : items)
+            {
+                if (item->in_use)
+                {
+                    all_freed = false;
+                    break;
+                }
+            }
+            if (all_freed)
+                return;
+
+            available.wait(lock);
+        }
+    }
+    /// proton: ends
+
 private:
     /** The maximum size of the pool. */
     unsigned max_items;
-
-    /** Pool. */
-    Objects items;
 
     /** Lock to access the pool. */
     std::mutex mutex;
     std::condition_variable available;
 
 protected:
+
+    /** Pool. */
+    Objects items; /// proton: updated
 
     Poco::Logger * log;
 

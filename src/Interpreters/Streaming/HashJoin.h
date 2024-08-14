@@ -157,6 +157,8 @@ public:
     std::shared_ptr<NotJoinedBlocks>
     getNonJoinedBlocks(const Block & left_sample_block, const Block & result_sample_block, UInt64 max_block_size) const override;
 
+    String metricsString() const final;
+
     /// Number of keys in all built JOIN maps.
     size_t getTotalRowCount() const final;
     /// Sum size in bytes of all buffers, used for JOIN maps and for all memory pools.
@@ -293,7 +295,7 @@ private:
     std::vector<Block> insertBlockToRangeBucketsAndJoin(Block block);
 
     template <bool is_left_block>
-    void doInsertBlock(Block block, HashBlocksPtr target_hash_blocks);
+    void doInsertBlock(Block block, HashBlocksPtr target_hash_blocks, IColumn::Filter * new_keys_filter = nullptr);
 
     /// For bidirectional hash join
     /// Return retracted block if needs emit changelog, otherwise empty block

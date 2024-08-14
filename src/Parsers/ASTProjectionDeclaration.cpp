@@ -22,7 +22,7 @@ void ASTProjectionDeclaration::formatImpl(const FormatSettings & settings, Forma
     std::string indent_str = settings.one_line ? "" : std::string(settings.indent_size * frame.indent, ' ');
     /// proton: ends
     std::string nl_or_nothing = settings.one_line ? "" : "\n";
-    settings.ostr << nl_or_nothing << indent_str << "(" << nl_or_nothing;
+    settings.ostr << settings.nl_or_ws << indent_str << "(" << nl_or_nothing;
     FormatStateStacked frame_nested = frame;
     frame_nested.need_parens = false;
     ++frame_nested.indent;

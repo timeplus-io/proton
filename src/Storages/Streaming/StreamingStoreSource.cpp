@@ -5,6 +5,7 @@
 
 #include <Interpreters/inplaceBlockConversions.h>
 #include <KafkaLog/KafkaWALPool.h>
+#include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
 
 namespace DB
@@ -18,6 +19,9 @@ StreamingStoreSource::StreamingStoreSource(
     Poco::Logger * log_)
     : StreamingStoreSourceBase(header, storage_snapshot_, std::move(context_), log_, ProcessorID::StreamingStoreSourceID)
 {
+    if (sn > 0)
+        setLastProcessedSN(sn - 1);
+
     const auto & settings = query_context->getSettingsRef();
     if (settings.record_consume_batch_count.value != 0)
         record_consume_batch_count = static_cast<UInt32>(settings.record_consume_batch_count.value);
@@ -32,7 +36,7 @@ StreamingStoreSource::StreamingStoreSource(
         auto consumer = kpool.getOrCreateStreaming(stream_shard_->logStoreClusterId());
         assert(consumer);
         kafka_reader = std::make_unique<StreamingBlockReaderKafka>(
-            std::move(stream_shard_), sn, columns_desc.physical_column_positions_to_read, std::move(consumer), log);
+            std::move(stream_shard_), sn, columns_desc.physical_column_positions_to_read, std::move(consumer), logger);
     }
     else
     {
@@ -46,8 +50,20 @@ StreamingStoreSource::StreamingStoreSource(
             /*schema_provider*/ nullptr,
             /*schema_version*/ 0,
             columns_desc.physical_column_positions_to_read,
-            log);
+            logger);
     }
+}
+
+String StreamingStoreSource::description() const
+{
+    String uuid;
+    Int64 shard;
+    if (nativelog_reader)
+        std::tie(uuid, shard) = nativelog_reader->getStreamShard();
+    else
+        std::tie(uuid, shard) = kafka_reader->getStreamShard();
+
+    return fmt::format("uuid={},shard={}", uuid, shard);
 }
 
 nlog::RecordPtrs StreamingStoreSource::read()
@@ -64,15 +80,13 @@ void StreamingStoreSource::readAndProcess()
     if (records.empty())
         return;
 
-    result_chunks.clear();
-    result_chunks.reserve(records.size());
+    result_chunks_with_sns.clear();
+    result_chunks_with_sns.reserve(records.size());
 
     for (auto & record : records)
     {
         if (record->empty())
             continue;
-
-        last_sn = record->getSN();
 
         Columns columns;
         columns.reserve(header_chunk.getNumColumns());
@@ -110,15 +124,15 @@ void StreamingStoreSource::readAndProcess()
             }
         }
 
-        result_chunks.emplace_back(std::move(columns), rows);
+        result_chunks_with_sns.emplace_back(Chunk{std::move(columns), rows}, record->getSN());
         if (likely(block.info.appendTime() > 0))
         {
             auto chunk_ctx = ChunkContext::create();
             chunk_ctx->setAppendTime(block.info.appendTime());
-            result_chunks.back().setChunkContext(std::move(chunk_ctx));
+            result_chunks_with_sns.back().first.setChunkContext(std::move(chunk_ctx));
         }
     }
-    iter = result_chunks.begin();
+    iter = result_chunks_with_sns.begin();
 }
 
 std::pair<String, Int32> StreamingStoreSource::getStreamShard() const
@@ -129,16 +143,16 @@ std::pair<String, Int32> StreamingStoreSource::getStreamShard() const
         return kafka_reader->getStreamShard();
 }
 
-void StreamingStoreSource::recover(CheckpointContextPtr ckpt_ctx_)
+void StreamingStoreSource::doResetStartSN(Int64 sn)
 {
-    StreamingStoreSourceBase::recover(std::move(ckpt_ctx_));
-
-    if (last_sn >= 0)
+    if (sn >= ProtonConsts::LogStartSN)
     {
         if (nativelog_reader)
-            nativelog_reader->resetSequenceNumber(last_sn + 1);
+            nativelog_reader->resetSequenceNumber(sn);
         else
-            kafka_reader->resetOffset(last_sn + 1);
+            kafka_reader->resetOffset(sn);
+
+        LOG_INFO(logger, "Reset start sn={}", sn);
     }
 }
 }

@@ -1,0 +1,64 @@
+Array min 	1
+Array max 	6
+Array sum 	21
+Array avg 	3.5
+Table array int min
+1
+0
+1
+Table array int max
+6
+0
+3
+Table array int sum
+21
+0
+6
+Table array int avg
+3.5
+0
+2
+Table array decimal min
+1
+0
+1
+Table array decimal max
+6
+0
+3
+Table array decimal sum
+21
+0
+6
+Table array decimal avg
+3.5
+0
+2
+2023-04-05 00:25:24	2023-04-05 00:25:23	[0,1]
+2023-04-05 00:25:24.124	2023-04-05 00:25:23.123	[0,1.001]
+2023-04-06	2023-04-05	[0,1]
+2023-04-06	2023-04-05	[0,1]
+Types of aggregation result array min
+int8	int16	int32	int64
+uint8	uint16	uint32	uint64
+int128	int256	uint256
+float32	float64
+decimal(9, 8)	decimal(18, 8)	decimal(38, 8)
+Types of aggregation result array max
+int8	int16	int32	int64
+uint8	uint16	uint32	uint64
+int128	int256	uint256
+float32	float64
+decimal(9, 8)	decimal(18, 8)	decimal(38, 8)
+Types of aggregation result array summ
+int64	int64	int64	int64
+uint64	uint64	uint64	uint64
+int128	int256	uint256
+float64	float64
+decimal(38, 8)	decimal(38, 8)	decimal(38, 8)
+Types of aggregation result array avg
+float64	float64	float64	float64
+float64	float64	float64	float64
+float64	float64	float64
+float64	float64
+float64	float64	float64

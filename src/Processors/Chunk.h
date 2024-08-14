@@ -343,6 +343,7 @@ private:
 };
 
 using Chunks = std::vector<Chunk>;
+using ChunkList = std::list<Chunk>;
 
 /// Extension to support delayed defaults. AddingDefaultsProcessor uses it to replace missing values with column defaults.
 class ChunkMissingValues : public ChunkInfo

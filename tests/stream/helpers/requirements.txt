@@ -1,11 +1,11 @@
 pytest==6.2.5
-requests>=2.26.0
+requests==2.31.0
 pyOpenSSL==23.0.0
 pytest-cases==3.6.5
 unidiff==0.7.0
 docker-compose==1.29.2
 boto3==1.20.4
-urllib3==1.26.18
+urllib3==1.26.19
 pytest-html==3.1.1
 psycopg2-binary==2.9.3
 kafka-python==2.0.2

@@ -141,20 +141,19 @@ tests:
             kill query where query_id = '3100' sync;
 
         - client: python
+          query_type: table
+          depends_on_stream: test_31_multishards_stream
+          wait: 2
+          query: |
+            insert into test_31_multishards_stream(i, v) values(101, 'test');
+
+        - client: python
           query_type: stream
           query_id: 3100-1
           depends_on_stream: test_31_multishards_stream
-          wait: 1
+          wait: 2
           query: |
             recover from '3100';
-
-        - client: python
-          query_type: table
-          depends_on_stream: test_31_multishards_stream
-          depends_on: 3100
-          wait: 1
-          query: |
-            insert into test_31_multishards_stream(i, v) values(101, 'test');
 
         - client: python
           query_table: table
@@ -177,6 +176,7 @@ tests:
       - "emit changelog"
       - "changelog aggr"
       - "query_state"
+      - "bug"
     name: subscribe-and-recover-two-level-global-aggr
     description: subscribe to two level global aggregation query, then recover from checkpointed.
     steps:
@@ -217,18 +217,17 @@ tests:
             kill query where query_id = '3101' sync;
 
         - client: python
+          query_type: table
+          wait: 1
+          query: |
+            insert into test_31_multishards_stream(i, v) values(101, 'test');
+
+        - client: python
           query_type: stream
           query_id: 3101-1
           wait: 1
           query: |
             recover from '3101';
-
-        - client: python
-          query_type: table
-          depends_on: 3101
-          wait: 1
-          query: |
-            insert into test_31_multishards_stream(i, v) values(101, 'test');
 
         - client: python
           query_table: table
@@ -295,3 +294,52 @@ tests:
       - query_id: '3101'
         expected_results:
           - [100]
+
+  - id: 5
+    tags:
+      - "global aggr"
+      - "max blocksize"
+      - "single level"
+    name: global-aggr-with-max-blocksize
+    description: single level global aggregation query with max block size
+    steps:
+      - statements:
+        - client: python
+          query_type: table
+          query: |
+            drop stream if exists test_31_stream;
+
+        - client: python
+          query_type: table
+          exist: test_31_stream
+          exist_wait: 2
+          wait: 1
+          query: |
+            create stream if not exists test_31_stream(i int);
+
+        - client: python
+          query_type: table
+          depends_on_stream: test_31_stream
+          wait: 1
+          query: |
+            insert into test_31_stream(i) select number from numbers(5);
+
+        - client: python
+          query_type: stream
+          query_id: 3100
+          depends_on_stream: test_31_stream
+          wait: 1
+          query_end_timer: 5
+          query: |
+            select block_size() /* <= max_block_size+1 */ from test_31_stream where _tp_time > earliest_ts() group by i settings max_block_size=1;
+
+    expected_results:
+      - query_id: '3100'
+        expected_results:
+          - [2]
+          - [2]
+
+          - [2]
+          - [2]
+
+          - [1]

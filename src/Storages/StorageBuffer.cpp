@@ -352,9 +352,10 @@ void StorageBuffer::read(
       */
     if (processed_stage > QueryProcessingStage::FetchColumns)
     {
+        /// TODO: Find a way to support projections for StorageBuffer
         auto interpreter = InterpreterSelectQuery(
                 query_info.query, local_context, std::move(pipe_from_buffers),
-                SelectQueryOptions(processed_stage));
+                SelectQueryOptions(processed_stage).ignoreProjections());
         interpreter.addStorageLimits(*query_info.storage_limits);
         interpreter.buildQueryPlan(buffers_plan);
     }

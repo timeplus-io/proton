@@ -153,6 +153,10 @@ void JoiningTransform::transform(Chunk & chunk)
     {
         initialized = true;
 
+        /// proton: starts.
+        LOG_INFO(&Poco::Logger::get("JoiningTransform"), "built hash map, total joined data {} rows, {} bytes", join->getTotalRowCount(), join->getTotalByteCount());
+        /// proton: ends.
+
         if (join->alwaysReturnsEmptySet() && !on_totals)
         {
             stop_reading = true;

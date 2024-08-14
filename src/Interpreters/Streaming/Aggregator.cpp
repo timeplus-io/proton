@@ -1224,7 +1224,8 @@ Block Aggregator::convertOneBucketToBlockImpl(
     if (type == ConvertType::Updates && !method.data.isBucketUpdated(bucket))
         return {};
 
-    Block block = convertToBlockImpl(method, method.data.impls[bucket], arena, data_variants.aggregates_pools, final, method.data.impls[bucket].size(), clear_states, type);
+    constexpr bool return_single_block = true;
+    Block block = convertToBlockImpl<return_single_block>(method, method.data.impls[bucket], arena, data_variants.aggregates_pools, final, method.data.impls[bucket].size(), clear_states, type);
     block.info.bucket_num = static_cast<int>(bucket);
     method.data.resetUpdatedBucket(bucket); /// finalized
     return block;
@@ -1291,8 +1292,9 @@ bool Aggregator::checkLimits(size_t result_size) const
 }
 
 
-template <typename Method, typename Table>
-Block Aggregator::convertToBlockImpl(
+template <bool return_single_block, typename Method, typename Table>
+Aggregator::ConvertToBlockRes<return_single_block>
+Aggregator::convertToBlockImpl(
     Method & method, Table & data, Arena * arena, Arenas & aggregates_pools, bool final, size_t rows, bool clear_states, ConvertType type) const
 {
     if (data.empty())
@@ -1301,16 +1303,16 @@ Block Aggregator::convertToBlockImpl(
         return {finalizeBlock(params, getHeader(final), std::move(out_cols), final, rows)};
     }
 
-    Block res;
+    ConvertToBlockRes<return_single_block> res;
 
     if (final)
     {
-        res = convertToBlockImplFinal<Method>(method, data, arena, aggregates_pools, rows, clear_states, type);
+        res = convertToBlockImplFinal<return_single_block>(method, data, arena, aggregates_pools, rows, clear_states, type);
     }
     else
     {
         assert(type == ConvertType::Normal);
-        res = convertToBlockImplNotFinal(method, data, aggregates_pools, rows);
+        res = convertToBlockImplNotFinal<return_single_block>(method, data, aggregates_pools, rows);
     }
 
     return res;
@@ -1480,34 +1482,61 @@ Block Aggregator::insertResultsIntoColumns(PaddedPODArray<AggregateDataPtr> & pl
     return finalizeBlock(params, getHeader(/*final=*/ true), std::move(out_cols), /*final=*/ true, places.size());
 }
 
-template <typename Method, typename Table>
-Block NO_INLINE Aggregator::convertToBlockImplFinal(
-    Method & method, Table & data, Arena * arena, Arenas & aggregates_pools, size_t rows, bool clear_states, ConvertType type) const
+template <bool return_single_block, typename Method, typename Table>
+Aggregator::ConvertToBlockRes<return_single_block> NO_INLINE
+Aggregator::convertToBlockImplFinal(
+    Method & method, Table & data, Arena * arena, Arenas & aggregates_pools, size_t, bool clear_states, ConvertType type) const
 {
+    /// +1 for nullKeyData, if `data` doesn't have it - not a problem, just some memory for one excessive row will be preallocated
+    const size_t max_block_size = (return_single_block ? data.size() : std::min(params.max_block_size, data.size())) + 1;
     constexpr bool final = true;
-    auto out_cols = prepareOutputBlockColumns(params, aggregate_functions, getHeader(final), aggregates_pools, final, rows);
+    ConvertToBlockRes<return_single_block> res;
 
-    if constexpr (Method::low_cardinality_optimization)
-    {
-        if (data.hasNullKeyData())
-        {
-            assert(type == ConvertType::Normal);
-            out_cols.key_columns[0]->insertDefault();
-            insertAggregatesIntoColumns(data.getNullKeyData(), out_cols.final_aggregate_columns, arena, clear_states);
-        }
-    }
-
-    auto shuffled_key_sizes = method.shuffleKeyColumns(out_cols.raw_key_columns, key_sizes);
-    const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
-
+    OutputBlockColumns out_cols;
+    std::optional<Sizes> shuffled_key_sizes;
     PaddedPODArray<AggregateDataPtr> places;
-    places.reserve(rows);
+
+    auto init_out_cols = [&]()
+    {
+        out_cols = prepareOutputBlockColumns(params, aggregate_functions, getHeader(final), aggregates_pools, final, max_block_size);
+
+        if constexpr (Method::low_cardinality_optimization)
+        {
+            if (data.hasNullKeyData())
+            {
+                assert(type == ConvertType::Normal);
+                out_cols.key_columns[0]->insertDefault();
+                insertAggregatesIntoColumns(data.getNullKeyData(), out_cols.final_aggregate_columns, arena, clear_states);
+                data.hasNullKeyData() = false;
+            }
+        }
+
+        shuffled_key_sizes = method.shuffleKeyColumns(out_cols.raw_key_columns, key_sizes);
+
+        places.clear();
+        places.reserve(max_block_size);
+    };
+
+    // should be invoked at least once, because null data might be the only content of the `data`
+    init_out_cols();
+
+    const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
 
     bool only_updates = (type == ConvertType::Updates);
     bool only_retract = (type == ConvertType::Retract);
 
     data.forEachValue([&](const auto & key, auto & mapped)
     {
+        if constexpr (!return_single_block)
+        {
+            /// If reached max block size, finalize the block and start a new one
+            if (out_cols.key_columns[0]->size() >= max_block_size)
+            {
+                res.emplace_back(insertResultsIntoColumns(places, std::move(out_cols), arena, clear_states));
+                init_out_cols();
+            }
+        }
+
         if (only_updates)
         {
             if (!TrackingUpdates::updated(mapped))
@@ -1555,47 +1584,97 @@ Block NO_INLINE Aggregator::convertToBlockImplFinal(
         }
     });
 
-    return insertResultsIntoColumns(places, std::move(out_cols), arena, clear_states);
+    if constexpr (return_single_block)
+    {
+        return insertResultsIntoColumns(places, std::move(out_cols), arena, clear_states);
+    }
+    else
+    {
+        res.emplace_back(insertResultsIntoColumns(places, std::move(out_cols), arena, clear_states));
+        return res;
+    }
 }
 
-template <typename Method, typename Table>
-Block NO_INLINE Aggregator::convertToBlockImplNotFinal(Method & method, Table & data, Arenas & aggregates_pools, size_t rows) const
+template <bool return_single_block, typename Method, typename Table>
+Aggregator::ConvertToBlockRes<return_single_block> NO_INLINE
+Aggregator::convertToBlockImplNotFinal(Method & method, Table & data, Arenas & aggregates_pools, size_t) const
 {
+    /// +1 for nullKeyData, if `data` doesn't have it - not a problem, just some memory for one excessive row will be preallocated
+    const size_t max_block_size = (return_single_block ? data.size() : std::min(params.max_block_size, data.size())) + 1;
     constexpr bool final = false;
-    auto out_cols = prepareOutputBlockColumns(params, aggregate_functions, getHeader(final), aggregates_pools, final, rows);
+    ConvertToBlockRes<return_single_block> res;
 
-    if constexpr (Method::low_cardinality_optimization)
+    std::optional<OutputBlockColumns> out_cols;
+    std::optional<Sizes> shuffled_key_sizes;
+    size_t rows_in_current_block = 0;
+
+    auto init_out_cols = [&]()
     {
-        if (data.hasNullKeyData())
+        out_cols = prepareOutputBlockColumns(params, aggregate_functions, getHeader(final), aggregates_pools, final, max_block_size);
+
+        if constexpr (Method::low_cardinality_optimization)
         {
-            out_cols.raw_key_columns[0]->insertDefault();
+            if (data.hasNullKeyData())
+            {
+                out_cols->raw_key_columns[0]->insertDefault();
 
-            for (size_t i = 0; i < params.aggregates_size; ++i)
-                out_cols.aggregate_columns_data[i]->push_back(data.getNullKeyData() + offsets_of_aggregate_states[i]);
+                for (size_t i = 0; i < params.aggregates_size; ++i)
+                    out_cols->aggregate_columns_data[i]->push_back(data.getNullKeyData() + offsets_of_aggregate_states[i]);
 
-            data.getNullKeyData() = nullptr;
+                ++rows_in_current_block;
+                data.getNullKeyData() = nullptr;
+                data.hasNullKeyData() = false;
+            }
         }
-    }
 
-    auto shuffled_key_sizes = method.shuffleKeyColumns(out_cols.raw_key_columns, key_sizes);
-    const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes :  key_sizes;
+        shuffled_key_sizes = method.shuffleKeyColumns(out_cols->raw_key_columns, key_sizes);
+    };
 
-    data.forEachValue([&](const auto & key, auto & mapped)
+    // should be invoked at least once, because null data might be the only content of the `data`
+    init_out_cols();
+
+    data.forEachValue(
+        [&](const auto & key, auto & mapped)
+        {
+            if (!out_cols.has_value())
+                init_out_cols();
+
+            const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
+            method.insertKeyIntoColumns(key, out_cols->raw_key_columns, key_sizes_ref);
+
+            /// reserved, so push_back does not throw exceptions
+            for (size_t i = 0; i < params.aggregates_size; ++i)
+                out_cols->aggregate_columns_data[i]->push_back(mapped + offsets_of_aggregate_states[i]);
+
+            /// proton: starts. For streaming aggr, we hold on to the states
+            /// Since it is not final, we shall never clear the state
+            /// mapped = nullptr;
+            /// proton: ends.
+
+            ++rows_in_current_block;
+
+            if constexpr (!return_single_block)
+            {
+                if (rows_in_current_block >= max_block_size)
+                {
+                    res.emplace_back(finalizeBlock(params, getHeader(final), std::move(out_cols.value()), final, rows_in_current_block));
+                    out_cols.reset();
+                    rows_in_current_block = 0;
+                }
+            }
+        });
+
+    if constexpr (return_single_block)
     {
-        method.insertKeyIntoColumns(key, out_cols.raw_key_columns, key_sizes_ref);
-
-        /// reserved, so push_back does not throw exceptions
-        for (size_t i = 0; i < params.aggregates_size; ++i)
-            out_cols.aggregate_columns_data[i]->push_back(mapped + offsets_of_aggregate_states[i]);
-
-        /// proton: starts. For streaming aggr, we hold on to the states
-        /// Since it is not final, we shall never clear the state
-        /// if (!params.keep_state)
-        ///    mapped = nullptr;
-        /// proton: ends.
-    });
-
-    return finalizeBlock(params, getHeader(final), std::move(out_cols), final, rows);
+        return finalizeBlock(params, getHeader(final), std::move(out_cols).value(), final, rows_in_current_block);
+    }
+    else
+    {
+        if (rows_in_current_block)
+            res.emplace_back(finalizeBlock(params, getHeader(final), std::move(out_cols).value(), final, rows_in_current_block));
+        return res;
+    }
+    return res;
 }
 
 void Aggregator::addSingleKeyToAggregateColumns(
@@ -1668,15 +1747,16 @@ Block Aggregator::prepareBlockAndFillWithoutKey(AggregatedDataVariants & data_va
     return finalizeBlock(params, res_header, std::move(out_cols), final, rows);
 }
 
-Block Aggregator::prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final, bool clear_states, ConvertType type) const
+BlocksList Aggregator::prepareBlockAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final, bool clear_states, ConvertType type) const
 {
     const size_t rows = data_variants.sizeWithoutOverflowRow();
+    constexpr bool return_single_block = false;
 #define M(NAME) \
     else if (data_variants.type == AggregatedDataVariants::Type::NAME) \
-        return convertToBlockImpl(*data_variants.NAME, data_variants.NAME->data, data_variants.aggregates_pool, data_variants.aggregates_pools, final, rows, clear_states, type);
+        return convertToBlockImpl<return_single_block>(*data_variants.NAME, data_variants.NAME->data, data_variants.aggregates_pool, data_variants.aggregates_pools, final, rows, clear_states, type);
 
     if (false) {} // NOLINT
-    APPLY_FOR_VARIANTS_SINGLE_LEVEL(M)
+    APPLY_FOR_VARIANTS_SINGLE_LEVEL_STREAMING(M)
 #undef M
     else throw Exception(ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT, "Unknown aggregated data variant.");
 }
@@ -1734,11 +1814,11 @@ BlocksList Aggregator::convertToBlocks(AggregatedDataVariants & data_variants, b
     bool clear_states = final && !params.keep_state;
 
     if (data_variants.type == AggregatedDataVariants::Type::without_key)
-        blocks.emplace_back(prepareBlockAndFillWithoutKey(data_variants, final, clear_states));
+        blocks.emplace_back(prepareBlockAndFillWithoutKey(data_variants, final, clear_states, ConvertType::Normal));
     else if (!data_variants.isTwoLevel())
-        blocks.emplace_back(prepareBlockAndFillSingleLevel(data_variants, final, clear_states));
+        blocks = prepareBlockAndFillSingleLevel(data_variants, final, clear_states, ConvertType::Normal);
     else
-        blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, clear_states, max_threads));
+        blocks = prepareBlocksAndFillTwoLevel(data_variants, final, clear_states, max_threads, ConvertType::Normal);
 
     /// proton: starts.
     if (clear_states)
@@ -1821,6 +1901,9 @@ void NO_INLINE Aggregator::mergeDataImpl(
     {
         if (inserted)
         {
+            /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
+            dst = nullptr;
+
             /// If there are multiple sources, there are more than one AggregatedDataVariant. Aggregator always creates a new AggregatedDataVariant and merge all other
             /// AggregatedDataVariants to the new created one. After finalize(), it does not clean up aggregate state except the new create AggregatedDataVariant.
             /// If it does not alloc new memory for the 'dst' (i.e. aggregate state of the new AggregatedDataVariant which get destroyed after finalize()) but reuse
@@ -1835,9 +1918,17 @@ void NO_INLINE Aggregator::mergeDataImpl(
     };
 
     if constexpr (std::is_same_v<KeyHandler, EmptyKeyHandler>)
-        table_src.mergeToViaEmplace(table_dst, func);
+        table_src.template mergeToViaEmplace<decltype(func), false>(table_dst, std::move(func));
     else
-        table_src.mergeToViaEmplace(table_dst, func, std::move(key_handler));
+    {
+        table_src.forEachValue([&](const auto & key, auto & mapped)
+        {
+            typename Table::LookupResult res_it;
+            bool inserted;
+            table_dst.emplace(key_handler(key), res_it, inserted);
+            func(res_it->getMapped(), mapped, inserted);
+        });
+    }
 
     /// In order to release memory early.
     if (clear_states)
@@ -1906,7 +1997,7 @@ Aggregator::mergeAndConvertToBlocks(ManyAggregatedDataVariants & data_variants, 
     if (first.type == AggregatedDataVariants::Type::without_key)
     {
         mergeWithoutKeyDataImpl(*prepared_data_ptr, clear_states);
-        blocks.emplace_back(prepareBlockAndFillWithoutKey(first, final, clear_states));
+        blocks.emplace_back(prepareBlockAndFillWithoutKey(first, final, clear_states, ConvertType::Normal));
     }
     else if (!first.isTwoLevel())
     {
@@ -1919,7 +2010,7 @@ Aggregator::mergeAndConvertToBlocks(ManyAggregatedDataVariants & data_variants, 
 #undef M
         else throw Exception("Unknown single level aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
 
-        blocks.emplace_back(prepareBlockAndFillSingleLevel(first, final, clear_states));
+        blocks = prepareBlockAndFillSingleLevel(first, final, clear_states, ConvertType::Normal);
     }
     else
     {
@@ -3056,17 +3147,17 @@ void Aggregator::serializeAggregateStates(const AggregateDataPtr & place, WriteB
 
 void Aggregator::deserializeAggregateStates(AggregateDataPtr & place, ReadBuffer & rb, Arena * arena) const
 {
+    /// exception-safety - if you can not allocate memory or create states, then destructors will not be called.
+    place = nullptr;
+
     UInt8 has_states;
     readIntBinary(has_states, rb);
     if (has_states)
     {
-        if (!place)
-        {
-            /// Allocate states for all aggregate functions
-            AggregateDataPtr aggregate_data = arena->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
-            createAggregateStates(aggregate_data);
-            place = aggregate_data;
-        }
+        /// Allocate states for all aggregate functions
+        AggregateDataPtr aggregate_data = arena->alignedAlloc(total_size_of_aggregate_states, align_aggregate_states);
+        createAggregateStates(aggregate_data);
+        place = aggregate_data;
 
         for (size_t i = 0; i < params.aggregates_size; ++i)
             aggregate_functions[i]->deserialize(place + offsets_of_aggregate_states[i], rb, std::nullopt, arena);
@@ -3281,9 +3372,9 @@ BlocksList Aggregator::convertUpdatesToBlocks(AggregatedDataVariants & data_vari
     if (data_variants.type == AggregatedDataVariants::Type::without_key)
         blocks.emplace_back(prepareBlockAndFillWithoutKey(data_variants, final, clear_states, ConvertType::Updates));
     else if (!data_variants.isTwoLevel())
-        blocks.emplace_back(prepareBlockAndFillSingleLevel(data_variants, final, clear_states, ConvertType::Updates));
+        blocks = prepareBlockAndFillSingleLevel(data_variants, final, clear_states, ConvertType::Updates);
     else
-        blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, clear_states, /*max_threads=*/ 1, ConvertType::Updates));
+        blocks = prepareBlocksAndFillTwoLevel(data_variants, final, clear_states, /*max_threads=*/ 1, ConvertType::Updates);
 
     size_t rows = 0;
     size_t bytes = 0;
@@ -3574,9 +3665,9 @@ BlocksList Aggregator::convertRetractToBlocks(AggregatedDataVariants & data_vari
     if (data_variants.type == AggregatedDataVariants::Type::without_key)
         blocks.emplace_back(prepareBlockAndFillWithoutKey(data_variants, final, clear_states, ConvertType::Retract));
     else if (!data_variants.isTwoLevel())
-        blocks.emplace_back(prepareBlockAndFillSingleLevel(data_variants, final, clear_states, ConvertType::Retract));
+        blocks = prepareBlockAndFillSingleLevel(data_variants, final, clear_states, ConvertType::Retract);
     else
-        blocks.splice(blocks.end(), prepareBlocksAndFillTwoLevel(data_variants, final, clear_states, /*max_threads=*/ 1, ConvertType::Retract));
+        blocks = prepareBlocksAndFillTwoLevel(data_variants, final, clear_states, /*max_threads=*/ 1, ConvertType::Retract);
 
     size_t rows = 0;
     size_t bytes = 0;

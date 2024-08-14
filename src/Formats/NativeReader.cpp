@@ -145,7 +145,12 @@ Block NativeReader::read()
         setVersionToAggregateFunctions(column.type, true, server_revision);
 
         SerializationPtr serialization;
-        if (server_revision >= DBMS_MIN_REVISION_WITH_CUSTOM_SERIALIZATION)
+        /// proton: starts
+        /// Because our drivers does not support custom serialization, we can only check the serialization when `compatible_with_clickhouse` is `true`,
+        /// i.e. this reader is reading packets from clickhouse (for ClickHouse external tables).
+        if (compatible_with_clickhouse &&
+            /// proton: ends
+            server_revision >= DBMS_MIN_REVISION_WITH_CUSTOM_SERIALIZATION)
         {
             auto info = column.type->createSerializationInfo({});
 

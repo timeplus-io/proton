@@ -31,8 +31,6 @@ public:
 
     KafkaWALSimpleConsumerPtr getOrCreateStreaming(const String & cluster_id);
 
-    KafkaWALSimpleConsumerPtr getOrCreateStreamingExternal(const String & brokers, const KafkaWALAuth & auth, int32_t fetch_wait_max_ms = 200);
-
     std::vector<KafkaWALClusterPtr> clusters(const KafkaWALContext & ctx) const;
 
     bool enabled() const { return meta_wal != nullptr; }

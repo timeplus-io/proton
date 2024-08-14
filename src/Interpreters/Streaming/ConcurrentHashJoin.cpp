@@ -4,6 +4,8 @@
 #include <Columns/ColumnSparse.h>
 #include <Columns/IColumn.h>
 #include <DataTypes/DataTypeLowCardinality.h>
+#include <IO/Operators.h>
+#include <IO/WriteBufferFromString.h>
 #include <Common/Exception.h>
 #include <Common/WeakHash.h>
 
@@ -387,6 +389,17 @@ std::shared_ptr<NotJoinedBlocks> ConcurrentHashJoin::getNonJoinedBlocks(
     }
     throw Exception(
         ErrorCodes::LOGICAL_ERROR, "Invalid join type. join kind: {}, strictness: {}", table_join->kind(), table_join->strictness());
+}
+
+String ConcurrentHashJoin::metricsString() const
+{
+    WriteBufferFromOwnString wb;
+    for (size_t i = 0; const auto & hash_join : hash_joins)
+    {
+        std::lock_guard lock(hash_join->mutex);
+        wb << "HashJoin-" << i++ << "(" << hash_join->data->metricsString() << ")";
+    }
+    return wb.str();
 }
 
 static ALWAYS_INLINE IColumn::Selector hashToSelector(const WeakHash32 & hash, size_t num_shards)

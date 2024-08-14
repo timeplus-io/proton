@@ -4,6 +4,7 @@
 #include <NativeLog/Server/NativeLog.h>
 
 #include <Core/Block.h>
+#include <Core/ServerUUID.h>
 #include <base/getMemoryAmount.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 
@@ -14,13 +15,13 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_TYPE_OF_QUERY;
+extern const int UNKNOWN_TYPE_OF_QUERY;
 }
 
 namespace
 {
-    std::map<String, String> colname_bldkey_mapping
-        = {{"VERSION_DESCRIBE", "version"}, {"BUILD_TIME", "time"}, {"VERSION_GITHASH", "commit_sha"}, {"EDITION", "edition"}};
+std::map<String, String> colname_bldkey_mapping
+    = {{"VERSION_DESCRIBE", "version"}, {"BUILD_TIME", "time"}, {"VERSION_GITHASH", "commit_sha"}, {"EDITION", "edition"}};
 }
 
 std::pair<String, Int32> PingHandler::executeGet(const Poco::JSON::Object::Ptr & /*payload*/) const
@@ -81,6 +82,9 @@ void PingHandler::buildResponse(const Block & block, String & resp) const
 
     Poco::JSON::Object server_info;
 
+    const auto & server_uuid = DB::ServerUUID::get();
+
+    server_info.set("uuid", DB::toString(server_uuid));
     server_info.set("num_of_physical_cpu_cores", getNumberOfPhysicalCPUCores());
     server_info.set("memory_amount", getMemoryAmount());
     json_resp.set("server", server_info);

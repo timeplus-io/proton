@@ -201,14 +201,13 @@ void StreamShard::backgroundPollNativeLog()
 
     LOG_INFO(
         log,
-        "Start consuming records from shard={} sn={} distributed_flush_threshold_ms={} "
-        "distributed_flush_threshold_count={} "
-        "distributed_flush_threshold_bytes={} with missing_sequence_ranges={}",
+        "Start consuming records from shard={} sn={} flush_threshold_ms={} flush_threshold_count={} "
+        "flush_threshold_bytes={} with missing_sequence_ranges={}",
         shard,
         snLoaded(),
-        ssettings->distributed_flush_threshold_ms.value,
-        ssettings->distributed_flush_threshold_count.value,
-        ssettings->distributed_flush_threshold_bytes.value,
+        ssettings->flush_threshold_ms.value,
+        ssettings->flush_threshold_count.value,
+        ssettings->flush_threshold_bytes.value,
         sequenceRangesToString(missing_sequence_ranges));
 
     StreamCallbackData stream_commit{this, missing_sequence_ranges};
@@ -227,9 +226,9 @@ void StreamShard::backgroundPollNativeLog()
     size_t batch_size = 100;
     batch.reserve(batch_size);
 
-    size_t rows_threshold = ssettings->distributed_flush_threshold_count.value;
-    size_t bytes_threshold = ssettings->distributed_flush_threshold_bytes.value;
-    Int64 interval_threshold = ssettings->distributed_flush_threshold_ms.value;
+    size_t rows_threshold = ssettings->flush_threshold_count.value;
+    size_t bytes_threshold = ssettings->flush_threshold_bytes.value;
+    Int64 interval_threshold = ssettings->flush_threshold_ms.value;
 
     size_t current_bytes_in_batch = 0;
     size_t current_rows_in_batch = 0;
@@ -302,9 +301,8 @@ void StreamShard::backgroundPollKafka()
 
     LOG_INFO(
         log,
-        "Start consuming records from shard={} sn={} distributed_flush_threshold_ms={} "
-        "distributed_flush_threshold_count={} "
-        "distributed_flush_threshold_bytes={} with missing_sequence_ranges={}",
+        "Start consuming records from shard={} sn={} flush_threshold_ms={} flush_threshold_count={} "
+        "flush_threshold_bytes={} with missing_sequence_ranges={}",
         shard,
         kafka->consume_ctx.offset,
         kafka->consume_ctx.consume_callback_timeout_ms,
@@ -885,9 +883,9 @@ void StreamShard::initKafkaLog()
         /// To ensure the replica can consume records inserted after its down time.
         kafka->consume_ctx.enforce_offset = true;
         kafka->consume_ctx.auto_offset_reset = ssettings->logstore_auto_offset_reset.value;
-        kafka->consume_ctx.consume_callback_timeout_ms = static_cast<int32_t>(ssettings->distributed_flush_threshold_ms.value);
-        kafka->consume_ctx.consume_callback_max_rows = static_cast<int32_t>(ssettings->distributed_flush_threshold_count.value);
-        kafka->consume_ctx.consume_callback_max_bytes = static_cast<int32_t>(ssettings->distributed_flush_threshold_bytes.value);
+        kafka->consume_ctx.consume_callback_timeout_ms = static_cast<int32_t>(ssettings->flush_threshold_ms.value);
+        kafka->consume_ctx.consume_callback_max_rows = static_cast<int32_t>(ssettings->flush_threshold_count.value);
+        kafka->consume_ctx.consume_callback_max_bytes = static_cast<int32_t>(ssettings->flush_threshold_bytes.value);
         kafka->log->initConsumerTopicHandle(kafka->consume_ctx);
     }
 

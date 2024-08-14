@@ -1,9 +1,10 @@
 #pragma once
 
 #include <Storages/IStorage.h>
-#include <base/shared_ptr_helper.h>
 #include <Common/SettingsChanges.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
+
+#include <base/shared_ptr_helper.h>
 
 namespace DB
 {
@@ -25,6 +26,7 @@ public:
     bool squashInsert() const noexcept override { return false; }
     bool supportsAccurateSeekTo() const noexcept override { return true; }
     NamesAndTypesList getVirtuals() const override;
+    std::optional<UInt64> totalRows(const Settings &) const override;
 
     Pipe read(
         const Names & column_names,

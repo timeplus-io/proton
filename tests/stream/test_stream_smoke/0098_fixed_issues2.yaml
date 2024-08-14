@@ -1,0 +1,342 @@
+test_suite_name: fixed_issues2
+tag: smoke
+test_suite_config:
+  tests_2_run:
+    ids_2_run:
+      - all
+    tags_2_run: [ ]
+    tags_2_skip:
+      default:
+        - todo
+        - to_support
+        - change
+        - bug
+        - sample
+      cluster:
+        - view
+        - cluster_table_bug
+comments: Tests covering fixed issues smoke cases.
+
+tests:
+  - id: 0
+    tags:
+      - query state
+      - query state compatibility
+      - in subquery
+    name: recover the query with in subquery
+    description: recover the query with in subquery
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists fixed_issues2_stream;
+
+          - client: python
+            query_type: table
+            exists: fixed_issues2_stream
+            exists_wait: 2
+            wait: 1
+            query: create stream fixed_issues2_stream(i int);
+
+          - client: python
+            query_type: table
+            depends_on_stream: fixed_issues2_stream
+            wait: 1
+            query: insert into fixed_issues2_stream(i) values(1);
+
+          - client: python
+            query_id: fixed-issues2-1
+            query_type: stream
+            wait: 2
+            query: subscribe to select i in (select i from table(fixed_issues2_stream)), multi_if(i in (select i from table(fixed_issues2_stream)), 1, 0) as t from fixed_issues2_stream settings seek_to='earliest', checkpoint_interval=1;
+
+          - client: python
+            query_id: fixed-issues2-2
+            query_type: stream
+            wait: 2
+            query: subscribe to with cte as (select 1), cte2 as (select multi_if(i in (cte), '1', '2') as t from fixed_issues2_stream where t = '1') select t from cte2 settings seek_to='earliest', checkpoint_interval=1
+
+          - client: python
+            query_type: type
+            depends_on: fixed-issues2-2
+            wait: 3
+            query: kill query where query_id='fixed-issues2-1' or query_id='fixed-issues2-2';
+
+          - client: python
+            query_id: fixed-issues2-1-1
+            query_type: stream
+            wait: 1
+            query: recover from 'fixed-issues2-1';
+
+          - client: python
+            query_id: fixed-issues2-2-1
+            query_type: stream
+            wait: 1
+            query: recover from 'fixed-issues2-2';
+
+          - client: python
+            depends_on: fixed-issues2-2
+            query_type: table
+            wait: 1
+            query: insert into fixed_issues2_stream(i) values(1);
+  
+          - client: python
+            query_type: table
+            wait: 3
+            query: unsubscribe to 'fixed-issues2-1';
+  
+          - client: python
+            query_type: table
+            query: unsubscribe to 'fixed-issues2-2';
+
+    expected_results:
+      - query_id: fixed-issues2-1
+        expected_results:
+          - ['True', 1]
+      - query_id: fixed-issues2-1-1
+        expected_results:
+          - ['True', 1]
+      - query_id: fixed-issues2-2
+        expected_results:
+          - ['1']
+      - query_id: fixed-issues2-2-1
+        expected_results:
+          - ['1']
+
+  - id: 1
+    tags:
+      - query state
+    name: issue 646
+    description: recover the query with incorrect start sn (0) if there is no checkpointed sn (-1)
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists fixed_issues2_stream;
+
+          - client: python
+            query_type: table
+            exists: fixed_issues2_stream
+            exists_wait: 2
+            wait: 1
+            query: create stream fixed_issues2_stream(i int);
+
+          - client: python
+            query_type: table
+            depends_on_stream: fixed_issues2_stream
+            wait: 1
+            query: insert into fixed_issues2_stream(i) values(1)(2)(3);
+
+          - client: python
+            query_id: fixed-issues2-1
+            query_type: stream
+            wait: 2
+            query: subscribe to select count() from fixed_issues2_stream emit periodic 1s;
+
+          - client: python
+            query_type: type
+            depends_on: fixed-issues2-1
+            wait: 3
+            query: kill query where query_id='fixed-issues2-1';
+
+          - client: python
+            query_id: fixed-issues2-1-1
+            query_type: stream
+            wait: 1
+            query: recover from 'fixed-issues2-1';
+
+          - client: python
+            query_type: table
+            depends_on: fixed-issues2-1
+            query: insert into fixed_issues2_stream(i) values(4);
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: unsubscribe to 'fixed-issues2-1';
+
+    expected_results:
+      - query_id: fixed-issues2-1
+        expected_results: []
+      - query_id: fixed-issues2-1-1
+        expected_results:
+          - [1]
+
+  - id: 2
+    tags:
+      - versioned_kv join versioned_kv
+      - view
+      - left join
+      - inner join
+    name: issue 700,701
+    description: no support to create view with changelog semantic but doesn't has _tp_delta column in select list
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop view if exists fixed_issues2_view;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: drop stream if exists fixed_issues2_kv_l;
+
+          - client: python
+            query_type: table
+            query: drop stream if exists fixed_issues2_kv_r;
+
+          - client: python
+            query_type: table
+            exists: fixed_issues2_kv_l
+            exists_wait: 2
+            wait: 1
+            query: create stream fixed_issues2_kv_l(id int, value int) primary key id settings mode='versioned_kv';
+
+          - client: python
+            query_type: table
+            exists: fixed_issues2_kv_r
+            exists_wait: 2
+            wait: 1
+            query: create stream fixed_issues2_kv_r(id int, value int) primary key id settings mode='versioned_kv';
+
+          - client: python
+            query_type: table
+            query_id: fixed-issues2-1
+            depends_on_stream: fixed_issues2_kv_r
+            wait: 1
+            query: create view fixed_issues2_view as select kv1.id as id, kv1.value as v1, kv2.value as v2, kv3.value as v3 from fixed_issues2_kv_l as kv1 left join fixed_issues2_kv_r as kv2 on kv1.id = kv2.id left join fixed_issues2_kv_r as kv3 on kv1.id = kv3.id;
+
+          - client: python
+            query_type: table
+            query_id: fixed-issues2-2
+            query: create view fixed_issues2_view as select kv1.id as id, kv1.value as v1, kv2.value as v2, kv3.value as v3, _tp_delta from fixed_issues2_kv_l as kv1 left join fixed_issues2_kv_r as kv2 on kv1.id = kv2.id left join fixed_issues2_kv_r as kv3 on kv1.id = kv3.id;
+
+          - client: python
+            query_type: stream
+            query_id: fixed-issues2-3
+            depends_on_stream: fixed_issues2_view
+            wait: 1
+            query: select l.*, t.value as v4 from fixed_issues2_view as l left join fixed_issues2_kv_r as t on l.id = t.id;
+
+          - client: python
+            query_type: stream
+            query_id: fixed-issues2-4
+            depends_on_stream: fixed_issues2_view
+            wait: 1
+            query: select l.*, t.value as v4 from fixed_issues2_view as l join fixed_issues2_kv_r as t on l.id = t.id;
+
+          - client: python
+            query_type: stream
+            query_id: fixed-issues2-5
+            depends_on_stream: fixed_issues2_view
+            wait: 1
+            query: select l.*, t.value as v4, _tp_delta from fixed_issues2_view as l left join fixed_issues2_kv_r as t on l.id = t.id;
+
+          - client: python
+            query_type: stream
+            query_id: fixed-issues2-6
+            depends_on_stream: fixed_issues2_view
+            wait: 1
+            query: select l.*, t.value as v4, _tp_delta from fixed_issues2_view as l join fixed_issues2_kv_r as t on l.id = t.id;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: insert into fixed_issues2_kv_l(id, value) values(1, 666);
+  
+          - client: python
+            query_type: table
+            depends_on: fixed-issues2-6
+            wait: 1
+            query: insert into fixed_issues2_kv_r(id, value) values(1, 888);
+
+          - client: python
+            query_type: table
+            wait: 1
+            kill: fixed-issues2-1,fixed-issues2-2,fixed-issues2-3,fixed-issues2-4,fixed-issues2-5,fixed-issues2-6
+            kill_wait: 2
+            drop_view: fixed_issues2_view
+            drop_view_wait: 1
+            query: insert into fixed_issues2_kv_r(id, value) values(1, 999);
+
+    expected_results:
+      - query_id: fixed-issues2-1
+        expected_results: "error_code:80"
+      - query_id: fixed-issues2-2
+        expected_results: []
+      - query_id: fixed-issues2-3
+        expected_results: "error_code:80"
+      - query_id: fixed-issues2-4
+        expected_results: "error_code:80"
+      - query_id: fixed-issues2-5
+        expected_results:
+          - [1, 666, 0, 0, 0, 1]
+          - [1, 666, 0, 0, 0, -1]
+          - [1, 666, 0, 0, 888, 1]
+          - [1, 666, 0, 0, 888, -1]
+          - [1, 666, 0, 888, 888, 1]
+          - [1, 666, 0, 888, 888, -1]
+          - [1, 666, 888, 888, 888, 1]
+          - [1, 666, 888, 888, 888, -1]
+          - [1, 666, 888, 888, 999, 1]
+          - [1, 666, 888, 888, 999, -1]
+          - [1, 666, 888, 999, 999, 1]
+          - [1, 666, 888, 999, 999, -1]
+          - [1, 666, 999, 999, 999, 1]
+      - query_id: fixed-issues2-6
+        expected_results:
+          - [1, 666, 0, 0, 888, 1]
+          - [1, 666, 0, 0, 888, -1]
+          - [1, 666, 0, 888, 888, 1]
+          - [1, 666, 0, 888, 888, -1]
+          - [1, 666, 888, 888, 888, 1]
+          - [1, 666, 888, 888, 888, -1]
+          - [1, 666, 888, 888, 999, 1]
+          - [1, 666, 888, 888, 999, -1]
+          - [1, 666, 888, 999, 999, 1]
+          - [1, 666, 888, 999, 999, -1]
+          - [1, 666, 999, 999, 999, 1]
+
+  - id: 3
+    tags:
+      - watermark
+      - tumble window
+    name: issue 733
+    description: emit watermark for tumble window
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists fixed_issues2_stream;
+
+          - client: python
+            query_type: table
+            exists: fixed_issues2_stream
+            exists_wait: 2
+            wait: 1
+            query: create stream fixed_issues2_stream(i int, v string);
+
+          - client: python
+            query_type: table
+            depends_on_stream: fixed_issues2_stream
+            wait: 1
+            query: insert into fixed_issues2_stream(i, v, _tp_time) values(1, 't1', '2024-05-16 21:28:00');
+
+          - client: python
+            query_id: fixed-issues2-1
+            query_type: stream
+            wait: 2
+            query: with cte as (select * from fixed_issues2_stream where v != 't1' settings seek_to='earliest') select i, window_end, count() from tumble(cte, 2m) group by i, window_end;
+
+          - client: python
+            query_type: type
+            depends_on: fixed-issues2-1
+            wait: 1
+            kill: fixed-issues2-1
+            kill_wait: 2
+            query: insert into fixed_issues2_stream(i, v, _tp_time) values (2, 't2', '2024-05-16 21:30:00') (2, 't3', '2024-05-16 21:32:00');
+
+    expected_results:
+      - query_id: fixed-issues2-1
+        expected_results:
+          - [2, '2024-05-16 21:32:00+00:00', 1]

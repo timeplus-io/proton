@@ -107,6 +107,8 @@ void WatermarkTransformWithSubstream::work()
     assert(output_iter == output_chunks.end());
     output_chunks.clear();
 
+    SCOPE_EXIT({ output_iter = output_chunks.begin(); });
+
     /// We will need clear input_chunk for next run
     Chunk process_chunk;
     process_chunk.swap(input_chunk);
@@ -191,8 +193,6 @@ void WatermarkTransformWithSubstream::work()
             output_chunks.emplace_back(std::move(process_chunk));
         }
     }
-
-    output_iter = output_chunks.begin(); /// need to output chunks
 }
 
 WatermarkStamper & WatermarkTransformWithSubstream::getOrCreateSubstreamWatermark(const SubstreamID & id)

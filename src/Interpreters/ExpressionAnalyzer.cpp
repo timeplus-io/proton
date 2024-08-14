@@ -32,6 +32,7 @@
 #include <Processors/QueryPlan/ExpressionStep.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
 #include <AggregateFunctions/parseAggregateFunctionParameters.h>
 
 #include <Storages/StorageDistributed.h>
@@ -42,11 +43,14 @@
 #include <Common/typeid_cast.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Core/SettingsEnums.h>
+#include <Core/ColumnNumbers.h>
+#include <Core/Names.h>
 #include <Core/NamesAndTypes.h>
 #include <Common/logger_useful.h>
 
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeFixedString.h>
 
 #include <Interpreters/ActionsVisitor.h>
 #include <Interpreters/GetAggregatesVisitor.h>
@@ -119,6 +123,9 @@ void tryTranslateToParametricAggregateFunction(
     if (!parameters.empty() || argument_names.empty())
         return;
 
+    if (AggregateFunctionCombinatorFactory::instance().tryFindSuffix(node->name))
+        return;
+
     assert(node->arguments);
     const ASTs & arguments = node->arguments->children;
     const auto & lower_name = node->name;
@@ -169,20 +176,49 @@ void tryTranslateToParametricAggregateFunction(
         argument_names = {argument_names[0], argument_names[1]};
         types = {types[0], types[1]};
     }
-    else if (lower_name == "quantile")
+    else if (lower_name.starts_with("quantile"))
     { 
-        ///Translate `quantile(key, level)` to `quantile(level)(key)`,and the default level is 0.5, median fucntion is the alias of quantile(key, 0.5)
-        if (arguments.size() != 2 && arguments.size() != 1)
-            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires one or two arguments", node->name);
-        if (arguments.size() == 2)
+        size_t arg_size = arguments.size();
+        if (lower_name.ends_with("deterministic") || lower_name.ends_with("weighted"))
         {
+            /// for qunatile_deterministic, quantiles_deterministic, qunatile_weighted, qunatiles_weighted.
+            /// qunatile_deterministic(expr, determinator, level) -> qunatile_deterministic(level)(expr, determinator)
             ASTPtr expression_list = std::make_shared<ASTExpressionList>();
-            expression_list->children.push_back(arguments[1]);
-            parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+            if (arg_size >= 2)
+            {
+                if (arg_size >= 3)
+                {
+                    for (size_t i = 2; i < arg_size; ++i)
+                        expression_list->children.push_back(arguments[i]);
+                    parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+                    
+                }
+                argument_names = {argument_names[0], argument_names[1]};
+                types = {types[0], types[1]};
+            }
+            else
+            {
+                argument_names = {argument_names[0]};
+                types = {types[0]};
+            }
+        }
+        else 
+        {
+            /// For functions: quantile, quantiles, quantile_extract, quantiles_extract, quantile_exact_low, quantiles_exact_low....
+            ///Translate `quantile(key, level)` to `quantile(level)(key)`,and the default level is 0.5, median fucntion is the alias of quantile(key, 0.5)
+            if (arg_size >= 2)
+            {
+                ASTPtr expression_list = std::make_shared<ASTExpressionList>();
+                for (size_t i = 1; i < arg_size; ++i)
+                    expression_list->children.push_back(arguments[i]);
+                parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+            }
+
+            argument_names = {argument_names[0]};
+            types = {types[0]};
         }
 
-        argument_names = {argument_names[0]};
-        types = {types[0]};
+
     }
     else if (lower_name == "stochastic_linear_regression_state" || lower_name == "stochastic_logistic_regression_state")
     {
@@ -402,12 +438,21 @@ void ExpressionAnalyzer::analyzeAggregation(ActionsDAGPtr & temp_actions)
     {
         if (ASTPtr group_by_ast = select_query->groupBy())
         {
-            NameSet unique_keys;
+            NameToIndexMap unique_keys;
             ASTs & group_asts = group_by_ast->children;
+
+            if (select_query->group_by_with_rollup)
+                group_by_kind = GroupByKind::ROLLUP;
+            else if (select_query->group_by_with_cube)
+                group_by_kind = GroupByKind::CUBE;
+            else if (select_query->group_by_with_grouping_sets && group_asts.size() > 1)
+                group_by_kind = GroupByKind::GROUPING_SETS;
+            else
+                group_by_kind = GroupByKind::ORDINARY;
 
             /// For GROUPING SETS with multiple groups we always add virtual __grouping_set column
             /// With set number, which is used as an additional key at the stage of merging aggregating data.
-            if (select_query->group_by_with_grouping_sets && group_asts.size() > 1)
+            if (group_by_kind != GroupByKind::ORDINARY)
                 aggregated_columns.emplace_back("__grouping_set", std::make_shared<DataTypeUInt64>());
 
             for (ssize_t i = 0; i < static_cast<ssize_t>(group_asts.size()); ++i)
@@ -424,6 +469,7 @@ void ExpressionAnalyzer::analyzeAggregation(ActionsDAGPtr & temp_actions)
                     group_elements_ast = group_ast_element->children;
 
                     NamesAndTypesList grouping_set_list;
+                    ColumnNumbers grouping_set_indexes_list;
 
                     for (ssize_t j = 0; j < ssize_t(group_elements_ast.size()); ++j)
                     {
@@ -464,15 +510,21 @@ void ExpressionAnalyzer::analyzeAggregation(ActionsDAGPtr & temp_actions)
                         /// Aggregation keys are unique.
                         if (!unique_keys.contains(key.name))
                         {
-                            unique_keys.insert(key.name);
+                            unique_keys[key.name] = aggregation_keys.size();
+                            grouping_set_indexes_list.push_back(aggregation_keys.size());
                             aggregation_keys.push_back(key);
 
                             /// Key is no longer needed, therefore we can save a little by moving it.
                             aggregated_columns.push_back(std::move(key));
                         }
+                        else
+                        {
+                            grouping_set_indexes_list.push_back(unique_keys[key.name]);
+                        }
                     }
 
                     aggregation_keys_list.push_back(std::move(grouping_set_list));
+                    aggregation_keys_indexes_list.push_back(std::move(grouping_set_indexes_list));
                 }
                 else
                 {
@@ -510,13 +562,20 @@ void ExpressionAnalyzer::analyzeAggregation(ActionsDAGPtr & temp_actions)
                     /// Aggregation keys are uniqued.
                     if (!unique_keys.contains(key.name))
                     {
-                        unique_keys.insert(key.name);
+                        unique_keys[key.name] = aggregation_keys.size();
                         aggregation_keys.push_back(key);
 
                         /// Key is no longer needed, therefore we can save a little by moving it.
                         aggregated_columns.push_back(std::move(key));
                     }
                 }
+            }
+
+            if (!select_query->group_by_with_grouping_sets)
+            {
+                auto & list = aggregation_keys_indexes_list.emplace_back();
+                for (size_t i = 0; i < aggregation_keys.size(); ++i)
+                    list.push_back(i);
             }
 
             if (group_asts.empty())
@@ -662,7 +721,8 @@ void ExpressionAnalyzer::getRootActions(const ASTPtr & ast, bool no_makeset_for_
         no_makeset_for_subqueries,
         false /* no_makeset */,
         only_consts,
-        !isRemoteStorage() /* create_source_for_in */);
+        !isRemoteStorage() /* create_source_for_in */,
+        getAggregationKeysInfo());
     ActionsVisitor(visitor_data, log.stream()).visit(ast);
     actions = visitor_data.getActions();
 }
@@ -680,7 +740,8 @@ void ExpressionAnalyzer::getRootActionsNoMakeSet(const ASTPtr & ast, ActionsDAGP
         true /* no_makeset_for_subqueries, no_makeset implies no_makeset_for_subqueries */,
         true /* no_makeset */,
         only_consts,
-        !isRemoteStorage() /* create_source_for_in */);
+        !isRemoteStorage() /* create_source_for_in */,
+        getAggregationKeysInfo());
     ActionsVisitor(visitor_data, log.stream()).visit(ast);
     actions = visitor_data.getActions();
 }
@@ -700,7 +761,8 @@ void ExpressionAnalyzer::getRootActionsForHaving(
         no_makeset_for_subqueries,
         false /* no_makeset */,
         only_consts,
-        true /* create_source_for_in */);
+        true /* create_source_for_in */,
+        getAggregationKeysInfo());
     ActionsVisitor(visitor_data, log.stream()).visit(ast);
     actions = visitor_data.getActions();
 }

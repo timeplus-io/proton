@@ -174,6 +174,8 @@ public:
 
     void renameColumn(String new_name, size_t column_pos);
 
+    Columns detachColumns();
+
     /// Deep clone, use cautiously. Most of time, we don't need deepClone
     Block deepClone() const;
 
@@ -233,6 +235,11 @@ void assertBlocksHaveEqualStructure(const Block & lhs, const Block & rhs, std::s
 /// If both columns are constant, it is checked that they have the same value.
 bool isCompatibleHeader(const Block & actual, const Block & desired);
 void assertCompatibleHeader(const Block & actual, const Block & desired, std::string_view context_description);
+
+/// proton : starts. Introduce head structure comparision without comparing the column names
+/// Actual header is compatible to desired if block have equal structure except column names
+bool isCompatibleHeaderWithoutComparingColumnNames(const Block & actual, const Block & desired);
+/// proton : ends
 
 /// Calculate difference in structure of blocks and write description into output strings. NOTE It doesn't compare values of constant columns.
 void getBlocksDifference(const Block & lhs, const Block & rhs, std::string & out_lhs_diff, std::string & out_rhs_diff);

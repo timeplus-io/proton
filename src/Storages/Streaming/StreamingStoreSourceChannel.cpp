@@ -26,6 +26,12 @@ StreamingStoreSourceChannel::~StreamingStoreSourceChannel()
     multiplexer->removeChannel(id);
 }
 
+String StreamingStoreSourceChannel::description() const
+{
+    auto [uuid, shard] = multiplexer->getStreamShard();
+    return fmt::format("id={},uuid={},shard={}", id, uuid, shard);
+}
+
 void StreamingStoreSourceChannel::readAndProcess()
 {
     nlog::RecordPtrs records;
@@ -40,8 +46,8 @@ void StreamingStoreSourceChannel::readAndProcess()
         return;
     }
 
-    result_chunks.clear();
-    result_chunks.reserve(records.size());
+    result_chunks_with_sns.clear();
+    result_chunks_with_sns.reserve(records.size());
 
     for (auto & record : records)
     {
@@ -90,15 +96,15 @@ void StreamingStoreSourceChannel::readAndProcess()
             }
         }
 
-        result_chunks.emplace_back(std::move(columns), rows);
+        result_chunks_with_sns.emplace_back(Chunk{std::move(columns), rows}, record->getSN());
         if (likely(block.info.appendTime() > 0))
         {
             auto chunk_ctx = ChunkContext::create();
             chunk_ctx->setAppendTime(block.info.appendTime());
-            result_chunks.back().setChunkContext(std::move(chunk_ctx));
+            result_chunks_with_sns.back().first.setChunkContext(std::move(chunk_ctx));
         }
     }
-    iter = result_chunks.begin();
+    iter = result_chunks_with_sns.begin();
 }
 
 void StreamingStoreSourceChannel::add(nlog::RecordPtrs records)

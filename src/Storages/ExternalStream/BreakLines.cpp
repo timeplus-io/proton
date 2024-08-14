@@ -12,7 +12,6 @@ std::vector<std::string_view> breakLines(const char * data, size_t & length, con
     assert(line_breaker.ok() && line_breaker.NumberOfCapturingGroups() == 1);
 
     re2::StringPiece input{data, length};
-    re2::StringPiece last_input = input;
 
     re2::StringPiece breaker;
     re2::StringPiece last_breaker;
@@ -20,12 +19,9 @@ std::vector<std::string_view> breakLines(const char * data, size_t & length, con
     std::vector<std::string_view> lines;
     lines.reserve(100);
 
-    size_t matches = 0;
 
     while (re2::RE2::FindAndConsume(&input, line_breaker, &breaker))
     {
-        ++matches;
-
         /// re2 moves input to next starting position beyond the current match automatically
         /// [.....breaker][....
         /// ^             ^
@@ -45,8 +41,14 @@ std::vector<std::string_view> breakLines(const char * data, size_t & length, con
             {
                 /// [data in the middle][breaker][next start...][breaker][next start...
                 /// data in the middle + breaker are composed into a line
-                lines.emplace_back(last_input.data(), static_cast<size_t>(input.data() - last_input.data()));
-                last_input = input;
+                /// Force the prefix information into a line
+                /// example:
+                ///     Processing configuration file 'config.xml'.
+                ///     There is no file 'config.xml', will use embedded config.
+                ///     Env variable is not set: TELEMETRY_ENABLED
+                ///     2024.06.03 14:19:48.818674 [ 374515 ] {} <Information> SentryWriter: Sending crash reports is disabled
+                lines.emplace_back(data, static_cast<size_t>(breaker.data() - data));
+                last_breaker = breaker;
             }
         }
         else
@@ -60,25 +62,14 @@ std::vector<std::string_view> breakLines(const char * data, size_t & length, con
     /// update remaining
     if (!lines.empty())
     {
-        if (matches == lines.size())
-        {
-            length -= (input.data() - data);
-        }
-        else
-        {
-            assert(!last_breaker.empty());
-            length -= (last_breaker.data() - data);
-
-            /// Rewind input back to last breaker for the following remaining > max_line_length calculation
-            input = last_breaker;
-        }
+        length -= (breaker.data() - data);
     }
 
     /// if remaining length is greater than max_line_length
     /// force the remaining data to a line
     if (length >= max_line_length)
     {
-        lines.emplace_back(input.data(), length);
+        lines.emplace_back(breaker.data(), length);
         length = 0;
     }
 

@@ -1009,10 +1009,8 @@ StorageStream::ShardsToRead StorageStream::getRequiredShardsToRead(ContextPtr co
         /// 1) For non-inmemory keyed storage stream, we always back fill from historical store (e.g. VersionedKV, ChangelogKV)
         /// 2) Do time travel with settings `enable_backfill_from_historical_store = true`
         bool require_back_fill_from_historical = false;
-        if (!isInmemory() && Streaming::isKeyedStorage(dataStreamSemantic()))
-            require_back_fill_from_historical = true;
-        else if (!query_info.seek_to_info->getSeekTo().empty() && settings_ref.enable_backfill_from_historical_store.value)
-            require_back_fill_from_historical = true;
+        if (!isInmemory() && (Streaming::isKeyedStorage(dataStreamSemantic()) || !query_info.seek_to_info->getSeekTo().empty()))
+            require_back_fill_from_historical = settings_ref.enable_backfill_from_historical_store.value;
 
         result.mode = require_back_fill_from_historical ? QueryMode::STREAMING_CONCAT : QueryMode::STREAMING;
     }
@@ -1068,6 +1066,10 @@ bool StorageStream::supportsSubcolumns() const
 
 std::optional<UInt64> StorageStream::totalRows(const Settings & settings) const
 {
+    /// For versioned-kv, we will need read on merge to get correct row count
+    if (!isAppendStorage(dataStreamSemantic()) && settings.compact_kv_stream.value)
+        return {};
+
     std::optional<UInt64> rows;
     for (const auto & stream_shard : stream_shards)
     {
@@ -1090,6 +1092,10 @@ std::optional<UInt64> StorageStream::totalRows(const Settings & settings) const
 
 std::optional<UInt64> StorageStream::totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr context_) const
 {
+    /// For versioned-kv, we will need read on merge to get correct row count
+    if (!isAppendStorage(dataStreamSemantic()) && context_->getSettingsRef().compact_kv_stream.value)
+        return {};
+
     std::optional<UInt64> rows;
     for (const auto & stream_shard : stream_shards)
     {

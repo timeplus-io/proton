@@ -1,3 +1,4 @@
+#include <Common/Exception.h>
 #include <Common/logger_useful.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -18,10 +19,8 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int CANNOT_WRITE_TO_KAFKA;
-extern const int MISSING_ACKNOWLEDGEMENT;
-extern const int INVALID_CONFIG_PARAMETER;
+extern const int KAFKA_PRODUCER_STOPPED;
 extern const int TYPE_MISMATCH;
-extern const int INVALID_SETTING_VALUE;
 }
 
 namespace
@@ -48,7 +47,7 @@ ChunkSharder::ChunkSharder()
     random_sharding = true;
 }
 
-BlocksWithShard ChunkSharder::shard(Block block, Int32 shard_cnt) const
+BlocksWithShard ChunkSharder::shard(Block block, Int32 shard_cnt)
 {
     /// no topics have zero partitions
     assert(shard_cnt > 0);
@@ -124,97 +123,28 @@ IColumn::Selector ChunkSharder::createSelector(Block block, Int32 shard_cnt) con
 }
 
 KafkaSink::KafkaSink(
-    const Kafka * kafka,
+    Kafka & kafka,
     const Block & header,
-    Int32 initial_partition_cnt,
     const ASTPtr & message_key_ast,
-    ContextPtr context,
-    Poco::Logger * logger_,
-    ExternalStreamCounterPtr external_stream_counter_)
+    ExternalStreamCounterPtr external_stream_counter_,
+    ContextPtr context)
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
-    , partition_cnt(initial_partition_cnt)
-    , one_message_per_row(kafka->produceOneMessagePerRow())
-    , logger(logger_)
+    , producer(kafka.getProducer())
+    , topic(kafka.getProducerTopic())
+    , partition_cnt(topic->getPartitionCount())
+    , one_message_per_row(kafka.produceOneMessagePerRow())
+    , topic_refresh_interval_ms(kafka.topicRefreshIntervalMs())
+    , pending_data(context->getSettingsRef().kafka_max_message_size.value)
     , external_stream_counter(external_stream_counter_)
+    , logger(&Poco::Logger::get(fmt::format("{}.{}", kafka.getLoggerName(), producer->name())))
 {
-    /// default values
-    std::vector<std::pair<String, String>> producer_params{
-        {"enable.idempotence", "true"},
-        {"message.timeout.ms", "0" /* infinite */},
-    };
+    /// If the buffer_size (kafka_max_message_size) is reached, the buffer will be forced to flush.
+    wb = std::make_unique<WriteBufferFromKafkaSink>(
+        [this](char * pos, size_t len, size_t total_len) { addMessageToBatch(pos, len, total_len); },
+        [this]() { tryCarryOverPendingData(); },
+        /*buffer_size=*/ context->getSettingsRef().kafka_max_message_size.value);
 
-    static const std::unordered_set<String> allowed_properties{
-        "enable.idempotence",
-        "message.timeout.ms",
-        "queue.buffering.max.messages",
-        "queue.buffering.max.kbytes",
-        "queue.buffering.max.ms",
-        "message.max.bytes",
-        "message.send.max.retries",
-        "retries",
-        "retry.backoff.ms",
-        "retry.backoff.max.ms",
-        "batch.num.messages",
-        "batch.size",
-        "compression.codec",
-        "compression.type",
-        "compression.level",
-        "topic.metadata.refresh.interval.ms",
-    };
-
-    /// customization, overrides default values
-    for (const auto & pair : kafka->properties())
-    {
-        if (allowed_properties.contains(pair.first))
-        {
-            producer_params.emplace_back(pair.first, pair.second);
-            continue;
-        }
-        throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Unsupported property {}", pair.first);
-    }
-
-    /// properies from settings have higher priority
-    producer_params.emplace_back("bootstrap.servers", kafka->brokers());
-    kafka->auth().populateConfigs(producer_params);
-
-    auto * conf = rd_kafka_conf_new();
-    char errstr[512]{'\0'};
-    for (const auto & param : producer_params)
-    {
-        auto ret = rd_kafka_conf_set(conf, param.first.c_str(), param.second.c_str(), errstr, sizeof(errstr));
-        if (ret != RD_KAFKA_CONF_OK)
-        {
-            rd_kafka_conf_destroy(conf);
-            throw Exception(
-                ErrorCodes::INVALID_CONFIG_PARAMETER,
-                "Failed to set kafka config `{}` with value `{}` error={}",
-                param.first,
-                param.second,
-                ret);
-        }
-    }
-
-    rd_kafka_conf_set_opaque(conf, this); /* needed by onMessageDelivery */
-    rd_kafka_conf_set_dr_msg_cb(conf, &KafkaSink::onMessageDelivery);
-
-    size_t value_size = 8;
-    char topic_refresh_interval_ms_value[8]{'\0'}; /// max: 3600000
-    rd_kafka_conf_get(conf, "topic.metadata.refresh.interval.ms", topic_refresh_interval_ms_value, &value_size);
-    Int32 topic_refresh_interval_ms {std::stoi(topic_refresh_interval_ms_value)};
-
-    producer.reset(rd_kafka_new(RD_KAFKA_PRODUCER, conf, errstr, sizeof(errstr)));
-    if (!producer)
-    {
-        // librdkafka will take the ownership of `conf` if `rd_kafka_new` succeeds,
-        // but if it does not, we need to take care of cleaning it up by ourselves.
-        rd_kafka_conf_destroy(conf);
-        throw Exception("Failed to create kafka handle", klog::mapErrorCode(rd_kafka_last_error()));
-    }
-
-    topic.reset(rd_kafka_topic_new(producer.get(), kafka->topic().c_str(), nullptr));
-    wb = std::make_unique<WriteBufferFromKafkaSink>([this](char * pos, size_t len) { addMessageToBatch(pos, len); });
-
-    const auto & data_format = kafka->dataFormat();
+    const auto & data_format = kafka.dataFormat();
     assert(!data_format.empty());
 
     if (message_key_ast)
@@ -229,19 +159,28 @@ KafkaSink::KafkaSink(
     {
         /// The callback allows `IRowOutputFormat` based formats produce one Kafka message per row.
         writer = FormatFactory::instance().getOutputFormat(
-            data_format, *wb, header, context, [this](auto & /*column*/, auto /*row*/) { wb->next(); }, kafka->getFormatSettings(context));
+            data_format, *wb, header, context, [this](auto & /*column*/, auto /*row*/) { wb->markOffset(); wb->next(); }, kafka.getFormatSettings(context));
         if (!dynamic_cast<IRowOutputFormat*>(writer.get()))
-            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Data format `{}` is not a row-based foramt, it cannot be used with `one_message_per_row`", data_format);
+            LOG_WARNING(logger, "Data format `{}` is not a row-based format, `one_message_per_row` setting will not be applied", data_format);
     }
     else
     {
-        writer = FormatFactory::instance().getOutputFormat(data_format, *wb, header, context, {}, kafka->getFormatSettings(context));
+        auto max_rows_per_message = context->getSettingsRef().max_insert_block_size.value;
+        writer = FormatFactory::instance().getOutputFormat(
+            data_format, *wb, header, context, [this, max_rows_per_message](auto & /*column*/, auto /*row*/) {
+                wb->markOffset();
+                if (++rows_in_current_message >= max_rows_per_message)
+                {
+                    external_stream_counter->addToMessagesByRow(1);
+                    wb->next();
+                }
+            }, kafka.getFormatSettings(context));
     }
     writer->setAutoFlush();
 
-    if (kafka->hasCustomShardingExpr())
+    if (kafka.hasCustomShardingExpr())
     {
-        const auto & ast = kafka->shardingExprAst();
+        const auto & ast = kafka.shardingExprAst();
         partitioner = std::make_unique<KafkaStream::ChunkSharder>(buildExpression(header, ast, context), ast->getColumnName());
     }
     else
@@ -249,56 +188,116 @@ KafkaSink::KafkaSink(
 
     /// Polling message deliveries.
     background_jobs.scheduleOrThrowOnError([this, refresh_interval_ms = static_cast<UInt64>(topic_refresh_interval_ms)]() {
+        LOG_INFO(logger, "Start topic partition count refreshing job");
         auto metadata_refresh_stopwatch = Stopwatch();
-
-        while (!is_finished.test())
+        /// Use a small sleep interval to avoid blocking operation for a long just (in case refresh_interval_ms is big).
+        auto sleep_ms = std::min(UInt64(500), refresh_interval_ms);
+        while (true)
         {
-            /// Firstly, poll messages
-            if (auto n = rd_kafka_poll(producer.get(), POLL_TIMEOUT_MS))
-                LOG_TRACE(logger, "polled {} events", n);
+            if (unlikely(producer->isStopped()))
+            {
+                is_finished.test_and_set();
+                LOG_WARNING(logger, "Producer {} has stopped, stopping sink", producer->name());
+            }
 
-            /// Then, fetch topic metadata for partition updates
+            if (is_finished.test())
+                break;
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
+            /// Fetch topic metadata for partition updates
             if (metadata_refresh_stopwatch.elapsedMilliseconds() < refresh_interval_ms)
                 continue;
 
             metadata_refresh_stopwatch.restart();
 
-            auto result {klog::describeTopic(topic.get(), producer.get(), logger)};
-            if (result.err)
+            try
             {
-                LOG_WARNING(logger, "Failed to describe topic, error code: {}", result.err);
-                continue;
+                partition_cnt = topic->getPartitionCount();
             }
-            partition_cnt = result.partitions;
+            catch (...) /// do not break the loop until finished
+            {
+                LOG_WARNING(logger, "Failed to describe topic, error code: {}", getCurrentExceptionMessage(true, true));
+            }
         }
+        LOG_INFO(logger, "Stopped topic partition count refreshing job");
     });
 }
 
-void KafkaSink::addMessageToBatch(char * pos, size_t len)
+/// When this function is called, there could be two scenarios:
+/// 1) len == total_len. That means the whole Chunk (or the whole row, when one_message_per_row is true) can fit into the buffer.
+///    In this case, we just need to create a rd_kafka_message_t, and push it to current_batch.
+///
+/// 2) len < total_len. That means the Chunk (or a row) is too big to fit into the buffer. In this case, the data between
+///    [pos + len, pos + total_len] will be copied into pending_data so that the bufer can accept more data until it gets
+///    complete data. Then it can create a rd_kafka_message_t.
+///
+/// In this way, we limit the size of one single Kafka message, so that it can avoid hitting the max.message.size.
+/// However, it's still possible that, one single row is still too big and it exceeds that limit. There is nothing we can do about it for now.
+void KafkaSink::addMessageToBatch(char * pos, size_t len, size_t total_len)
 {
-    StringRef key = message_key_expr ? keys_for_current_batch[current_batch_row++] : "";
+    auto pending_size = pending_data.size();
 
-    /// Data at pos (which is in the WriteBuffer) will be overwritten, thus it must be kept somewhere else (in `batch_payload`).
-    nlog::ByteVector payload {len};
-    payload.resize(len); /// set the size to the right value
-    memcpy(payload.data(), pos, len);
+    /// There are complete data to consume.
+    if (len > 0)
+    {
+        StringRef key = message_key_expr ? keys_for_current_batch[current_batch_row++] : "";
 
-    current_batch.push_back(rd_kafka_message_t{
-        .partition = next_partition,
-        .payload = payload.data(),
-        .len = len,
-        .key = const_cast<char *>(key.data),
-        .key_len = key.size,
-    });
+        /// Data at pos (which is in the WriteBuffer) will be overwritten, thus it must be kept somewhere else (in `batch_payload`).
+        auto msg_size = pending_size + len;
+        nlog::ByteVector payload{msg_size};
+        payload.resize(msg_size); /// set the size to the right value
+        if (pending_size)
+            memcpy(payload.data(), pending_data.data(), pending_size);
+        memcpy(payload.data() + pending_size, pos, len);
 
-    batch_payload.push_back(std::move(payload));
-    ++state.outstandings;
+        current_batch.push_back(rd_kafka_message_t{
+            .partition = next_partition,
+            .payload = payload.data(),
+            .len = msg_size,
+            .key = const_cast<char *>(key.data),
+            .key_len = key.size,
+            ._private = this,
+        });
+
+        batch_payload.push_back(std::move(payload));
+        ++state.outstandings;
+
+        pending_data.resize(0);
+        pending_size = 0;
+        rows_in_current_message = 0;
+    }
+
+    if (len == total_len)
+        /// Nothing left
+        return;
+
+    /// There are some remaining incomplete data, copy them to pending_data.
+    auto remaining = total_len - len;
+    pending_data.resize(pending_size + remaining);
+    memcpy(pending_data.data() + pending_size, pos + len, remaining);
+
+    external_stream_counter->addToMessagesBySize(1);
+}
+
+void KafkaSink::tryCarryOverPendingData()
+{
+    /// If there are pending data and it can be fit into the buffer, then write the data back to the buffer,
+    /// so that we can use the buffer to limit the message size.
+    /// If the pending data are too big, that means we get a over-size row.
+    if (!pending_data.empty() && pending_data.size() < wb->available())
+    {
+        wb->write(pending_data.data(), pending_data.size());
+        pending_data.resize(0);
+    }
 }
 
 void KafkaSink::consume(Chunk chunk)
 {
     if (!chunk.hasRows())
         return;
+
+    if (unlikely(is_finished.test()))
+        throw Exception(ErrorCodes::KAFKA_PRODUCER_STOPPED, "KafkaSink cannot consume data because producer has stopped, likely the underlying external stream is gone");
 
     auto total_rows = chunk.rows();
     auto block = getHeader().cloneWithColumns(chunk.detachColumns());
@@ -372,13 +371,13 @@ void KafkaSink::consume(Chunk chunk)
 
     /// With `wb->setAutoFlush()`, it makes sure that all messages are generated for the chunk at this point.
     rd_kafka_produce_batch(
-        topic.get(),
+        topic->getHandle(),
         RD_KAFKA_PARTITION_UA,
         RD_KAFKA_MSG_F_FREE | RD_KAFKA_MSG_F_PARTITION | RD_KAFKA_MSG_F_BLOCK,
         current_batch.data(),
         current_batch.size());
 
-    rd_kafka_resp_err_t err {RD_KAFKA_RESP_ERR_NO_ERROR};
+    rd_kafka_resp_err_t err{RD_KAFKA_RESP_ERR_NO_ERROR};
     for (size_t i = 0; i < current_batch.size(); ++i)
     {
         if (current_batch[i].err)
@@ -417,36 +416,39 @@ void KafkaSink::onFinish()
     if (is_finished.test_and_set())
         return;
 
+    LOG_INFO(logger, "Stopping producing messages");
+
     background_jobs.wait();
 
     /// if there are no outstandings, no need to do flushing
-    if (!hasOutstandingMessages())
+    if (outstandingMessages() == 0)
         return;
 
     /// Make sure all outstanding requests are transmitted and handled.
     /// It should not block for ever here, otherwise, it will block proton from stopping the job
     /// or block proton from terminating.
-    if (auto err = rd_kafka_flush(producer.get(), 15000 /* time_ms */); err)
+    if (auto err = rd_kafka_flush(producer->getHandle(), 15000 /* time_ms */); err)
         LOG_ERROR(logger, "Failed to flush kafka producer, error={}", rd_kafka_err2str(err));
 
     if (auto err = lastSeenError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
         LOG_ERROR(logger, "Failed to send messages, last_seen_error={}", rd_kafka_err2str(err));
 
     /// if flush does not return an error, the delivery report queue should be empty
-    if (hasOutstandingMessages())
+    if (outstandingMessages() > 0)
         LOG_ERROR(logger, "Not all messsages are sent successfully, expected={} actual={}", outstandings(), acked());
 }
 
-void KafkaSink::onMessageDelivery(rd_kafka_t * /* producer */, const rd_kafka_message_t * msg, void * opaque)
+void KafkaSink::onMessageDelivery(rd_kafka_t * /* producer */, const rd_kafka_message_t * msg, void *  /*opaque*/)
 {
-    static_cast<KafkaSink *>(opaque)->onMessageDelivery(msg);
+    auto * sink = static_cast<KafkaSink *>(msg->_private);
+    sink->onMessageDelivery(msg->err);
 }
 
-void KafkaSink::onMessageDelivery(const rd_kafka_message_t * msg)
+void KafkaSink::onMessageDelivery(rd_kafka_resp_err_t err)
 {
-    if (msg->err)
+    if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
     {
-        state.last_error_code.store(msg->err);
+        state.last_error_code.store(err);
         ++state.error_count;
     }
     else
@@ -466,13 +468,16 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
             throw Exception(
                 klog::mapErrorCode(err), "Failed to send messages, error_cout={} last_error={}", errorCount(), rd_kafka_err2str(err));
 
-        if (!hasOutstandingMessages())
+        auto outstanding_msgs = outstandingMessages();
+        if (outstanding_msgs == 0)
             break;
+
+        LOG_INFO(logger, "Waiting for {} outstandings on checkpointing", outstanding_msgs);
 
         if (is_finished.test())
         {
             /// for a final check, it should not wait for too long
-            if (auto err = rd_kafka_flush(producer.get(), 15000 /* time_ms */); err)
+            if (auto err = rd_kafka_flush(producer->getHandle(), 15000 /* time_ms */); err)
                 throw Exception(klog::mapErrorCode(err), "Failed to flush kafka producer, error={}", rd_kafka_err2str(err));
 
             if (auto err = lastSeenError(); err != RD_KAFKA_RESP_ERR_NO_ERROR)
@@ -482,7 +487,7 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
                     errorCount(),
                     rd_kafka_err2str(err));
 
-            if (hasOutstandingMessages())
+            if (outstandingMessages() > 0)
                 throw Exception(
                     ErrorCodes::CANNOT_WRITE_TO_KAFKA,
                     "Not all messsages are sent successfully, expected={} actual={}",
@@ -495,7 +500,7 @@ void KafkaSink::checkpoint(CheckpointContextPtr context)
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     } while (true);
 
-    resetState();
+    state.reset();
     IProcessor::checkpoint(context);
 }
 

@@ -1,11 +1,10 @@
-#include "FileLog.h"
-#include "FileLogSource.h"
-#include "fileLastModifiedTime.h"
-
 #include <Interpreters/Context.h>
 #include <NativeLog/Base/Stds.h>
 #include <NativeLog/Record/Record.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
+#include <Storages/ExternalStream/Log/FileLog.h>
+#include <Storages/ExternalStream/Log/FileLogSource.h>
+#include <Storages/ExternalStream/Log/fileLastModifiedTime.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/Streaming/storageUtil.h>
@@ -22,9 +21,8 @@ extern const int INVALID_SETTING_VALUE;
 extern const int CANNOT_FSTAT;
 }
 
-FileLog::FileLog(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_)
-    : StorageExternalStreamImpl(std::move(settings_))
-    , storage_id(storage->getStorageID())
+FileLog::FileLog(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context)
+    : StorageExternalStreamImpl(storage, std::move(settings_), context)
     , timestamp_regex(std::make_unique<re2::RE2>(settings->timestamp_regex.value))
     , linebreaker_regex(std::make_unique<re2::RE2>(settings->row_delimiter.value))
     , log(&Poco::Logger::get("External-FileLog"))
@@ -106,16 +104,18 @@ Pipe FileLog::read(
     assert(query_info.seek_to_info);
     auto saved_start_timestamp = query_info.seek_to_info->getSeekPoints()[0];
 
+    bool table_query = context->getSettings().query_mode.value == "table";
+
     /// SeekToInfo parsed with UTC timezone, we should re-parse with local timezone.
     /// FIXME better implementation
     if (query_info.seek_to_info->getSeekToType() == SeekToType::RELATIVE_TIME)
         saved_start_timestamp = SeekToInfo::parse(query_info.seek_to_info->getSeekTo(), false).second[0];
 
     return Pipe(std::make_shared<FileLogSource>(
-        this, std::move(header), std::move(context), max_block_size, saved_start_timestamp, searchForCandidates(), log));
+        this, std::move(header), std::move(context), max_block_size, saved_start_timestamp, searchForCandidates(table_query), log));
 }
 
-FileLogSource::FileContainer FileLog::searchForCandidates()
+FileLogSource::FileContainer FileLog::searchForCandidates(bool table_query)
 {
     FileLogSource::FileContainer candidates;
 
@@ -132,7 +132,13 @@ FileLogSource::FileContainer FileLog::searchForCandidates()
             if (file_regex->Match(filename, 0, filename.size(), re2::RE2::ANCHOR_BOTH, nullptr, 0))
             {
                 auto last_modified = lastModifiedTime(dir_entry.path());
-                if (last_modified >= start_timestamp)
+                if (table_query)
+                {
+                    /// Historic query: use all files to query
+                    candidates.emplace(last_modified, std::filesystem::canonical(dir_entry.path()));
+                }
+                else if (last_modified >= start_timestamp)
+                    /// Streaming query: use the latest file to tail
                     candidates.emplace(last_modified, std::filesystem::canonical(dir_entry.path()));
 
                 break;
@@ -140,7 +146,7 @@ FileLogSource::FileContainer FileLog::searchForCandidates()
         }
     }
 
-    if (start_timestamp == nlog::LATEST_SN)
+    if (!table_query && start_timestamp == nlog::LATEST_SN)
     {
         /// Tail the log last file
         /// Remove all other files except the last one

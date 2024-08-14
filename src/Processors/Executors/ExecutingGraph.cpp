@@ -6,6 +6,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Processors/PlaceholdProcessor.h>
+#include <Processors/Streaming/ISource.h>
 
 #include <Poco/JSON/Object.h>
 #include <Poco/JSON/Array.h>
@@ -463,9 +464,11 @@ void ExecutingGraph::deserialize(ReadBuffer & rb) const
 
             for (; recovered_ports_iter != recovered_ports.end();)
             {
-                /// Use `isCompatibleHeader` instead of `blocksHaveEqualStructure`,
-                /// since the recovered columns are always non-const columns after serializing/deserializing for now
-                if (!isCompatibleHeader(new_ports_iter->getHeader(), recovered_ports_iter->getHeader()))
+                /// Use `isCompatibleHeaderWithoutComparingColumnNames` instead of `blocksHaveEqualStructure`,
+                /// After deserialization from disk, the header name may be different than the current one in-memory
+                /// (for instance constant column names) for query state checkpoint. So skip column name comparision
+                /// when validting the head structure
+                if (!isCompatibleHeaderWithoutComparingColumnNames(new_ports_iter->getHeader(), recovered_ports_iter->getHeader()))
                     throw Exception(
                         ErrorCodes::RECOVER_CHECKPOINT_FAILED,
                         "Recovered streaming processor logic_id={} name={} doesn't have same input structure as the new planned processor. expected "
@@ -539,6 +542,17 @@ void ExecutingGraph::initCheckpointNodes()
     }
 
     assert(!checkpoint_trigger_nodes.empty() && !checkpoint_ack_nodes.empty());
+}
+
+bool ExecutingGraph::hasProcessedNewDataSinceLastCheckpoint() const noexcept
+{
+    for (const auto * node : checkpoint_trigger_nodes)
+    {
+        const auto * streaming_source = dynamic_cast<const Streaming::ISource *>(node->processor);
+        if (streaming_source->hasProcessedNewDataSinceLastCheckpoint())
+            return true;
+    }
+    return false;
 }
 
 void ExecutingGraph::triggerCheckpoint(CheckpointContextPtr ckpt_ctx)

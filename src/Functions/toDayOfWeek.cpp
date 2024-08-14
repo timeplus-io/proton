@@ -1,8 +1,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/DateTimeTransforms.h>
-#include <Functions/FunctionCustomWeekToSomething.h>
 #include <DataTypes/DataTypesNumber.h>
-
+#include <Functions/FunctionCustomWeekToSomething.h>
 
 namespace DB
 {

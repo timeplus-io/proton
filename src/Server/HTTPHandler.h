@@ -90,7 +90,7 @@ private:
     IServer & server;
     Poco::Logger * log;
 
-    /// It is the name of the server that will be sent in an http-header x-proton-server-display-Name.
+    /// It is the name of the server that will be sent in an http-header x-timeplus-server-display-Name.
     String server_display_name;
 
     CurrentMetrics::Increment metric_increment{CurrentMetrics::HTTPConnection};

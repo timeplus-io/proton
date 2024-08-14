@@ -9,7 +9,7 @@ class TwoLevelStringHashMap : public TwoLevelStringHashTable<StringHashMapSubMap
 public:
     using Key = StringRef;
     using Self = TwoLevelStringHashMap;
-    using Base = TwoLevelStringHashTable<StringHashMapSubMaps<TMapped, Allocator>, StringHashMap<TMapped, Allocator>>;
+    using Base = TwoLevelStringHashTable<StringHashMapSubMaps<TMapped, Allocator>, ImplTable<TMapped, Allocator>>;
     using LookupResult = typename Base::LookupResult;
 
     using Base::Base;
@@ -43,11 +43,11 @@ public:
         }
     }
 
-    template <typename Func>
+    template <typename Func, bool prefetch = false>
     void ALWAYS_INLINE mergeToViaEmplace(Self & that, Func && func)
     {
         for (auto i = 0u; i < this->NUM_BUCKETS; ++i)
-            this->impls[i].mergeToViaEmplace(that.impls[i], func);
+            this->impls[i].template mergeToViaEmplace<Func, prefetch>(that.impls[i], std::move(func));
     }
     /// proton: ends.
 

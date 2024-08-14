@@ -50,6 +50,13 @@ public:
 
     bool hasEvenlyDistributedRead() const override { return storage ? storage->hasEvenlyDistributedRead() : false; }
 
+    std::optional<UInt64> totalRows(const Settings & settings) const override { return storage ? storage->totalRows(settings) : std::nullopt; }
+
+    std::optional<UInt64> totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr context_) const override
+    {
+        return storage ? storage->totalRowsByPartitionPredicate(query_info, context_) : std::nullopt;
+    }
+
     TableFunctionDescriptionPtr getStreamingTableFunctionDescription() const { return table_func_desc; }
 
     /// Whether it reads data from streaming store or historical store

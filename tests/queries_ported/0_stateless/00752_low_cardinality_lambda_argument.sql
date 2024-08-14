@@ -12,3 +12,5 @@ insert into test_array(resources_host) values (['a']);
 select sleep(3);
 SELECT array_map(i -> [resources_host[i]], array_enumerate(resources_host)) FROM test_array;
 drop stream if exists test_array;
+
+SELECT array_map(x -> (x + (array_map(y -> ((x + y) + to_low_cardinality(1)), [])[1])), []);

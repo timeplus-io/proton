@@ -87,7 +87,7 @@ private:
     SERDE RefCountDataBlockList<LightChunk> source_chunks;
 
     Port::Data input_data;
-    std::list<Chunk> output_chunks;
+    ChunkList output_chunks;
 
     /// Index blocks by key columns
     SERDE HashMapsTemplate<std::unique_ptr<RowRefWithRefCount<LightChunk>>> index;

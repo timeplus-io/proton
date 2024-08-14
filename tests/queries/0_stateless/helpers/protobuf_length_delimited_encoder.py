@@ -65,16 +65,15 @@ class FormatSchemaSplitted:
             self.schemaname = self.schemaname + ".proto"
         self.message_type = splitted[1]
 
-
 def decode(input, output, format_schema, format):
     if not type(format_schema) is FormatSchemaSplitted:
         format_schema = FormatSchemaSplitted(format_schema)
     msgindex = 1
     if format == "protobuflist":
-        read_varint(input)  # envelope msg size
+        read_varint(input) # envelope msg size
     while True:
         if format == "protobuflist":
-            read_varint(input)  # wiretype and field id of nested msg
+            read_varint(input) # wiretype and field id of nested msg
         sz = read_varint(input)
         if sz is None:
             break
@@ -100,7 +99,6 @@ def decode(input, output, format_schema, format):
                 raise RuntimeError("protoc returned code " + str(proc.returncode))
         output.flush()
         msgindex = msgindex + 1
-
 
 def encode(input, output, format_schema, format):
     if not type(format_schema) is FormatSchemaSplitted:
@@ -137,7 +135,7 @@ def encode(input, output, format_schema, format):
                 raise RuntimeError("protoc returned code " + str(proc.returncode))
         if format == "protobuflist":
             field_number = 1
-            wire_type = 2  # length-delimited
+            wire_type = 2 # length-delimited
             write_varint(buf, (field_number << 3) | wire_type)
         write_varint(buf, len(msgbin))
         buf.write(msgbin)
@@ -145,7 +143,6 @@ def encode(input, output, format_schema, format):
         write_varint(output, len(buf.getvalue()))
     output.write(buf.getvalue())
     output.flush()
-
 
 def decode_and_check(input, output, format_schema, format):
     input_data = input.read()

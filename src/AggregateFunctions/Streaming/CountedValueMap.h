@@ -59,7 +59,7 @@ public:
     using Map = std::conditional_t<std::is_nothrow_copy_constructible<Compare>::value, BTreeMap, STDMap>;
     using size_type = typename Map::size_type;
 
-    CountedValueMap() = default;
+    CountedValueMap() : CountedValueMap(1000) { }
     explicit CountedValueMap(size_type max_size_, Compare && comp = Compare{})
         : max_size(max_size_), arena(std::make_unique<CountedValueArena<T>>()), m(std::move(comp))
     {

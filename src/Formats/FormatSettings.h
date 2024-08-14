@@ -96,6 +96,7 @@ struct FormatSettings
         bool allow_missing_fields = false;
         String string_column_pattern;
         UInt64 output_rows_in_file = 1;
+        bool null_as_default = false;
     } avro;
 
     String bool_true_representation = "true";
@@ -178,6 +179,8 @@ struct FormatSettings
 
     struct
     {
+        bool input_flatten_google_wrappers = false;
+        bool output_nullables_with_google_wrappers = false;
         /**
          * Some buffers (kafka / rabbit) split the rows internally using callback,
          * and always send one row per message, so we can push there formats
@@ -186,6 +189,7 @@ struct FormatSettings
          * because Protobuf without delimiters is not generally useful.
          */
         bool allow_multiple_rows_without_delimiter = false;
+        bool skip_fields_with_unsupported_types_in_schema_inference = false;
     } protobuf;
 
     struct
@@ -269,6 +273,7 @@ struct FormatSettings
     struct
     {
         EnumComparingMode enum_comparing_mode = EnumComparingMode::BY_VALUES;
+        bool skip_fields_with_unsupported_types_in_schema_inference = false;
     } capn_proto;
 
     struct
