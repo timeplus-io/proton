@@ -33,6 +33,7 @@ echo "Geo-locating all the IP addresses in bulk using the IPInfo API (https://ip
 ip_count=$(wc "$DEST"/$export_ipinfo | awk '{print $1}')
 echo "   Total IP addresses that will be looked up in bulk using $DEST/$export_ipinfo: $ip_count." 
 cat "$DEST"/$export_ipinfo | ipinfo -c > "$DEST"/"$import_ipinfo"
+head "$DEST"/"$import_ipinfo"
 echo "   Geo-lookup of $ip_count IP addresses written to file: $DEST/$import_ipinfo."
 echo "   Complete!"
 
