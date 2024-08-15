@@ -59,6 +59,10 @@ public:
 
     std::string getWindowDescription() const;
 
+    /// proton: starts. Generates the one-line formatting string (without aliases) for the current function and assigns it to code_name.
+    void makeCurrentCodeName();
+    /// proton: ends.
+
 protected:
     void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
     void appendColumnNameImpl(WriteBuffer & ostr) const override;

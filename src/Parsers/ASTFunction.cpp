@@ -641,6 +641,20 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
     }
 }
 
+/// proton: starts.
+void ASTFunction::makeCurrentCodeName()
+{
+    if (!code_name.empty())
+        return;
+
+    WriteBufferFromOwnString buf;
+    IAST::FormatSettings settings(buf, /*one_line=*/true);
+    FormatState state;
+    formatImplWithoutAlias(settings, state, FormatStateStacked());
+    code_name = buf.str();
+}
+/// proton: ends.
+
 String getFunctionName(const IAST * ast)
 {
     String res;
