@@ -146,8 +146,7 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
                 if (!func_alias_name->empty())
                 {
                     /// Always show original function
-                    if (func.code_name.empty())
-                        func.code_name = DB::serializeAST(func);
+                    func.makeCurrentCodeName();
 
                     func.name = *func_alias_name;
                     if (!func.arguments)

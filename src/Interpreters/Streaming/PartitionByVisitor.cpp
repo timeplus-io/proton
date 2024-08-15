@@ -55,7 +55,7 @@ void PartitionByMatcher::visit(ASTPtr & ast, Data & data)
 
             /// Convert function to window function.
             /// Always show original function
-            node_func->code_name = DB::serializeAST(*node_func);
+            node_func->makeCurrentCodeName();
             node_func->window_definition = data.win_define->clone();
             node_func->is_window_function = true;
         }
