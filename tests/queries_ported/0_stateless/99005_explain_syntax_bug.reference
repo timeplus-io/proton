@@ -1,0 +1,6 @@
+SELECT
+  count() OVER (PARTITION BY i) AS x, lag(x)
+FROM
+  changelog(`99005_stream`, i)
+GROUP BY
+  i
