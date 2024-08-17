@@ -2803,8 +2803,10 @@ const StorageS3Settings & Context::getStorageS3Settings() const
 
 void Context::checkCanBeDropped(const String & database, const String & table, const size_t & size, const size_t & max_size_to_drop) const
 {
-    if (!max_size_to_drop || size <= max_size_to_drop)
+    /// proton: starts. add setting `force_drop_big_stream`
+    if (!max_size_to_drop || size <= max_size_to_drop || getSettingsRef().force_drop_big_stream)
         return;
+    /// proton: ends.
 
     fs::path force_file(getFlagsPath() + "force_drop_table");
     bool force_file_exists = fs::exists(force_file);
@@ -2827,11 +2829,13 @@ void Context::checkCanBeDropped(const String & database, const String & table, c
     String max_size_to_drop_str = formatReadableSizeWithDecimalSuffix(max_size_to_drop);
     throw Exception(ErrorCodes::STREAM_SIZE_EXCEEDS_MAX_DROP_SIZE_LIMIT,
                     "Stream or Partition in {}.{} was not dropped.\nReason:\n"
-                    "1. Size ({}) is greater than max_[table/partition]_size_to_drop ({})\n"
+                    "1. Size ({}) is greater than max_[stream/partition]_size_to_drop ({})\n"
                     "2. File '{}' intended to force DROP {}\n"
+                    "3. Setting 'force_drop_big_stream' is not set\n"
                     "How to fix this:\n"
                     "1. Either increase (or set to zero) max_[stream/partition]_size_to_drop in server config\n"
-                    "2. Either create forcing file {} and make sure that proton has write permission for it.\n"
+                    "2. Either create forcing file {} and make sure that timeplus DBMS has write permission for it.\n"
+                    "3. Either add setting 'force_drop_big_stream=true'\n"
                     "Example:\nsudo touch '{}' && sudo chmod 666 '{}'",
                     backQuoteIfNeed(database), backQuoteIfNeed(table),
                     size_str, max_size_to_drop_str,
