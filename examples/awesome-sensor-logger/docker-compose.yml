@@ -1,24 +1,24 @@
 services:
   proton:
-     image: ghcr.io/timeplus-io/proton:latest
-     pull_policy: always
-     ports:
-       - 3218:3218 #http port for JDBC driver, default streaming mode
-       - 8123:8123 #http port for JDBC driver, default batch mode
-       - 8463:8463 #tcp port for go driver or grafana plugin
-     volumes:
-      - ./init_sql:/docker-entrypoint-initdb.d  
-     healthcheck:
-        test: wget --no-verbose --tries=1 --spider http://localhost:8123/?query=show+create+phone || exit 1
-        interval: 2s
-        timeout: 10s
-        retries: 3
-        start_period: 10s
+    image: d.timeplus.com/timeplus-io/proton:latest
+    pull_policy: always
+    ports:
+      - 3218:3218 #http port for JDBC driver, default streaming mode
+      - 8123:8123 #http port for JDBC driver, default batch mode
+      - 8463:8463 #tcp port for go driver or grafana plugin
+    volumes:
+      - ./init_sql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/?query=show+create+phone || exit 1
+      interval: 2s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   proxy:
-    image: timeplus/sensor-logger-proxy
+    image: docker.timeplus.com/timeplus/sensor-logger-proxy
     ports:
-       - 8000:3000 #expose internal port 3000 as 8000, avoiding conflicts with Grafana. This will forward HTTP POST to proton:3218
+      - 8000:3000 #expose internal port 3000 as 8000, avoiding conflicts with Grafana. This will forward HTTP POST to proton:3218
     environment:
       HOST: proton
       STREAM: phone

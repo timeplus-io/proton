@@ -1,7 +1,7 @@
 name: proton-fraud-detection
 services:
   proton:
-    image: ghcr.io/timeplus-io/proton:latest
+    image: d.timeplus.com/timeplus-io/proton:latest
     pull_policy: always
     healthcheck:
       test: ["CMD", "curl", "http://localhost:3218/proton/ping"]
@@ -11,7 +11,7 @@ services:
       start_period: 10s
 
   online-payment-data:
-    image: timeplus/fraud:2cfdfbc
+    image: docker.timeplus.com/timeplus/fraud:2cfdfbc
     pull_policy: always
     environment:
       PROTON_HOST: proton

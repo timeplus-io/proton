@@ -1,7 +1,6 @@
 services:
-
   proton:
-    image: ghcr.io/timeplus-io/proton:latest
+    image: d.timeplus.com/timeplus-io/proton:latest
     pull_policy: always
     ports:
       - 8463:8463
@@ -13,12 +12,12 @@ services:
       interval: 5s
       timeout: 10s
       retries: 3
-      start_period: 10s  
-      
+      start_period: 10s
+
   hn_stream:
     build:
-      context: .  
-    image: timeplus/hackernews_bytewax:latest
+      context: .
+    image: docker.timeplus.com/timeplus/hackernews_bytewax:latest
     environment:
       - PROTON_HOST=proton
     depends_on:

@@ -1,7 +1,7 @@
 name: coinbase
 services:
   proton:
-    image: ghcr.io/timeplus-io/proton:latest
+    image: d.timeplus.com/timeplus-io/proton:latest
     pull_policy: always
     ports:
       - "3218:3218" # HTTP Streaming
@@ -22,7 +22,7 @@ services:
       - "4195:4195"
 
   init-pipeline:
-    image: ghcr.io/timeplus-io/proton:latest
+    image: d.timeplus.com/timeplus-io/proton:latest
     command:
       - sh
       - -c
