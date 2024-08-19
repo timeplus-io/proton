@@ -317,10 +317,10 @@ StorageMergeTree::write(const ASTPtr & /*query*/, const StorageMetadataPtr & met
 void StorageMergeTree::checkTableCanBeDropped(ContextPtr context_) const
 {
     IStorage::checkTableCanBeDropped(context_);
-/// proton: ends.
 
     auto table_id = getStorageID();
-    getContext()->checkTableCanBeDropped(table_id.database_name, table_id.table_name, getTotalActiveSizeInBytes());
+    context_->checkTableCanBeDropped(table_id.database_name, table_id.table_name, getTotalActiveSizeInBytes());
+/// proton: ends.
 }
 
 void StorageMergeTree::drop()
