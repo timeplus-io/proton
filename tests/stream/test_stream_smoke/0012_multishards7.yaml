@@ -473,7 +473,7 @@ tests:
             wait: 1
             query: |
               create stream if not exists test13_multishard_7(id int, val int) settings shards=3, sharding_expr='to_int(id)';
-
+          
           - client: python
             query_id: '1364'
             depends_on_stream: test13_multishard_7
@@ -498,9 +498,115 @@ tests:
             wait: 3
             query: |
               drop stream if exists test13_multishard_7;
-
+    
     expected_results:
       - query_id: '1364'
         expected_results:
           - [70, 70]
           - [70, 140]
+
+  - id: 65
+    tags:
+      - multishards
+      - append_only
+      - distinct_aggr
+      - issue_425
+    name: fix incorrect result on distinct aggr
+    description: fix incorrect result on distinct aggr
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_multishard_7;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_multishard_7(id int, val int) settings shards=3, sharding_expr='to_int(id)';
+          
+          - client: python
+            query_id: '1365'
+            depends_on_stream: test13_multishard_7
+            query_type: stream
+            query: select sum_distinct(val), sum(val) from test13_multishard_7;
+
+          - client: python
+            query_type: table
+            depends_on: '1365'
+            wait: 3
+            query: insert into test13_multishard_7(id, val) values(3, 30), (4, 40)
+
+          - client: python
+            query_type: table
+            kill: '1365'
+            kill_wait: 3
+            wait: 3
+            query: insert into test13_multishard_7(id, val) values(1, 30), (7, 41)
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test13_multishard_7;
+    
+    expected_results:
+      - query_id: '1365'
+        expected_results:
+          - [70, 70]
+          - [111, 141]
+
+  - id: 66
+    tags:
+      - multishards
+      - append_only
+      - distinct_aggr
+      - issue_425
+    name: fix incorrect result on distinct aggr
+    description: fix incorrect result on distinct aggr
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              drop stream if exists test13_multishard_7;
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: |
+              create stream if not exists test13_multishard_7(id int, val int) settings shards=3, sharding_expr='to_int(id)';
+          
+          - client: python
+            query_id: '1366'
+            depends_on_stream: test13_multishard_7
+            query_type: stream
+            query: select sum_distinct(val), sum(val) from test13_multishard_7;
+
+          - client: python
+            query_type: table
+            depends_on: '1366'
+            wait: 3
+            query: insert into test13_multishard_7(id, val) values(3, 30), (4, 40)
+
+          - client: python
+            query_type: table
+            kill: '1366'
+            kill_wait: 3
+            wait: 3
+            query: insert into test13_multishard_7(id, val) values(5, 300), (7, 400)
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              drop stream if exists test13_multishard_7;
+    
+    expected_results:
+      - query_id: '1366'
+        expected_results:
+          - [70, 70]
+          - [770, 770]

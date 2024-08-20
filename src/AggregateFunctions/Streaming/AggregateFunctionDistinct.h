@@ -23,8 +23,12 @@ struct AggregateFunctionDistinctSingleNumericData
     /// Optimized, put the new coming data that the set does not have into extra_data_since_last_finalize.
     std::vector<T> extra_data_since_last_finalize;
 
-    // If has new data
+    /// If has new data
     bool has_new_data = false;
+
+    /// A blank mark that's used to decide which kind is the current block. 
+    /// 0 means data block, 1 means a special data block whose extra data has been deleted, 2 means a blank block.
+    int is_blank = 0;
 
     void add(const IColumn ** columns, size_t /* columns_num */, size_t row_num, Arena *)
     {
@@ -36,35 +40,86 @@ struct AggregateFunctionDistinctSingleNumericData
             has_new_data = true;
             extra_data_since_last_finalize.emplace_back(vec[row_num]);
         }
+        if (is_blank == 2)
+        {
+            is_blank = 1;
+        }
     }
 
     void merge(const Self & rhs, Arena *)
     {
-        if (rhs.extra_data_since_last_finalize.size())
+        /// mark out the blank blocks
+        if (is_blank != 2 && !extra_data_since_last_finalize.size())
         {
-            for (const auto & data : rhs.extra_data_since_last_finalize)
-            {
-                auto [_, inserted] = set.insert(data);
-                if (inserted)
-                    extra_data_since_last_finalize.emplace_back(data);
-            }
+            is_blank = 2;
         }
-        /**
-         * Under what circumstances will extra_data_since_last_finalize.size() be zero but has_new_data be true?
-         * Only in the first round of inserting data into multi-shard stream.
-         * For example: create stream test(id int, value int) settings shards=3;
-         *              select count_distinct(value) from test;
-         *              insert into test(id, value) values (3, 30), (4, 40);
-         * when execute the 'insert' command, it will trigger merge function, because in Aggregator::mergeSingleLevelDataImpl(...),
-         * there is a varible 'non_empty_data' to indicate if the other shard has data, and then call merge function.
-         * Since we are in the first round of inserting data, the other shard has no data, then in the insertResultIntoImpl function,
-         * the extra_data_since_last_finalize will be cleared.But actually, we do have new data.
-         * So it is just a special case and will just happen once.
-         */
-        else if (rhs.has_new_data)
+        /// if the block is in 1 mode, merge the set and delete the data both existed in the current extra data and the set.
+        if (rhs.is_blank == 1)
         {
+            for (const auto & data : rhs.set)
+            {
+                double value = data.getValue();
+                auto it = std::find(extra_data_since_last_finalize.begin(), extra_data_since_last_finalize.end(), value);
+                if (it != extra_data_since_last_finalize.end())
+                {
+                    extra_data_since_last_finalize.erase(it);
+                }      
+                
+            }
+            if (rhs.extra_data_since_last_finalize.size())
+            {
+                for (const auto & data : rhs.extra_data_since_last_finalize)
+                {
+                    auto [_, inserted] = set.insert(data);
+                    if (inserted)
+                    {
+                        extra_data_since_last_finalize.emplace_back(data);
+                    }
+                }
+            }
             set.merge(rhs.set);
         }
+        else
+        {
+            if (rhs.extra_data_since_last_finalize.size())
+            {
+                for (const auto & data : rhs.extra_data_since_last_finalize)
+                {
+                    auto [_, inserted] = set.insert(data);
+                    if (inserted)
+                    {
+                        extra_data_since_last_finalize.emplace_back(data);
+                    }
+                }
+            }
+            /**
+            * Under what circumstances will extra_data_since_last_finalize.size() be zero but has_new_data be true?
+            * Only in the first round of inserting data into multi-shard stream.
+            * For example: create stream test(id int, value int) settings shards=3;
+            *              select count_distinct(value) from test;
+            *              insert into test(id, value) values (3, 30), (4, 40);
+            * when execute the 'insert' command, it will trigger merge function, because in Aggregator::mergeSingleLevelDataImpl(...),
+            * there is a varible 'non_empty_data' to indicate if the other shard has data, and then call merge function.
+            * Since we are in the first round of inserting data, the other shard has no data, then in the insertResultIntoImpl function,
+            * the extra_data_since_last_finalize will be cleared.But actually, we do have new data.
+            * So it is just a special case and will just happen once.
+            */
+            else if (rhs.has_new_data)
+            {
+                for (const auto & data : rhs.set)
+                {
+                    double value = data.getValue();
+                    auto it = std::find(extra_data_since_last_finalize.begin(), extra_data_since_last_finalize.end(), value);
+                    if (it != extra_data_since_last_finalize.end()) 
+                    {
+                        extra_data_since_last_finalize.erase(it);
+                    }      
+                    
+                }
+                set.merge(rhs.set);
+            }
+        }
+               
     }
 
     void serialize(WriteBuffer & buf) const
@@ -103,28 +158,67 @@ struct AggregateFunctionDistinctGenericData
     /// Optimized, put the new coming data that the set does not have into extra_data_since_last_finalize.
     std::vector<StringRef> extra_data_since_last_finalize;
     bool has_new_data = false;
-
+    int is_blank = 0;
 
     void merge(const Self & rhs, Arena * arena)
     {
         Set::LookupResult it;
         bool inserted;
-
-        if (rhs.extra_data_since_last_finalize.size())
+        if (is_blank != 2 && !extra_data_since_last_finalize.size()) {
+            is_blank = 2;
+        }
+        if (rhs.is_blank == 1)
         {
-            for (const auto & data : rhs.extra_data_since_last_finalize)
+            for (const auto & data : rhs.set)
             {
-                set.emplace(ArenaKeyHolder{data, *arena}, it, inserted);
-                if (inserted)
+                double value = data.getValue();
+                auto it = std::find(extra_data_since_last_finalize.begin(), extra_data_since_last_finalize.end(), value);
+                if (it != extra_data_since_last_finalize.end())
                 {
-                    assert(it);
-                    extra_data_since_last_finalize.emplace_back(it->getValue());
+                    extra_data_since_last_finalize.erase(it);
+                }      
+                
+            }
+            if (rhs.extra_data_since_last_finalize.size())
+            {
+                for (const auto & data : rhs.extra_data_since_last_finalize)
+                {
+                    auto [_, inserted] = set.insert(data);
+                    if (inserted)
+                    {
+                        extra_data_since_last_finalize.emplace_back(data);
+                    }
                 }
             }
-        }
-        else if (rhs.has_new_data)
-        {
             set.merge(rhs.set);
+        }
+        else
+        {
+            if (rhs.extra_data_since_last_finalize.size())
+            {
+                for (const auto & data : rhs.extra_data_since_last_finalize)
+                {
+                    auto [_, inserted] = set.insert(data);
+                    if (inserted)
+                    {
+                        extra_data_since_last_finalize.emplace_back(data);
+                    }
+                }
+            }
+            else if (rhs.has_new_data)
+            {
+                for (const auto & data : rhs.set)
+                {
+                    double value = data.getValue();
+                    auto it = std::find(extra_data_since_last_finalize.begin(), extra_data_since_last_finalize.end(), value);
+                    if (it != extra_data_since_last_finalize.end()) 
+                    {
+                        extra_data_since_last_finalize.erase(it);
+                    }      
+                    
+                }
+                set.merge(rhs.set);
+            }
         }
     }
 
@@ -168,10 +262,14 @@ struct AggregateFunctionDistinctSingleGenericData : public AggregateFunctionDist
         bool inserted;
         auto key_holder = getKeyHolder<is_plain_column>(*columns[0], row_num, *arena);
         set.emplace(key_holder, it, inserted);
+        
         if (inserted)
         {
             assert(it);
             has_new_data = true;
+            if (is_blank == 2) {
+                is_blank = 1;
+            }
             extra_data_since_last_finalize.emplace_back(it->getValue());
         }
     }
@@ -211,6 +309,9 @@ struct AggregateFunctionDistinctMultipleGenericData : public AggregateFunctionDi
         {
             assert(it);
             has_new_data = true;
+            if (is_blank == 2) {
+                is_blank = 1;
+            }
             extra_data_since_last_finalize.emplace_back(it->getValue());
         }
     }
@@ -301,10 +402,10 @@ public:
         else
             nested_func->insertResultInto(getNestedPlace(place), to, arena);
 
-        /// proton: starts. Next finalization will use extra data, used in streaming global aggregation query.
-        // this->data(place).use_extra_data = true;
+        /// only the blank block's extra data will be cleaned
         this->data(place).extra_data_since_last_finalize.clear();
-        /// proton: ends.
+        this->data(place).is_blank = 2;
+
     }
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
