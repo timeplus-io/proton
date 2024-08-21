@@ -28,6 +28,8 @@ void registerTableFunctions()
 
     registerTableFunctionDictionary(factory);
 
+    registerTableFunctionExplain(factory);
+
     /// proton: starts
     Streaming::registerTableFunctionHop(factory);
     Streaming::registerTableFunctionTumble(factory);

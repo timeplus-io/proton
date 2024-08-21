@@ -88,10 +88,19 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     {
         /// Nothing to parse
     }
+    else if (select_only)
+    {
+        if (select_p.parse(pos, query, expected))
+            explain_query->setExplainedQuery(std::move(query));
+        else
+            return false;
+    }
     else if (select_p.parse(pos, query, expected) ||
         create_p.parse(pos, query, expected) ||
         insert_p.parse(pos, query, expected))
+    {
         explain_query->setExplainedQuery(std::move(query));
+    }
     else
         return false;
 
