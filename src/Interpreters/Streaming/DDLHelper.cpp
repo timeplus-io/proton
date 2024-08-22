@@ -175,9 +175,9 @@ void prepareEngine(ASTCreateQuery & create, ContextPtr ctx)
     if (expr.empty())
     {
         /// Default sharding expr:
-        /// 1) If has primary keys, default is `weak_hash32(<primary_keys>)`
+        /// 1) If has multiple shards and has primary keys, default is `weak_hash32(<primary_keys>)`
         /// 2) Otherwise, default is `rand()`
-        if (create.storage->primary_key)
+        if (shards > 1 && create.storage->primary_key)
             sharding_expr = makeASTFunction("weak_hash32", create.storage->primary_key->clone());
         else
             sharding_expr = makeASTFunction("rand");
