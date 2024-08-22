@@ -11,6 +11,9 @@
 #include <Parsers/ASTAssignment.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTColumnsMatcher.h>
+#include <Parsers/ASTExplainQuery.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTColumnsTransformers.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
@@ -33,6 +36,7 @@
 
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ParserCreateQuery.h>
+#include <Parsers/ParserExplainQuery.h>
 
 #include <Parsers/queryToString.h>
 
@@ -53,6 +57,52 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+/*
+ * Build an AST with the following structure:
+ *
+ * ```
+ * SelectWithUnionQuery (children 1)
+ *  ExpressionList (children 1)
+ *   SelectQuery (children 2)
+ *    ExpressionList (children 1)
+ *     Asterisk
+ *    TablesInSelectQuery (children 1)
+ *     TablesInSelectQueryElement (children 1)
+ *      TableExpression (children 1)
+ *       Function <...>
+ * ```
+ */
+static ASTPtr buildSelectFromTableFunction(const std::shared_ptr<ASTFunction> & ast_function)
+{
+    auto result_select_query = std::make_shared<ASTSelectWithUnionQuery>();
+
+    {
+        auto select_ast = std::make_shared<ASTSelectQuery>();
+        select_ast->setExpression(ASTSelectQuery::Expression::SELECT, std::make_shared<ASTExpressionList>());
+        select_ast->select()->children.push_back(std::make_shared<ASTAsterisk>());
+
+        auto list_of_selects = std::make_shared<ASTExpressionList>();
+        list_of_selects->children.push_back(select_ast);
+
+        result_select_query->children.push_back(std::move(list_of_selects));
+        result_select_query->list_of_selects = result_select_query->children.back();
+
+        {
+            auto tables = std::make_shared<ASTTablesInSelectQuery>();
+            select_ast->setExpression(ASTSelectQuery::Expression::TABLES, tables);
+            auto tables_elem = std::make_shared<ASTTablesInSelectQueryElement>();
+            auto table_expr = std::make_shared<ASTTableExpression>();
+            tables->children.push_back(tables_elem);
+            tables_elem->table_expression = table_expr;
+            tables_elem->children.push_back(table_expr);
+
+            table_expr->table_function = ast_function;
+            table_expr->children.push_back(table_expr->table_function);
+        }
+    }
+
+    return result_select_query;
+}
 
 bool ParserArray::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
@@ -140,22 +190,35 @@ bool ParserParenthesisExpression::parseImpl(Pos & pos, ASTPtr & node, Expected &
 
 bool ParserSubquery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint)
 {
-    ASTPtr select_node;
     ParserSelectWithUnionQuery select;
+    ParserExplainQuery explain;
 
     if (pos->type != TokenType::OpeningRoundBracket)
         return false;
     ++pos;
 
-    if (!select.parse(pos, select_node, expected))
+    ASTPtr result_node = nullptr;
+
+    if (ASTPtr select_node; select.parse(pos, select_node, expected))
+    {
+        result_node = std::move(select_node);
+    }
+    else if (ASTPtr explain_node; explain.parse(pos, explain_node, expected))
+    {
+        /// Replace SELECT * FROM (EXPLAIN SELECT ...) with SELECT * FROM viewExplain(EXPLAIN SELECT ...)
+        result_node = buildSelectFromTableFunction(makeASTFunction("viewExplain", explain_node));
+    }
+    else
+    {
         return false;
+    }
 
     if (pos->type != TokenType::ClosingRoundBracket)
         return false;
     ++pos;
 
     node = std::make_shared<ASTSubquery>();
-    node->children.push_back(select_node);
+    node->children.push_back(result_node);
     return true;
 }
 

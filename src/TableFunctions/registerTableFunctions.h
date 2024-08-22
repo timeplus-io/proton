@@ -26,6 +26,8 @@ void registerTableFunctionView(TableFunctionFactory & factory);
 
 void registerTableFunctionDictionary(TableFunctionFactory & factory);
 
+void registerTableFunctionExplain(TableFunctionFactory & factory);
+
 /// proton: starts
 namespace Streaming
 {
