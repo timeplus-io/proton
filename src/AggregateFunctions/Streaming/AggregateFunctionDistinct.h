@@ -10,7 +10,16 @@ namespace DB
 {
 namespace Streaming
 {
-
+enum class IsBlank
+{
+    /// A block that contains new data, whose data will not be deleted.
+    DataBlock,
+    /// A block that appears in special occasion, as the first insertion didn't call merge, the extra_data of this block will be deleted.
+    /// So we'll need to mark the block and merge all the data in set to check if there's an overlap
+    LessExtraDataBlock,
+    /// A block that is newly created for merge, its extra_data must have been cleared.
+    BlankBlock,
+};
 template <typename T>
 struct AggregateFunctionDistinctSingleNumericData
 {
@@ -23,117 +32,63 @@ struct AggregateFunctionDistinctSingleNumericData
     /// Optimized, put the new coming data that the set does not have into extra_data_since_last_finalize.
     std::vector<T> extra_data_since_last_finalize;
 
-    /// If has new data
-    bool has_new_data = false;
+    std::vector<uintptr_t> related_places;
 
-    /// A blank mark that's used to decide which kind is the current block. 
-    /// 0 means data block, 1 means a special data block whose extra data has been deleted, 2 means a blank block.
-    int is_blank = 0;
-
+    /// not used
+    bool use_extra_data = false;
     void add(const IColumn ** columns, size_t /* columns_num */, size_t row_num, Arena *)
     {
         const auto & vec = assert_cast<const ColumnVector<T> &>(*columns[0]).getData();
         auto [_, inserted] = set.insert(vec[row_num]);
-        has_new_data = false;
         if (inserted)
         {
-            has_new_data = true;
             extra_data_since_last_finalize.emplace_back(vec[row_num]);
-        }
-        if (is_blank == 2)
-        {
-            is_blank = 1;
         }
     }
 
-    void merge(const Self & rhs, Arena *)
+    void merge(const Self & rhs, Arena *, ConstAggregateDataPtr __restrict place)
     {
-        /// mark out the blank blocks
-        if (is_blank != 2 && !extra_data_since_last_finalize.size())
+        for (const auto & data : extra_data_since_last_finalize)
         {
-            is_blank = 2;
-        }
-        /// if the block is in 1 mode, merge the set and delete the data both existed in the current extra data and the set.
-        if (rhs.is_blank == 1)
-        {
-            for (const auto & data : rhs.set)
-            {
-                double value = data.getValue();
-                auto it = std::find(extra_data_since_last_finalize.begin(), extra_data_since_last_finalize.end(), value);
+            if ((rhs.set).find(data)){
+                auto it = std::find(extra_data_since_last_finalize.begin(), extra_data_since_last_finalize.end(), data);
                 if (it != extra_data_since_last_finalize.end())
                 {
                     extra_data_since_last_finalize.erase(it);
-                }      
-                
-            }
-            if (rhs.extra_data_since_last_finalize.size())
-            {
-                for (const auto & data : rhs.extra_data_since_last_finalize)
-                {
-                    auto [_, inserted] = set.insert(data);
-                    if (inserted)
-                    {
-                        extra_data_since_last_finalize.emplace_back(data);
-                    }
-                }
-            }
-            set.merge(rhs.set);
+                } 
+            }        
         }
-        else
+
+        for (const auto & data : rhs.extra_data_since_last_finalize)
         {
-            if (rhs.extra_data_since_last_finalize.size())
-            {
-                for (const auto & data : rhs.extra_data_since_last_finalize)
-                {
-                    auto [_, inserted] = set.insert(data);
-                    if (inserted)
-                    {
-                        extra_data_since_last_finalize.emplace_back(data);
-                    }
-                }
-            }
-            /**
-            * Under what circumstances will extra_data_since_last_finalize.size() be zero but has_new_data be true?
-            * Only in the first round of inserting data into multi-shard stream.
-            * For example: create stream test(id int, value int) settings shards=3;
-            *              select count_distinct(value) from test;
-            *              insert into test(id, value) values (3, 30), (4, 40);
-            * when execute the 'insert' command, it will trigger merge function, because in Aggregator::mergeSingleLevelDataImpl(...),
-            * there is a varible 'non_empty_data' to indicate if the other shard has data, and then call merge function.
-            * Since we are in the first round of inserting data, the other shard has no data, then in the insertResultIntoImpl function,
-            * the extra_data_since_last_finalize will be cleared.But actually, we do have new data.
-            * So it is just a special case and will just happen once.
-            */
-            else if (rhs.has_new_data)
-            {
-                for (const auto & data : rhs.set)
-                {
-                    double value = data.getValue();
-                    auto it = std::find(extra_data_since_last_finalize.begin(), extra_data_since_last_finalize.end(), value);
-                    if (it != extra_data_since_last_finalize.end()) 
-                    {
-                        extra_data_since_last_finalize.erase(it);
-                    }      
-                    
-                }
-                set.merge(rhs.set);
-            }
+            auto [_, inserted] = set.insert(data);
+            if (inserted)
+                extra_data_since_last_finalize.emplace_back(data);
         }
-               
+    
+        set.merge(rhs.set);
+        if ((rhs.extra_data_since_last_finalize).size())
+        {
+            uintptr_t temp = reinterpret_cast<uintptr_t>(place);
+            auto find_place = std::find(related_places.begin(), related_places.end(),temp);
+            if (find_place == related_places.end())
+                related_places.emplace_back(temp);
+        }
+
     }
 
     void serialize(WriteBuffer & buf) const
     {
         set.write(buf);
         writeVectorBinary(extra_data_since_last_finalize, buf);
-        writeBoolText(has_new_data, buf);
+        writeBoolText(use_extra_data, buf);
     }
 
     void deserialize(ReadBuffer & buf, Arena *)
     {
         set.read(buf);
         readVectorBinary(extra_data_since_last_finalize, buf);
-        readBoolText(has_new_data, buf);
+        readBoolText(use_extra_data, buf);
     }
 
     MutableColumns getArguments(const DataTypes & argument_types) const
@@ -143,6 +98,7 @@ struct AggregateFunctionDistinctSingleNumericData
 
         for (const auto & data : extra_data_since_last_finalize)
             argument_columns[0]->insert(data);
+        
 
         return argument_columns;
     }
@@ -157,69 +113,41 @@ struct AggregateFunctionDistinctGenericData
     /// Resolve multiple finalizations problem for streaming global aggreagtion query
     /// Optimized, put the new coming data that the set does not have into extra_data_since_last_finalize.
     std::vector<StringRef> extra_data_since_last_finalize;
-    bool has_new_data = false;
-    int is_blank = 0;
-
-    void merge(const Self & rhs, Arena * arena)
+    std::vector<uintptr_t> related_places;
+    bool use_extra_data = false;
+    void merge(const Self & rhs, Arena * arena, ConstAggregateDataPtr __restrict place)
     {
         Set::LookupResult it;
         bool inserted;
-        if (is_blank != 2 && !extra_data_since_last_finalize.size()) {
-            is_blank = 2;
-        }
-        if (rhs.is_blank == 1)
+       
+        for (const auto & data : extra_data_since_last_finalize)
         {
-            for (const auto & data : rhs.set)
-            {
-                double value = data.getValue();
-                auto it = std::find(extra_data_since_last_finalize.begin(), extra_data_since_last_finalize.end(), value);
-                if (it != extra_data_since_last_finalize.end())
+            if ((rhs.set).find(data)){
+                auto next = std::find(extra_data_since_last_finalize.begin(), extra_data_since_last_finalize.end(), data);
+                if (next != extra_data_since_last_finalize.end())
                 {
-                    extra_data_since_last_finalize.erase(it);
-                }      
-                
-            }
-            if (rhs.extra_data_since_last_finalize.size())
-            {
-                for (const auto & data : rhs.extra_data_since_last_finalize)
-                {
-                    auto [_, inserted] = set.insert(data);
-                    if (inserted)
-                    {
-                        extra_data_since_last_finalize.emplace_back(data);
-                    }
-                }
-            }
-            set.merge(rhs.set);
+                    extra_data_since_last_finalize.erase(next);
+                } 
+            } 
+
         }
-        else
+
+        for (const auto & data : rhs.extra_data_since_last_finalize)
         {
-            if (rhs.extra_data_since_last_finalize.size())
+            set.emplace(ArenaKeyHolder{data, *arena}, it, inserted);
+            if (inserted)
             {
-                for (const auto & data : rhs.extra_data_since_last_finalize)
-                {
-                    auto [_, inserted] = set.insert(data);
-                    if (inserted)
-                    {
-                        extra_data_since_last_finalize.emplace_back(data);
-                    }
-                }
-            }
-            else if (rhs.has_new_data)
-            {
-                for (const auto & data : rhs.set)
-                {
-                    double value = data.getValue();
-                    auto it = std::find(extra_data_since_last_finalize.begin(), extra_data_since_last_finalize.end(), value);
-                    if (it != extra_data_since_last_finalize.end()) 
-                    {
-                        extra_data_since_last_finalize.erase(it);
-                    }      
-                    
-                }
-                set.merge(rhs.set);
+                assert(it);
+                extra_data_since_last_finalize.emplace_back(it->getValue());
             }
         }
+        set.merge(rhs.set);
+        uintptr_t temp = reinterpret_cast<uintptr_t>(place);
+        auto find_place = std::find(related_places.begin(), related_places.end(),temp);
+        if (find_place == related_places.end())
+            related_places.emplace_back(temp);
+
+        
     }
 
     void serialize(WriteBuffer & buf) const
@@ -232,7 +160,7 @@ struct AggregateFunctionDistinctGenericData
         for (const auto & data : extra_data_since_last_finalize)
             writeStringBinary(data, buf);
 
-        writeBoolText(has_new_data, buf);
+        writeBoolText(use_extra_data, buf);
     }
 
     void deserialize(ReadBuffer & buf, Arena * arena)
@@ -248,7 +176,7 @@ struct AggregateFunctionDistinctGenericData
         for (size_t i = 0; i < extra_size; ++i)
             extra_data_since_last_finalize[i] = readStringBinaryInto(*arena, buf);
 
-        readBoolText(has_new_data, buf);
+        readBoolText(use_extra_data, buf);
     }
 };
 
@@ -257,7 +185,6 @@ struct AggregateFunctionDistinctSingleGenericData : public AggregateFunctionDist
 {
     void add(const IColumn ** columns, size_t /* columns_num */, size_t row_num, Arena * arena)
     {
-        has_new_data = false;
         Set::LookupResult it;
         bool inserted;
         auto key_holder = getKeyHolder<is_plain_column>(*columns[0], row_num, *arena);
@@ -266,10 +193,6 @@ struct AggregateFunctionDistinctSingleGenericData : public AggregateFunctionDist
         if (inserted)
         {
             assert(it);
-            has_new_data = true;
-            if (is_blank == 2) {
-                is_blank = 1;
-            }
             extra_data_since_last_finalize.emplace_back(it->getValue());
         }
     }
@@ -299,7 +222,6 @@ struct AggregateFunctionDistinctMultipleGenericData : public AggregateFunctionDi
             value.size += cur_ref.size;
         }
 
-        has_new_data = false;
         Set::LookupResult it;
         bool inserted;
         auto key_holder = SerializedKeyHolder{value, *arena};
@@ -308,10 +230,6 @@ struct AggregateFunctionDistinctMultipleGenericData : public AggregateFunctionDi
         if (inserted)
         {
             assert(it);
-            has_new_data = true;
-            if (is_blank == 2) {
-                is_blank = 1;
-            }
             extra_data_since_last_finalize.emplace_back(it->getValue());
         }
     }
@@ -371,7 +289,7 @@ public:
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
-        this->data(place).merge(this->data(rhs), arena);
+        this->data(place).merge(this->data(rhs), arena, rhs);
         nested_func->merge(getNestedPlace(place), getNestedPlace(rhs), arena);
     }
 
@@ -402,10 +320,26 @@ public:
         else
             nested_func->insertResultInto(getNestedPlace(place), to, arena);
 
-        /// only the blank block's extra data will be cleaned
-        this->data(place).extra_data_since_last_finalize.clear();
-        this->data(place).is_blank = 2;
 
+        /// clear all the extra data in related blocks
+        for (auto & item : this->data(place).related_places) {
+            this->data(reinterpret_cast<AggregateDataPtr>(item)).extra_data_since_last_finalize.clear();
+        }
+
+        /// Add the temp data to sum so that the distinct outcome can accumulate
+        if(this->data(place).related_places.size()){
+            nested_func->addBatchSinglePlace(0, arguments[0]->size(), getNestedPlace(reinterpret_cast<AggregateDataPtr>(this->data(place).related_places[0])), arguments_raw.data(), arena);
+        }
+
+        if (this->data(place).extra_data_since_last_finalize.size())
+        {
+            this->data(place).extra_data_since_last_finalize.clear();
+        }
+
+        if (this->data(place).related_places.size())
+        {
+            this->data(place).related_places.clear();
+        }    
     }
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
