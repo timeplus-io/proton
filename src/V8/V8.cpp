@@ -1,5 +1,6 @@
 #include <Interpreters/Context.h>
 #include <V8/V8.h>
+#include <base/getMemoryAmount.h>
 #include <Common/logger_useful.h>
 
 namespace DB
@@ -86,8 +87,9 @@ v8::Isolate * V8::createIsolate()
     v8::Isolate::CreateParams isolate_params;
     isolate_params.array_buffer_allocator = allocator.get();
 
-    if (v8_max_heap_bytes > 0)
-        isolate_params.constraints.set_max_old_generation_size_in_bytes(v8_max_heap_bytes);
+    v8_max_heap_bytes = static_cast<size_t>(getMemoryAmountOrZero() * 0.6);
+    isolate_params.constraints.ConfigureDefaultsFromHeapSize(0, v8_max_heap_bytes);
+    isolate_params.constraints.set_max_old_generation_size_in_bytes(v8_max_heap_bytes);
 
     auto * isolate = v8::Isolate::New(isolate_params);
     assert(isolate);

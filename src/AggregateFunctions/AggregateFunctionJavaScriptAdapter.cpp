@@ -23,6 +23,11 @@ JavaScriptBlueprint::JavaScriptBlueprint(const String & name, const String & sou
 {
     /// FIXME, create isolate from V8::V8 global isolates pool
     v8::Isolate::CreateParams isolate_params;
+
+    auto v8_max_heap_bytes = static_cast<size_t>(getMemoryAmountOrZero() * 0.6);
+    isolate_params.constraints.ConfigureDefaultsFromHeapSize(0, v8_max_heap_bytes);
+    isolate_params.constraints.set_max_old_generation_size_in_bytes(v8_max_heap_bytes);
+
     isolate_params.array_buffer_allocator_shared
         = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
     isolate = std::unique_ptr<v8::Isolate, IsolateDeleter>(v8::Isolate::New(isolate_params), IsolateDeleter());

@@ -332,14 +332,12 @@ void validateFunctionSource(
     std::function<void(v8::Isolate *, v8::Local<v8::Context> &, v8::TryCatch &, v8::Local<v8::Value> &)> func)
 {
     /// FIXME, switch to global isolate allocation / pooling
-    UInt64 max_heap_size_in_bytes = 10 * 1024 * 1024;
-    UInt64 max_old_gen_size_in_bytes = 8 * 1024 * 1024;
-
     v8::Isolate::CreateParams isolate_params;
     isolate_params.array_buffer_allocator_shared
         = std::shared_ptr<v8::ArrayBuffer::Allocator>(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
-    isolate_params.constraints.ConfigureDefaultsFromHeapSize(0, max_heap_size_in_bytes);
-    isolate_params.constraints.set_max_old_generation_size_in_bytes(max_old_gen_size_in_bytes);
+    auto v8_max_heap_bytes = static_cast<size_t>(getMemoryAmountOrZero() * 0.6);
+    isolate_params.constraints.ConfigureDefaultsFromHeapSize(0, v8_max_heap_bytes);
+    isolate_params.constraints.set_max_old_generation_size_in_bytes(v8_max_heap_bytes);
 
     auto isolate_deleter = [](v8::Isolate * isolate_) { isolate_->Dispose(); };
     std::unique_ptr<v8::Isolate, void (*)(v8::Isolate *)> isolate_ptr(v8::Isolate::New(isolate_params), isolate_deleter);
@@ -423,26 +421,65 @@ void validateStatelessFunctionSource(const std::string & func_name, const std::s
     validateFunctionSource(func_name, source, validate_function);
 }
 
+std::string getHeapStatisticsString(v8::HeapStatistics & heap_statistics)
+{
+    return fmt::format(
+        "Total Heap Size: {}\t"
+        "Total Heap Size Executable: {}\t"
+        "Total Physical Size: {}\t"
+        "Total Available Size: {}\t"
+        "Used Heap Size: {}\t"
+        "Heap Size Limit: {}\t"
+        "Malloced Memory: {}\t"
+        "External Memory: {}\t"
+        "Peak Malloced Memory: {}\t"
+        "Does Zap Garbage: {}\t"
+        "Number Of Native Contexts: {}\t"
+        "Number Of Detached Contexts: {}\t"
+        "Total Global Handles Size: {}\t"
+        "Used Global Handles Size: {}",
+        heap_statistics.total_heap_size(),
+        heap_statistics.total_heap_size_executable(),
+        heap_statistics.total_physical_size(),
+        heap_statistics.total_available_size(),
+        heap_statistics.used_heap_size(),
+        heap_statistics.heap_size_limit(),
+        heap_statistics.malloced_memory(),
+        heap_statistics.external_memory(),
+        heap_statistics.peak_malloced_memory(),
+        heap_statistics.does_zap_garbage(),
+        heap_statistics.number_of_native_contexts(),
+        heap_statistics.number_of_detached_contexts(),
+        heap_statistics.total_global_handles_size(),
+        heap_statistics.used_global_handles_size());
+}
+
 void checkHeapLimit(v8::Isolate * isolate, size_t max_v8_heap_size_in_bytes)
 {
-    v8::Locker locker(isolate);
-    v8::Isolate::Scope isolate_scope(isolate);
-    v8::HandleScope handle_scope(isolate);
-    v8::HandleScope scope(isolate);
     v8::HeapStatistics heap_statistics;
-    isolate->GetHeapStatistics(&heap_statistics);
+
+    /// Lock only for getting heap statistics
+    {
+        v8::Locker locker(isolate);
+        v8::Isolate::Scope isolate_scope(isolate);
+        v8::HandleScope handle_scope(isolate);
+        v8::HandleScope scope(isolate);
+        isolate->GetHeapStatistics(&heap_statistics);
+    }
 
     auto used = heap_statistics.used_heap_size();
-    auto total = heap_statistics.total_available_size();
+    auto total = heap_statistics.heap_size_limit();
     auto limit = std::min(static_cast<size_t>(0.9 * total), max_v8_heap_size_in_bytes);
     if (used > limit)
         throw Exception(
             ErrorCodes::UDF_MEMORY_THRESHOLD_EXCEEDED,
-            "Current V8 heap size used={} bytes, total={} bytes, javascript_max_memory_bytes={}, exceed the limit={} bytes",
+            "Current V8 heap size used={} bytes, total={} bytes, javascript_max_memory_bytes={}, exceed the limit={} bytes, V8 heap "
+            "stat={{{}}}",
             used,
             total,
             max_v8_heap_size_in_bytes,
-            limit);
+            limit,
+            V8::getHeapStatisticsString(heap_statistics));
 }
 }
 }
