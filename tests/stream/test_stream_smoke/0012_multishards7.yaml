@@ -478,20 +478,29 @@ tests:
             query_id: '1364'
             depends_on_stream: test13_multishard_7
             query_type: stream
-            query: select sum_distinct(val), sum(val) from test13_multishard_7;
+            query: |
+              select sum_distinct(val), sum(val) from test13_multishard_7;
 
           - client: python
             query_type: table
             depends_on: '1364'
             wait: 3
-            query: insert into test13_multishard_7(id, val) values(1, 30), (1, 40)
+            query: |
+              insert into test13_multishard_7(id, val) values(1, 30), (1, 40)
 
+          - client: python
+            query_type: table
+            wait: 3
+            query: |
+              insert into test13_multishard_7(id, val) values(2, 30), (2, 50), (1, 40)
+          
           - client: python
             query_type: table
             kill: '1364'
             kill_wait: 3
             wait: 3
-            query: insert into test13_multishard_7(id, val) values(2, 30), (1, 40)
+            query: |
+              insert into test13_multishard_7(id, val) values(3, 50), (3, 60), (4, 70)
 
           - client: python
             query_type: table
@@ -503,7 +512,8 @@ tests:
       - query_id: '1364'
         expected_results:
           - [70, 70]
-          - [70, 140]
+          - [120, 190]
+          - [250, 370]
 
   - id: 65
     tags:
@@ -537,14 +547,19 @@ tests:
             query_type: table
             depends_on: '1365'
             wait: 3
-            query: insert into test13_multishard_7(id, val) values(3, 30), (4, 40)
+            query: insert into test13_multishard_7(id, val) values(1, 30), (1, 40)
+
+          - client: python
+            query_type: table
+            wait: 3
+            query: insert into test13_multishard_7(id, val) values(1, 300), (2, 400)
 
           - client: python
             query_type: table
             kill: '1365'
             kill_wait: 3
             wait: 3
-            query: insert into test13_multishard_7(id, val) values(1, 30), (7, 41)
+            query: insert into test13_multishard_7(id, val) values(1, 30), (2, 40)
 
           - client: python
             query_type: table
@@ -556,7 +571,8 @@ tests:
       - query_id: '1365'
         expected_results:
           - [70, 70]
-          - [111, 141]
+          - [770, 770]
+          - [770, 840]
 
   - id: 66
     tags:
@@ -590,14 +606,14 @@ tests:
             query_type: table
             depends_on: '1366'
             wait: 3
-            query: insert into test13_multishard_7(id, val) values(3, 30), (4, 40)
+            query: insert into test13_multishard_7(id, val) values(1, 30), (2, 40), (3, 60)
 
           - client: python
             query_type: table
             kill: '1366'
             kill_wait: 3
             wait: 3
-            query: insert into test13_multishard_7(id, val) values(5, 300), (7, 400)
+            query: insert into test13_multishard_7(id, val) values(1, 30), (1, 40), (1, 60), (2, 40), (3, 40)
 
           - client: python
             query_type: table
@@ -608,5 +624,5 @@ tests:
     expected_results:
       - query_id: '1366'
         expected_results:
-          - [70, 70]
-          - [770, 770]
+          - [130, 130]
+          - [130, 340]
