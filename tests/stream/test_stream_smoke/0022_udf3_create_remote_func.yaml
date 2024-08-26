@@ -91,7 +91,8 @@ tests:
               URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/'
               AUTH_METHOD 'auth_header'
               AUTH_HEADER 'auth'
-              AUTH_KEY 'proton';
+              AUTH_KEY 'proton'
+              EXECUTION_TIMEOUT 60000;
           - client: python
             query_id: udf-30-1
             query_end_timer: 7

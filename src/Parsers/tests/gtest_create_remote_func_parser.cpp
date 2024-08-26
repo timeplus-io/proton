@@ -41,7 +41,7 @@ TEST(ParserCreateRemoteFunctionQuery, UDFNoHeaderMethod)
     EXPECT_EQ(
         remote_func_settings->as<ASTLiteral>()->value.safeGet<String>(),
         "https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/");
-    EXPECT_TRUE(remote_func_settings->children.empty());
+    EXPECT_TRUE(remote_func_settings->children.size() == 2);
 }
 
 TEST(ParserCreateRemoteFunctionQuery, UDFHeaderMethodIsNone)
@@ -68,7 +68,7 @@ TEST(ParserCreateRemoteFunctionQuery, UDFHeaderMethodIsNone)
     EXPECT_EQ(
         remote_func_settings->as<ASTLiteral>()->value.safeGet<String>(),
         "https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/");
-    EXPECT_EQ(remote_func_settings->children.size(), 1);
+    EXPECT_EQ(remote_func_settings->children.size(), 2);
     EXPECT_EQ(remote_func_settings->children[0]->as<ASTLiteral>()->value.safeGet<String>(), "none"); // Auth method
 }
 
@@ -78,7 +78,8 @@ TEST(ParserCreateRemoteFunctionQuery, UDFHeaderMethodIsAuthHeader)
                    "URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/'"
                    "AUTH_METHOD 'auth_header'"
                    "AUTH_HEADER 'auth'"
-                   "AUTH_KEY 'proton'";
+                   "AUTH_KEY 'proton'"
+                   "EXECUTION_TIMEOUT 10000";
     ParserCreateFunctionQuery parser;
     ASTPtr ast = parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0);
     ASTCreateFunctionQuery * create = ast->as<ASTCreateFunctionQuery>();
@@ -99,10 +100,11 @@ TEST(ParserCreateRemoteFunctionQuery, UDFHeaderMethodIsAuthHeader)
     EXPECT_EQ(
         remote_func_settings->as<ASTLiteral>()->value.safeGet<String>(),
         "https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/");
-    EXPECT_EQ(remote_func_settings->children.size(), 3);
+    EXPECT_EQ(remote_func_settings->children.size(), 4);
     EXPECT_EQ(remote_func_settings->children[0]->as<ASTLiteral>()->value.safeGet<String>(), "auth_header"); /// Auth method
     EXPECT_EQ(remote_func_settings->children[1]->as<ASTLiteral>()->value.safeGet<String>(), "auth"); /// auth_header
     EXPECT_EQ(remote_func_settings->children[2]->as<ASTLiteral>()->value.safeGet<String>(), "proton"); /// auth key
+    EXPECT_EQ(remote_func_settings->children[3]->as<ASTLiteral>()->value.safeGet<UInt64>(), 10000u);
 }
 
 

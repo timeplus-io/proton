@@ -81,6 +81,7 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
             settings.ostr << fmt::format("AUTH_HEADER '{}'\n", function_core->children[1]->as<ASTLiteral>()->value.safeGet<String>());
             settings.ostr << fmt::format("AUTH_KEY '{}'\n", function_core->children[2]->as<ASTLiteral>()->value.safeGet<String>());
         }
+        settings.ostr << fmt::format("EXECUTION_TIMEOUT {}", function_core->children.back()->as<ASTLiteral>()->value.safeGet<UInt64>());
         return;
     }
     /// proton: ends
@@ -167,6 +168,8 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
                 auth_context->set("key_value", function_core->children[2]->as<ASTLiteral>()->value.safeGet<String>());
                 inner_func->set("auth_context", auth_context);
             }
+            auto execution_timeout = function_core->children.back()->as<ASTLiteral>()->value.safeGet<UInt64>();
+            inner_func->set("command_execution_timeout", execution_timeout);
         }
         func->set("function", inner_func);
         /// Remote function don't have source, return early.

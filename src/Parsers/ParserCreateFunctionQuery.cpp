@@ -40,11 +40,13 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     ParserKeyword s_auth_method("AUTH_METHOD");
     ParserKeyword s_auth_header("AUTH_HEADER");
     ParserKeyword s_auth_key("AUTH_KEY");
+    ParserKeyword s_execution_timeout("EXECUTION_TIMEOUT");
     ParserLiteral value;
     ASTPtr url;
     ASTPtr auth_method;
     ASTPtr auth_header;
     ASTPtr auth_key;
+    ASTPtr execution_timeout;
     ParserArguments arguments_p;
     ParserDataType return_p;
     ParserStringLiteral js_src_p;
@@ -166,6 +168,20 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
             {
                 throw Exception("AUTH_METHOD must be 'none' or 'auth_header'", ErrorCodes::UNKNOWN_FUNCTION);
             }
+        }
+        else
+        {
+            url->children.push_back(std::make_shared<ASTLiteral>(Field{String("none")}));
+        }
+        if (s_execution_timeout.ignore(pos, expected))
+        {
+            if(!value.parse(pos, execution_timeout, expected))
+                return false;
+            url->children.push_back(std::move(execution_timeout));
+        }
+        else
+        {
+            url->children.push_back(std::make_shared<ASTLiteral>(Field{UInt64(60000)}));
         }
         function_core = std::move(url);
     }

@@ -255,6 +255,7 @@ createUserDefinedExecutableFunction(ContextPtr context, const std::string & name
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid url for remote UDF, msg: {}", e.message());
         }
         cfg->command_read_timeout_milliseconds = config.getUInt64(key_in_config + ".command_read_timeout", 10000);
+        cfg->command_execution_timeout_milliseconds = config.getUInt64(key_in_config + ".command_execution_timeout", 10000);
         cfg->auth_method = std::move(auth_method);
         cfg->auth_context = std::move(auth_ctx);
     };
