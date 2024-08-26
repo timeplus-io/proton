@@ -10,16 +10,6 @@ namespace DB
 {
 namespace Streaming
 {
-enum class IsBlank
-{
-    /// A block that contains new data, whose data will not be deleted.
-    DataBlock,
-    /// A block that appears in special occasion, as the first insertion didn't call merge, the extra_data of this block will be deleted.
-    /// So we'll need to mark the block and merge all the data in set to check if there's an overlap
-    LessExtraDataBlock,
-    /// A block that is newly created for merge, its extra_data must have been cleared.
-    BlankBlock,
-};
 template <typename T>
 struct AggregateFunctionDistinctSingleNumericData
 {
@@ -41,35 +31,34 @@ struct AggregateFunctionDistinctSingleNumericData
         const auto & vec = assert_cast<const ColumnVector<T> &>(*columns[0]).getData();
         auto [_, inserted] = set.insert(vec[row_num]);
         if (inserted)
-        {
             extra_data_since_last_finalize.emplace_back(vec[row_num]);
-        }
+    
     }
 
-    void merge(const Self & rhs, Arena *, ConstAggregateDataPtr __restrict place)
+    void merge(const Self & rhs, Arena *)
     {
-        for (const auto & data : extra_data_since_last_finalize)
+        /// Deduplicate owned extra data based on rhs
+        for (auto it = extra_data_since_last_finalize.begin(); it != extra_data_since_last_finalize.end();)
         {
-            if ((rhs.set).find(data)){
-                auto it = std::find(extra_data_since_last_finalize.begin(), extra_data_since_last_finalize.end(), data);
-                if (it != extra_data_since_last_finalize.end())
-                {
-                    extra_data_since_last_finalize.erase(it);
-                } 
-            }        
+            if (rhs.set.find(*it) != rhs.set.end())
+                extra_data_since_last_finalize.erase(it);
+            else
+                ++it;
         }
 
+        /// Merge and deduplicate rhs' extra data
         for (const auto & data : rhs.extra_data_since_last_finalize)
         {
             auto [_, inserted] = set.insert(data);
             if (inserted)
                 extra_data_since_last_finalize.emplace_back(data);
         }
-    
+
         set.merge(rhs.set);
+
         if ((rhs.extra_data_since_last_finalize).size())
         {
-            uintptr_t temp = reinterpret_cast<uintptr_t>(place);
+            uintptr_t temp = reinterpret_cast<uintptr_t>(&rhs);
             auto find_place = std::find(related_places.begin(), related_places.end(),temp);
             if (find_place == related_places.end())
                 related_places.emplace_back(temp);
@@ -115,23 +104,20 @@ struct AggregateFunctionDistinctGenericData
     std::vector<StringRef> extra_data_since_last_finalize;
     std::vector<uintptr_t> related_places;
     bool use_extra_data = false;
-    void merge(const Self & rhs, Arena * arena, ConstAggregateDataPtr __restrict place)
+    void merge(const Self & rhs, Arena * arena)
     {
         Set::LookupResult it;
         bool inserted;
-       
-        for (const auto & data : extra_data_since_last_finalize)
+        /// Deduplicate owned extra data based on rhs
+        for (auto next = extra_data_since_last_finalize.begin(); next != extra_data_since_last_finalize.end();)
         {
-            if ((rhs.set).find(data)){
-                auto next = std::find(extra_data_since_last_finalize.begin(), extra_data_since_last_finalize.end(), data);
-                if (next != extra_data_since_last_finalize.end())
-                {
-                    extra_data_since_last_finalize.erase(next);
-                } 
-            } 
-
+            if (rhs.set.find(*next) != rhs.set.end())
+                extra_data_since_last_finalize.erase(next);
+            else
+                ++next;
         }
 
+        /// Merge and deduplicate rhs' extra data
         for (const auto & data : rhs.extra_data_since_last_finalize)
         {
             set.emplace(ArenaKeyHolder{data, *arena}, it, inserted);
@@ -141,8 +127,10 @@ struct AggregateFunctionDistinctGenericData
                 extra_data_since_last_finalize.emplace_back(it->getValue());
             }
         }
+
         set.merge(rhs.set);
-        uintptr_t temp = reinterpret_cast<uintptr_t>(place);
+
+        uintptr_t temp = reinterpret_cast<uintptr_t>(&rhs);
         auto find_place = std::find(related_places.begin(), related_places.end(),temp);
         if (find_place == related_places.end())
             related_places.emplace_back(temp);
@@ -289,7 +277,7 @@ public:
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
-        this->data(place).merge(this->data(rhs), arena, rhs);
+        this->data(place).merge(this->data(rhs), arena);
         nested_func->merge(getNestedPlace(place), getNestedPlace(rhs), arena);
     }
 
