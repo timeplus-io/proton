@@ -5,6 +5,7 @@
 #include <Columns/ColumnArray.h>
 #include <Common/assert_cast.h>
 #include <Common/HashTable/HashSet.h>
+#include <Common/serde.h>
 
 namespace DB
 {
@@ -22,10 +23,11 @@ struct AggregateFunctionDistinctSingleNumericData
     /// Optimized, put the new coming data that the set does not have into extra_data_since_last_finalize.
     std::vector<T> extra_data_since_last_finalize;
 
-    std::vector<uintptr_t> related_places;
+    NO_SERDE std::vector<uintptr_t> merged_places;
 
-    /// not used
+    /// not used, but is kept for backward compatibility
     bool use_extra_data = false;
+
     void add(const IColumn ** columns, size_t /* columns_num */, size_t row_num, Arena *)
     {
         const auto & vec = assert_cast<const ColumnVector<T> &>(*columns[0]).getData();
@@ -41,7 +43,7 @@ struct AggregateFunctionDistinctSingleNumericData
         for (auto it = extra_data_since_last_finalize.begin(); it != extra_data_since_last_finalize.end();)
         {
             if (rhs.set.find(*it) != rhs.set.end())
-                extra_data_since_last_finalize.erase(it);
+                it = extra_data_since_last_finalize.erase(it);
             else
                 ++it;
         }
@@ -56,13 +58,10 @@ struct AggregateFunctionDistinctSingleNumericData
 
         set.merge(rhs.set);
 
-        if ((rhs.extra_data_since_last_finalize).size())
-        {
-            uintptr_t temp = reinterpret_cast<uintptr_t>(&rhs);
-            auto find_place = std::find(related_places.begin(), related_places.end(),temp);
-            if (find_place == related_places.end())
-                related_places.emplace_back(temp);
-        }
+        uintptr_t merged_place = reinterpret_cast<uintptr_t>(&rhs);
+        auto find_place = std::find(merged_places.begin(), merged_places.end(),merged_place);
+        if (find_place == merged_places.end())
+            merged_places.emplace_back(merged_place);
 
     }
 
@@ -87,7 +86,6 @@ struct AggregateFunctionDistinctSingleNumericData
 
         for (const auto & data : extra_data_since_last_finalize)
             argument_columns[0]->insert(data);
-        
 
         return argument_columns;
     }
@@ -102,8 +100,11 @@ struct AggregateFunctionDistinctGenericData
     /// Resolve multiple finalizations problem for streaming global aggreagtion query
     /// Optimized, put the new coming data that the set does not have into extra_data_since_last_finalize.
     std::vector<StringRef> extra_data_since_last_finalize;
-    std::vector<uintptr_t> related_places;
+
+    NO_SERDE std::vector<uintptr_t> merged_places;
+
     bool use_extra_data = false;
+
     void merge(const Self & rhs, Arena * arena)
     {
         Set::LookupResult it;
@@ -112,7 +113,7 @@ struct AggregateFunctionDistinctGenericData
         for (auto next = extra_data_since_last_finalize.begin(); next != extra_data_since_last_finalize.end();)
         {
             if (rhs.set.find(*next) != rhs.set.end())
-                extra_data_since_last_finalize.erase(next);
+                next = extra_data_since_last_finalize.erase(next);
             else
                 ++next;
         }
@@ -130,12 +131,11 @@ struct AggregateFunctionDistinctGenericData
 
         set.merge(rhs.set);
 
-        uintptr_t temp = reinterpret_cast<uintptr_t>(&rhs);
-        auto find_place = std::find(related_places.begin(), related_places.end(),temp);
-        if (find_place == related_places.end())
-            related_places.emplace_back(temp);
+        uintptr_t merged_place = reinterpret_cast<uintptr_t>(&rhs);
+        auto find_place = std::find(merged_places.begin(), merged_places.end(),merged_place);
+        if (find_place == merged_places.end())
+            merged_places.emplace_back(merged_place);
 
-        
     }
 
     void serialize(WriteBuffer & buf) const
@@ -302,6 +302,7 @@ public:
             arguments_raw[i] = arguments[i].get();
 
         assert(!arguments.empty());
+        /// Accumulation for current data block
         nested_func->addBatchSinglePlace(0, arguments[0]->size(), getNestedPlace(place), arguments_raw.data(), arena);
         if constexpr (MergeResult)
             nested_func->insertMergeResultInto(getNestedPlace(place), to, arena);
@@ -309,25 +310,25 @@ public:
             nested_func->insertResultInto(getNestedPlace(place), to, arena);
 
 
-        /// clear all the extra data in related blocks
-        for (auto & item : this->data(place).related_places) {
+        /// Clear all the extra data in related blocks
+        for (auto & item : this->data(place).merged_places)
             this->data(reinterpret_cast<AggregateDataPtr>(item)).extra_data_since_last_finalize.clear();
-        }
 
-        /// Add the temp data to sum so that the distinct outcome can accumulate
-        if(this->data(place).related_places.size()){
-            nested_func->addBatchSinglePlace(0, arguments[0]->size(), getNestedPlace(reinterpret_cast<AggregateDataPtr>(this->data(place).related_places[0])), arguments_raw.data(), arena);
-        }
+        /* Add the temp data to sum so that the distinct outcome can accumulate.
+         The block we using here may be a blank block, therefore we need to find data block and store sum in it.
+         For example: if the current sum is 70, what we stored in sum{} of blank block will be 70, but it will be
+         deleted, so we find the information of the first block stored in merged_places and put 70 to its sum
+         using addBatchSinglePlace. 
+         */
+        if(this->data(place).merged_places.size())
+            nested_func->addBatchSinglePlace(0, arguments[0]->size(), getNestedPlace(reinterpret_cast<AggregateDataPtr>(this->data(place).merged_places[0])), arguments_raw.data(), arena);
 
         if (this->data(place).extra_data_since_last_finalize.size())
-        {
             this->data(place).extra_data_since_last_finalize.clear();
-        }
 
-        if (this->data(place).related_places.size())
-        {
-            this->data(place).related_places.clear();
-        }    
+        if (this->data(place).merged_places.size())
+            this->data(place).merged_places.clear();
+
     }
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
