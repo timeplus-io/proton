@@ -11,6 +11,71 @@ namespace DB
 {
 namespace Streaming
 {
+
+/*  Notes on distinct function:
+
+    For example: Using sum_distinct function in a two shards situation. 
+                 During the first insertion, we may insert all the data to one shard, or we may insert them into different shards.
+
+    - We use the first scenerio as an example, during which don't need to create a new temp state for merge, sum will
+      directly add using extra data and the data will be cleared after finalization. (This is similar to single shard situation.)
+
+      We won't merge the state but directly use the data. Which will cause the extra data not been able to recorded
+      after we use another shard, for the extra data have been cleared after first finalization.
+                  ______________                       _______________ 
+                 |  <state 1>   |                     |   <state 1>   |
+Insert 30,40     |  set:30 40   |       finalize      |   set:30 40   |
+                 | extra:30 40  |     ————————————>   |  extra:none   |  *extra data will be cleared after every merge
+                 | nested_sum:0 |                     | nested_sum:70 | 
+                 |______________|                     |_______________| 
+
+    - After data been inserted into the other shard, causing the merging action been activatied as shown in the graphic.
+      The aggregate state we using here is temporary, therefore we need to find first aggregate state and store sum in it. 
+      Here we use the shard after the finalization in single situation.
+
+      *sum(temp state) = sum(data1) + sum(data2) + extra
+                     ______________   ______________                  _______________   ______________ 
+                    |  <state 1>   | |  <state 2>   |                |   <state 1>   | |  <state 2>   |
+                    |  set:30 40   | |   set:40 50  |                |  set:30 40    | |   set:40 50  |
+                    |  extra:none  | |  extra:40 50 |                |  extra:none   | |  extra:none  |
+                    | nested_sum:70| | nested_sum:0 |                | nested_sum:120| | nested_sum:0 |
+                    |______________| |______________|                |_______________| |______________| 
+Insert 40,50               |                |                                |                 |
+into shard2                |                |  *step2: Finalize and          |                 |
+                           |  *step1:Merge  |   add extra data back to       |                 |
+                     ______▼________        |   nested_sum (70+50=120)_______▼________         |
+                    | <temp state>  |       |     ——————————————>    |  <temp state>  |        |
+                    |  set:30 40 50 | ◀------                        |  set:30 40 50  | ◀-------
+                    |  extra:50     |                                |   extra:none   |
+                    | nested_sum:70 |                                | nested_sum:120 |  
+                    |_______________|                                |________________|
+    
+                     _______________   ______________                        _______________   ______________ 
+                    |   <state 1>   | |  <state 2>   |                      |   <state 1>   | |  <state 2>   |                      
+                    |  set:30 40 60 | |   set:40 50  | *extra data will     |  set:30 40 60 | |   set:40 50  |
+                    |  extra:60     | |  extra:none  |  be cleared after    |  extra:none   | |  extra:none  |
+                    | nested_sum:120| | nested_sum:0 |  every merge         | nested_sum:180| | nested_sum:0 |
+                    |_______________| |______________|                      |_______________| |______________|
+                            |                 |               *step2                |                |
+Insert 60                   |                 |         ——————————————————>         |                |
+into shard1                 |     *step1      |                                     |                |
+                     _______▼________         |                              _______▼________        |
+                    |  <temp state>  |        |                             |  <temp state>  |       |
+                    | set:30 40 50 60| ◀-------                             | set:30 40 50 60| ◀------ 
+                    |   extra:60     |                                      |   extra:none   |       
+                    | nested_sum:120 | *sum won't accumulate without        | nested_sum:180 | 
+                    |________________|  addback in step 2 because sum in    |________________|
+                                        temp state will be cleared everytime
+
+
+    step1: Check if there's extra data that already existed in set and delete it, then Merge the set to prevent shards afterwards inserting 
+           data exists in set.
+    
+    step2: If the current sum is 70, what we stored in nested_sum of temporary state will be 70, but it will be deleted after finalization. 
+           So we find the information of the first aggregate state stored in merged_places and put 70 to its sum after the merging
+           using nested_func->addBatchSinglePlace, thus the sum will accumulate.
+
+*/ 
 template <typename T>
 struct AggregateFunctionDistinctSingleNumericData
 {
@@ -34,7 +99,6 @@ struct AggregateFunctionDistinctSingleNumericData
         auto [_, inserted] = set.insert(vec[row_num]);
         if (inserted)
             extra_data_since_last_finalize.emplace_back(vec[row_num]);
-    
     }
 
     void merge(const Self & rhs, Arena *)
@@ -62,7 +126,6 @@ struct AggregateFunctionDistinctSingleNumericData
         auto find_place = std::find(merged_places.begin(), merged_places.end(),merged_place);
         if (find_place == merged_places.end())
             merged_places.emplace_back(merged_place);
-
     }
 
     void serialize(WriteBuffer & buf) const
@@ -135,7 +198,6 @@ struct AggregateFunctionDistinctGenericData
         auto find_place = std::find(merged_places.begin(), merged_places.end(),merged_place);
         if (find_place == merged_places.end())
             merged_places.emplace_back(merged_place);
-
     }
 
     void serialize(WriteBuffer & buf) const
@@ -309,26 +371,15 @@ public:
         else
             nested_func->insertResultInto(getNestedPlace(place), to, arena);
 
-
         /// Clear all the extra data in related blocks
         for (auto & item : this->data(place).merged_places)
             this->data(reinterpret_cast<AggregateDataPtr>(item)).extra_data_since_last_finalize.clear();
 
-        /* Add the temp data to sum so that the distinct outcome can accumulate.
-         The block we using here may be a blank block, therefore we need to find data block and store sum in it.
-         For example: if the current sum is 70, what we stored in sum{} of blank block will be 70, but it will be
-         deleted, so we find the information of the first block stored in merged_places and put 70 to its sum
-         using addBatchSinglePlace. 
-         */
-        if(this->data(place).merged_places.size())
+        if (this->data(place).merged_places.size())
             nested_func->addBatchSinglePlace(0, arguments[0]->size(), getNestedPlace(reinterpret_cast<AggregateDataPtr>(this->data(place).merged_places[0])), arguments_raw.data(), arena);
 
-        if (this->data(place).extra_data_since_last_finalize.size())
-            this->data(place).extra_data_since_last_finalize.clear();
-
-        if (this->data(place).merged_places.size())
-            this->data(place).merged_places.clear();
-
+        this->data(place).extra_data_since_last_finalize.clear();
+        this->data(place).merged_places.clear();
     }
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
