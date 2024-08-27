@@ -33,9 +33,9 @@ std::pair<String, Int32> sendRequest(
     const String & password,
     const String & payload,
     const std::vector<std::pair<String, String>> & headers,
-    Poco::Logger * log,
     /// One second for connect/send/receive
-    ConnectionTimeouts timeouts)
+    ConnectionTimeouts timeouts,
+    Poco::Logger * log)
 {
 
     PooledHTTPSessionPtr session;
@@ -112,14 +112,14 @@ std::pair<String, Int32> sendRequest(
         if (e.code() == 1000){
             LOG_ERROR(
                 log,
-                "Execution Timeout from uri={} method={} payload={} query_id={} error={} exception={}",
+                "Execution timeout from uri={} method={} payload={} query_id={} error={} exception={}",
                 uri.toString(),
                 method,
                 payload,
                 query_id,
                 e.message(),
                 getCurrentExceptionMessage(true, true));
-            return {"Execution Timeout", toHTTPCode(e)};   
+            return {"Execution timeout", toHTTPCode(e)};   
         }
 
         LOG_ERROR(

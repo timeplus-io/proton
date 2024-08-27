@@ -54,8 +54,8 @@ public:
             "",
             out,
             {{config.auth_context.key_name, config.auth_context.key_value}, {"", context->getCurrentQueryId()}},
-            &Poco::Logger::get("UserDefinedFunction"),
-            ConnectionTimeouts({2, 0}, {5, 0}, {static_cast<long>(config.command_execution_timeout_milliseconds / 1000), static_cast<long>((config.command_execution_timeout_milliseconds % 1000u) * 1000u)}));
+            ConnectionTimeouts({2, 0}, {5, 0}, {static_cast<long>(config.command_execution_timeout_milliseconds / 1000), static_cast<long>((config.command_execution_timeout_milliseconds % 1000u) * 1000u)}),
+            &Poco::Logger::get("UserDefinedFunction"));
 
         if (http_status != Poco::Net::HTTPResponse::HTTP_OK)
             throw Exception(

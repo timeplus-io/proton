@@ -25,6 +25,6 @@ std::pair<String, Int32> sendRequest(
     const String & password,
     const String & payload,
     const std::vector<std::pair<String, String>> & headers,
-    Poco::Logger * log,
-    ConnectionTimeouts timeouts = ConnectionTimeouts({2, 0}, {5, 0}, {10, 0}));
+    ConnectionTimeouts timeouts,
+    Poco::Logger * log);
 }
