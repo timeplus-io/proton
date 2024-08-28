@@ -3,8 +3,8 @@
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/KeyHolderHelpers.h>
 #include <Columns/ColumnArray.h>
-#include <Common/assert_cast.h>
 #include <Common/HashTable/HashSet.h>
+#include <Common/assert_cast.h>
 #include <Common/serde.h>
 
 namespace DB
@@ -75,7 +75,7 @@ into shard1                 |     *step1      |                                 
            So we find the information of the first aggregate state stored in merged_places and put 70 to its sum after the merging
            using nested_func->addBatchSinglePlace, thus the sum will accumulate.
 
-*/ 
+*/
 template <typename T>
 struct AggregateFunctionDistinctSingleNumericData
 {
@@ -123,7 +123,7 @@ struct AggregateFunctionDistinctSingleNumericData
         set.merge(rhs.set);
 
         uintptr_t merged_place = reinterpret_cast<uintptr_t>(&rhs);
-        auto find_place = std::find(merged_places.begin(), merged_places.end(),merged_place);
+        auto find_place = std::find(merged_places.begin(), merged_places.end(), merged_place);
         if (find_place == merged_places.end())
             merged_places.emplace_back(merged_place);
     }
@@ -195,7 +195,7 @@ struct AggregateFunctionDistinctGenericData
         set.merge(rhs.set);
 
         uintptr_t merged_place = reinterpret_cast<uintptr_t>(&rhs);
-        auto find_place = std::find(merged_places.begin(), merged_places.end(),merged_place);
+        auto find_place = std::find(merged_places.begin(), merged_places.end(), merged_place);
         if (find_place == merged_places.end())
             merged_places.emplace_back(merged_place);
     }
@@ -239,7 +239,7 @@ struct AggregateFunctionDistinctSingleGenericData : public AggregateFunctionDist
         bool inserted;
         auto key_holder = getKeyHolder<is_plain_column>(*columns[0], row_num, *arena);
         set.emplace(key_holder, it, inserted);
-        
+
         if (inserted)
         {
             assert(it);
@@ -312,21 +312,15 @@ protected:
     size_t prefix_size;
     size_t arguments_num;
 
-    AggregateDataPtr getNestedPlace(AggregateDataPtr __restrict place) const noexcept
-    {
-        return place + prefix_size;
-    }
+    AggregateDataPtr getNestedPlace(AggregateDataPtr __restrict place) const noexcept { return place + prefix_size; }
 
-    ConstAggregateDataPtr getNestedPlace(ConstAggregateDataPtr __restrict place) const noexcept
-    {
-        return place + prefix_size;
-    }
+    ConstAggregateDataPtr getNestedPlace(ConstAggregateDataPtr __restrict place) const noexcept { return place + prefix_size; }
 
 public:
     AggregateFunctionDistinct(AggregateFunctionPtr nested_func_, const DataTypes & arguments, const Array & params_)
-    : IAggregateFunctionDataHelper<Data, AggregateFunctionDistinct>(arguments, params_)
-    , nested_func(nested_func_)
-    , arguments_num(arguments.size())
+        : IAggregateFunctionDataHelper<Data, AggregateFunctionDistinct>(arguments, params_)
+        , nested_func(nested_func_)
+        , arguments_num(arguments.size())
     {
         size_t nested_size = nested_func->alignOfData();
         prefix_size = (sizeof(Data) + nested_size - 1) / nested_size * nested_size;
@@ -358,7 +352,8 @@ public:
     template <bool MergeResult>
     void insertResultIntoImpl(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const
     {
-        auto arguments = this->data(place).getArguments(this->argument_types);
+        auto & data = this->data(place);
+        auto arguments = data.getArguments(this->argument_types);
         ColumnRawPtrs arguments_raw(arguments.size());
         for (size_t i = 0; i < arguments.size(); ++i)
             arguments_raw[i] = arguments[i].get();
@@ -372,14 +367,19 @@ public:
             nested_func->insertResultInto(getNestedPlace(place), to, arena);
 
         /// Clear all the extra data in related blocks
-        for (auto & item : this->data(place).merged_places)
-            this->data(reinterpret_cast<AggregateDataPtr>(item)).extra_data_since_last_finalize.clear();
+        for (auto & merged_place : data.merged_places)
+            this->data(reinterpret_cast<AggregateDataPtr>(merged_place)).extra_data_since_last_finalize.clear();
 
-        if (this->data(place).merged_places.size())
-            nested_func->addBatchSinglePlace(0, arguments[0]->size(), getNestedPlace(reinterpret_cast<AggregateDataPtr>(this->data(place).merged_places[0])), arguments_raw.data(), arena);
+        if (!data.merged_places.empty())
+            nested_func->addBatchSinglePlace(
+                0,
+                arguments[0]->size(),
+                getNestedPlace(reinterpret_cast<AggregateDataPtr>(data.merged_places[0])),
+                arguments_raw.data(),
+                arena);
 
-        this->data(place).extra_data_since_last_finalize.clear();
-        this->data(place).merged_places.clear();
+        data.extra_data_since_last_finalize.clear();
+        data.merged_places.clear();
     }
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
@@ -392,10 +392,7 @@ public:
         insertResultIntoImpl<true>(place, to, arena);
     }
 
-    size_t sizeOfData() const override
-    {
-        return prefix_size + nested_func->sizeOfData();
-    }
+    size_t sizeOfData() const override { return prefix_size + nested_func->sizeOfData(); }
 
     void create(AggregateDataPtr __restrict place) const override
     {
@@ -409,10 +406,7 @@ public:
         nested_func->destroy(getNestedPlace(place));
     }
 
-    bool hasTrivialDestructor() const override
-    {
-        return std::is_trivially_destructible_v<Data> && nested_func->hasTrivialDestructor();
-    }
+    bool hasTrivialDestructor() const override { return std::is_trivially_destructible_v<Data> && nested_func->hasTrivialDestructor(); }
 
     void destroyUpToState(AggregateDataPtr __restrict place) const noexcept override
     {
@@ -420,40 +414,19 @@ public:
         nested_func->destroyUpToState(getNestedPlace(place));
     }
 
-    String getName() const override
-    {
-        return nested_func->getName() + "_distinct_streaming";
-    }
+    String getName() const override { return nested_func->getName() + "_distinct_streaming"; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return nested_func->getReturnType();
-    }
+    DataTypePtr getReturnType() const override { return nested_func->getReturnType(); }
 
-    bool allocatesMemoryInArena() const override
-    {
-        return true;
-    }
+    bool allocatesMemoryInArena() const override { return true; }
 
-    bool isState() const override
-    {
-        return nested_func->isState();
-    }
+    bool isState() const override { return nested_func->isState(); }
 
-    bool isVersioned() const override
-    {
-        return nested_func->isVersioned();
-    }
+    bool isVersioned() const override { return nested_func->isVersioned(); }
 
-    size_t getVersionFromRevision(size_t revision) const override
-    {
-        return nested_func->getVersionFromRevision(revision);
-    }
+    size_t getVersionFromRevision(size_t revision) const override { return nested_func->getVersionFromRevision(revision); }
 
-    size_t getDefaultVersion() const override
-    {
-        return nested_func->getDefaultVersion();
-    }
+    size_t getDefaultVersion() const override { return nested_func->getDefaultVersion(); }
 
     AggregateFunctionPtr getNestedFunction() const override { return nested_func; }
 };
