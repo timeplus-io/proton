@@ -3,14 +3,79 @@
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/KeyHolderHelpers.h>
 #include <Columns/ColumnArray.h>
-#include <Common/assert_cast.h>
 #include <Common/HashTable/HashSet.h>
+#include <Common/assert_cast.h>
+#include <Common/serde.h>
 
 namespace DB
 {
 namespace Streaming
 {
 
+/*  Notes on distinct function:
+
+    For example: Using sum_distinct function in a two shards situation. 
+                 During the first insertion, we may insert all the data to one shard, or we may insert them into different shards.
+
+    - We use the first scenerio as an example, during which don't need to create a new temp state for merge, sum will
+      directly add using extra data and the data will be cleared after finalization. (This is similar to single shard situation.)
+
+      We won't merge the state but directly use the data. Which will cause the extra data not been able to recorded
+      after we use another shard, for the extra data have been cleared after first finalization.
+                  ______________                       _______________ 
+                 |  <state 1>   |                     |   <state 1>   |
+Insert 30,40     |  set:30 40   |       finalize      |   set:30 40   |
+                 | extra:30 40  |     ————————————>   |  extra:none   |  *extra data will be cleared after every merge
+                 | nested_sum:0 |                     | nested_sum:70 | 
+                 |______________|                     |_______________| 
+
+    - After data been inserted into the other shard, causing the merging action been activatied as shown in the graphic.
+      The aggregate state we using here is temporary, therefore we need to find first aggregate state and store sum in it. 
+      Here we use the shard after the finalization in single situation.
+
+      *sum(temp state) = sum(data1) + sum(data2) + extra
+                     ______________   ______________                  _______________   ______________ 
+                    |  <state 1>   | |  <state 2>   |                |   <state 1>   | |  <state 2>   |
+                    |  set:30 40   | |   set:40 50  |                |  set:30 40    | |   set:40 50  |
+                    |  extra:none  | |  extra:40 50 |                |  extra:none   | |  extra:none  |
+                    | nested_sum:70| | nested_sum:0 |                | nested_sum:120| | nested_sum:0 |
+                    |______________| |______________|                |_______________| |______________| 
+Insert 40,50               |                |                                |                 |
+into shard2                |                |  *step2: Finalize and          |                 |
+                           |  *step1:Merge  |   add extra data back to       |                 |
+                     ______▼________        |   nested_sum (70+50=120)_______▼________         |
+                    | <temp state>  |       |     ——————————————>    |  <temp state>  |        |
+                    |  set:30 40 50 | ◀------                        |  set:30 40 50  | ◀-------
+                    |  extra:50     |                                |   extra:none   |
+                    | nested_sum:70 |                                | nested_sum:120 |  
+                    |_______________|                                |________________|
+    
+                     _______________   ______________                        _______________   ______________ 
+                    |   <state 1>   | |  <state 2>   |                      |   <state 1>   | |  <state 2>   |                      
+                    |  set:30 40 60 | |   set:40 50  | *extra data will     |  set:30 40 60 | |   set:40 50  |
+                    |  extra:60     | |  extra:none  |  be cleared after    |  extra:none   | |  extra:none  |
+                    | nested_sum:120| | nested_sum:0 |  every merge         | nested_sum:180| | nested_sum:0 |
+                    |_______________| |______________|                      |_______________| |______________|
+                            |                 |               *step2                |                |
+Insert 60                   |                 |         ——————————————————>         |                |
+into shard1                 |     *step1      |                                     |                |
+                     _______▼________         |                              _______▼________        |
+                    |  <temp state>  |        |                             |  <temp state>  |       |
+                    | set:30 40 50 60| ◀-------                             | set:30 40 50 60| ◀------ 
+                    |   extra:60     |                                      |   extra:none   |       
+                    | nested_sum:120 | *sum won't accumulate without        | nested_sum:180 | 
+                    |________________|  addback in step 2 because sum in    |________________|
+                                        temp state will be cleared everytime
+
+
+    step1: Check if there's extra data that already existed in set and delete it, then Merge the set to prevent shards afterwards inserting 
+           data exists in set.
+    
+    step2: If the current sum is 70, what we stored in nested_sum of temporary state will be 70, but it will be deleted after finalization. 
+           So we find the information of the first aggregate state stored in merged_places and put 70 to its sum after the merging
+           using nested_func->addBatchSinglePlace, thus the sum will accumulate.
+
+*/
 template <typename T>
 struct AggregateFunctionDistinctSingleNumericData
 {
@@ -19,65 +84,62 @@ struct AggregateFunctionDistinctSingleNumericData
     using Self = AggregateFunctionDistinctSingleNumericData<T>;
     Set set;
 
-    /// proton: starts. Resolve multiple finalizations problem for streaming global aggreagtion query
+    /// Resolve multiple finalizations problem for streaming global aggreagtion query
+    /// Optimized, put the new coming data that the set does not have into extra_data_since_last_finalize.
     std::vector<T> extra_data_since_last_finalize;
-    bool use_extra_data = false;  /// Optimized, only streaming global aggreagtion query need to use extra data after first finalization.
-    /// proton: ends.
+
+    NO_SERDE std::vector<uintptr_t> merged_places;
+
+    /// not used, but is kept for backward compatibility
+    bool use_extra_data = false;
 
     void add(const IColumn ** columns, size_t /* columns_num */, size_t row_num, Arena *)
     {
         const auto & vec = assert_cast<const ColumnVector<T> &>(*columns[0]).getData();
-        /// proton: starts.
         auto [_, inserted] = set.insert(vec[row_num]);
-        if (use_extra_data && inserted)
+        if (inserted)
             extra_data_since_last_finalize.emplace_back(vec[row_num]);
-        /// proton: ends.
     }
 
     void merge(const Self & rhs, Arena *)
     {
-        /// proton: starts.
-        if (rhs.use_extra_data)
+        /// Deduplicate owned extra data based on rhs
+        for (auto it = extra_data_since_last_finalize.begin(); it != extra_data_since_last_finalize.end();)
         {
-            for (const auto & data : rhs.extra_data_since_last_finalize)
-            {
-                auto [_, inserted] = set.insert(data);
-                if (use_extra_data && inserted)
-                    extra_data_since_last_finalize.emplace_back(data);
-            }
+            if (rhs.set.find(*it) != rhs.set.end())
+                it = extra_data_since_last_finalize.erase(it);
+            else
+                ++it;
         }
-        else if (use_extra_data)
+
+        /// Merge and deduplicate rhs' extra data
+        for (const auto & data : rhs.extra_data_since_last_finalize)
         {
-            for (const auto & elem : rhs.set)
-            {
-                auto [_, inserted] = set.insert(elem.getValue());
-                if (inserted)
-                    extra_data_since_last_finalize.emplace_back(elem.getValue());
-            }
+            auto [_, inserted] = set.insert(data);
+            if (inserted)
+                extra_data_since_last_finalize.emplace_back(data);
         }
-        else
-        {
-            set.merge(rhs.set);
-        }
-        /// proton: ends.
+
+        set.merge(rhs.set);
+
+        uintptr_t merged_place = reinterpret_cast<uintptr_t>(&rhs);
+        auto find_place = std::find(merged_places.begin(), merged_places.end(), merged_place);
+        if (find_place == merged_places.end())
+            merged_places.emplace_back(merged_place);
     }
 
     void serialize(WriteBuffer & buf) const
     {
         set.write(buf);
-        /// proton: starts.
         writeVectorBinary(extra_data_since_last_finalize, buf);
         writeBoolText(use_extra_data, buf);
-        /// proton: ends.
     }
 
     void deserialize(ReadBuffer & buf, Arena *)
     {
         set.read(buf);
-        /// proton: starts.
         readVectorBinary(extra_data_since_last_finalize, buf);
         readBoolText(use_extra_data, buf);
-        /// proton: ends.
     }
 
     MutableColumns getArguments(const DataTypes & argument_types) const
@@ -85,18 +147,8 @@ struct AggregateFunctionDistinctSingleNumericData
         MutableColumns argument_columns;
         argument_columns.emplace_back(argument_types[0]->createColumn());
 
-        /// proton: starts.
-        if (use_extra_data)
-        {
-            for (const auto & data : extra_data_since_last_finalize)
-                argument_columns[0]->insert(data);
-        }
-        else
-        {
-            for (const auto & elem : set)
-                argument_columns[0]->insert(elem.getValue());
-        }
-        /// proton: ends.
+        for (const auto & data : extra_data_since_last_finalize)
+            argument_columns[0]->insert(data);
 
         return argument_columns;
     }
@@ -108,27 +160,44 @@ struct AggregateFunctionDistinctGenericData
     using Set = HashSetWithSavedHashWithStackMemory<StringRef, StringRefHash, 4>;
     using Self = AggregateFunctionDistinctGenericData;
     Set set;
-    /// proton: starts. Resolve multiple finalizations problem for streaming global aggreagtion query
+    /// Resolve multiple finalizations problem for streaming global aggreagtion query
+    /// Optimized, put the new coming data that the set does not have into extra_data_since_last_finalize.
     std::vector<StringRef> extra_data_since_last_finalize;
-    bool use_extra_data = false;  /// Optimized, only streaming global aggreagtion query need to use extra data after first finalization.
-    /// proton: ends.
+
+    NO_SERDE std::vector<uintptr_t> merged_places;
+
+    bool use_extra_data = false;
 
     void merge(const Self & rhs, Arena * arena)
     {
         Set::LookupResult it;
         bool inserted;
-        for (const auto & elem : rhs.set)
-        /// proton: starts.
+        /// Deduplicate owned extra data based on rhs
+        for (auto next = extra_data_since_last_finalize.begin(); next != extra_data_since_last_finalize.end();)
         {
-            set.emplace(ArenaKeyHolder{elem.getValue(), *arena}, it, inserted);
+            if (rhs.set.find(*next) != rhs.set.end())
+                next = extra_data_since_last_finalize.erase(next);
+            else
+                ++next;
+        }
 
-            if (use_extra_data && inserted)
+        /// Merge and deduplicate rhs' extra data
+        for (const auto & data : rhs.extra_data_since_last_finalize)
+        {
+            set.emplace(ArenaKeyHolder{data, *arena}, it, inserted);
+            if (inserted)
             {
                 assert(it);
                 extra_data_since_last_finalize.emplace_back(it->getValue());
             }
         }
-        /// proton: ends.
+
+        set.merge(rhs.set);
+
+        uintptr_t merged_place = reinterpret_cast<uintptr_t>(&rhs);
+        auto find_place = std::find(merged_places.begin(), merged_places.end(), merged_place);
+        if (find_place == merged_places.end())
+            merged_places.emplace_back(merged_place);
     }
 
     void serialize(WriteBuffer & buf) const
@@ -137,13 +206,11 @@ struct AggregateFunctionDistinctGenericData
         for (const auto & elem : set)
             writeStringBinary(elem.getValue(), buf);
 
-        /// proton: starts.
         writeVarUInt(extra_data_since_last_finalize.size(), buf);
         for (const auto & data : extra_data_since_last_finalize)
             writeStringBinary(data, buf);
 
         writeBoolText(use_extra_data, buf);
-        /// proton: ends.
     }
 
     void deserialize(ReadBuffer & buf, Arena * arena)
@@ -153,7 +220,6 @@ struct AggregateFunctionDistinctGenericData
         for (size_t i = 0; i < size; ++i)
             set.insert(readStringBinaryInto(*arena, buf));
 
-        /// proton: starts.
         size_t extra_size;
         readVarUInt(extra_size, buf);
         extra_data_since_last_finalize.resize(extra_size);
@@ -161,7 +227,6 @@ struct AggregateFunctionDistinctGenericData
             extra_data_since_last_finalize[i] = readStringBinaryInto(*arena, buf);
 
         readBoolText(use_extra_data, buf);
-        /// proton: ends.
     }
 };
 
@@ -175,13 +240,11 @@ struct AggregateFunctionDistinctSingleGenericData : public AggregateFunctionDist
         auto key_holder = getKeyHolder<is_plain_column>(*columns[0], row_num, *arena);
         set.emplace(key_holder, it, inserted);
 
-        /// proton: starts.
-        if (use_extra_data && inserted)
+        if (inserted)
         {
             assert(it);
             extra_data_since_last_finalize.emplace_back(it->getValue());
         }
-        /// proton: ends.
     }
 
     MutableColumns getArguments(const DataTypes & argument_types) const
@@ -189,18 +252,8 @@ struct AggregateFunctionDistinctSingleGenericData : public AggregateFunctionDist
         MutableColumns argument_columns;
         argument_columns.emplace_back(argument_types[0]->createColumn());
 
-        /// proton: starts.
-        if (use_extra_data)
-        {
-            for (const auto & data : extra_data_since_last_finalize)
-                deserializeAndInsert<is_plain_column>(data, *argument_columns[0]);
-        }
-        else
-        {
-            for (const auto & elem : set)
-                deserializeAndInsert<is_plain_column>(elem.getValue(), *argument_columns[0]);
-        }
-        /// proton: ends.
+        for (const auto & data : extra_data_since_last_finalize)
+            deserializeAndInsert<is_plain_column>(data, *argument_columns[0]);
 
         return argument_columns;
     }
@@ -224,13 +277,11 @@ struct AggregateFunctionDistinctMultipleGenericData : public AggregateFunctionDi
         auto key_holder = SerializedKeyHolder{value, *arena};
         set.emplace(key_holder, it, inserted);
 
-        /// proton: starts.
-        if (use_extra_data && inserted)
+        if (inserted)
         {
             assert(it);
             extra_data_since_last_finalize.emplace_back(it->getValue());
         }
-        /// proton: ends.
     }
 
     MutableColumns getArguments(const DataTypes & argument_types) const
@@ -239,26 +290,12 @@ struct AggregateFunctionDistinctMultipleGenericData : public AggregateFunctionDi
         for (size_t i = 0; i < argument_types.size(); ++i)
             argument_columns[i] = argument_types[i]->createColumn();
 
-        /// proton: starts.
-        if (use_extra_data)
+        for (const auto & data : extra_data_since_last_finalize)
         {
-            for (const auto & data : extra_data_since_last_finalize)
-            {
-                const char * begin = data.data;
-                for (auto & column : argument_columns)
-                    begin = column->deserializeAndInsertFromArena(begin);
-            }
+            const char * begin = data.data;
+            for (auto & column : argument_columns)
+                begin = column->deserializeAndInsertFromArena(begin);
         }
-        else
-        {
-            for (const auto & elem : set)
-            {
-                const char * begin = elem.getValue().data;
-                for (auto & column : argument_columns)
-                    begin = column->deserializeAndInsertFromArena(begin);
-            }
-        }
-        /// proton: ends.
 
         return argument_columns;
     }
@@ -275,21 +312,15 @@ protected:
     size_t prefix_size;
     size_t arguments_num;
 
-    AggregateDataPtr getNestedPlace(AggregateDataPtr __restrict place) const noexcept
-    {
-        return place + prefix_size;
-    }
+    AggregateDataPtr getNestedPlace(AggregateDataPtr __restrict place) const noexcept { return place + prefix_size; }
 
-    ConstAggregateDataPtr getNestedPlace(ConstAggregateDataPtr __restrict place) const noexcept
-    {
-        return place + prefix_size;
-    }
+    ConstAggregateDataPtr getNestedPlace(ConstAggregateDataPtr __restrict place) const noexcept { return place + prefix_size; }
 
 public:
     AggregateFunctionDistinct(AggregateFunctionPtr nested_func_, const DataTypes & arguments, const Array & params_)
-    : IAggregateFunctionDataHelper<Data, AggregateFunctionDistinct>(arguments, params_)
-    , nested_func(nested_func_)
-    , arguments_num(arguments.size())
+        : IAggregateFunctionDataHelper<Data, AggregateFunctionDistinct>(arguments, params_)
+        , nested_func(nested_func_)
+        , arguments_num(arguments.size())
     {
         size_t nested_size = nested_func->alignOfData();
         prefix_size = (sizeof(Data) + nested_size - 1) / nested_size * nested_size;
@@ -321,22 +352,34 @@ public:
     template <bool MergeResult>
     void insertResultIntoImpl(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const
     {
-        auto arguments = this->data(place).getArguments(this->argument_types);
+        auto & data = this->data(place);
+        auto arguments = data.getArguments(this->argument_types);
         ColumnRawPtrs arguments_raw(arguments.size());
         for (size_t i = 0; i < arguments.size(); ++i)
             arguments_raw[i] = arguments[i].get();
 
         assert(!arguments.empty());
+        /// Accumulation for current data block
         nested_func->addBatchSinglePlace(0, arguments[0]->size(), getNestedPlace(place), arguments_raw.data(), arena);
         if constexpr (MergeResult)
             nested_func->insertMergeResultInto(getNestedPlace(place), to, arena);
         else
             nested_func->insertResultInto(getNestedPlace(place), to, arena);
 
-        /// proton: starts. Next finalization will use extra data, used in streaming global aggregation query.
-        this->data(place).use_extra_data = true;
-        this->data(place).extra_data_since_last_finalize.clear();
-        /// proton: ends.
+        /// Clear all the extra data in related blocks
+        for (auto & merged_place : data.merged_places)
+            this->data(reinterpret_cast<AggregateDataPtr>(merged_place)).extra_data_since_last_finalize.clear();
+
+        if (!data.merged_places.empty())
+            nested_func->addBatchSinglePlace(
+                0,
+                arguments[0]->size(),
+                getNestedPlace(reinterpret_cast<AggregateDataPtr>(data.merged_places[0])),
+                arguments_raw.data(),
+                arena);
+
+        data.extra_data_since_last_finalize.clear();
+        data.merged_places.clear();
     }
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
@@ -349,10 +392,7 @@ public:
         insertResultIntoImpl<true>(place, to, arena);
     }
 
-    size_t sizeOfData() const override
-    {
-        return prefix_size + nested_func->sizeOfData();
-    }
+    size_t sizeOfData() const override { return prefix_size + nested_func->sizeOfData(); }
 
     void create(AggregateDataPtr __restrict place) const override
     {
@@ -366,10 +406,7 @@ public:
         nested_func->destroy(getNestedPlace(place));
     }
 
-    bool hasTrivialDestructor() const override
-    {
-        return std::is_trivially_destructible_v<Data> && nested_func->hasTrivialDestructor();
-    }
+    bool hasTrivialDestructor() const override { return std::is_trivially_destructible_v<Data> && nested_func->hasTrivialDestructor(); }
 
     void destroyUpToState(AggregateDataPtr __restrict place) const noexcept override
     {
@@ -377,40 +414,19 @@ public:
         nested_func->destroyUpToState(getNestedPlace(place));
     }
 
-    String getName() const override
-    {
-        return nested_func->getName() + "_distinct_streaming";
-    }
+    String getName() const override { return nested_func->getName() + "_distinct_streaming"; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return nested_func->getReturnType();
-    }
+    DataTypePtr getReturnType() const override { return nested_func->getReturnType(); }
 
-    bool allocatesMemoryInArena() const override
-    {
-        return true;
-    }
+    bool allocatesMemoryInArena() const override { return true; }
 
-    bool isState() const override
-    {
-        return nested_func->isState();
-    }
+    bool isState() const override { return nested_func->isState(); }
 
-    bool isVersioned() const override
-    {
-        return nested_func->isVersioned();
-    }
+    bool isVersioned() const override { return nested_func->isVersioned(); }
 
-    size_t getVersionFromRevision(size_t revision) const override
-    {
-        return nested_func->getVersionFromRevision(revision);
-    }
+    size_t getVersionFromRevision(size_t revision) const override { return nested_func->getVersionFromRevision(revision); }
 
-    size_t getDefaultVersion() const override
-    {
-        return nested_func->getDefaultVersion();
-    }
+    size_t getDefaultVersion() const override { return nested_func->getDefaultVersion(); }
 
     AggregateFunctionPtr getNestedFunction() const override { return nested_func; }
 };
