@@ -42,6 +42,7 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     ParserKeyword s_auth_key("AUTH_KEY");
     ParserKeyword s_execution_timeout("EXECUTION_TIMEOUT");
     ParserLiteral value;
+    ASTPtr kv_list;
     ASTPtr url;
     ASTPtr auth_method;
     ASTPtr auth_header;
@@ -141,49 +142,10 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
         {
             throw Exception("Remote udf can not be an aggregate function", ErrorCodes::AGGREGATE_FUNCTION_NOT_APPLICABLE);
         }
-        if (!s_url.ignore(pos, expected))
+        ParserKeyValuePairsList kv_pairs_list;
+        if (!kv_pairs_list.parse(pos, kv_list, expected))
             return false;
-        if (!value.parse(pos, url, expected))
-            return false;
-        if (s_auth_method.ignore(pos, expected))
-        {
-            if (!value.parse(pos, auth_method, expected))
-                return false;
-            auto method_str = auth_method->as<ASTLiteral>()->value.safeGet<String>();
-            url->children.push_back(std::move(auth_method));
-            if (method_str == "auth_header")
-            {
-                if (!s_auth_header.ignore(pos, expected))
-                    return false;
-                if (!value.parse(pos, auth_header, expected))
-                    return false;
-                if (!s_auth_key.ignore(pos, expected))
-                    return false;
-                if (!value.parse(pos, auth_key, expected))
-                    return false;
-                url->children.push_back(std::move(auth_header));
-                url->children.push_back(std::move(auth_key));
-            }
-            else if (method_str != "none")
-            {
-                throw Exception("AUTH_METHOD must be 'none' or 'auth_header'", ErrorCodes::UNKNOWN_FUNCTION);
-            }
-        }
-        else
-        {
-            url->children.push_back(std::make_shared<ASTLiteral>(Field{String("none")}));
-        }
-        if (s_execution_timeout.ignore(pos, expected))
-        {
-            if(!value.parse(pos, execution_timeout, expected))
-                return false;
-            url->children.push_back(std::move(execution_timeout));
-        }
-        else
-        {
-            url->children.push_back(std::make_shared<ASTLiteral>(Field{UInt64(60000)}));
-        }
-        function_core = std::move(url);
+        function_core = std::move(kv_list);
     }
     /// proton: ends
 

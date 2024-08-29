@@ -5,6 +5,8 @@
 #include <Parsers/ASTFunction.h>
 
 /// proton: starts
+#include <optional>
+#include <Parsers/ASTFunctionWithKeyValueArguments.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTNameTypePair.h>
 #include <Parsers/formatAST.h>
@@ -72,16 +74,8 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
     /// proton: starts
     if (is_remote)
     {
-        settings.ostr << fmt::format("\nURL '{}'\n", function_core->as<ASTLiteral>()->value.safeGet<String>());
-        auto auth_method
-            = !function_core->children.empty() ? function_core->children[0]->as<ASTLiteral>()->value.safeGet<String>() : "none";
-        settings.ostr << fmt::format("AUTH_METHOD '{}'\n", auth_method);
-        if (auth_method != "none")
-        {
-            settings.ostr << fmt::format("AUTH_HEADER '{}'\n", function_core->children[1]->as<ASTLiteral>()->value.safeGet<String>());
-            settings.ostr << fmt::format("AUTH_KEY '{}'\n", function_core->children[2]->as<ASTLiteral>()->value.safeGet<String>());
-        }
-        settings.ostr << fmt::format("EXECUTION_TIMEOUT {}", function_core->children.back()->as<ASTLiteral>()->value.safeGet<UInt64>());
+        settings.ostr << '\n';
+        function_core->formatImpl(settings, state, frame);
         return;
     }
     /// proton: ends
@@ -154,22 +148,41 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
     /// remote function
     if (is_remote)
     {
-        assert(function_core != nullptr);
-        inner_func->set("url", function_core->as<ASTLiteral>()->value.safeGet<String>());
-        // auth
-        if (!function_core->children.empty())
+        assert(function_core != nullptr && function_core->as<ASTExpressionList>());
+        auto keyvalue_list = function_core->as<ASTExpressionList>();
+        std::optional<String> url;
+        std::optional<String> auth_method;
+        std::optional<String> auth_header;
+        std::optional<String> auth_key;
+        std::optional<UInt64> execution_timeout;
+        for (ASTPtr child : keyvalue_list->children)
         {
-            auto auth_method = function_core->children[0]->as<ASTLiteral>()->value.safeGet<String>();
-            inner_func->set("auth_method", auth_method);
-            if (auth_method == "auth_header")
-            {
-                Poco::JSON::Object::Ptr auth_context = new Poco::JSON::Object();
-                auth_context->set("key_name", function_core->children[1]->as<ASTLiteral>()->value.safeGet<String>());
-                auth_context->set("key_value", function_core->children[2]->as<ASTLiteral>()->value.safeGet<String>());
-                inner_func->set("auth_context", auth_context);
+            auto pair = child->as<ASTPair>();
+            if (pair != nullptr){
+                if (pair->first == "url")
+                    url = pair->second->as<ASTLiteral>()->value.safeGet<String>();
+                else if (pair->first == "auth_method")
+                    auth_method = pair->second->as<ASTLiteral>()->value.safeGet<String>();
+                else if (pair->first == "auth_header")
+                    auth_header = pair->second->as<ASTLiteral>()->value.safeGet<String>();
+                else if (pair->first == "auth_key")
+                    auth_key = pair->second->as<ASTLiteral>()->value.safeGet<String>();
+                else if (pair->first == "execution_timeout")
+                    execution_timeout = pair->second->as<ASTLiteral>()->value.safeGet<UInt64>();
             }
-            auto execution_timeout = function_core->children.back()->as<ASTLiteral>()->value.safeGet<UInt64>();
-            inner_func->set("command_execution_timeout", execution_timeout);
+        }        
+
+        inner_func->set("url", url.value());
+        if (auth_method.has_value() && auth_method.value() == "auth_header")
+        {
+            Poco::JSON::Object::Ptr auth_context = new Poco::JSON::Object();
+            auth_context->set("key_name", auth_header.value_or(""));
+            auth_context->set("key_value", auth_key.value_or(""));
+            inner_func->set("auth_context", auth_context);
+        }
+        if (execution_timeout.has_value())
+        {
+            inner_func->set("command_execution_timeout", execution_timeout.value());
         }
         func->set("function", inner_func);
         /// Remote function don't have source, return early.
