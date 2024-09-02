@@ -107,9 +107,21 @@ struct AggregateFunctionDistinctSingleNumericData
         for (auto it = extra_data_since_last_finalize.begin(); it != extra_data_since_last_finalize.end();)
         {
             if (rhs.set.find(*it) != rhs.set.end())
-                it = extra_data_since_last_finalize.erase(it);
+            {
+                auto found = std::find(rhs.extra_data_since_last_finalize.begin(), rhs.extra_data_since_last_finalize.end(), *it);
+                if (found == rhs.extra_data_since_last_finalize.end())
+                {
+                    it = extra_data_since_last_finalize.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
             else
+            {
                 ++it;
+            }
         }
 
         /// Merge and deduplicate rhs' extra data
