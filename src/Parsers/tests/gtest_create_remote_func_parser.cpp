@@ -130,30 +130,6 @@ TEST(ParserCreateRemoteFunctionQuery, UDFMultipleKey)
                    "EXECUTION_TIMEOUT 30000"
                    " AUTH_METHOD 'auth_header'";
     ParserCreateFunctionQuery parser;
-    ASTPtr ast = parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0);
-    ASTCreateFunctionQuery * create = ast->as<ASTCreateFunctionQuery>();
-    EXPECT_EQ(create->getFunctionName(), "ip_lookup");
-    EXPECT_EQ(create->lang, "Remote");
-    EXPECT_NE(create->function_core, nullptr);
-    EXPECT_NE(create->arguments, nullptr);
-
-    /// Check arguments
-    String args = queryToString(*create->arguments.get(), true);
-    EXPECT_EQ(args, "(ip string)");
-
-    /// Check return type
-    String ret = queryToString(*create->return_type.get(), true);
-    EXPECT_EQ(ret, "string");
-
-    auto remote_func_settings = create->function_core;
-    EXPECT_EQ(remote_func_settings->children.size(), 6);
-    EXPECT_EQ(remote_func_settings->children.front()->as<ASTPair>()->first, "url");
-    EXPECT_EQ(
-        remote_func_settings->children.front()->as<ASTPair>()->second->as<ASTLiteral>()->value.safeGet<String>(),
-        "https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/");
-    EXPECT_EQ(remote_func_settings->children[5]->as<ASTPair>()->second->as<ASTLiteral>()->value.safeGet<String>(), "auth_header"); /// Auth method
-    EXPECT_EQ(remote_func_settings->children[2]->as<ASTPair>()->second->as<ASTLiteral>()->value.safeGet<String>(), "auth"); /// auth_header
-    EXPECT_EQ(remote_func_settings->children[3]->as<ASTPair>()->second->as<ASTLiteral>()->value.safeGet<String>(), "proton"); /// auth key
-    EXPECT_EQ(remote_func_settings->children[4]->as<ASTPair>()->second->as<ASTLiteral>()->value.safeGet<UInt64>(), 30000u);
+    EXPECT_THROW(parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0), Exception);
 }
 

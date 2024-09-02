@@ -11,6 +11,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/Streaming/ParserArguments.h>
+#include <Parsers/ParserKeyValuePairsSet.h>
 
 #include <Poco/JSON/Object.h>
 /// proton: ends
@@ -142,7 +143,7 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
         {
             throw Exception("Remote udf can not be an aggregate function", ErrorCodes::AGGREGATE_FUNCTION_NOT_APPLICABLE);
         }
-        ParserKeyValuePairsList kv_pairs_list;
+        ParserKeyValuePairsSet kv_pairs_list;
         if (!kv_pairs_list.parse(pos, kv_list, expected))
             return false;
         function_core = std::move(kv_list);
