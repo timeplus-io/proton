@@ -107,9 +107,18 @@ struct AggregateFunctionDistinctSingleNumericData
         for (auto it = extra_data_since_last_finalize.begin(); it != extra_data_since_last_finalize.end();)
         {
             if (rhs.set.find(*it) != rhs.set.end())
-                it = extra_data_since_last_finalize.erase(it);
+            {
+                bool is_new_data = std::find(rhs.extra_data_since_last_finalize.begin(), rhs.extra_data_since_last_finalize.end(), *it)
+                    != rhs.extra_data_since_last_finalize.end();
+                if (is_new_data)
+                    ++it;
+                else
+                    it = extra_data_since_last_finalize.erase(it);
+            }
             else
+            {
                 ++it;
+            }
         }
 
         /// Merge and deduplicate rhs' extra data
@@ -176,9 +185,18 @@ struct AggregateFunctionDistinctGenericData
         for (auto next = extra_data_since_last_finalize.begin(); next != extra_data_since_last_finalize.end();)
         {
             if (rhs.set.find(*next) != rhs.set.end())
-                next = extra_data_since_last_finalize.erase(next);
+            {
+                bool is_new_data = std::find(rhs.extra_data_since_last_finalize.begin(), rhs.extra_data_since_last_finalize.end(), *next)
+                    != rhs.extra_data_since_last_finalize.end();
+                if (is_new_data)
+                    ++next;
+                else
+                    next = extra_data_since_last_finalize.erase(next);
+            }
             else
+            {
                 ++next;
+            }
         }
 
         /// Merge and deduplicate rhs' extra data
