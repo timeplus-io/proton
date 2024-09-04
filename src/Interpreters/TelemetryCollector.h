@@ -14,7 +14,7 @@ private:
     BackgroundSchedulePool & pool;
     BackgroundSchedulePoolTaskHolder collector_task;
     std::atomic_flag is_shutdown;
-    std::atomic_flag is_enable;
+    std::atomic_bool is_enable;
 
     std::string started_on;
     bool new_session = true;
@@ -42,7 +42,7 @@ public:
     void enable();
     void disable();
 
-    bool isEnabled() const { return is_enable.test(); }
+    bool isEnabled() const { return is_enable; }
 
     UInt64 getCollectIntervalMilliseconds() const { return collect_interval_ms.load(); }
 

@@ -36,8 +36,7 @@ TelemetryCollector::TelemetryCollector(ContextPtr context_)
 {
     const auto & config = context_->getConfigRef();
 
-    if (config.getBool("telemetry_enabled", true))
-        is_enable.test_and_set();
+    is_enable = config.getBool("telemetry_enabled", true);
 
     collect_interval_ms = config.getUInt("telemetry_interval_ms", DEFAULT_INTERVAL_MS);
 
@@ -61,7 +60,10 @@ void TelemetryCollector::startup()
 
 void TelemetryCollector::shutdown()
 {
-    if (!is_shutdown.test_and_set() && collector_task)
+    if (is_shutdown.test_and_set())
+        return;
+
+    if (collector_task)
     {
         LOG_INFO(log, "Stopped");
         collector_task->deactivate();
@@ -75,13 +77,13 @@ void TelemetryCollector::enable()
         "Please note that telemetry is enabled. "
         "This is used to collect the version and runtime environment information to Timeplus, Inc. "
         "You can disable it by setting telemetry_enabled to false in config.yaml");
-    is_enable.test_and_set();
+    is_enable = true;
 }
 
 void TelemetryCollector::disable()
 {
     LOG_WARNING(log, "Please note that telemetry is disabled.");
-    is_enable.clear();
+    is_enable = false;
 }
 
 void TelemetryCollector::collect()
