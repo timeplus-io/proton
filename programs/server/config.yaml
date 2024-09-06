@@ -150,6 +150,8 @@ telemetry_enabled:
     "@replace": true
     "#text": true
 
+telemetry_interval_ms: 300000   # 5 minutes
+
 # gRPC protocol (see src/Server/grpc_protos/proton_grpc.proto for the API)
 # grpc_port: 9100
 grpc:

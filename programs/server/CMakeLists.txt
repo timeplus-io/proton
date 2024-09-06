@@ -2,7 +2,6 @@ include(${proton_SOURCE_DIR}/cmake/embed_binary.cmake)
 
 set(CLICKHOUSE_SERVER_SOURCES
     MetricsTransmitter.cpp
-    TelemetryCollector.cpp
     Server.cpp
 )
 

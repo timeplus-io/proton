@@ -19,6 +19,7 @@
 #include "StorageInfoHandler.h"
 #include "SystemCommandHandler.h"
 #include "TabularTableRestRouterHandler.h"
+#include "TelemetryHandler.h"
 #include "UDFHandler.h"
 
 #include <re2/re2.h>
@@ -214,6 +215,14 @@ public:
                 "POST",
                 [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
                     return std::make_shared<DB::SystemCommandHandler>(query_context);
+                });
+
+            /// GET/POST: /proton/v1/telemetry
+            factory.registerRouterHandler(
+                fmt::format("/{}/v1/telemetry", prefix),
+                "GET/POST",
+                [](ContextMutablePtr query_context) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
+                    return std::make_shared<DB::TelemetryHandler>(query_context);
                 });
 
             factory.registerRouterHandler(

@@ -87,11 +87,11 @@
 #include "config_version.h"
 
 /// proton: starts
-#include "TelemetryCollector.h"
 #include <Checkpoint/CheckpointCoordinator.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Functions/UserDefined/ExternalUserDefinedFunctionsLoader.h>
 #include <Interpreters/DiskUtilChecker.h>
+#include <Interpreters/TelemetryCollector.h>
 #include <KafkaLog/KafkaWALPool.h>
 #include <NativeLog/Server/NativeLog.h>
 #include <Server/RestRouterHandlers/RestRouterFactory.h>
@@ -307,6 +307,9 @@ void initGlobalServices(DB::ContextMutablePtr & global_context)
 
     if (native_log.enabled() && pool.enabled())
         throw DB::Exception("Both external Kafka log and internal native log are enabled. This is not a supported configuration", DB::ErrorCodes::UNSUPPORTED);
+
+    auto & telemetry_collector = DB::TelemetryCollector::instance(global_context);
+    telemetry_collector.startup();
 }
 
 void initGlobalSingletons(DB::ContextMutablePtr & context)
@@ -317,7 +320,6 @@ void initGlobalSingletons(DB::ContextMutablePtr & context)
     DB::DiskUtilChecker::instance(context);
     DB::ExternalGrokPatterns::instance(context);
     DB::ExternalUserDefinedFunctionsLoader::instance(context);
-    DB::TelemetryCollector::instance(context);
 }
 
 void deinitGlobalSingletons(DB::ContextMutablePtr & context)
@@ -1759,6 +1761,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 LOG_INFO(log, "Closed connections.");
 
             /// proton: start.
+            DB::TelemetryCollector::instance(global_context).shutdown();
+
             deinitGlobalSingletons(global_context);
 
             disposeV8();
