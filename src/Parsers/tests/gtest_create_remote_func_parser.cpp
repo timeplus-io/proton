@@ -117,7 +117,55 @@ TEST(ParserCreateRemoteFunctionQuery, UDFHeaderMethodIsOther)
                    "URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/'"
                    "AUTH_METHOD 'token'";
     ParserCreateFunctionQuery parser;
-    EXPECT_NO_THROW(parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0));
+    EXPECT_THROW(parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0), Exception);
+}
+
+TEST(ParserCreateRemoteFunctionQuery, UDFNoURL)
+{
+    String input = "CREATE REMOTE  FUNCTION ip_lookup(ip string) RETURNS string "
+                   "AUTH_METHOD 'none'";
+    ParserCreateFunctionQuery parser;
+    EXPECT_THROW(parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0), Exception);
+}
+
+TEST(ParserCreateRemoteFunctionQuery, UDFURLWithExecutionTimeout)
+{
+    String input = "CREATE REMOTE  FUNCTION ip_lookup(ip string) RETURNS string "
+                   "EXECUTION_TIMEOUT 2000 "
+                   "URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/'";
+    ParserCreateFunctionQuery parser;
+    ASTPtr ast = parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0);
+    ASTCreateFunctionQuery * create = ast->as<ASTCreateFunctionQuery>();
+
+    EXPECT_EQ(create->getFunctionName(), "ip_lookup");
+    EXPECT_EQ(create->lang, "Remote");
+    EXPECT_NE(create->function_core, nullptr);
+    EXPECT_NE(create->arguments, nullptr);
+
+    /// Check arguments
+    String args = queryToString(*create->arguments.get(), true);
+    EXPECT_EQ(args, "(ip string)");
+
+    /// Check return type
+    String ret = queryToString(*create->return_type.get(), true);
+    EXPECT_EQ(ret, "string");
+
+    auto remote_func_settings = create->function_core;
+
+    EXPECT_EQ(remote_func_settings->children.size(), 2);
+    EXPECT_EQ(remote_func_settings->children.front()->as<ASTPair>()->first, "execution_timeout");
+    EXPECT_EQ(remote_func_settings->children.front()->as<ASTPair>()->second->as<ASTLiteral>()->value.safeGet<UInt64>(),2000u);
+    EXPECT_EQ(remote_func_settings->children.back()->as<ASTPair>()->first, "url");
+    EXPECT_EQ(remote_func_settings->children.back()->as<ASTPair>()->second->as<ASTLiteral>()->value.safeGet<String>(),
+    "https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/");
+}
+
+TEST(ParserCreateRemoteFunctionQuery, UDFOnlyExecutionTimeout)
+{
+    String input = "CREATE REMOTE  FUNCTION ip_lookup(ip string) RETURNS string "
+                   "EXECUTION_TIMEOUT 3000";
+    ParserCreateFunctionQuery parser;
+    EXPECT_THROW(parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0), Exception);
 }
 
 TEST(ParserCreateRemoteFunctionQuery, UDFMultipleKey)
@@ -131,5 +179,90 @@ TEST(ParserCreateRemoteFunctionQuery, UDFMultipleKey)
                    " AUTH_METHOD 'auth_header'";
     ParserCreateFunctionQuery parser;
     EXPECT_THROW(parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0), Exception);
+}
+
+TEST(ParserCreateRemoteFunctionQuery, UDFNoneButSetAUTHHEADER)
+{
+    String input = "CREATE REMOTE  FUNCTION ip_lookup(ip string) RETURNS string "
+                   "URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/'"
+                   "AUTH_METHOD 'none'"
+                   "AUTH_HEADER 'auth'"
+                   "AUTH_KEY 'proton'"
+                   "EXECUTION_TIMEOUT 30000";
+    ParserCreateFunctionQuery parser;
+    EXPECT_THROW(parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0), Exception);
+}
+
+TEST(ParserCreateRemoteFunctionQuery, UDFAUTHHEADERButNotSetAUTHHEADER)
+{
+    String input = "CREATE REMOTE  FUNCTION ip_lookup(ip string) RETURNS string "
+                   "URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/'"
+                   "AUTH_METHOD 'auth_header'"
+                   "AUTH_KEY 'proton'"
+                   "EXECUTION_TIMEOUT 30000";
+    ParserCreateFunctionQuery parser;
+    EXPECT_THROW(parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0), Exception);
+}
+
+TEST(ParserCreateRemoteFunctionQuery, UDFAUTHHEADERButNotSetAUTHKEY)
+{
+    String input = "CREATE REMOTE  FUNCTION ip_lookup(ip string) RETURNS string "
+                   "URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/'"
+                   "AUTH_METHOD 'auth_header'"
+                   "AUTH_HEADER 'proton'"
+                   "EXECUTION_TIMEOUT 30000";
+    ParserCreateFunctionQuery parser;
+    EXPECT_THROW(parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0), Exception);
+}
+
+TEST(ParserCreateRemoteFunctionQuery, UDFFormat1)
+{
+    String input = "CREATE REMOTE  FUNCTION ip_lookup(ip string) RETURNS string "
+                   "EXECUTION_TIMEOUT 2000 "
+                   "URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/'";
+    ParserCreateFunctionQuery parser;
+    ASTPtr ast = parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0);
+    ASTCreateFunctionQuery * create = ast->as<ASTCreateFunctionQuery>();
+
+    auto str = serializeAST(*create, true);
+
+    EXPECT_EQ(str,
+             "CREATE REMOTE FUNCTION ip_lookup(ip string) RETURNS string EXECUTION_TIMEOUT 2000 URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/'"
+    );
+}
+
+TEST(ParserCreateRemoteFunctionQuery, UDFFormat2)
+{
+    String input = "CREATE REMOTE  FUNCTION ip_lookup(ip string) RETURNS string "
+                   "URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/' "
+                   "EXECUTION_TIMEOUT 2000";
+    ParserCreateFunctionQuery parser;
+    ASTPtr ast = parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0);
+    ASTCreateFunctionQuery * create = ast->as<ASTCreateFunctionQuery>();
+
+    auto str = serializeAST(*create, true);
+
+    EXPECT_EQ(str,
+             "CREATE REMOTE FUNCTION ip_lookup(ip string) RETURNS string URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/' EXECUTION_TIMEOUT 2000"
+    );
+}
+
+TEST(ParserCreateRemoteFunctionQuery, UDFFormat3)
+{
+    String input = "CREATE REMOTE  FUNCTION ip_lookup(ip string) RETURNS string "
+                   "AUTH_METHOD 'auth_header' "
+                   "URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/' "
+                   "EXECUTION_TIMEOUT 2000 "
+                   "AUTH_KEY 'proton' "
+                   "AUTH_HEADER 'auth' ";
+    ParserCreateFunctionQuery parser;
+    ASTPtr ast = parseQuery(parser, input.data(), input.data() + input.size(), "", 0, 0);
+    ASTCreateFunctionQuery * create = ast->as<ASTCreateFunctionQuery>();
+
+    auto str = serializeAST(*create, true);
+
+    EXPECT_EQ(str,
+             "CREATE REMOTE FUNCTION ip_lookup(ip string) RETURNS string AUTH_METHOD 'auth_header' URL 'https://hn6wip76uexaeusz5s7bh3e4u40lrrrz.lambda-url.us-west-2.on.aws/' EXECUTION_TIMEOUT 2000 AUTH_KEY 'proton' AUTH_HEADER 'auth'"
+    );
 }
 

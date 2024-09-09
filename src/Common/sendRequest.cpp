@@ -33,7 +33,7 @@ std::pair<String, Int32> sendRequest(
     const String & password,
     const String & payload,
     const std::vector<std::pair<String, String>> & headers,
-    /// One second for connect/send/receive
+    /// Timeout second for connect/send/receive
     ConnectionTimeouts timeouts,
     Poco::Logger * log)
 {

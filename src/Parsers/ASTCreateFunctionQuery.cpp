@@ -74,7 +74,7 @@ void ASTCreateFunctionQuery::formatImpl(const IAST::FormatSettings & settings, I
     /// proton: starts
     if (is_remote)
     {
-        settings.ostr << '\n';
+        settings.ostr << ' ';
         function_core->formatImpl(settings, state, frame);
         return;
     }
@@ -173,12 +173,20 @@ Poco::JSON::Object::Ptr ASTCreateFunctionQuery::toJSON() const
         }        
 
         inner_func->set("url", url.value());
-        if (auth_method.has_value() && auth_method.value() == "auth_header")
+        if (auth_method.has_value())
+        {   
+            inner_func->set("auth_method", auth_method.value());
+            if (auth_method.value() == "auth_header")
+            {
+                Poco::JSON::Object::Ptr auth_context = new Poco::JSON::Object();
+                auth_context->set("key_name", auth_header.value_or(""));
+                auth_context->set("key_value", auth_key.value_or(""));
+                inner_func->set("auth_context", auth_context);
+            }
+        }
+        else
         {
-            Poco::JSON::Object::Ptr auth_context = new Poco::JSON::Object();
-            auth_context->set("key_name", auth_header.value_or(""));
-            auth_context->set("key_value", auth_key.value_or(""));
-            inner_func->set("auth_context", auth_context);
+            inner_func->set("auth_method", "none");
         }
         if (execution_timeout.has_value())
         {
