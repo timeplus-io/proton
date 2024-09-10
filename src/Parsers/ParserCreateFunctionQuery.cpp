@@ -11,6 +11,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/Streaming/ParserArguments.h>
+#include <Parsers/ParserKeyValuePairsSet.h>
 
 #include <Poco/JSON/Object.h>
 /// proton: ends
@@ -40,11 +41,14 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
     ParserKeyword s_auth_method("AUTH_METHOD");
     ParserKeyword s_auth_header("AUTH_HEADER");
     ParserKeyword s_auth_key("AUTH_KEY");
+    ParserKeyword s_execution_timeout("EXECUTION_TIMEOUT");
     ParserLiteral value;
+    ASTPtr kv_list;
     ASTPtr url;
     ASTPtr auth_method;
     ASTPtr auth_header;
     ASTPtr auth_key;
+    ASTPtr execution_timeout;
     ParserArguments arguments_p;
     ParserDataType return_p;
     ParserStringLiteral js_src_p;
@@ -139,35 +143,74 @@ bool ParserCreateFunctionQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
         {
             throw Exception("Remote udf can not be an aggregate function", ErrorCodes::AGGREGATE_FUNCTION_NOT_APPLICABLE);
         }
-        if (!s_url.ignore(pos, expected))
+        ParserKeyValuePairsSet kv_pairs_list;
+        if (!kv_pairs_list.parse(pos, kv_list, expected))
             return false;
-        if (!value.parse(pos, url, expected))
-            return false;
-        if (s_auth_method.ignore(pos, expected))
+        
+        /// check if the parameters are valid and no unsupported or unknown parameters.
+        std::optional<String> ast_url;
+        std::optional<String> ast_auth_method;
+        std::optional<String> ast_auth_header;
+        std::optional<String> ast_auth_key;
+        std::optional<UInt64> ast_execution_timeout;
+        for (const auto & kv : kv_list->children)
         {
-            if (!value.parse(pos, auth_method, expected))
-                return false;
-            auto method_str = auth_method->as<ASTLiteral>()->value.safeGet<String>();
-            url->children.push_back(std::move(auth_method));
-            if (method_str == "auth_header")
+            auto * kv_pair = kv->as<ASTPair>();
+            auto key = kv_pair->first;
+            auto pair_value = kv_pair->second->as<ASTLiteral>()->value;
+            if (!kv_pair)
+                throw Exception("Key-value pair expected", ErrorCodes::UNKNOWN_FUNCTION);
+            
+            if (key == "url")
             {
-                if (!s_auth_header.ignore(pos, expected))
-                    return false;
-                if (!value.parse(pos, auth_header, expected))
-                    return false;
-                if (!s_auth_key.ignore(pos, expected))
-                    return false;
-                if (!value.parse(pos, auth_key, expected))
-                    return false;
-                url->children.push_back(std::move(auth_header));
-                url->children.push_back(std::move(auth_key));
+                ast_url = pair_value.safeGet<String>();
             }
-            else if (method_str != "none")
+            else if (key == "auth_method")
             {
-                throw Exception("AUTH_METHOD must be 'none' or 'auth_header'", ErrorCodes::UNKNOWN_FUNCTION);
+                ast_auth_method = pair_value.safeGet<String>();
+                if (ast_auth_method.value() != "none" && ast_auth_method.value() != "auth_header")
+                    throw Exception("Unknown auth method", ErrorCodes::UNKNOWN_FUNCTION);
+            }
+            else if (key == "auth_header")
+            {
+                ast_auth_header = pair_value.safeGet<String>();
+            }
+            else if (key == "auth_key")
+            {
+                ast_auth_key = pair_value.safeGet<String>();
+            }
+            else if (key == "execution_timeout")
+            {
+                ast_execution_timeout = pair_value.safeGet<UInt64>();
             }
         }
-        function_core = std::move(url);
+        /// check if URL is set
+        if (!ast_url)
+            throw Exception("URL is required for remote function", ErrorCodes::UNKNOWN_FUNCTION);
+        /// check if auth_method is "auth_header" or "none"
+        if (ast_auth_method)
+        {
+            if (ast_auth_method.value() == "auth_header")
+            {
+                if (!ast_auth_header  || !ast_auth_key)
+                    throw Exception("Auth header and auth key are required for auth_header auth method", ErrorCodes::UNKNOWN_FUNCTION);
+            }
+            else if (ast_auth_method.value() == "none")
+            {
+                if (ast_auth_header || ast_auth_key)
+                    throw Exception("Auth method is 'none', but auth header or auth key is set.", ErrorCodes::UNKNOWN_FUNCTION);
+            }
+            else
+            {
+                throw Exception("Unknown auth method " + ast_auth_method.value(), ErrorCodes::UNKNOWN_FUNCTION);
+            }
+        }
+        else
+        {
+            if (ast_auth_header || ast_auth_key)
+                throw Exception("Auth method is 'none', but auth header or auth key is set.", ErrorCodes::UNKNOWN_FUNCTION);
+        }
+        function_core = std::move(kv_list);
     }
     /// proton: ends
 

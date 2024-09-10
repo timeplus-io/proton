@@ -80,6 +80,9 @@ struct RemoteUserDefinedFunctionConfiguration : public UserDefinedFunctionConfig
     /// Timeout for reading data from input format
     size_t command_read_timeout_milliseconds = 10000;
 
+    /// Timeout for receiving response from remote endpoint
+    size_t command_execution_timeout_milliseconds = 10000;
+
     /// url of remote endpoint, only available when 'type' is 'remote'
     Poco::URI url;
     enum AuthMethod

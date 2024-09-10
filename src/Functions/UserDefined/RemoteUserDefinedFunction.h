@@ -2,6 +2,7 @@
 
 #include <Functions/UserDefined/UserDefinedFunctionBase.h>
 #include <IO/ReadBufferFromString.h>
+#include <IO/ConnectionTimeouts.h>
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Formats/IRowInputFormat.h>
 #include <Common/sendRequest.h>
@@ -53,6 +54,7 @@ public:
             "",
             out,
             {{config.auth_context.key_name, config.auth_context.key_value}, {"", context->getCurrentQueryId()}},
+            ConnectionTimeouts({2, 0}/* connect timeout */, {5, 0} /* send timeout */, {static_cast<long>(config.command_execution_timeout_milliseconds / 1000), static_cast<long>((config.command_execution_timeout_milliseconds % 1000u) * 1000u)/* receive timeout */}), ///  timeout and limit for connect/send/receive ...
             &Poco::Logger::get("UserDefinedFunction"));
 
         if (http_status != Poco::Net::HTTPResponse::HTTP_OK)

@@ -215,7 +215,7 @@ std::pair<String, Int32> MetaStoreConnection::forwardRequest(
     for (auto it = active_servers.begin(); it != active_servers.end();)
     {
         Poco::URI uri{fmt::format({METASTORE_URL}, it->getHost(), it->getPort(), uri_parameter)};
-        auto [response, http_status] = sendRequest(uri, method, query_id, user, password, body, {}, log);
+        auto [response, http_status] = sendRequest(uri, method, query_id, user, password, body, {}, ConnectionTimeouts({2, 0}/* connect timeout */, {5, 0}/* send timeout */, {10, 0}/* receive timeout */) , log);
 
         if (http_status != Poco::Net::HTTPResponse::HTTP_INTERNAL_SERVER_ERROR)
         {

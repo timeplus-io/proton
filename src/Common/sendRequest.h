@@ -2,6 +2,8 @@
 
 #include <base/types.h>
 
+#include <IO/ConnectionTimeouts.h>
+
 #include <Poco/URI.h>
 
 #include  <utility>
@@ -23,5 +25,6 @@ std::pair<String, Int32> sendRequest(
     const String & password,
     const String & payload,
     const std::vector<std::pair<String, String>> & headers,
+    ConnectionTimeouts timeouts,
     Poco::Logger * log);
 }
