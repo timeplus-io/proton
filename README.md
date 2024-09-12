@@ -24,7 +24,7 @@
   <a href="#need-help"><strong>Need help?</strong></a>
 </p>
 
-Timeplus Proton is a streaming SQL engine, a fast and lightweight alternative to ksqlDB or Apache Flink, 🚀 powered by ClickHouse. It enables developers to solve streaming data processing, routing and analytics challenges from Apache Kafka, Redpanda and more sources, and send aggregated data to the downstream systems. Timeplus Proton is the core engine of [Timeplus Enterprise](https://timeplus.com), which is a cloud native streaming analytics platform.
+Timeplus Proton is a streaming SQL engine, a fast and lightweight alternative to ksqlDB or Apache Flink, 🚀 powered by ClickHouse. It enables developers to solve streaming data processing, routing and analytics challenges from Apache Kafka, Redpanda and more sources, and send aggregated data to the downstream systems. Timeplus Proton is the core engine of [Timeplus Enterprise](https://timeplus.com).
 
 ## 💪 Why use Timeplus Proton?
 
@@ -76,7 +76,7 @@ The [Docker Compose stack](https://github.com/timeplus-io/proton/tree/develop/ex
 
 ### Timeplus Cloud:
 
-Don't want to setup by yourself? Try Timeplus Proton in [Cloud](https://us.timeplus.cloud/)
+Don't want to setup by yourself? Try Timeplus Proton in [Cloud](https://us-west-2.timeplus.cloud/)
 
 
 ### 🔎 Usage
@@ -112,7 +112,7 @@ You should see data like the following:
 ### ⏩ What's next?
 To see more examples of using Timeplus Proton, check out the [examples](https://github.com/timeplus-io/proton/tree/develop/examples) folder.
 
-To access more features, such as sources, sinks, dashboards, alerts, and data lineage, create a workspace on [Timeplus Cloud](https://us.timeplus.cloud) or try [Timeplus Enterprise](https://www.timeplus.com/product#selfhosted) locally.
+To access more features, such as sources, sinks, dashboards, alerts, and data lineage, try [Timeplus Enterprise](https://www.timeplus.com/product) locally or create a workspace on [Timeplus Cloud](https://us-west-2.timeplus.cloud).
 
 What features are available with Timeplus Proton versus Timeplus Enterprise?
 
