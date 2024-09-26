@@ -58,8 +58,10 @@ void registerTableFunctionHop(TableFunctionFactory & factory)
 {
     factory.registerFunction(
         "hop",
-        []() -> TableFunctionPtr { return std::make_shared<TableFunctionHop>("hop"); },
-        {},
+        TableFunctionFactoryData{
+            []() -> TableFunctionPtr { return std::make_shared<TableFunctionHop>("hop"); },
+            {},
+        },
         TableFunctionFactory::CaseSensitive,
         /*support subquery*/ true);
 }

@@ -179,15 +179,15 @@ REGISTER_FUNCTION(GetOSKernelVersion)
 
 REGISTER_FUNCTION(DisplayName)
 {
-    factory.registerFunction<FunctionDisplayName>(
+    factory.registerFunction<FunctionDisplayName>(FunctionDocumentation
         {
-            R"(
+            .description=R"(
 Returns the value of `display_name` from config or server FQDN if not set.
 
 [example:displayName]
 )",
-            Documentation::Examples{{"displayName", "SELECT display_name();"}},
-            Documentation::Categories{"Constant", "Miscellaneous"}
+            .examples{{"displayName", "SELECT display_name();", ""}},
+            .categories{"Constant", "Miscellaneous"}
         },
         FunctionFactory::CaseSensitive);
 }

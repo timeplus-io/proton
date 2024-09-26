@@ -142,8 +142,10 @@ void registerTableFunctionChangelog(TableFunctionFactory & factory)
 {
     factory.registerFunction(
         "changelog",
-        []() -> TableFunctionPtr { return std::make_shared<TableFunctionChangelog>("changelog"); },
-        {},
+        TableFunctionFactoryData{
+            []() -> TableFunctionPtr { return std::make_shared<TableFunctionChangelog>("changelog"); },
+            {},
+        },
         TableFunctionFactory::CaseSensitive,
         /*support subquery*/ true);
 }

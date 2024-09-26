@@ -16,22 +16,21 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-
 void TableFunctionFactory::registerFunction(
-    const std::string & name, TableFunctionCreator creator, Documentation doc, CaseSensitiveness case_sensitiveness, bool support_subquery)
+    const std::string & name, Value value, CaseSensitiveness case_sensitiveness, bool support_subquery)
 {
-    if (!table_functions.emplace(name, TableFunctionFactoryData{creator, doc}).second)
-        throw Exception("TableFunctionFactory: the function name '" + name + "' is not unique",
+    if (!table_functions.emplace(name, value).second)
+        throw Exception("TableFunctionFactory: the table function name '" + name + "' is not unique",
             ErrorCodes::LOGICAL_ERROR);
 
     if (case_sensitiveness == CaseInsensitive
-        && !case_insensitive_table_functions.emplace(Poco::toLower(name), TableFunctionFactoryData{creator, doc}).second)
-        throw Exception("TableFunctionFactory: the case insensitive function name '" + name + "' is not unique",
+        && !case_insensitive_table_functions.emplace(Poco::toLower(name), value).second)
+        throw Exception("TableFunctionFactory: the case insensitive table function name '" + name + "' is not unique",
                         ErrorCodes::LOGICAL_ERROR);
 
     /// proton: starts.
     if (support_subquery)
-        if (!support_subquery_table_functions.emplace(name, TableFunctionFactoryData{creator, doc}).second)
+        if (!support_subquery_table_functions.emplace(name, value).second)
             throw Exception("TableFunctionFactory: the support subquery function name '" + name + "' is not unique",
                         ErrorCodes::LOGICAL_ERROR);
     /// proton: ends.
@@ -69,13 +68,13 @@ TableFunctionPtr TableFunctionFactory::tryGet(
     auto it = table_functions.find(name);
     if (table_functions.end() != it)
     {
-        res = it->second.first();
+        res = it->second.creator();
     }
     else
     {
         it = case_insensitive_table_functions.find(Poco::toLower(name));
         if (case_insensitive_table_functions.end() != it)
-            res = it->second.first();
+            res = it->second.creator();
     }
 
     if (!res)
@@ -103,13 +102,29 @@ bool TableFunctionFactory::isSupportSubqueryTableFunctionName(const std::string 
 }
 /// proton: ends.
 
-Documentation TableFunctionFactory::getDocumentation(const std::string & name) const
+std::optional<TableFunctionProperties> TableFunctionFactory::tryGetProperties(const String & name) const
 {
-    auto it = table_functions.find(name);
-    if (it == table_functions.end())
-        throw Exception(ErrorCodes::UNKNOWN_FUNCTION, "Unknown table function {}", name);
+    return tryGetPropertiesImpl(name);
+}
 
-    return it->second.second;
+std::optional<TableFunctionProperties> TableFunctionFactory::tryGetPropertiesImpl(const String & name_param) const
+{
+    String name = getAliasToOrName(name_param);
+    Value found;
+
+    /// Find by exact match.
+    if (auto it = table_functions.find(name); it != table_functions.end())
+    {
+        found = it->second;
+    }
+
+    if (auto jt = case_insensitive_table_functions.find(Poco::toLower(name)); jt != case_insensitive_table_functions.end())
+        found = jt->second;
+
+    if (found.creator)
+        return found.properties;
+
+    return {};
 }
 
 TableFunctionFactory & TableFunctionFactory::instance()
