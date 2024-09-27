@@ -760,6 +760,19 @@ inline void writeDateTimeText(time_t datetime, WriteBuffer & buf, const DateLUTI
     writeDateTimeText<date_delimeter, time_delimeter, between_date_time_delimiter>(LocalDateTime(datetime, time_zone), buf);
 }
 
+/// In the format YYYY-MM-DD HH:MM:SS+time zone, according to the specified time zone.
+template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' '>
+inline void writeDateTimeTextWIthZone(time_t datetime, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
+{
+    writeDateTimeText<date_delimeter, time_delimeter, between_date_time_delimiter>(LocalDateTime(datetime, time_zone), buf);
+    int hour = time_zone.timezoneOffset(datetime) / 3600;
+    buf.write(hour >= 0 ? '+' : '-');
+    int abs_hour = std::abs(hour);
+    buf.write(&digits100[abs_hour * 2], 2);
+    buf.write(':');
+    buf.write(&digits100[0], 2);
+}
+
 /// In the format YYYY-MM-DD HH:MM:SS.NNNNNNNNN, according to the specified time zone.
 template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' ', char fractional_time_delimiter = '.'>
 inline void writeDateTimeText(DateTime64 datetime64, UInt32 scale, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
@@ -792,6 +805,20 @@ inline void writeDateTimeText(DateTime64 datetime64, UInt32 scale, WriteBuffer &
         buf.write(fractional_time_delimiter);
         writeDateTime64FractionalText<DateTime64>(components.fractional, scale, buf);
     }
+}
+
+
+/// In the format YYYY-MM-DD HH:MM:SS.NNNNNNNNN+time zone, according to the specified time zone.
+template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' '>
+inline void writeDateTimeTextWIthZone(DateTime64 datetime64, UInt32 scale, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
+{
+    writeDateTimeText(datetime64, scale, buf, time_zone);
+    int hour = time_zone.timezoneOffset(datetime64) / 3600;
+    buf.write(hour >= 0 ? '+' : '-');
+    int abs_hour = std::abs(hour);
+    buf.write(&digits100[abs_hour * 2], 2);
+    buf.write(':');
+    buf.write(&digits100[0], 2);
 }
 
 /// In the RFC 1123 format: "Tue, 03 Dec 2019 00:11:50 GMT". You must provide GMT DateLUT.
