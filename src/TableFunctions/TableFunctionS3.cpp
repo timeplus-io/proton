@@ -15,7 +15,6 @@
 #include <Storages/StorageURL.h>
 #include <Formats/FormatFactory.h>
 #include "registerTableFunctions.h"
-#include <filesystem>
 
 
 namespace DB
@@ -181,18 +180,6 @@ public:
     }
 private:
     const char * getStorageTypeName() const override { return "GCS"; }
-};
-
-class TableFunctionCOS : public TableFunctionS3
-{
-public:
-    static constexpr auto name = "cosn";
-    std::string getName() const override
-    {
-        return name;
-    }
-private:
-    const char * getStorageTypeName() const override { return "COSN"; }
 };
 
 class TableFunctionOSS : public TableFunctionS3
