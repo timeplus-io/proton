@@ -31,7 +31,7 @@ void SerializationDateTime64::serializeText(const IColumn & column, size_t row_n
     {
         case FormatSettings::DateTimeOutputFormat::Simple:
             if (has_explicit_time_zone)
-                writeDateTimeTextWIthZone(value, scale, ostr, time_zone);
+                writeDateTimeTextWithTimeZone(value, scale, ostr, time_zone);
             else
                 writeDateTimeText(value, scale, ostr, time_zone);
             return;
