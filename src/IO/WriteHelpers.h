@@ -766,6 +766,13 @@ inline void writeDateTimeTextWithTimeZone(time_t datetime, WriteBuffer & buf, co
 {
     writeDateTimeText<date_delimeter, time_delimeter, between_date_time_delimiter>(datetime, buf,  time_zone);
     auto offset = time_zone.timezoneOffset(std::abs(datetime));
+    /// Special UTC format 
+    if (offset == 0)
+    {
+        buf.write('Z');
+        return;
+    }
+
     auto asb_offset = std::abs(offset);
     auto hours = asb_offset / 3600;
     auto minutes = asb_offset % 3600 / 60;
@@ -821,6 +828,13 @@ inline void writeDateTimeTextWithTimeZone(DateTime64 datetime64, UInt32 scale, W
     auto components = DecimalUtils::split(datetime64, scale);
 
     auto offset = time_zone.timezoneOffset(std::abs(components.whole));
+    /// Special UTC format 
+    if (offset == 0)
+    {
+        buf.write('Z');
+        return;
+    }
+
     auto asb_offset = std::abs(offset);
     auto hours = asb_offset / 3600;
     auto minutes = asb_offset % 3600 / 60;
@@ -828,7 +842,6 @@ inline void writeDateTimeTextWithTimeZone(DateTime64 datetime64, UInt32 scale, W
     buf.write(&digits100[hours * 2], 2);
     buf.write(':');
     buf.write(&digits100[minutes * 2], 2);
-
 }
 
 /// In the RFC 1123 format: "Tue, 03 Dec 2019 00:11:50 GMT". You must provide GMT DateLUT.
