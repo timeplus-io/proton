@@ -998,10 +998,12 @@ ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const D
     static constexpr auto date_broken_down_length = 10;
     /// hh:mm:ss
     static constexpr auto time_broken_down_length = 8;
-    /// YYYY-MM-DD hh:mm:ss
-    static constexpr auto date_time_broken_down_length = date_broken_down_length + 1 + time_broken_down_length;
+    /// +zz:zz
+    static constexpr auto zone_broken_down_length = 6;
+    /// YYYY-MM-DD hh:mm:ss+zz:zz
+    static constexpr auto date_time_with_zone_broken_down_length = date_broken_down_length + 1 + time_broken_down_length + zone_broken_down_length;
 
-    char s[date_time_broken_down_length];
+    char s[date_time_with_zone_broken_down_length];
     char * s_pos = s;
 
     /** Read characters, that could represent unix timestamp.
@@ -1011,18 +1013,22 @@ ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const D
       */
 
     /// A piece similar to unix timestamp, maybe scaled to subsecond precision.
-    while (s_pos < s + date_time_broken_down_length && !buf.eof() && isNumericASCII(*buf.position()))
+    while (s_pos < s + date_time_with_zone_broken_down_length && !buf.eof() && isNumericASCII(*buf.position()))
     {
         *s_pos = *buf.position();
         ++s_pos;
         ++buf.position();
     }
 
-    /// 2015-01-01 01:02:03 or 2015-01-01
+    /// 2015-01-01 01:02:03+08:00 or 2015-01-01 01:02:03 or 2015-01-01
     if (s_pos == s + 4 && !buf.eof() && !isNumericASCII(*buf.position()))
     {
         const auto already_read_length = s_pos - s;
         const size_t remaining_date_size = date_broken_down_length - already_read_length;
+        /// If have time zone symbol
+        bool has_time_zone_offset = false;
+        UInt8 time_zone_offset_hour = 0;
+        UInt8 time_zone_offset_minute = 0;
 
         size_t size = buf.read(s_pos, remaining_date_size);
         if (size != remaining_date_size)
@@ -1062,11 +1068,56 @@ ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const D
             minute = (s[3] - '0') * 10 + (s[4] - '0');
             second = (s[6] - '0') * 10 + (s[7] - '0');
         }
+        if (!buf.eof() && (*buf.position() == '+' || *buf.position() == '-'))
+        {
+            
+            has_time_zone_offset = true;
+            char timezone_sign = *buf.position();
+            ++buf.position();
+
+            char tz[zone_broken_down_length];
+            size = buf.read(tz, zone_broken_down_length - 1);
+            tz[size] = 0;
+
+            if (size != zone_broken_down_length - 1 || tz[2] != ':')
+            {
+                throw ParsingException(std::string("Invalid timezone format ") + tz, ErrorCodes::CANNOT_PARSE_DATETIME);
+            }
+
+            time_zone_offset_hour = (tz[0] - '0') * 10 + (tz[1] - '0');
+            time_zone_offset_minute = (tz[3] - '0') * 10 + (tz[4] - '0');
+
+            if (timezone_sign == '-')
+            {
+                time_zone_offset_hour = -time_zone_offset_hour;
+                time_zone_offset_minute = -time_zone_offset_minute;                
+            }
+
+        }
+        else if (!buf.eof() && *buf.position() == 'Z')
+        {
+            has_time_zone_offset = true;
+            ++buf.position();
+        }
 
         if (unlikely(year == 0))
+        {
             datetime = 0;
+        }
+        else if (has_time_zone_offset)
+        {
+            const DateLUTImpl * utc_time_zone = &DateLUT::instance("UTC");
+            datetime = utc_time_zone->makeDateTime(year, month, day, hour, minute, second);
+            if (time_zone_offset_hour)
+                datetime -= time_zone_offset_hour * 3600;
+
+            if (time_zone_offset_minute)
+                datetime -= time_zone_offset_minute * 60;
+        }
         else
+        {
             datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
+        }
     }
     else
     {

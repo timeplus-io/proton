@@ -919,13 +919,16 @@ inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, cons
     /// Optimistic path, when whole value is in buffer.
     const char * s = buf.position();
 
+    /// YYYY-MM-DD hh:mm:ss+zz:zz
+    static constexpr auto date_time_with_time_zone_broken_down_length = 25;
     /// YYYY-MM-DD hh:mm:ss
     static constexpr auto date_time_broken_down_length = 19;
     /// YYYY-MM-DD
     static constexpr auto date_broken_down_length = 10;
-    bool optimistic_path_for_date_time_input = s + date_time_broken_down_length <= buf.buffer().end();
 
-    if (optimistic_path_for_date_time_input)
+    bool optimistic_path_for_date_time_with_zone_input = s + date_time_with_time_zone_broken_down_length <= buf.buffer().end();
+
+    if (optimistic_path_for_date_time_with_zone_input)
     {
         if (s[4] < '0' || s[4] > '9')
         {
@@ -946,15 +949,62 @@ inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, cons
                 second = (s[17] - '0') * 10 + (s[18] - '0');
             }
 
-            if (unlikely(year == 0))
-                datetime = 0;
-            else
-                datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
-
             if (dt_long)
                 buf.position() += date_time_broken_down_length;
             else
                 buf.position() += date_broken_down_length;
+
+            /// processing time zone
+            bool has_time_zone_offset = false;
+            UInt8 time_zone_offset_hour = 0;
+            UInt8 time_zone_offset_minute = 0;
+            UInt8 timezone_length = 6;
+
+            if (*buf.position() == '+' || *buf.position() == '-')
+            {
+                has_time_zone_offset = true;
+                char timezone_sign = *buf.position();
+                ++buf.position();
+
+                char tz[timezone_length];
+                auto size = buf.read(tz, timezone_length - 1);
+                tz[size] = 0;
+
+                if (size != timezone_length - 1 || tz[2] != ':')
+                    throw ParsingException(std::string("Cannot parse Timezone ") + tz, ErrorCodes::CANNOT_PARSE_DATETIME);
+
+                time_zone_offset_hour = (tz[0] - '0') * 10 + (tz[1] - '0');
+                time_zone_offset_minute = (tz[3] - '0') * 10 + (tz[4] - '0');
+
+                if (timezone_sign == '-')
+                {
+                    time_zone_offset_hour = -time_zone_offset_hour;
+                    time_zone_offset_minute = -time_zone_offset_minute;
+                }
+            }
+            else if (*buf.position() == 'Z')
+            {
+                has_time_zone_offset = true;
+                ++buf.position();
+            }
+            
+            if (unlikely(year == 0))
+            {
+                datetime = 0;
+            }
+            else if (has_time_zone_offset)
+            {
+                datetime = DateLUT::instance("UTC").makeDateTime(year, month, day, hour, minute, second);
+                if (time_zone_offset_hour)
+                    datetime -= time_zone_offset_hour * 3600;
+
+                if (time_zone_offset_minute)
+                    datetime -= time_zone_offset_minute * 60;
+            }
+            else
+            {
+                datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
+            }
 
             return ReturnType(true);
         }
