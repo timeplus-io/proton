@@ -76,7 +76,7 @@ The [Docker Compose stack](https://github.com/timeplus-io/proton/tree/develop/ex
 
 ### Timeplus Cloud:
 
-Don't want to setup by yourself? Try Timeplus Proton in [Cloud](https://us-west-2.timeplus.cloud/)
+Don't want to setup by yourself? Try Timeplus in [Cloud](https://us-west-2.timeplus.cloud/)
 
 
 ### 🔎 Usage
@@ -84,18 +84,19 @@ SQL is the main interface. You can start a new terminal window with `proton clie
 > [!NOTE]
 > You can also integrate Timeplus Proton with Python/Java/Go SDK, REST API, or BI plugins. Please check <a href="#-integrations"><strong>Integrations</strong></a>
 
-In the `proton client`, you can write SQL to create [External Stream for Kafka](https://docs.timeplus.com/proton-kafka) or [External Table for ClickHouse](https://docs.timeplus.com/proton-clickhouse-external-table). You can also run the following SQL to create a stream of random data:
+In the `proton client`, you can write SQL to create [External Stream for Kafka](https://docs.timeplus.com/proton-kafka) or [External Table for ClickHouse](https://docs.timeplus.com/proton-clickhouse-external-table).
+
+You can also run the following SQL to create a stream of random data:
 
 ```sql
 -- Create a stream with random data
 CREATE RANDOM STREAM devices(
   device string default 'device'||to_string(rand()%4),
-  temperature float default rand()%1000/10)
-```
-```sql
+  temperature float default rand()%1000/10);
+
 -- Run the streaming SQL
 SELECT device, count(*), min(temperature), max(temperature)
-FROM devices GROUP BY device
+FROM devices GROUP BY device;
 ```
 
 You should see data like the following:
@@ -119,8 +120,8 @@ What features are available with Timeplus Proton versus Timeplus Enterprise?
 |                               | **Timeplus Proton**                                                                                                                                                                    | **Timeplus Enterprise**                                                                                                                                                                                                          |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Deployment**                | <ul><li>Single-node Docker image</li><li>Single binary on Mac/Linux</li></ul>                                                                                                          | <ul><li>Single node, or</li><li>Cluster</li><li>Kubernetes-based self-hosting, or</li><li>Fully-managed cloud service</li></ul>                                                                               |
-| **Data sources**              | <ul><li>Random streams</li><li>External streams to Apache Kafka, Confluent Cloud, Redpanda</li><li>Streaming ingestion via REST API (compact mode only)</li></ul> | <ul><li>Everything in Timeplus Proton</li><li>WebSocket and HTTP Stream</li><li>NATS</li><li>Apache Pulsar</li><li>CSV upload</li><li>Streaming ingestion via REST API (with API key and flexible modes)</li><li>Hundreds of connectors from Redpanda Connect</li></ul> |
-| **Data destinations (sinks)** | <ul><li>External streams to Apache Kafka, Confluent Cloud, Redpanda</li></ul>                                                                                                          | <ul><li>Everything in Timeplus Proton</li><li>Apache Pulsar</li><li>Slack</li><li>Webhook</li><li>Exchange data with other Timeplus Enterprise or Proton deployments</li></ul>                                                                                                      |
+| **Data sources**              | <ul><li>Random streams</li><li>External streams to Apache Kafka, Confluent Cloud, Redpanda</li><li>Streaming ingestion via REST API (compact mode only)</li></ul> | <ul><li>Everything in Timeplus Proton</li><li>External streams to another Timeplus Proton or Timeplus Enterprise deployment</li><li>WebSocket and HTTP Stream</li><li>NATS</li><li>CSV upload</li><li>Streaming ingestion via REST API (with API key and flexible modes)</li><li>Hundreds of connectors from Redpanda Connect</li></ul> |
+| **Data destinations (sinks)** | <ul><li>External streams to Apache Kafka, Confluent Cloud, Redpanda</li></ul>                                                                                                          | <ul><li>Everything in Timeplus Proton</li><li>External streams to another Timeplus Proton or Timeplus Enterprise deployment</li><li>Slack</li><li>Webhook</li><li>Hundreds of connectors from Redpanda Connect</li></ul>                                                                                                      |
 | **Support**                   | <ul><li>Community support from GitHub and Slack</li></ul>                                                                                                                              | <ul><li>Enterprise support via email, Slack, and Zoom, with a SLA</li></ul>                                                                                                                                                      |
 
 ## 🧩 Integrations
@@ -133,6 +134,7 @@ The following drivers are available:
 Integrations with other systems:
 
 * ClickHouse https://docs.timeplus.com/proton-clickhouse-external-table
+* Docker and Testcontainers https://docs.timeplus.com/tutorial-testcontainers-java
 * Sling https://docs.timeplus.com/sling
 * Grafana https://github.com/timeplus-io/proton-grafana-source
 * Metabase  https://github.com/timeplus-io/metabase-proton-driver

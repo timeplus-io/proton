@@ -8,7 +8,7 @@ A YouTube video tutorial is available for visual learners: https://youtu.be/ga_D
 
 Simply run `docker compose up` in this folder. Three docker containers in the stack:
 
-1. ghcr.io/timeplus-io/proton:latest, as the streaming SQL engine. 
+1. d.timeplus.com/timeplus-io/proton:latest, as the streaming SQL engine.
 2. clickhouse/clickhouse-server:latest
 3. quay.io/cloudhut/owl-shop:latest, as the data generator. [Owl Shop](https://github.com/cloudhut/owl-shop) is an imaginary ecommerce shop that simulates microservices exchanging data via Apache Kafka.
 4. docker.redpanda.com/redpandadata/redpanda, as the Kafka compatiable streaming message bus

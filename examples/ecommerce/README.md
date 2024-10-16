@@ -7,7 +7,7 @@ For more details, please check https://docs.timeplus.com/proton-kafka#tutorial
 ## Start the example
 
 Simply run `docker compose up` in this folder. Four docker containers in the stack:
-1. ghcr.io/timeplus-io/proton:latest, as the streaming database.
+1. d.timeplus.com/timeplus-io/proton:latest, as the streaming database.
 2. quay.io/cloudhut/owl-shop:latest, as the data generator. [Owl Shop](https://github.com/cloudhut/owl-shop) is an imaginary ecommerce shop that simulates microservices exchanging data via Apache Kafka.
 3. docker.redpanda.com/redpandadata/redpanda, as the Kafka compatiable streaming message bus
 4. docker.redpanda.com/redpandadata/console, as the web UI to explore data in Kafka/Redpanda
@@ -20,7 +20,7 @@ Run the following commands:
 ```sql
 -- Create externarl stream to read data from Kafka/Redpanda
 CREATE EXTERNAL STREAM frontend_events(raw string)
-SETTINGS type='kafka', 
+SETTINGS type='kafka',
          brokers='redpanda:9092',
          topic='owlshop-frontend-events';
 

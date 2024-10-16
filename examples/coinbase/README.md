@@ -2,7 +2,7 @@
 
 
 
-This docker compose file demonstrates how to ingest WebSocket data into Proton by using Benthos pipeline. 
+This docker compose file demonstrates how to ingest WebSocket data into Proton by using Benthos pipeline.
 
 
 
@@ -10,7 +10,7 @@ This docker compose file demonstrates how to ingest WebSocket data into Proton b
 
 Simply run `docker compose up` in this folder. Three docker containers in the stack:
 
-1. ghcr.io/timeplus-io/proton:latest, as the streaming database
+1. d.timeplus.com/timeplus-io/proton:latest, as the streaming database
 2. jeffail/benthos:latest, a [Benthos](https://www.benthos.dev/) service as the data pipeline
 3. init container, create the tickers stream when Proton database server is ready
 
@@ -54,7 +54,7 @@ output:
   http_client:
     url: http://proton:8123/proton/v1/ingest/streams/tickers
     verb: POST
-    headers: 
+    headers:
       Content-Type: application/json
     batching:
       count: 10
@@ -85,5 +85,3 @@ WHERE
 GROUP BY
   window_start, product_id
 ```
-
-

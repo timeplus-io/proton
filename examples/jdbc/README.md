@@ -6,7 +6,7 @@ This docker compose file demonstrates how to connect to Proton via JDBC driver.
 
 Simply run `docker compose up` in this folder. Two docker containers in the stack:
 
-1. ghcr.io/timeplus-io/proton:latest, as the streaming database. Port 8123 is exposed so that JDBC driver can connect to it.
+1. d.timeplus.com/timeplus-io/proton:latest, as the streaming database. Port 8123 is exposed so that JDBC driver can connect to it.
 2. timeplus/cardemo:latest, as the data generator
 
 Please note port 8123 from the Proton container is exposed to the host. You need this port to connect to Proton via JDBC driver.
@@ -55,7 +55,7 @@ public class App {
             }
             return count;
         }
-    }    
+    }
     public static void main(String[] args) {
         String url = "jdbc:proton://localhost:8123";
         String user = System.getProperty("user", "default");
@@ -85,7 +85,7 @@ First add the Proton JDBC driver to DBeaver. Taking DBeaver 23.2.3 as an example
 * Default User: default
 * Allow Empty Password
 
-In the "Libaries" tab, click "Add Artifact" and type `com.timeplus:proton-jdbc:0.6.0`. Click the "Find Class" button to load the class. 
+In the "Libaries" tab, click "Add Artifact" and type `com.timeplus:proton-jdbc:0.6.0`. Click the "Find Class" button to load the class.
 
 Create a new database connection, choose "Timeplus Proton" and accept the default settings. Click the "Test Connection.." to verify the connection is okay.
 
