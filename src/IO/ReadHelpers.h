@@ -969,8 +969,8 @@ inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, cons
 
             /// processing time zone
             bool has_time_zone_offset = false;
-            UInt8 time_zone_offset_hour = 0;
-            UInt8 time_zone_offset_minute = 0;
+            Int8 time_zone_offset_hour = 0;
+            Int8 time_zone_offset_minute = 0;
             UInt8 timezone_length = 6;
 
             if (*buf.position() == '+' || *buf.position() == '-')
@@ -1107,6 +1107,7 @@ inline ReturnType readDateTimeTextImpl(DateTime64 & datetime64, UInt32 scale, Re
         datetime64 = DecimalUtils::decimalFromComponents<DateTime64>(components, scale) * negative_fraction_multiplier;
     }
     else
+    {
         is_ok = DecimalUtils::tryGetDecimalFromComponents<DateTime64>(components, scale, datetime64);
         if (is_ok)
             datetime64 *= negative_fraction_multiplier;

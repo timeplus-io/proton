@@ -1047,8 +1047,8 @@ ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const D
         const size_t remaining_date_size = date_broken_down_length - already_read_length;
         /// If have time zone symbol
         bool has_time_zone_offset = false;
-        UInt8 time_zone_offset_hour = 0;
-        UInt8 time_zone_offset_minute = 0;
+        Int8 time_zone_offset_hour = 0;
+        Int8 time_zone_offset_minute = 0;
 
         size_t size = buf.read(s_pos, remaining_date_size);
         if (size != remaining_date_size)
