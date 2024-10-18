@@ -760,6 +760,30 @@ inline void writeDateTimeText(time_t datetime, WriteBuffer & buf, const DateLUTI
     writeDateTimeText<date_delimeter, time_delimeter, between_date_time_delimiter>(LocalDateTime(datetime, time_zone), buf);
 }
 
+/// proton: starts
+/// In the format YYYY-MM-DD HH:MM:SS+time zone, according to the specified time zone.
+template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' '>
+inline void writeDateTimeTextWithTimeZone(time_t datetime, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
+{
+    writeDateTimeText<date_delimeter, time_delimeter, between_date_time_delimiter>(datetime, buf,  time_zone);
+    auto offset = time_zone.timezoneOffset(std::abs(datetime));
+    /// Special UTC format 
+    if (offset == 0)
+    {
+        buf.write('Z');
+        return;
+    }
+
+    auto asb_offset = std::abs(offset);
+    auto hours = asb_offset / 3600;
+    auto minutes = asb_offset % 3600 / 60;
+    buf.write(offset >= 0 ? '+' : '-');
+    buf.write(&digits100[hours * 2], 2);
+    buf.write(':');
+    buf.write(&digits100[minutes * 2], 2);
+}
+/// proton: ends
+
 /// In the format YYYY-MM-DD HH:MM:SS.NNNNNNNNN, according to the specified time zone.
 template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' ', char fractional_time_delimiter = '.'>
 inline void writeDateTimeText(DateTime64 datetime64, UInt32 scale, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
@@ -793,6 +817,35 @@ inline void writeDateTimeText(DateTime64 datetime64, UInt32 scale, WriteBuffer &
         writeDateTime64FractionalText<DateTime64>(components.fractional, scale, buf);
     }
 }
+
+/// proton: starts
+/// In the format YYYY-MM-DD HH:MM:SS.NNNNNNNNN+time zone, according to the specified time zone.
+template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' '>
+inline void writeDateTimeTextWithTimeZone(DateTime64 datetime64, UInt32 scale, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
+{
+    writeDateTimeText(datetime64, scale, buf, time_zone);
+    static constexpr UInt32 MaxScale = DecimalUtils::max_precision<DateTime64>;
+    scale = scale > MaxScale ? MaxScale : scale;
+
+    auto components = DecimalUtils::split(datetime64, scale);
+
+    auto offset = time_zone.timezoneOffset(std::abs(components.whole));
+    /// Special UTC format 
+    if (offset == 0)
+    {
+        buf.write('Z');
+        return;
+    }
+
+    auto asb_offset = std::abs(offset);
+    auto hours = asb_offset / 3600;
+    auto minutes = asb_offset % 3600 / 60;
+    buf.write(offset >= 0 ? '+' : '-');
+    buf.write(&digits100[hours * 2], 2);
+    buf.write(':');
+    buf.write(&digits100[minutes * 2], 2);
+}
+/// proton: ends
 
 /// In the RFC 1123 format: "Tue, 03 Dec 2019 00:11:50 GMT". You must provide GMT DateLUT.
 /// This is needed for HTTP requests.

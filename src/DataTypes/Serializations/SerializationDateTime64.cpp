@@ -30,7 +30,10 @@ void SerializationDateTime64::serializeText(const IColumn & column, size_t row_n
     switch (settings.date_time_output_format)
     {
         case FormatSettings::DateTimeOutputFormat::Simple:
-            writeDateTimeText(value, scale, ostr, time_zone);
+            if (has_explicit_time_zone)
+                writeDateTimeTextWithTimeZone(value, scale, ostr, time_zone);
+            else
+                writeDateTimeText(value, scale, ostr, time_zone);
             return;
         case FormatSettings::DateTimeOutputFormat::UnixTimestamp:
             writeDateTimeUnixTimestamp(value, scale, ostr);

@@ -907,25 +907,44 @@ inline T parseFromString(std::string_view str)
 }
 
 
-template <typename ReturnType = void>
+template <typename ReturnType = void, bool dt64_mode = false>
 ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & date_lut);
 
 /** In YYYY-MM-DD hh:mm:ss or YYYY-MM-DD format, according to specified time zone.
   * As an exception, also supported parsing of unix timestamp in form of decimal number.
   */
-template <typename ReturnType = void>
+template <typename ReturnType = void, bool dt64_mode = false>
 inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & date_lut)
 {
+    static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
+
+    if constexpr (!dt64_mode)
+    {
+        if (!buf.eof() && !isNumericASCII(*buf.position()))
+        {
+            if constexpr (throw_exception)
+                throw ParsingException(ErrorCodes::CANNOT_PARSE_DATETIME, "Cannot parse datetime");
+            else
+                return false;
+        }
+    }
+
     /// Optimistic path, when whole value is in buffer.
     const char * s = buf.position();
 
+    /// YYYY-MM-DD hh:mm:ss+zz:zz
+    static constexpr auto date_time_with_time_zone_broken_down_length = 25;
     /// YYYY-MM-DD hh:mm:ss
     static constexpr auto date_time_broken_down_length = 19;
+
+    /// proton: starts
     /// YYYY-MM-DD
     static constexpr auto date_broken_down_length = 10;
-    bool optimistic_path_for_date_time_input = s + date_time_broken_down_length <= buf.buffer().end();
 
-    if (optimistic_path_for_date_time_input)
+    bool optimistic_path_for_date_time_with_zone_input = s + date_time_with_time_zone_broken_down_length <= buf.buffer().end();
+    /// proton: ends
+
+    if (optimistic_path_for_date_time_with_zone_input)
     {
         if (s[4] < '0' || s[4] > '9')
         {
@@ -946,15 +965,64 @@ inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, cons
                 second = (s[17] - '0') * 10 + (s[18] - '0');
             }
 
-            if (unlikely(year == 0))
-                datetime = 0;
-            else
-                datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
-
             if (dt_long)
                 buf.position() += date_time_broken_down_length;
             else
                 buf.position() += date_broken_down_length;
+
+            /// proton: starts
+            /// processing time zone
+            bool has_time_zone_offset = false;
+            Int8 time_zone_offset_hour = 0;
+            Int8 time_zone_offset_minute = 0;
+            UInt8 timezone_length = 6;
+
+            if (*buf.position() == '+' || *buf.position() == '-')
+            {
+                has_time_zone_offset = true;
+                char timezone_sign = *buf.position();
+                ++buf.position();
+
+                char tz[timezone_length];
+                auto size = buf.read(tz, timezone_length - 1);
+                tz[size] = 0;
+
+                if (size != timezone_length - 1 || tz[2] != ':')
+                    throw ParsingException(std::string("Cannot parse Timezone ") + tz, ErrorCodes::CANNOT_PARSE_DATETIME);
+
+                time_zone_offset_hour = (tz[0] - '0') * 10 + (tz[1] - '0');
+                time_zone_offset_minute = (tz[3] - '0') * 10 + (tz[4] - '0');
+
+                if (timezone_sign == '-')
+                {
+                    time_zone_offset_hour = -time_zone_offset_hour;
+                    time_zone_offset_minute = -time_zone_offset_minute;
+                }
+            }
+            else if (*buf.position() == 'Z')
+            {
+                has_time_zone_offset = true;
+                ++buf.position();
+            }
+
+            if (unlikely(year == 0))
+            {
+                datetime = 0;
+            }
+            else if (has_time_zone_offset)
+            {
+                datetime = DateLUT::instance("UTC").makeDateTime(year, month, day, hour, minute, second);
+                if (time_zone_offset_hour)
+                    datetime -= time_zone_offset_hour * 3600;
+
+                if (time_zone_offset_minute)
+                    datetime -= time_zone_offset_minute * 60;
+            }
+            else
+            {
+                datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
+            }
+            /// proton: ends
 
             return ReturnType(true);
         }
@@ -963,19 +1031,30 @@ inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, cons
             return readIntTextImpl<time_t, ReturnType, ReadIntTextCheckOverflow::CHECK_OVERFLOW>(datetime, buf);
     }
     else
-        return readDateTimeTextFallback<ReturnType>(datetime, buf, date_lut);
+        return readDateTimeTextFallback<ReturnType, dt64_mode>(datetime, buf, date_lut);
 }
 
 template <typename ReturnType>
 inline ReturnType readDateTimeTextImpl(DateTime64 & datetime64, UInt32 scale, ReadBuffer & buf, const DateLUTImpl & date_lut)
 {
-    time_t whole;
-    if (!readDateTimeTextImpl<bool>(whole, buf, date_lut))
+    time_t whole = 0;
+    bool is_negative_timestamp = (!buf.eof() && *buf.position() == '-');
+    bool is_empty = buf.eof();
+
+    if (!is_empty)
     {
-        return ReturnType(false);
+        try
+        {
+            readDateTimeTextImpl<ReturnType, true>(whole, buf, date_lut);
+        }
+        catch (const DB::ParsingException & exception)
+        {
+            if (buf.eof() || *buf.position() != '.')
+                throw exception;
+        }
     }
 
-    int negative_multiplier = 1;
+    int negative_fraction_multiplier = 1;
 
     DB::DecimalUtils::DecimalComponents<DateTime64> components{static_cast<DateTime64::NativeType>(whole), 0};
 
@@ -1003,18 +1082,18 @@ inline ReturnType readDateTimeTextImpl(DateTime64 & datetime64, UInt32 scale, Re
         while (!buf.eof() && isNumericASCII(*buf.position()))
             ++buf.position();
 
-        /// Fractional part (subseconds) is treated as positive by users
-        /// (as DateTime64 itself is a positive, although underlying decimal is negative)
-        /// setting fractional part to be negative when whole is 0 results in wrong value,
-        /// so we multiply result by -1.
-        if (components.whole < 0 && components.fractional != 0)
+        /// Fractional part (subseconds) is treated as positive by users, but represented as a negative number.
+        /// E.g. `1925-12-12 13:14:15.123` is represented internally as timestamp `-1390214744.877`.
+        /// Thus need to convert <negative_timestamp>.<fractional> to <negative_timestamp+1>.<1-0.<fractional>>
+        /// Also, setting fractional part to be negative when whole is 0 results in wrong value, in this case multiply result by -1.
+        if (!is_negative_timestamp && components.whole < 0 && components.fractional != 0)
         {
             const auto scale_multiplier = DecimalUtils::scaleMultiplier<DateTime64::NativeType>(scale);
             ++components.whole;
             components.fractional = scale_multiplier - components.fractional;
             if (!components.whole)
             {
-                negative_multiplier = -1;
+                negative_fraction_multiplier = -1;
             }
         }
     }
@@ -1029,12 +1108,15 @@ inline ReturnType readDateTimeTextImpl(DateTime64 & datetime64, UInt32 scale, Re
 
     bool is_ok = true;
     if constexpr (std::is_same_v<ReturnType, void>)
-        datetime64 = DecimalUtils::decimalFromComponents<DateTime64>(components, scale);
+    {
+        datetime64 = DecimalUtils::decimalFromComponents<DateTime64>(components, scale) * negative_fraction_multiplier;
+    }
     else
+    {
         is_ok = DecimalUtils::tryGetDecimalFromComponents<DateTime64>(components, scale, datetime64);
-
-    datetime64 *= negative_multiplier;
-
+        if (is_ok)
+            datetime64 *= negative_fraction_multiplier;
+    }
 
     return ReturnType(is_ok);
 }
