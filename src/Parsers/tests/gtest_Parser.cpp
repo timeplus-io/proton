@@ -3,6 +3,7 @@
 #include <Parsers/ParserCreateQuery.h>
 /// proton: starts
 #include <Parsers/ParserDropQuery.h>
+#include <Parsers/ParserTablePropertiesQuery.h>
 /// proton: ends
 #include <Parsers/ParserOptimizeQuery.h>
 #include <Parsers/ParserQueryWithOutput.h>
@@ -236,9 +237,7 @@ INSTANTIATE_TEST_SUITE_P(ParserCreateStreamQuery, ParserTest,
                                      "CREATE STREAM tests\n(\n  `device` string\n)"
                                  }
                              })));
-/// proton: ends
 
-/// proton: starts. ALTER STREAM test cases
 INSTANTIATE_TEST_SUITE_P(ParserAlterStreamQuery, ParserTest,
                          ::testing::Combine(
                              ::testing::Values(std::make_shared<ParserAlterQuery>()),
@@ -260,9 +259,7 @@ INSTANTIATE_TEST_SUITE_P(ParserAlterStreamQuery, ParserTest,
                                      "ALTER STREAM tests\n  DROP COLUMN id1"
                                  }
                              })));
-/// proton: ends
 
-/// proton: starts. DROP STREAM test cases
 INSTANTIATE_TEST_SUITE_P(ParserDropStreamQuery, ParserTest,
                          ::testing::Combine(
                              ::testing::Values(std::make_shared<ParserDropQuery>()),
@@ -280,4 +277,56 @@ INSTANTIATE_TEST_SUITE_P(ParserDropStreamQuery, ParserTest,
                                      "TRUNCATE STREAM tests"
                                  }
                              })));
+
+
+INSTANTIATE_TEST_SUITE_P(ParserTablePropertiesQuery, ParserTest,
+    ::testing::Combine(
+        ::testing::Values(std::make_shared<ParserTablePropertiesQuery>()),
+        ::testing::ValuesIn(std::initializer_list<ParserTestCase>{
+            {
+                "SHOW CREATE DATABASE db",
+                "SHOW CREATE DATABASE db",
+            },
+            {
+                "SHOW CREATE STREAM test",
+                "SHOW CREATE STREAM test",
+            },
+            {
+                "SHOW CREATE STREAM db.test",
+                "SHOW CREATE STREAM db.test",
+            },
+            {
+                "SHOW CREATE TABLE db.test",
+                "SHOW CREATE STREAM db.test",
+            },
+            {
+                "SHOW CREATE VIEW db.testv",
+                "SHOW CREATE VIEW db.testv",
+            },
+            {
+                "SHOW CREATE DICTIONARY db.testd",
+                "SHOW CREATE DICTIONARY db.testd",
+            },
+            {
+                "EXISTS DATABASE db",
+                "EXISTS DATABASE db",
+            },
+            {
+                "EXISTS STREAM db.test",
+                "EXISTS STREAM db.test",
+            },
+            {
+                "EXISTS TABLE db.test",
+                "EXISTS STREAM db.test",
+            },
+            {
+                "EXISTS VIEW db.testv",
+                "EXISTS VIEW db.testv",
+            },
+            {
+                "EXISTS DICTIONARY db.testd",
+                "EXISTS DICTIONARY db.testd",
+            }
+        }
+)));
 /// proton: ends

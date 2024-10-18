@@ -20,6 +20,9 @@ bool ParserTablePropertiesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & 
     ParserKeyword s_create("CREATE");
     ParserKeyword s_database("DATABASE");
     ParserKeyword s_table("TABLE");
+    /// proton: starts.
+    ParserKeyword s_stream("STREAM");
+    /// proton: ends.
     ParserKeyword s_view("VIEW");
     ParserKeyword s_dictionary("DICTIONARY");
     ParserToken s_dot(TokenType::Dot);
@@ -51,7 +54,9 @@ bool ParserTablePropertiesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & 
             if (s_temporary.ignore(pos, expected))
                 temporary = true;
 
-            if (s_table.checkWithoutMoving(pos, expected))
+            /// proton: starts.
+            if (s_stream.checkWithoutMoving(pos, expected) || s_table.checkWithoutMoving(pos, expected))
+            /// proton: ends.
                 query = std::make_shared<ASTExistsTableQuery>();
             else if (s_dictionary.checkWithoutMoving(pos, expected))
                 query = std::make_shared<ASTExistsDictionaryQuery>();
@@ -96,8 +101,11 @@ bool ParserTablePropertiesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & 
             if (temporary || s_temporary.ignore(pos, expected))
                 query->temporary = true;
 
-            if (!s_table.ignore(pos, expected))
-                s_dictionary.ignore(pos, expected);
+            /// proton: starts.
+            if (!s_stream.ignore(pos, expected))
+                if (!s_table.ignore(pos, expected))
+                    s_dictionary.ignore(pos, expected);
+            /// proton: ends.
         }
         if (!name_p.parse(pos, table, expected))
             return false;

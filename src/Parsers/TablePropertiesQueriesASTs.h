@@ -18,8 +18,8 @@ struct ASTExistsDatabaseQueryIDAndQueryNames
 struct ASTExistsTableQueryIDAndQueryNames
 {
     static constexpr auto ID = "ExistsTableQuery";
-    static constexpr auto Query = "EXISTS TABLE";
-    static constexpr auto QueryTemporary = "EXISTS TEMPORARY TABLE";
+    static constexpr auto Query = "EXISTS STREAM";
+    static constexpr auto QueryTemporary = "EXISTS TEMPORARY STREAM";
 };
 
 struct ASTExistsViewQueryIDAndQueryNames
@@ -86,6 +86,17 @@ using ASTShowCreateDictionaryQuery = ASTQueryWithTableAndOutputImpl<ASTShowCreat
 class ASTExistsDatabaseQuery : public ASTQueryWithTableAndOutputImpl<ASTExistsDatabaseQueryIDAndQueryNames>
 {
 protected:
+    /// proton: starts
+    ASTPtr clone() const override
+    {
+        auto res = std::make_shared<ASTExistsDatabaseQuery>(*this);
+        res->children.clear();
+        cloneOutputOptions(*res);
+        cloneTableOptions(*res);
+        return res;
+    }
+    /// proton: ends
+
     void formatQueryImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << ASTExistsDatabaseQueryIDAndQueryNames::Query
@@ -96,6 +107,17 @@ protected:
 class ASTShowCreateDatabaseQuery : public ASTQueryWithTableAndOutputImpl<ASTShowCreateDatabaseQueryIDAndQueryNames>
 {
 protected:
+    /// proton: starts
+    ASTPtr clone() const override
+    {
+        auto res = std::make_shared<ASTShowCreateDatabaseQuery>(*this);
+        res->children.clear();
+        cloneOutputOptions(*res);
+        cloneTableOptions(*res);
+        return res;
+    }
+    /// proton: ends
+
     void formatQueryImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << ASTShowCreateDatabaseQueryIDAndQueryNames::Query
