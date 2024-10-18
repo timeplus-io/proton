@@ -760,6 +760,7 @@ inline void writeDateTimeText(time_t datetime, WriteBuffer & buf, const DateLUTI
     writeDateTimeText<date_delimeter, time_delimeter, between_date_time_delimiter>(LocalDateTime(datetime, time_zone), buf);
 }
 
+/// proton: starts
 /// In the format YYYY-MM-DD HH:MM:SS+time zone, according to the specified time zone.
 template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' '>
 inline void writeDateTimeTextWithTimeZone(time_t datetime, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
@@ -781,6 +782,7 @@ inline void writeDateTimeTextWithTimeZone(time_t datetime, WriteBuffer & buf, co
     buf.write(':');
     buf.write(&digits100[minutes * 2], 2);
 }
+/// proton: ends
 
 /// In the format YYYY-MM-DD HH:MM:SS.NNNNNNNNN, according to the specified time zone.
 template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' ', char fractional_time_delimiter = '.'>
@@ -816,7 +818,7 @@ inline void writeDateTimeText(DateTime64 datetime64, UInt32 scale, WriteBuffer &
     }
 }
 
-
+/// proton: starts
 /// In the format YYYY-MM-DD HH:MM:SS.NNNNNNNNN+time zone, according to the specified time zone.
 template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' '>
 inline void writeDateTimeTextWithTimeZone(DateTime64 datetime64, UInt32 scale, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
@@ -843,6 +845,7 @@ inline void writeDateTimeTextWithTimeZone(DateTime64 datetime64, UInt32 scale, W
     buf.write(':');
     buf.write(&digits100[minutes * 2], 2);
 }
+/// proton: ends
 
 /// In the RFC 1123 format: "Tue, 03 Dec 2019 00:11:50 GMT". You must provide GMT DateLUT.
 /// This is needed for HTTP requests.

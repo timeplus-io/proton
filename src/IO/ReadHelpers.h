@@ -936,10 +936,13 @@ inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, cons
     static constexpr auto date_time_with_time_zone_broken_down_length = 25;
     /// YYYY-MM-DD hh:mm:ss
     static constexpr auto date_time_broken_down_length = 19;
+
+    /// proton: starts
     /// YYYY-MM-DD
     static constexpr auto date_broken_down_length = 10;
 
     bool optimistic_path_for_date_time_with_zone_input = s + date_time_with_time_zone_broken_down_length <= buf.buffer().end();
+    /// proton: ends
 
     if (optimistic_path_for_date_time_with_zone_input)
     {
@@ -967,6 +970,7 @@ inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, cons
             else
                 buf.position() += date_broken_down_length;
 
+            /// proton: starts
             /// processing time zone
             bool has_time_zone_offset = false;
             Int8 time_zone_offset_hour = 0;
@@ -1000,7 +1004,7 @@ inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, cons
                 has_time_zone_offset = true;
                 ++buf.position();
             }
-            
+
             if (unlikely(year == 0))
             {
                 datetime = 0;
@@ -1018,6 +1022,7 @@ inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, cons
             {
                 datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
             }
+            /// proton: ends
 
             return ReturnType(true);
         }

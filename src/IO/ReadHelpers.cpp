@@ -998,12 +998,14 @@ ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const D
     static constexpr auto date_broken_down_length = 10;
     /// hh:mm:ss
     static constexpr auto time_broken_down_length = 8;
+    /// proton: starts
     /// +zz:zz
     static constexpr auto zone_broken_down_length = 6;
     /// YYYY-MM-DD hh:mm:ss+zz:zz
     static constexpr auto date_time_with_zone_broken_down_length = date_broken_down_length + 1 + time_broken_down_length + zone_broken_down_length;
 
     char s[date_time_with_zone_broken_down_length];
+    /// proton: ends
     char * s_pos = s;
 
     /** Read characters, that could represent unix timestamp.
@@ -1045,10 +1047,12 @@ ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const D
     {
         const auto already_read_length = s_pos - s;
         const size_t remaining_date_size = date_broken_down_length - already_read_length;
+        /// proton: starts
         /// If have time zone symbol
         bool has_time_zone_offset = false;
         Int8 time_zone_offset_hour = 0;
         Int8 time_zone_offset_minute = 0;
+        /// proton: ends
 
         size_t size = buf.read(s_pos, remaining_date_size);
         if (size != remaining_date_size)
@@ -1088,6 +1092,7 @@ ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const D
             minute = (s[3] - '0') * 10 + (s[4] - '0');
             second = (s[6] - '0') * 10 + (s[7] - '0');
         }
+        /// proton: starts
         if (!buf.eof() && (*buf.position() == '+' || *buf.position() == '-'))
         {
             
@@ -1138,6 +1143,7 @@ ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const D
         {
             datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
         }
+        /// proton: ends
     }
     else
     {
