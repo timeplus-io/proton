@@ -28,27 +28,27 @@ select to_YYYYMMDD(to_date(recordTimestamp, 'Europe/Amsterdam')), to_date(record
 20221011	2022-10-11	1665519765	float64
 -- to_datetime
 select to_YYYYMMDD(to_datetime(recordTimestamp, 'Europe/Amsterdam')), to_datetime(recordTimestamp, 'Europe/Amsterdam'), to_int64(1665519765) as recordTimestamp, to_type_name(recordTimestamp);
-20221011	2022-10-11 22:22:45	1665519765	int64
+20221011	2022-10-11 22:22:45+02:00	1665519765	int64
 select to_YYYYMMDD(to_datetime(recordTimestamp, 'Europe/Amsterdam')), to_datetime(recordTimestamp, 'Europe/Amsterdam'), to_uint64(1665519765) as recordTimestamp, to_type_name(recordTimestamp);
-20221011	2022-10-11 22:22:45	1665519765	uint64
+20221011	2022-10-11 22:22:45+02:00	1665519765	uint64
 select to_YYYYMMDD(to_datetime(recordTimestamp, 'Europe/Amsterdam')), to_datetime(recordTimestamp, 'Europe/Amsterdam'), to_int32(1665519765) as recordTimestamp, to_type_name(recordTimestamp);
-20221011	2022-10-11 22:22:45	1665519765	int32
+20221011	2022-10-11 22:22:45+02:00	1665519765	int32
 select to_YYYYMMDD(to_datetime(recordTimestamp, 'Europe/Amsterdam')), to_datetime(recordTimestamp, 'Europe/Amsterdam'), to_uint32(1665519765) as recordTimestamp, to_type_name(recordTimestamp);
-20221011	2022-10-11 22:22:45	1665519765	uint32
+20221011	2022-10-11 22:22:45+02:00	1665519765	uint32
 select to_YYYYMMDD(to_datetime(recordTimestamp, 'Europe/Amsterdam')), to_datetime(recordTimestamp, 'Europe/Amsterdam'), to_float32(1665519765) as recordTimestamp, to_type_name(recordTimestamp);
-20221011	2022-10-11 22:22:24	1665519700	float32
+20221011	2022-10-11 22:22:24+02:00	1665519700	float32
 select to_YYYYMMDD(to_datetime(recordTimestamp, 'Europe/Amsterdam')), to_datetime(recordTimestamp, 'Europe/Amsterdam'), to_float64(1665519765) as recordTimestamp, to_type_name(recordTimestamp);
-20221011	2022-10-11 22:22:45	1665519765	float64
+20221011	2022-10-11 22:22:45+02:00	1665519765	float64
 -- to_datetime64
 select to_YYYYMMDD(to_datetime64(recordTimestamp, 3, 'Europe/Amsterdam')), to_datetime64(recordTimestamp, 3, 'Europe/Amsterdam'), to_int64(1665519765) as recordTimestamp, to_type_name(recordTimestamp);
-20221011	2022-10-11 22:22:45.000	1665519765	int64
+20221011	2022-10-11 22:22:45.000+02:00	1665519765	int64
 select to_YYYYMMDD(to_datetime64(recordTimestamp, 3, 'Europe/Amsterdam')), to_datetime64(recordTimestamp, 3, 'Europe/Amsterdam'), to_uint64(1665519765) as recordTimestamp, to_type_name(recordTimestamp);
-20221011	2022-10-11 22:22:45.000	1665519765	uint64
+20221011	2022-10-11 22:22:45.000+02:00	1665519765	uint64
 select to_YYYYMMDD(to_datetime64(recordTimestamp, 3, 'Europe/Amsterdam')), to_datetime64(recordTimestamp, 3, 'Europe/Amsterdam'), to_int32(1665519765) as recordTimestamp, to_type_name(recordTimestamp);
-20221011	2022-10-11 22:22:45.000	1665519765	int32
+20221011	2022-10-11 22:22:45.000+02:00	1665519765	int32
 select to_YYYYMMDD(to_datetime64(recordTimestamp, 3, 'Europe/Amsterdam')), to_datetime64(recordTimestamp, 3, 'Europe/Amsterdam'), to_uint32(1665519765) as recordTimestamp, to_type_name(recordTimestamp);
-20221011	2022-10-11 22:22:45.000	1665519765	uint32
+20221011	2022-10-11 22:22:45.000+02:00	1665519765	uint32
 select to_YYYYMMDD(to_datetime64(recordTimestamp, 3, 'Europe/Amsterdam')), to_datetime64(recordTimestamp, 3, 'Europe/Amsterdam'), to_float32(1665519765) as recordTimestamp, to_type_name(recordTimestamp);
-20221011	2022-10-11 22:21:54.304	1665519700	float32
+20221011	2022-10-11 22:21:54.304+02:00	1665519700	float32
 select to_YYYYMMDD(to_datetime64(recordTimestamp, 3, 'Europe/Amsterdam')), to_datetime64(recordTimestamp, 3, 'Europe/Amsterdam'), to_float64(1665519765) as recordTimestamp, to_type_name(recordTimestamp);
-20221011	2022-10-11 22:22:45.000	1665519765	float64
+20221011	2022-10-11 22:22:45.000+02:00	1665519765	float64

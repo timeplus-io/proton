@@ -989,7 +989,7 @@ template void readDateTextFallback<void>(LocalDate &, ReadBuffer &);
 template bool readDateTextFallback<bool>(LocalDate &, ReadBuffer &);
 
 
-template <typename ReturnType>
+template <typename ReturnType, bool dt64_mode>
 ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & date_lut)
 {
     static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
@@ -998,20 +998,43 @@ ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const D
     static constexpr auto date_broken_down_length = 10;
     /// hh:mm:ss
     static constexpr auto time_broken_down_length = 8;
-    /// YYYY-MM-DD hh:mm:ss
-    static constexpr auto date_time_broken_down_length = date_broken_down_length + 1 + time_broken_down_length;
+    /// proton: starts
+    /// +zz:zz
+    static constexpr auto zone_broken_down_length = 6;
+    /// YYYY-MM-DD hh:mm:ss+zz:zz
+    static constexpr auto date_time_with_zone_broken_down_length = date_broken_down_length + 1 + time_broken_down_length + zone_broken_down_length;
 
-    char s[date_time_broken_down_length];
+    char s[date_time_with_zone_broken_down_length];
+    /// proton: ends
     char * s_pos = s;
 
     /** Read characters, that could represent unix timestamp.
-      * Only unix timestamp of at least 5 characters is supported.
+      * Only unix timestamp of at least 5 characters is supported by default, exception is thrown for a shorter one
+      * (unless parsing a string like '1.23' or '-12': there is no ambiguity, it is a DT64 timestamp).
       * Then look at 5th character. If it is a number - treat whole as unix timestamp.
       * If it is not a number - then parse datetime in YYYY-MM-DD hh:mm:ss or YYYY-MM-DD format.
       */
 
+    int negative_multiplier = 1;
+
+    if (!buf.eof() && *buf.position() == '-')
+    {
+        if constexpr (dt64_mode)
+        {
+            negative_multiplier = -1;
+            ++buf.position();
+        }
+        else
+        {
+            if constexpr (throw_exception)
+                throw ParsingException(ErrorCodes::CANNOT_PARSE_DATETIME, "Cannot parse DateTime");
+            else
+                return false;
+        }
+    }
+
     /// A piece similar to unix timestamp, maybe scaled to subsecond precision.
-    while (s_pos < s + date_time_broken_down_length && !buf.eof() && isNumericASCII(*buf.position()))
+    while (s_pos < s + date_time_with_zone_broken_down_length && !buf.eof() && isNumericASCII(*buf.position()))
     {
         *s_pos = *buf.position();
         ++s_pos;
@@ -1019,10 +1042,17 @@ ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const D
     }
 
     /// 2015-01-01 01:02:03 or 2015-01-01
-    if (s_pos == s + 4 && !buf.eof() && !isNumericASCII(*buf.position()))
+    /// if negative, it is a timestamp with no ambiguity
+    if (negative_multiplier == 1 && s_pos == s + 4 && !buf.eof() && !isNumericASCII(*buf.position()))
     {
         const auto already_read_length = s_pos - s;
         const size_t remaining_date_size = date_broken_down_length - already_read_length;
+        /// proton: starts
+        /// If have time zone symbol
+        bool has_time_zone_offset = false;
+        Int8 time_zone_offset_hour = 0;
+        Int8 time_zone_offset_minute = 0;
+        /// proton: ends
 
         size_t size = buf.read(s_pos, remaining_date_size);
         if (size != remaining_date_size)
@@ -1062,35 +1092,89 @@ ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const D
             minute = (s[3] - '0') * 10 + (s[4] - '0');
             second = (s[6] - '0') * 10 + (s[7] - '0');
         }
+        /// proton: starts
+        if (!buf.eof() && (*buf.position() == '+' || *buf.position() == '-'))
+        {
+            
+            has_time_zone_offset = true;
+            char timezone_sign = *buf.position();
+            ++buf.position();
+
+            char tz[zone_broken_down_length];
+            size = buf.read(tz, zone_broken_down_length - 1);
+            tz[size] = 0;
+
+            if (size != zone_broken_down_length - 1 || tz[2] != ':')
+            {
+                throw ParsingException(std::string("Invalid timezone format ") + tz, ErrorCodes::CANNOT_PARSE_DATETIME);
+            }
+
+            time_zone_offset_hour = (tz[0] - '0') * 10 + (tz[1] - '0');
+            time_zone_offset_minute = (tz[3] - '0') * 10 + (tz[4] - '0');
+
+            if (timezone_sign == '-')
+            {
+                time_zone_offset_hour = -time_zone_offset_hour;
+                time_zone_offset_minute = -time_zone_offset_minute;                
+            }
+
+        }
+        else if (!buf.eof() && *buf.position() == 'Z')
+        {
+            has_time_zone_offset = true;
+            ++buf.position();
+        }
 
         if (unlikely(year == 0))
+        {
             datetime = 0;
+        }
+        else if (has_time_zone_offset)
+        {
+            const DateLUTImpl * utc_time_zone = &DateLUT::instance("UTC");
+            datetime = utc_time_zone->makeDateTime(year, month, day, hour, minute, second);
+            if (time_zone_offset_hour)
+                datetime -= time_zone_offset_hour * 3600;
+
+            if (time_zone_offset_minute)
+                datetime -= time_zone_offset_minute * 60;
+        }
         else
+        {
             datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
+        }
+        /// proton: ends
     }
     else
     {
-        if (s_pos - s >= 5)
+        datetime = 0;
+        bool too_short = s_pos - s <= 4;
+
+        if (!too_short || dt64_mode)
         {
             /// Not very efficient.
-            datetime = 0;
             for (const char * digit_pos = s; digit_pos < s_pos; ++digit_pos)
                 datetime = datetime * 10 + *digit_pos - '0';
         }
-        else
+        datetime *= negative_multiplier;
+
+        if (too_short && negative_multiplier != -1)
         {
             if constexpr (throw_exception)
-                throw ParsingException("Cannot parse datetime", ErrorCodes::CANNOT_PARSE_DATETIME);
+                throw ParsingException(ErrorCodes::CANNOT_PARSE_DATETIME, "Cannot parse datetime");
             else
                 return false;
         }
+
     }
 
     return ReturnType(true);
 }
 
-template void readDateTimeTextFallback<void>(time_t &, ReadBuffer &, const DateLUTImpl &);
-template bool readDateTimeTextFallback<bool>(time_t &, ReadBuffer &, const DateLUTImpl &);
+template void readDateTimeTextFallback<void, false>(time_t &, ReadBuffer &, const DateLUTImpl &);
+template void readDateTimeTextFallback<void, true>(time_t &, ReadBuffer &, const DateLUTImpl &);
+template bool readDateTimeTextFallback<bool, false>(time_t &, ReadBuffer &, const DateLUTImpl &);
+template bool readDateTimeTextFallback<bool, true>(time_t &, ReadBuffer &, const DateLUTImpl &);
 
 
 void skipJSONField(ReadBuffer & buf, StringRef name_of_field)
