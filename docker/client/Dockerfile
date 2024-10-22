@@ -5,25 +5,25 @@ ARG apt_archive="http://archive.ubuntu.com"
 RUN sed -i "s|http://archive.ubuntu.com|$apt_archive|g" /etc/apt/sources.list
 
 ARG repository="deb https://repo.clickhouse.com/deb/stable/ main/"
-ARG version=1.5.18
+ARG version=1.6.0
 
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
-        apt-transport-https \
-        ca-certificates \
-        dirmngr \
-        gnupg \
+    apt-transport-https \
+    ca-certificates \
+    dirmngr \
+    gnupg \
     && mkdir -p /etc/apt/sources.list.d \
     && apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4 \
     && echo $repository > /etc/apt/sources.list.d/clickhouse.list \
     && apt-get update \
     && env DEBIAN_FRONTEND=noninteractive \
-        apt-get install --allow-unauthenticated --yes --no-install-recommends \
-            clickhouse-client=$version \
-            clickhouse-common-static=$version \
-            locales \
-            tzdata \
+    apt-get install --allow-unauthenticated --yes --no-install-recommends \
+    clickhouse-client=$version \
+    clickhouse-common-static=$version \
+    locales \
+    tzdata \
     && rm -rf /var/lib/apt/lists/* /var/cache/debconf \
     && apt-get clean
 
