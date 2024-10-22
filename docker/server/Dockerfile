@@ -3,7 +3,7 @@ FROM ubuntu:20.04
 # FIXME, XXX, timeplus deb repo
 # ARG repository="deb https://repo.timeplus/deb/stable/ main/"
 ARG repository=""
-ARG version=1.5.18
+ARG version=1.6.0
 ARG gosu_ver=1.10
 
 # set non-empty deb_location_url url to create a docker image
@@ -51,51 +51,51 @@ RUN groupadd -r timeplus --gid=101 \
     && echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4 \
     && apt-get update \
     && apt-get install --yes --no-install-recommends \
-        apt-transport-https \
-        ca-certificates \
-        dirmngr \
-        gnupg \
-        locales \
-        wget \
-        curl \
-        tzdata \
+    apt-transport-https \
+    ca-certificates \
+    dirmngr \
+    gnupg \
+    locales \
+    wget \
+    curl \
+    tzdata \
     && mkdir -p /etc/apt/sources.list.d \
     && apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4 \
     && echo $repository > /etc/apt/sources.list.d/proton.list \
     && if [ -n "$deb_location_url" ]; then \
-            echo "installing from custom url with deb packages: $deb_location_url" \
-            rm -rf /tmp/proton_debs \
-            && mkdir -p /tmp/proton_debs \
-            && wget --progress=bar:force:noscroll "${deb_location_url}/proton-common-static_${version}_amd64.deb" -P /tmp/proton_debs \
-            && wget --progress=bar:force:noscroll "${deb_location_url}/proton-client_${version}_all.deb" -P /tmp/proton_debs \
-            && wget --progress=bar:force:noscroll "${deb_location_url}/proton-server_${version}_all.deb" -P /tmp/proton_debs \
-            && dpkg -i /tmp/proton_debs/*.deb ; \
-       elif [ -n "$single_binary_location_url" ]; then \
-            echo "installing from single binary url: $single_binary_location_url" \
-            && rm -rf /tmp/proton_binary \
-            && mkdir -p /tmp/proton_binary \
-            && wget --progress=bar:force:noscroll "$single_binary_location_url" -O /tmp/proton_binary/proton \
-            && chmod +x /tmp/proton_binary/proton \
-            && /tmp/proton_binary/proton install --user "timeplus" --group "timeplus" ; \
-       else \
-           echo "installing from repository: $repository" \
-           && apt-get update \
-           && apt-get --yes -o "Dpkg::Options::=--force-confdef" -o "Dpkg::Options::=--force-confold" upgrade \
-           && apt-get install --allow-unauthenticated --yes --no-install-recommends \
-                proton-common-static=$version \
-                proton-client=$version \
-                proton-server=$version ; \
-       fi \
+    echo "installing from custom url with deb packages: $deb_location_url" \
+    rm -rf /tmp/proton_debs \
+    && mkdir -p /tmp/proton_debs \
+    && wget --progress=bar:force:noscroll "${deb_location_url}/proton-common-static_${version}_amd64.deb" -P /tmp/proton_debs \
+    && wget --progress=bar:force:noscroll "${deb_location_url}/proton-client_${version}_all.deb" -P /tmp/proton_debs \
+    && wget --progress=bar:force:noscroll "${deb_location_url}/proton-server_${version}_all.deb" -P /tmp/proton_debs \
+    && dpkg -i /tmp/proton_debs/*.deb ; \
+    elif [ -n "$single_binary_location_url" ]; then \
+    echo "installing from single binary url: $single_binary_location_url" \
+    && rm -rf /tmp/proton_binary \
+    && mkdir -p /tmp/proton_binary \
+    && wget --progress=bar:force:noscroll "$single_binary_location_url" -O /tmp/proton_binary/proton \
+    && chmod +x /tmp/proton_binary/proton \
+    && /tmp/proton_binary/proton install --user "timeplus" --group "timeplus" ; \
+    else \
+    echo "installing from repository: $repository" \
+    && apt-get update \
+    && apt-get --yes -o "Dpkg::Options::=--force-confdef" -o "Dpkg::Options::=--force-confold" upgrade \
+    && apt-get install --allow-unauthenticated --yes --no-install-recommends \
+    proton-common-static=$version \
+    proton-client=$version \
+    proton-server=$version ; \
+    fi \
     && apt-get install -y --no-install-recommends tcc libc-dev && \
-        tcc /su-exec.c -o /bin/su-exec && \
-        chown root:root /bin/su-exec && \
-        chmod 0755 /bin/su-exec && \
-        rm /su-exec.c && \
-        apt-get purge -y --auto-remove tcc libc-dev libc-dev-bin libc6-dev linux-libc-dev \
+    tcc /su-exec.c -o /bin/su-exec && \
+    chown root:root /bin/su-exec && \
+    chmod 0755 /bin/su-exec && \
+    rm /su-exec.c && \
+    apt-get purge -y --auto-remove tcc libc-dev libc-dev-bin libc6-dev linux-libc-dev \
     && rm -rf \
-        /var/lib/apt/lists/* \
-        /var/cache/debconf \
-        /tmp/* \
+    /var/lib/apt/lists/* \
+    /var/cache/debconf \
+    /tmp/* \
     && apt-get clean \
     && mkdir -p /var/lib/proton /var/log/proton-server /etc/proton-server /etc/proton-client \
     && chmod ugo+Xrw -R /var/lib/proton /var/log/proton-server /etc/proton-server /etc/proton-client
