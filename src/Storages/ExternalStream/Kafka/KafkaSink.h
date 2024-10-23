@@ -7,6 +7,7 @@
 #include <Storages/ExternalStream/Kafka/Kafka.h>
 #include <Storages/ExternalStream/Kafka/WriteBufferFromKafkaSink.h>
 #include <Common/ThreadPool.h>
+#include <IO/NullWriteBuffer.h>
 
 namespace DB
 {
@@ -114,7 +115,8 @@ private:
 
     /// For constructing the message batch
     UInt64 rows_in_current_message{0};
-    nlog::ByteVector pending_data;
+    NullWriteBuffer pending_data;
+    nlog::ByteVector oversized_payload;
     std::vector<rd_kafka_message_t> current_batch;
     std::vector<nlog::ByteVector> batch_payload;
     std::vector<StringRef> keys_for_current_batch;
