@@ -6,9 +6,9 @@ This example provides a Python implementation to track all HTTP requests made to
 
 This solution utilizes the following technologies:
 
-- **httpx.Client**: For making and intercepting HTTP requests.
-- **Proton**: To store and monitor HTTP call logs.
-- **Proton Driver**: To insert data into Proton.
+- **httpx.Client**: For making and intercepting HTTP requests. https://www.python-httpx.org/ 
+- **Timeplus Proton**: To store and monitor HTTP call logs.
+- **Proton Driver for Timeplus**: To insert data into Proton. https://github.com/timeplus-io/proton-python-driver 
 
 ### Key Features:
 1. Intercept OpenAI API calls.
@@ -27,6 +27,7 @@ This solution utilizes the following technologies:
 
 1. run `pip install openai proton-driver` to install all python dependency
 2. run following SQL to create the log stream
+
 ```sql
 CREATE STREAM llm_calls
 (
@@ -40,13 +41,14 @@ CREATE STREAM llm_calls
   `response_text` string
 )
 ```
+
 3. setup related environment 
+
 ```bash
 export PROTON_HOST=localhost
-export PROTON_USER=user_name
-export PROTON_PASSWORD=password
+export PROTON_USER=default
+export PROTON_PASSWORD=
 export OPENAI_API_KEY=sk-xxx
-
 ```
 
 3. create an instance of `TimeplusStreamLogHTTPClient` and use that as the http client when create openAI client
