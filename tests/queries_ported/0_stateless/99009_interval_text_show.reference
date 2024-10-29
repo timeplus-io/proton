@@ -1,0 +1,2 @@
+CREATE VIEW default.v_99009\n(\n  `count()` uint64\n) AS\nSELECT\n  count()\nFROM\n  default.test_99009\nWHERE\n  _tp_time > (((now() - INTERVAL 1 MINUTE) + INTERVAL -1 HOUR) + INTERVAL 1 SECOND)
+2

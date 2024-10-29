@@ -12,6 +12,7 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/formatAST.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserUnionQueryElement.h>
 #include <Parsers/parseIntervalKind.h>
@@ -997,13 +998,8 @@ bool ParserIntervalOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expec
     exp_list->children.push_back(expr);
 
     /// Set code name: 'INTERVAL 1 SECOND' 'INTERVAL -10 MINUTE' ...
-    auto expr_begin = begin;
-    auto expr_end = pos;
-    ++expr_begin;
-    --expr_end;
     function->code_name = "INTERVAL ";
-    for (auto iter = expr_begin; iter != expr_end; ++iter)
-        function->code_name.append(iter->begin, iter->size());
+    function->code_name.append(serializeAST(*expr, true));
     function->code_name.append(" ");
     function->code_name.append(interval_kind.toKeyword());
 
