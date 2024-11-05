@@ -2,6 +2,10 @@ set(ABSL_ROOT_DIR "${proton_SOURCE_DIR}/contrib/abseil-cpp")
 if(NOT EXISTS "${ABSL_ROOT_DIR}/CMakeLists.txt")
   message(FATAL_ERROR " submodule third_party/abseil-cpp is missing. To fix try run: \n git submodule update --init --recursive")
 endif()
+
+# To avoid errors "'X' does not refer to a value" while using `offsetof` function.
+set(CMAKE_CXX_STANDARD 17)
+
 set(BUILD_TESTING OFF)
 set(ABSL_PROPAGATE_CXX_STD ON)
 add_subdirectory("${ABSL_ROOT_DIR}" "${proton_BINARY_DIR}/contrib/abseil-cpp")

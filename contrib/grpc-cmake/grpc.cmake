@@ -1,0 +1,1221 @@
+# This file was edited for ClickHouse.
+
+# GRPC global cmake file
+# This currently builds C and C++ code.
+# This file has been automatically generated from a template file.
+# Please look at the templates directory instead.
+# This file can be regenerated from the template by running
+# tools/buildgen/generate_projects.sh
+#
+# Copyright 2015 gRPC authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# We want to use C++23, but GRPC is not ready
+set (CMAKE_CXX_STANDARD 17)
+
+set(_gRPC_ZLIB_INCLUDE_DIR "")
+set(_gRPC_ZLIB_LIBRARIES ch_contrib::zlib)
+
+set(_gRPC_CARES_LIBRARIES ch_contrib::c-ares)
+
+set(_gRPC_RE2_INCLUDE_DIR "")
+set(_gRPC_RE2_LIBRARIES ch_contrib::re2)
+
+set(_gRPC_SSL_INCLUDE_DIR "")
+set(_gRPC_SSL_LIBRARIES OpenSSL::Crypto OpenSSL::SSL)
+
+set(_gRPC_PROTOBUF_LIBRARIES ch_contrib::protobuf)
+set(_gRPC_PROTOBUF_PROTOC "protoc")
+set(_gRPC_PROTOBUF_PROTOC_EXECUTABLE $<TARGET_FILE:protoc>)
+set(_gRPC_PROTOBUF_PROTOC_LIBRARIES ch_contrib::protoc)
+
+
+if(UNIX)
+  if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+    set(_gRPC_PLATFORM_LINUX ON)
+  elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    set(_gRPC_PLATFORM_MAC ON)
+  elseif(${CMAKE_SYSTEM_NAME} MATCHES "iOS")
+    set(_gRPC_PLATFORM_IOS ON)
+  elseif(${CMAKE_SYSTEM_NAME} MATCHES "Android")
+    set(_gRPC_PLATFORM_ANDROID ON)
+  else()
+    set(_gRPC_PLATFORM_POSIX ON)
+  endif()
+endif()
+
+set(_gRPC_ADDRESS_SORTING_INCLUDE_DIR "${_gRPC_SOURCE_DIR}/third_party/address_sorting/include")
+set(_gRPC_ADDRESS_SORTING_LIBRARIES address_sorting)
+
+set(UPB_ROOT_DIR ${_gRPC_SOURCE_DIR}/third_party/upb)
+
+set(_gRPC_UPB_INCLUDE_DIR "${UPB_ROOT_DIR}" "${_gRPC_SOURCE_DIR}/third_party/utf8_range")
+set(_gRPC_UPB_GRPC_GENERATED_DIR "${_gRPC_SOURCE_DIR}/src//core/ext/upb-generated" "${_gRPC_SOURCE_DIR}/src//core/ext/upbdefs-generated")
+
+set(_gRPC_UPB_LIBRARIES upb)
+
+set(_gRPC_XXHASH_INCLUDE_DIR "${_gRPC_SOURCE_DIR}/third_party/xxhash")
+
+add_library(address_sorting
+  ${_gRPC_SOURCE_DIR}/third_party/address_sorting/address_sorting.c
+  ${_gRPC_SOURCE_DIR}/third_party/address_sorting/address_sorting_posix.c
+  ${_gRPC_SOURCE_DIR}/third_party/address_sorting/address_sorting_windows.c
+)
+
+target_compile_features(address_sorting PUBLIC cxx_std_14)
+
+target_include_directories(address_sorting
+  PUBLIC ${_gRPC_SOURCE_DIR}/include
+  PRIVATE
+    ${_gRPC_SOURCE_DIR}
+    ${_gRPC_ADDRESS_SORTING_INCLUDE_DIR}
+    ${_gRPC_RE2_INCLUDE_DIR}
+    ${_gRPC_SSL_INCLUDE_DIR}
+    ${_gRPC_UPB_GENERATED_DIR}
+    ${_gRPC_UPB_GRPC_GENERATED_DIR}
+    ${_gRPC_UPB_INCLUDE_DIR}
+    ${_gRPC_ZLIB_INCLUDE_DIR}
+)
+target_link_libraries(address_sorting
+  ${_gRPC_BASELIB_LIBRARIES}
+  ${_gRPC_ALLTARGETS_LIBRARIES}
+)
+
+
+add_library(gpr
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/alloc.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/atm.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/cpu_iphone.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/cpu_linux.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/cpu_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/cpu_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/env_linux.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/env_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/env_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/log.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/log_android.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/log_linux.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/log_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/log_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/murmur_hash.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/string.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/string_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/string_util_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/string_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/sync.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/sync_abseil.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/sync_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/sync_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/time.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/time_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/time_precise.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/time_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/tls_pthread.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/tmpfile_msys.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/tmpfile_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/tmpfile_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gpr/wrap_memcpy.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gprpp/arena.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gprpp/fork.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gprpp/global_config_env.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gprpp/host_port.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gprpp/mpscq.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gprpp/thd_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/gprpp/thd_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/profiling/basic_timers.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/profiling/stap_timers.cc
+)
+
+target_compile_features(gpr PUBLIC cxx_std_14)
+
+target_include_directories(gpr
+  PUBLIC ${_gRPC_SOURCE_DIR}/include
+  PRIVATE
+    ${_gRPC_SOURCE_DIR}
+    ${_gRPC_ADDRESS_SORTING_INCLUDE_DIR}
+    ${_gRPC_RE2_INCLUDE_DIR}
+    ${_gRPC_SSL_INCLUDE_DIR}
+    ${_gRPC_UPB_GENERATED_DIR}
+    ${_gRPC_UPB_GRPC_GENERATED_DIR}
+    ${_gRPC_UPB_INCLUDE_DIR}
+    ${_gRPC_ZLIB_INCLUDE_DIR}
+)
+target_link_libraries(gpr
+  ${_gRPC_ALLTARGETS_LIBRARIES}
+  absl::time
+  absl::synchronization
+  absl::strings
+  absl::str_format
+  absl::memory
+  absl::base
+)
+if(_gRPC_PLATFORM_ANDROID)
+  target_link_libraries(gpr
+    android
+    log
+  )
+endif()
+
+
+add_library(grpc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/census/grpc_context.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/backend_metric.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/backup_poller.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/channel_connectivity.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/client_channel.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/client_channel_channelz.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/client_channel_factory.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/client_channel_plugin.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/config_selector.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/global_subchannel_pool.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/health/health_check_client.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/http_connect_handshaker.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/http_proxy.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/address_filtering.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/child_policy_handler.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/grpclb/client_load_reporting_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/grpclb/grpclb.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/grpclb/grpclb_balancer_addresses.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/grpclb/grpclb_channel_secure.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/grpclb/grpclb_client_stats.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/grpclb/load_balancer_api.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/pick_first/pick_first.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/priority/priority.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/round_robin/round_robin.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/weighted_target/weighted_target.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/xds/cds.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/xds/eds.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/xds/eds_drop.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/xds/xds_cluster_manager.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy_registry.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/local_subchannel_pool.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/proxy_mapper_registry.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/dns_resolver_ares.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_ev_driver.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_ev_driver_libuv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_ev_driver_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_ev_driver_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_wrapper.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_wrapper_fallback.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_wrapper_libuv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_wrapper_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_wrapper_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/dns_resolver_selection.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/native/dns_resolver.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/fake/fake_resolver.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/sockaddr/sockaddr_resolver.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/xds/xds_resolver.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver_registry.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver_result_parsing.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolving_lb_policy.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/retry_throttle.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/server_address.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/service_config.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/service_config_channel_arg_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/service_config_parser.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/subchannel.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/subchannel_pool_interface.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_idle/client_idle_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/deadline/deadline_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/http/client/http_client_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/http/client_authority_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/http/http_filters_plugin.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/http/message_compress/message_compress_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/http/message_compress/message_decompress_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/http/server/http_server_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/max_age/max_age_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/message_size/message_size_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/workarounds/workaround_cronet_compression_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/workarounds/workaround_utils.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/alpn/alpn.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/client/authority.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/client/chttp2_connector.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/client/insecure/channel_create.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/client/insecure/channel_create_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/client/secure/secure_channel_create.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/server/chttp2_server.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/server/insecure/server_chttp2.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/server/insecure/server_chttp2_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/server/secure/server_secure_chttp2.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/bin_decoder.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/bin_encoder.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/chttp2_plugin.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/chttp2_transport.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/context_list.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/flow_control.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/frame_data.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/frame_goaway.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/frame_ping.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/frame_rst_stream.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/frame_settings.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/frame_window_update.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/hpack_encoder.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/hpack_parser.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/hpack_table.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/http2_settings.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/huffsyms.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/incoming_metadata.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/parsing.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/stream_lists.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/stream_map.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/varint.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/writing.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/inproc/inproc_plugin.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/inproc/inproc_transport.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/annotations/deprecation.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/annotations/resource.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/accesslog/v3/accesslog.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/cluster/v3/circuit_breaker.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/cluster/v3/cluster.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/cluster/v3/filter.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/cluster/v3/outlier_detection.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/core/v3/address.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/core/v3/backoff.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/core/v3/base.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/core/v3/config_source.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/core/v3/event_service_config.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/core/v3/extension.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/core/v3/grpc_service.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/core/v3/health_check.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/core/v3/http_uri.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/core/v3/protocol.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/core/v3/proxy_protocol.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/core/v3/socket_option.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/core/v3/substitution_format_string.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/endpoint/v3/endpoint.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/endpoint/v3/endpoint_components.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/endpoint/v3/load_report.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/listener/v3/api_listener.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/listener/v3/listener.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/listener/v3/listener_components.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/listener/v3/udp_listener_config.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/rbac/v3/rbac.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/route/v3/route.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/route/v3/route_components.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/route/v3/scoped_route.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/config/trace/v3/http_tracer.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/extensions/filters/network/http_connection_manager/v3/http_connection_manager.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/extensions/transport_sockets/tls/v3/cert.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/extensions/transport_sockets/tls/v3/common.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/extensions/transport_sockets/tls/v3/secret.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/extensions/transport_sockets/tls/v3/tls.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/service/cluster/v3/cds.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/service/discovery/v3/ads.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/service/discovery/v3/discovery.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/service/endpoint/v3/eds.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/service/listener/v3/lds.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/service/load_stats/v3/lrs.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/service/route/v3/rds.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/service/route/v3/srds.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/type/matcher/v3/metadata.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/type/matcher/v3/number.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/type/matcher/v3/path.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/type/matcher/v3/regex.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/type/matcher/v3/string.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/type/matcher/v3/value.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/type/metadata/v3/metadata.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/type/tracing/v3/custom_tag.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/type/v3/http.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/type/v3/percent.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/type/v3/range.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/envoy/type/v3/semantic_version.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/api/annotations.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/api/expr/v1alpha1/checked.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/api/expr/v1alpha1/syntax.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/api/http.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/protobuf/any.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/protobuf/descriptor.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/protobuf/duration.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/protobuf/empty.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/protobuf/struct.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/protobuf/timestamp.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/protobuf/wrappers.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/rpc/status.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/src/proto/grpc/gcp/altscontext.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/src/proto/grpc/gcp/handshaker.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/src/proto/grpc/gcp/transport_security_common.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/src/proto/grpc/health/v1/health.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/src/proto/grpc/lb/v1/load_balancer.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/udpa/annotations/migrate.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/udpa/annotations/security.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/udpa/annotations/sensitive.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/udpa/annotations/status.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/udpa/annotations/versioning.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/udpa/core/v1/authority.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/udpa/core/v1/collection_entry.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/udpa/core/v1/context_params.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/udpa/core/v1/resource.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/udpa/core/v1/resource_locator.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/udpa/core/v1/resource_name.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/udpa/data/orca/v1/orca_load_report.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/validate/validate.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/xds/certificate_provider_registry.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/xds/google_mesh_ca_certificate_provider_factory.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/xds/xds_api.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/xds/xds_bootstrap.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/xds/xds_client.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/xds/xds_client_stats.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/avl/avl.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/backoff/backoff.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/channel_args.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/channel_stack.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/channel_stack_builder.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/channel_trace.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/channelz.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/channelz_registry.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/connected_channel.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/handshaker.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/handshaker_registry.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/status_util.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/compression/compression.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/compression/compression_args.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/compression/compression_internal.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/compression/message_compress.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/compression/stream_compression.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/compression/stream_compression_gzip.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/compression/stream_compression_identity.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/debug/stats.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/debug/stats_data.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/debug/trace.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/http/format_request.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/http/httpcli.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/http/httpcli_security_connector.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/http/parser.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/buffer_list.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/call_combiner.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/cfstream_handle.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/combiner.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/dualstack_socket_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/endpoint.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/endpoint_cfstream.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/endpoint_pair_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/endpoint_pair_uv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/endpoint_pair_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/error.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/error_cfstream.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/ev_apple.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/ev_epoll1_linux.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/ev_epollex_linux.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/ev_poll_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/ev_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/ev_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/exec_ctx.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/executor.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/executor/mpmcqueue.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/executor/threadpool.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/fork_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/fork_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/gethostname_fallback.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/gethostname_host_name_max.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/gethostname_sysconf.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/grpc_if_nametoindex_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/grpc_if_nametoindex_unsupported.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/internal_errqueue.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/iocp_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/iomgr.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/iomgr_custom.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/iomgr_internal.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/iomgr_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/iomgr_posix_cfstream.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/iomgr_uv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/iomgr_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/is_epollexclusive_available.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/load_file.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/lockfree_event.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/parse_address.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/poller/eventmanager_libuv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/polling_entity.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/pollset.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/pollset_custom.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/pollset_set.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/pollset_set_custom.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/pollset_set_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/pollset_uv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/pollset_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/resolve_address.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/resolve_address_custom.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/resolve_address_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/resolve_address_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/resource_quota.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/sockaddr_utils.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/socket_factory_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/socket_mutator.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/socket_utils_common_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/socket_utils_linux.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/socket_utils_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/socket_utils_uv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/socket_utils_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/socket_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_client.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_client_cfstream.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_client_custom.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_client_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_client_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_custom.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_server.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_server_custom.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_server_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_server_utils_posix_common.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_server_utils_posix_ifaddrs.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_server_utils_posix_noifaddrs.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_server_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_uv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/time_averaged_stats.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/timer.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/timer_custom.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/timer_generic.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/timer_heap.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/timer_manager.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/timer_uv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/udp_server.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/unix_sockets_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/unix_sockets_posix_noop.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/wakeup_fd_eventfd.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/wakeup_fd_nospecial.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/wakeup_fd_pipe.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/wakeup_fd_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/work_serializer.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/json/json_reader.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/json/json_util.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/json/json_writer.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/authorization/authorization_engine.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/authorization/evaluate_args.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/context/security_context.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/alts/alts_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/alts/check_gcp_environment.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/alts/check_gcp_environment_linux.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/alts/check_gcp_environment_no_op.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/alts/check_gcp_environment_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/alts/grpc_alts_credentials_client_options.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/alts/grpc_alts_credentials_options.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/alts/grpc_alts_credentials_server_options.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/composite/composite_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/credentials_metadata.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/fake/fake_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/google_default/credentials_generic.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/google_default/google_default_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/iam/iam_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/jwt/json_token.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/jwt/jwt_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/jwt/jwt_verifier.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/local/local_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/oauth2/oauth2_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/plugin/plugin_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/ssl/ssl_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/tls/grpc_tls_certificate_distributor.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/tls/grpc_tls_credentials_options.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/tls/tls_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/credentials/xds/xds_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/security_connector/alts/alts_security_connector.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/security_connector/fake/fake_security_connector.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/security_connector/load_system_roots_fallback.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/security_connector/load_system_roots_linux.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/security_connector/local/local_security_connector.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/security_connector/security_connector.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/security_connector/ssl/ssl_security_connector.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/security_connector/ssl_utils.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/security_connector/ssl_utils_config.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/security_connector/tls/tls_security_connector.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/transport/client_auth_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/transport/secure_endpoint.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/transport/security_handshaker.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/transport/server_auth_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/transport/tsi_error.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/security/util/json_util.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/slice/b64.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/slice/percent_encoding.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/slice/slice.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/slice/slice_buffer.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/slice/slice_intern.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/slice/slice_string_helpers.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/api_trace.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/byte_buffer.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/byte_buffer_reader.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/call.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/call_details.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/call_log_batch.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/channel.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/channel_init.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/channel_ping.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/channel_stack_type.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/completion_queue.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/completion_queue_factory.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/event_string.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/init.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/init_secure.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/lame_client.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/metadata_array.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/server.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/validate_metadata.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/version.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/authority_override.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/bdp_estimator.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/byte_stream.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/connectivity_state.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/error_utils.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/metadata.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/metadata_batch.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/pid_controller.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/static_metadata.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/status_conversion.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/status_metadata.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/timeout_encoding.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/transport.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/transport_op_string.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/uri/uri_parser.cc
+  ${_gRPC_SOURCE_DIR}/src/core/plugin_registry/grpc_plugin_registry.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/crypt/aes_gcm.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/crypt/gsec.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/frame_protector/alts_counter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/frame_protector/alts_crypter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/frame_protector/alts_frame_protector.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/frame_protector/alts_record_protocol_crypter_common.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/frame_protector/alts_seal_privacy_integrity_crypter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/frame_protector/alts_unseal_privacy_integrity_crypter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/frame_protector/frame_handler.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/handshaker/alts_handshaker_client.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/handshaker/alts_shared_resource.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/handshaker/alts_tsi_handshaker.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/handshaker/alts_tsi_utils.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/handshaker/transport_security_common_api.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/zero_copy_frame_protector/alts_grpc_integrity_only_record_protocol.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/zero_copy_frame_protector/alts_grpc_privacy_integrity_record_protocol.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/zero_copy_frame_protector/alts_grpc_record_protocol_common.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/zero_copy_frame_protector/alts_iovec_record_protocol.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/alts/zero_copy_frame_protector/alts_zero_copy_grpc_protector.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/fake_transport_security.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/local_transport_security.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/ssl/session_cache/ssl_session_boringssl.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/ssl/session_cache/ssl_session_cache.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/ssl/session_cache/ssl_session_openssl.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/ssl_transport_security.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/transport_security.cc
+  ${_gRPC_SOURCE_DIR}/src/core/tsi/transport_security_grpc.cc
+)
+
+target_compile_features(grpc PUBLIC cxx_std_14)
+
+target_include_directories(grpc
+  PUBLIC ${_gRPC_SOURCE_DIR}/include
+  PRIVATE
+    ${_gRPC_SOURCE_DIR}
+    ${_gRPC_ADDRESS_SORTING_INCLUDE_DIR}
+    ${_gRPC_RE2_INCLUDE_DIR}
+    ${_gRPC_SSL_INCLUDE_DIR}
+    ${_gRPC_UPB_GENERATED_DIR}
+    ${_gRPC_UPB_GRPC_GENERATED_DIR}
+    ${_gRPC_UPB_INCLUDE_DIR}
+    ${_gRPC_ZLIB_INCLUDE_DIR}
+)
+target_link_libraries(grpc
+  ${_gRPC_BASELIB_LIBRARIES}
+  ${_gRPC_SSL_LIBRARIES}
+  ${_gRPC_ZLIB_LIBRARIES}
+  ${_gRPC_CARES_LIBRARIES}
+  ${_gRPC_ADDRESS_SORTING_LIBRARIES}
+  ${_gRPC_RE2_LIBRARIES}
+  ${_gRPC_UPB_LIBRARIES}
+  ${_gRPC_ALLTARGETS_LIBRARIES}
+  gpr
+  address_sorting
+  upb
+  absl::optional
+  absl::strings
+  absl::status
+  absl::inlined_vector
+  absl::flat_hash_set
+)
+if(_gRPC_PLATFORM_IOS OR _gRPC_PLATFORM_MAC)
+  target_link_libraries(grpc "-framework CoreFoundation")
+endif()
+
+
+add_library(grpc_csharp_ext SHARED
+  ${_gRPC_SOURCE_DIR}/src/csharp/ext/grpc_csharp_ext.c
+)
+
+target_compile_features(grpc_csharp_ext PUBLIC cxx_std_14)
+
+target_include_directories(grpc_csharp_ext
+  PUBLIC ${_gRPC_SOURCE_DIR}/include
+  PRIVATE
+    ${_gRPC_SOURCE_DIR}
+    ${_gRPC_ADDRESS_SORTING_INCLUDE_DIR}
+    ${_gRPC_RE2_INCLUDE_DIR}
+    ${_gRPC_SSL_INCLUDE_DIR}
+    ${_gRPC_UPB_GENERATED_DIR}
+    ${_gRPC_UPB_GRPC_GENERATED_DIR}
+    ${_gRPC_UPB_INCLUDE_DIR}
+    ${_gRPC_ZLIB_INCLUDE_DIR}
+)
+target_link_libraries(grpc_csharp_ext
+  ${_gRPC_ALLTARGETS_LIBRARIES}
+  grpc
+  gpr
+  address_sorting
+  upb
+)
+
+add_library(grpc_unsecure
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/census/grpc_context.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/backend_metric.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/backup_poller.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/channel_connectivity.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/client_channel.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/client_channel_channelz.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/client_channel_factory.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/client_channel_plugin.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/config_selector.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/global_subchannel_pool.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/health/health_check_client.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/http_connect_handshaker.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/http_proxy.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/address_filtering.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/child_policy_handler.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/grpclb/client_load_reporting_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/grpclb/grpclb.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/grpclb/grpclb_balancer_addresses.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/grpclb/grpclb_channel.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/grpclb/grpclb_client_stats.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/grpclb/load_balancer_api.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/pick_first/pick_first.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/priority/priority.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/round_robin/round_robin.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy/weighted_target/weighted_target.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/lb_policy_registry.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/local_subchannel_pool.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/proxy_mapper_registry.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/dns_resolver_ares.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_ev_driver.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_ev_driver_libuv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_ev_driver_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_ev_driver_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_wrapper.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_wrapper_fallback.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_wrapper_libuv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_wrapper_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/c_ares/grpc_ares_wrapper_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/dns_resolver_selection.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/dns/native/dns_resolver.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/fake/fake_resolver.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver/sockaddr/sockaddr_resolver.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver_registry.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolver_result_parsing.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/resolving_lb_policy.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/retry_throttle.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/server_address.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/service_config.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/service_config_channel_arg_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/service_config_parser.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/subchannel.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_channel/subchannel_pool_interface.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/client_idle/client_idle_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/deadline/deadline_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/http/client/http_client_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/http/client_authority_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/http/http_filters_plugin.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/http/message_compress/message_compress_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/http/message_compress/message_decompress_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/http/server/http_server_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/max_age/max_age_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/message_size/message_size_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/workarounds/workaround_cronet_compression_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/filters/workarounds/workaround_utils.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/alpn/alpn.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/client/authority.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/client/chttp2_connector.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/client/insecure/channel_create.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/client/insecure/channel_create_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/server/chttp2_server.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/server/insecure/server_chttp2.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/server/insecure/server_chttp2_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/bin_decoder.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/bin_encoder.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/chttp2_plugin.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/chttp2_transport.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/context_list.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/flow_control.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/frame_data.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/frame_goaway.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/frame_ping.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/frame_rst_stream.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/frame_settings.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/frame_window_update.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/hpack_encoder.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/hpack_parser.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/hpack_table.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/http2_settings.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/huffsyms.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/incoming_metadata.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/parsing.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/stream_lists.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/stream_map.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/varint.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/chttp2/transport/writing.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/inproc/inproc_plugin.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/transport/inproc/inproc_transport.cc
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/api/annotations.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/api/expr/v1alpha1/checked.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/api/expr/v1alpha1/syntax.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/api/http.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/protobuf/any.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/protobuf/descriptor.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/protobuf/duration.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/protobuf/empty.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/protobuf/struct.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/protobuf/timestamp.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/protobuf/wrappers.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/google/rpc/status.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/src/proto/grpc/health/v1/health.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/src/proto/grpc/lb/v1/load_balancer.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/udpa/data/orca/v1/orca_load_report.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/ext/upb-generated/validate/validate.upb.c
+  ${_gRPC_SOURCE_DIR}/src/core/lib/avl/avl.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/backoff/backoff.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/channel_args.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/channel_stack.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/channel_stack_builder.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/channel_trace.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/channelz.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/channelz_registry.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/connected_channel.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/handshaker.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/handshaker_registry.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/channel/status_util.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/compression/compression.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/compression/compression_args.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/compression/compression_internal.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/compression/message_compress.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/compression/stream_compression.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/compression/stream_compression_gzip.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/compression/stream_compression_identity.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/debug/stats.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/debug/stats_data.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/debug/trace.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/http/format_request.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/http/httpcli.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/http/parser.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/buffer_list.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/call_combiner.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/cfstream_handle.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/combiner.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/dualstack_socket_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/endpoint.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/endpoint_cfstream.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/endpoint_pair_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/endpoint_pair_uv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/endpoint_pair_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/error.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/error_cfstream.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/ev_apple.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/ev_epoll1_linux.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/ev_epollex_linux.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/ev_poll_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/ev_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/ev_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/exec_ctx.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/executor.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/executor/mpmcqueue.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/executor/threadpool.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/fork_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/fork_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/gethostname_fallback.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/gethostname_host_name_max.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/gethostname_sysconf.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/grpc_if_nametoindex_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/grpc_if_nametoindex_unsupported.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/internal_errqueue.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/iocp_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/iomgr.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/iomgr_custom.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/iomgr_internal.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/iomgr_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/iomgr_posix_cfstream.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/iomgr_uv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/iomgr_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/is_epollexclusive_available.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/load_file.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/lockfree_event.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/parse_address.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/poller/eventmanager_libuv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/polling_entity.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/pollset.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/pollset_custom.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/pollset_set.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/pollset_set_custom.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/pollset_set_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/pollset_uv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/pollset_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/resolve_address.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/resolve_address_custom.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/resolve_address_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/resolve_address_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/resource_quota.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/sockaddr_utils.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/socket_factory_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/socket_mutator.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/socket_utils_common_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/socket_utils_linux.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/socket_utils_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/socket_utils_uv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/socket_utils_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/socket_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_client.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_client_cfstream.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_client_custom.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_client_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_client_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_custom.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_server.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_server_custom.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_server_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_server_utils_posix_common.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_server_utils_posix_ifaddrs.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_server_utils_posix_noifaddrs.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_server_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_uv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_windows.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/time_averaged_stats.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/timer.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/timer_custom.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/timer_generic.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/timer_heap.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/timer_manager.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/timer_uv.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/udp_server.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/unix_sockets_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/unix_sockets_posix_noop.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/wakeup_fd_eventfd.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/wakeup_fd_nospecial.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/wakeup_fd_pipe.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/wakeup_fd_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/work_serializer.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/json/json_reader.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/json/json_util.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/json/json_writer.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/slice/b64.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/slice/percent_encoding.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/slice/slice.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/slice/slice_buffer.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/slice/slice_intern.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/slice/slice_string_helpers.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/api_trace.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/byte_buffer.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/byte_buffer_reader.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/call.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/call_details.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/call_log_batch.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/channel.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/channel_init.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/channel_ping.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/channel_stack_type.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/completion_queue.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/completion_queue_factory.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/event_string.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/init.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/init_unsecure.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/lame_client.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/metadata_array.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/server.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/validate_metadata.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/surface/version.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/authority_override.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/bdp_estimator.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/byte_stream.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/connectivity_state.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/error_utils.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/metadata.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/metadata_batch.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/pid_controller.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/static_metadata.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/status_conversion.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/status_metadata.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/timeout_encoding.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/transport.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/transport/transport_op_string.cc
+  ${_gRPC_SOURCE_DIR}/src/core/lib/uri/uri_parser.cc
+  ${_gRPC_SOURCE_DIR}/src/core/plugin_registry/grpc_unsecure_plugin_registry.cc
+)
+
+target_compile_features(grpc_unsecure PUBLIC cxx_std_14)
+
+target_include_directories(grpc_unsecure
+  PUBLIC ${_gRPC_SOURCE_DIR}/include
+  PRIVATE
+    ${_gRPC_SOURCE_DIR}
+    ${_gRPC_ADDRESS_SORTING_INCLUDE_DIR}
+    ${_gRPC_RE2_INCLUDE_DIR}
+    ${_gRPC_SSL_INCLUDE_DIR}
+    ${_gRPC_UPB_GENERATED_DIR}
+    ${_gRPC_UPB_GRPC_GENERATED_DIR}
+    ${_gRPC_UPB_INCLUDE_DIR}
+    ${_gRPC_ZLIB_INCLUDE_DIR}
+)
+target_link_libraries(grpc_unsecure
+  ${_gRPC_BASELIB_LIBRARIES}
+  ${_gRPC_ZLIB_LIBRARIES}
+  ${_gRPC_CARES_LIBRARIES}
+  ${_gRPC_ADDRESS_SORTING_LIBRARIES}
+  ${_gRPC_RE2_LIBRARIES}
+  ${_gRPC_UPB_LIBRARIES}
+  ${_gRPC_ALLTARGETS_LIBRARIES}
+  gpr
+  address_sorting
+  upb
+  absl::optional
+  absl::strings
+  absl::status
+  absl::inlined_vector
+)
+if(_gRPC_PLATFORM_IOS OR _gRPC_PLATFORM_MAC)
+  target_link_libraries(grpc_unsecure "-framework CoreFoundation")
+endif()
+
+
+add_library(grpc++
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/channel_cc.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/client_callback.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/client_context.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/client_interceptor.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/create_channel.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/create_channel_internal.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/create_channel_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/credentials_cc.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/insecure_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/secure_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/codegen/codegen_init.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/alarm.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/auth_property_iterator.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/channel_arguments.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/channel_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/completion_queue_cc.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/core_codegen.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/resource_quota_cc.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/rpc_method.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/secure_auth_context.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/secure_channel_arguments.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/secure_create_auth_context.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/tls_credentials_options.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/tls_credentials_options_util.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/validate_service_config.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/version_cc.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/async_generic_service.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/channel_argument_option.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/create_default_thread_pool.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/dynamic_thread_pool.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/external_connection_acceptor_impl.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/health/default_health_check_service.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/health/health_check_service.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/health/health_check_service_server_builder_option.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/insecure_server_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/secure_server_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/server_builder.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/server_callback.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/server_cc.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/server_context.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/server_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/server_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/thread_manager/thread_manager.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/util/byte_buffer_cc.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/util/status.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/util/string_ref.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/util/time_cc.cc
+)
+
+target_compile_features(grpc++ PUBLIC cxx_std_14)
+
+target_include_directories(grpc++
+  PUBLIC ${_gRPC_SOURCE_DIR}/include
+  PRIVATE
+    ${_gRPC_SOURCE_DIR}
+    ${_gRPC_ADDRESS_SORTING_INCLUDE_DIR}
+    ${_gRPC_RE2_INCLUDE_DIR}
+    ${_gRPC_SSL_INCLUDE_DIR}
+    ${_gRPC_UPB_GENERATED_DIR}
+    ${_gRPC_UPB_GRPC_GENERATED_DIR}
+    ${_gRPC_UPB_INCLUDE_DIR}
+    ${_gRPC_ZLIB_INCLUDE_DIR}
+    ${_gRPC_PROTO_GENS_DIR}
+)
+target_link_libraries(grpc++
+  ${_gRPC_BASELIB_LIBRARIES}
+  ${_gRPC_PROTOBUF_LIBRARIES}
+  ${_gRPC_ALLTARGETS_LIBRARIES}
+  grpc
+  gpr
+  address_sorting
+  upb
+)
+
+add_library(grpc++_unsecure
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/channel_cc.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/client_callback.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/client_context.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/client_interceptor.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/create_channel.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/create_channel_internal.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/create_channel_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/credentials_cc.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/client/insecure_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/codegen/codegen_init.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/alarm.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/channel_arguments.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/channel_filter.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/completion_queue_cc.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/core_codegen.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/insecure_create_auth_context.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/resource_quota_cc.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/rpc_method.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/validate_service_config.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/common/version_cc.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/async_generic_service.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/channel_argument_option.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/create_default_thread_pool.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/dynamic_thread_pool.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/external_connection_acceptor_impl.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/health/default_health_check_service.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/health/health_check_service.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/health/health_check_service_server_builder_option.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/insecure_server_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/server_builder.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/server_callback.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/server_cc.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/server_context.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/server_credentials.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/server/server_posix.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/thread_manager/thread_manager.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/util/byte_buffer_cc.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/util/status.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/util/string_ref.cc
+  ${_gRPC_SOURCE_DIR}/src/cpp/util/time_cc.cc
+)
+
+target_compile_features(grpc++_unsecure PUBLIC cxx_std_14)
+
+target_include_directories(grpc++_unsecure
+  PUBLIC ${_gRPC_SOURCE_DIR}/include
+  PRIVATE
+    ${_gRPC_SOURCE_DIR}
+    ${_gRPC_ADDRESS_SORTING_INCLUDE_DIR}
+    ${_gRPC_RE2_INCLUDE_DIR}
+    ${_gRPC_SSL_INCLUDE_DIR}
+    ${_gRPC_UPB_GENERATED_DIR}
+    ${_gRPC_UPB_GRPC_GENERATED_DIR}
+    ${_gRPC_UPB_INCLUDE_DIR}
+    ${_gRPC_ZLIB_INCLUDE_DIR}
+    ${_gRPC_PROTO_GENS_DIR}
+)
+target_link_libraries(grpc++_unsecure
+  ${_gRPC_BASELIB_LIBRARIES}
+  ${_gRPC_PROTOBUF_LIBRARIES}
+  ${_gRPC_ALLTARGETS_LIBRARIES}
+  grpc_unsecure
+  gpr
+  address_sorting
+  upb
+)
+
+add_library(grpc_plugin_support
+  ${_gRPC_SOURCE_DIR}/src/compiler/cpp_generator.cc
+  ${_gRPC_SOURCE_DIR}/src/compiler/csharp_generator.cc
+  ${_gRPC_SOURCE_DIR}/src/compiler/node_generator.cc
+  ${_gRPC_SOURCE_DIR}/src/compiler/objective_c_generator.cc
+  ${_gRPC_SOURCE_DIR}/src/compiler/php_generator.cc
+  ${_gRPC_SOURCE_DIR}/src/compiler/python_generator.cc
+  ${_gRPC_SOURCE_DIR}/src/compiler/ruby_generator.cc
+)
+
+target_compile_features(grpc_plugin_support PUBLIC cxx_std_14)
+
+target_include_directories(grpc_plugin_support
+  PUBLIC ${_gRPC_SOURCE_DIR}/include
+  PRIVATE
+    ${_gRPC_SOURCE_DIR}
+    ${_gRPC_ADDRESS_SORTING_INCLUDE_DIR}
+    ${_gRPC_RE2_INCLUDE_DIR}
+    ${_gRPC_SSL_INCLUDE_DIR}
+    ${_gRPC_UPB_GENERATED_DIR}
+    ${_gRPC_UPB_GRPC_GENERATED_DIR}
+    ${_gRPC_UPB_INCLUDE_DIR}
+    ${_gRPC_ZLIB_INCLUDE_DIR}
+    ${_gRPC_PROTO_GENS_DIR}
+)
+target_link_libraries(grpc_plugin_support
+  ${_gRPC_PROTOBUF_PROTOC_LIBRARIES}
+  ${_gRPC_PROTOBUF_LIBRARIES}
+  ${_gRPC_ALLTARGETS_LIBRARIES}
+)
+
+
+add_library(upb
+  ${_gRPC_SOURCE_DIR}/third_party/upb/upb/decode.c
+  ${_gRPC_SOURCE_DIR}/third_party/upb/upb/encode.c
+  ${_gRPC_SOURCE_DIR}/third_party/upb/upb/msg.c
+  ${_gRPC_SOURCE_DIR}/third_party/upb/upb/port.c
+  ${_gRPC_SOURCE_DIR}/third_party/upb/upb/table.c
+  ${_gRPC_SOURCE_DIR}/third_party/upb/upb/upb.c
+)
+
+target_compile_features(upb PUBLIC cxx_std_14)
+
+target_include_directories(upb
+  PUBLIC ${_gRPC_SOURCE_DIR}/include
+  PRIVATE
+    ${_gRPC_SOURCE_DIR}
+    ${_gRPC_ADDRESS_SORTING_INCLUDE_DIR}
+    ${_gRPC_RE2_INCLUDE_DIR}
+    ${_gRPC_SSL_INCLUDE_DIR}
+    ${_gRPC_UPB_GENERATED_DIR}
+    ${_gRPC_UPB_GRPC_GENERATED_DIR}
+    ${_gRPC_UPB_INCLUDE_DIR}
+    ${_gRPC_ZLIB_INCLUDE_DIR}
+)
+target_link_libraries(upb
+  ${_gRPC_ALLTARGETS_LIBRARIES}
+)
+
+add_executable(grpc_cpp_plugin
+  ${_gRPC_SOURCE_DIR}/src/compiler/cpp_plugin.cc
+)
+
+target_compile_features(grpc_cpp_plugin PUBLIC cxx_std_14)
+
+target_include_directories(grpc_cpp_plugin
+  PRIVATE
+    ${_gRPC_SOURCE_DIR}
+    ${_gRPC_SOURCE_DIR}/include
+    ${_gRPC_ADDRESS_SORTING_INCLUDE_DIR}
+    ${_gRPC_RE2_INCLUDE_DIR}
+    ${_gRPC_SSL_INCLUDE_DIR}
+    ${_gRPC_UPB_GENERATED_DIR}
+    ${_gRPC_UPB_GRPC_GENERATED_DIR}
+    ${_gRPC_UPB_INCLUDE_DIR}
+    ${_gRPC_ZLIB_INCLUDE_DIR}
+    ${_gRPC_PROTO_GENS_DIR}
+)
+
+target_link_libraries(grpc_cpp_plugin
+  ${_gRPC_PROTOBUF_PROTOC_LIBRARIES}
+  ${_gRPC_PROTOBUF_LIBRARIES}
+  ${_gRPC_ALLTARGETS_LIBRARIES}
+  grpc_plugin_support
+)
