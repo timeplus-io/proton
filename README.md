@@ -24,11 +24,11 @@
   <a href="#need-help"><strong>Need help?</strong></a>
 </p>
 
-Timeplus Proton is a streaming SQL engine, a fast and lightweight alternative to ksqlDB or Apache Flink, 🚀 powered by ClickHouse. It enables developers to solve streaming data processing, routing and analytics challenges from Apache Kafka, Redpanda and more sources, and send aggregated data to the downstream systems. Timeplus Proton is the core engine of [Timeplus Enterprise](https://timeplus.com).
+Timeplus Proton is a Stream Processing/Database, a fast and lightweight alternative to ksqlDB or Apache Flink, 🚀 powered by ClickHouse. It enables developers to solve streaming data processing, multi-stream JOINs, sophisticated incremental Materialized Views, routing and analytics challenges from Apache Kafka, Redpanda and more sources, and send aggregated data to the downstream streaming or database systems. Timeplus Proton is the core engine of [Timeplus Enterprise](https://timeplus.com).
 
 ## 💪 Why use Timeplus Proton?
 
-1. **[Apache Flink](https://github.com/apache/flink) or [ksqlDB](https://github.com/confluentinc/ksql) alternative.** Timeplus Proton provides powerful streaming SQL functionalities, such as streaming ETL, tumble/hop/session windows, watermarks, materialized views, CDC and data revision processing, etc.
+1. **[Apache Flink](https://github.com/apache/flink) or [ksqlDB](https://github.com/confluentinc/ksql) alternative.** Timeplus Proton provides powerful stream processing functionalities, such as streaming ETL, tumble/hop/session windows, watermarks, incremental materialized views maintenance, CDC and data revision processing, etc in addition to having queryable analytical/row based materialized views within Proton itself. 
 2. **Fast.** Timeplus Proton is written in C++, with optimized performance through SIMD. [For example](https://www.timeplus.com/post/scary-fast), on an Apple MacBookPro with M2 Max, Timeplus Proton can deliver 90 million EPS, 4 millisecond end-to-end latency, and high cardinality aggregation with 1 million unique keys.
 3. **Lightweight.** Timeplus Proton is a single binary (\<500MB). No JVM or any other dependencies. You can also run it with Docker, or on an AWS t2.nano instance (1 vCPU and 0.5 GiB memory).
 4. **Powered by the fast, resource efficient and mature [ClickHouse](https://github.com/clickhouse/clickhouse).** Timeplus Proton extends the historical data, storage, and computing functionality of ClickHouse with stream processing. Thousands of SQL functions are available in Timeplus Proton. Billions of rows are queried in milliseconds.
