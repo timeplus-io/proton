@@ -24,7 +24,7 @@
   <a href="#need-help"><strong>Need help?</strong></a>
 </p>
 
-Timeplus Proton is a stream processing engine and database. It is a fast and lightweight alternative to ksqlDB or Apache Flink, 🚀 powered by ClickHouse. It enables developers to solve streaming data processing, multi-stream JOINs, sophisticated incremental materialized views, routing and analytics challenges from Apache Kafka, Redpanda and more sources, and send aggregated data to the downstream streaming or database systems. Timeplus Proton is the core engine of [Timeplus Enterprise](https://timeplus.com).
+Timeplus Proton is a stream processing engine and database. It is a fast and lightweight alternative to ksqlDB or Apache Flink, 🚀 powered by the libraries and engines in ClickHouse. It enables developers to solve streaming data processing, multi-stream JOINs, sophisticated incremental materialized views, routing and analytics challenges from Apache Kafka, Redpanda and more sources, and send aggregated data to the downstream streaming or database systems. Timeplus Proton is the core engine of [Timeplus Enterprise](https://timeplus.com).
 
 ## 💪 Why use Timeplus Proton?
 
@@ -36,6 +36,10 @@ Timeplus Proton is a stream processing engine and database. It is a fast and lig
 
 ![Proton Architecture](design/proton-architecture.webp)
 See our [architecture](https://docs.timeplus.com/proton-architecture) doc for technical details and our [FAQ](https://docs.timeplus.com/proton-faq) for more information.
+
+## How is it different from ClickHouse?
+
+ClickHouse is an extremely performant Data Warehouse built for fast analytical queries on large amounts of data. While it does support ingesting data from streaming sources such as Apache Kafka, it is itself not a stream processing engine which can transform and join streaming event data based on time-based semantics to detect patterns that need to be acted upon as soon as it happens. ClickHouse also has incremental materialized view capability but is limited to creating materialized view off of ingestion of blocks to a single table. Proton uses ClickHouse as a table store engine inside of each stream (alongside a Write Ahead Log and other data structures) and uses to unify real-time and historical data together to detect signals in the data. In addition, Proton can act as an advanced data pre-processor for ClickHouse (and similar systems) where the bulk of the data preparation and batching is done ahead of ingestion. See [Timeplus and ClickHouse](https://www.timeplus.com/timeplus-and-clickhouse) for more details on this. 
 
 ## 🎬 Demo Video
 
