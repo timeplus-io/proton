@@ -1,29 +1,35 @@
 services:
-  proton:
+  timeplus:
     image: d.timeplus.com/timeplus-io/proton:latest
     pull_policy: always
     ports:
       - 3218:3218 #http port for JDBC driver, default streaming mode
       - 8123:8123 #http port for JDBC driver, default batch mode
       - 8463:8463 #tcp port for go driver or grafana plugin
-    volumes:
-      - ./init_sql:/docker-entrypoint-initdb.d
     healthcheck:
-      test: wget --no-verbose --tries=1 --spider http://localhost:8123/?query=show+create+phone || exit 1
+      test: ["CMD", "curl", "http://localhost:8123"]
       interval: 2s
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  init_timeplus:
+    image: curlimages/curl
+    command: >
+      sh -c "echo 'CREATE STREAM IF NOT EXISTS phone(raw string)' | curl timeplus:8123 --data-binary @-"
+    depends_on:
+      timeplus:
+        condition: service_healthy
 
   proxy:
     image: docker.timeplus.com/timeplus/sensor-logger-proxy
     ports:
       - 8000:3000 #expose internal port 3000 as 8000, avoiding conflicts with Grafana. This will forward HTTP POST to proton:3218
     environment:
-      HOST: proton
+      HOST: timeplus
       STREAM: phone
     depends_on:
-      - proton
+      - timeplus
 
   grafana:
     image: grafana/grafana:latest
@@ -33,10 +39,10 @@ services:
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: 1
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
-      GF_INSTALL_PLUGINS: timeplus-proton-datasource
+      GF_INSTALL_PLUGINS: https://d.timeplus.com/grafana/timeplus-proton-datasource-2.0.0.zip;timeplus-proton-datasource
       GF_LOG_LEVEL: error
     volumes:
       - ./grafana_provisioning:/etc/grafana/provisioning
     depends_on:
-      proton:
+      timeplus:
         condition: service_healthy

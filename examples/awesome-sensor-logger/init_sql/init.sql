@@ -1,1 +1,0 @@
-CREATE STREAM IF NOT EXISTS phone(raw string)
