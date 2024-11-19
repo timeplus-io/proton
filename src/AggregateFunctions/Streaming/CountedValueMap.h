@@ -3,10 +3,14 @@
 #include <base/StringRef.h>
 #include <Common/ArenaUtils.h>
 #include <Common/ArenaWithFreeLists.h>
+#include <Common/HashTable/Hash.h>
+#include <Common/HashTable/HashSet.h>
 
 #include <absl/container/btree_map.h>
+#include <absl/container/flat_hash_map.h>
 
 #include <map>
+#include <unordered_map>
 #include <stdexcept>
 
 namespace DB
@@ -47,21 +51,25 @@ private:
 /// CountedValueMap maintain count for each key with maximum capacity
 /// When capacity hits the max capacity threshold, it will delete
 /// the minimum / maximum key in the map to maintain the capacity constrain
-template <typename T, bool maximum, typename KeyCompare = void>
-class CountedValueMap
+template <typename T, bool use_hash, typename Compare>
+class CountedValueTable
 {
 public:
-    using Compare = std::conditional_t<std::is_void_v<KeyCompare>, std::conditional_t<maximum, std::greater<T>, std::less<T>>, KeyCompare>;
-
     /// NOTE: Generally we prefer to use absl::btree_map, but it requires `Compare` is nothrow copy constructible, so if not, we use std::map
     using BTreeMap = absl::btree_map<T, uint32_t, Compare>;
     using STDMap = std::map<T, uint32_t, Compare>;
-    using Map = std::conditional_t<std::is_nothrow_copy_constructible<Compare>::value, BTreeMap, STDMap>;
+    using FlatHashMap = absl::flat_hash_map<T, uint32_t, DefaultHash<T>, Compare>;
+    using STDHashMap = std::unordered_map<T, uint32_t, DefaultHash<T>, Compare>;
+    using Map = std::conditional_t<
+        use_hash,
+        std::conditional_t<std::is_nothrow_copy_constructible<Compare>::value, FlatHashMap, STDHashMap>,
+        std::conditional_t<std::is_nothrow_copy_constructible<Compare>::value, BTreeMap, STDMap>>;
     using size_type = typename Map::size_type;
+    using key_type = T;
 
-    CountedValueMap() : CountedValueMap(1000) { }
-    explicit CountedValueMap(size_type max_size_, Compare && comp = Compare{})
-        : max_size(max_size_), arena(std::make_unique<CountedValueArena<T>>()), m(std::move(comp))
+    CountedValueTable() : CountedValueTable(1000) { }
+    explicit CountedValueTable(size_type max_size_, Compare && comp = Compare{})
+        : max_size(max_size_), arena(std::make_unique<CountedValueArena<T>>())
     {
     }
 
@@ -78,10 +86,17 @@ public:
     {
         if (atCapacity())
         {
-            /// At capacity, this is an optimization
-            /// fast ignore elements we don't want to maintain
-            if (less(lastValue(), v))
+            if constexpr (std::is_same_v<Map, std::map<T, uint32_t, Compare>> || std::is_same_v<Map, absl::btree_map<T, uint32_t, Compare>>)
+            {
+                /// At capacity, this is an optimization
+                /// fast ignore elements we don't want to maintain
+                if (less(lastValue(), v))
+                    return m.end();
+            }
+            else
+            {
                 return m.end();
+            }
         }
 
         if (auto iter = m.find(v); iter != m.end())
@@ -94,8 +109,9 @@ public:
             /// Didn't find v in the map
             auto [new_iter, inserted] = m.emplace(arena->emplace(std::move(v)), 1);
             assert(inserted);
+            if constexpr (std::is_same_v<Map, std::map<T, uint32_t, Compare>> || std::is_same_v<Map, absl::btree_map<T, uint32_t, Compare>>)
+                eraseExtraElements();
 
-            eraseExtraElements();
             return new_iter;
         }
     }
@@ -127,7 +143,7 @@ public:
     }
 
     /// Return true if the element exists in the map.
-    template<typename TT>
+    template <typename TT>
     bool contains(const TT & v) const
     {
         return m.find(v) != m.end();
@@ -167,10 +183,10 @@ public:
         return m.rbegin()->first;
     }
 
-    void merge(const CountedValueMap & rhs) { merge<true>(rhs); }
+    void merge(const CountedValueTable & rhs) { merge<true>(rhs); }
 
     /// After merge, `rhs` will be empty
-    void merge(CountedValueMap & rhs)
+    void merge(CountedValueTable & rhs)
     {
         merge<false>(rhs);
         rhs.clear();
@@ -192,7 +208,7 @@ public:
 
     bool empty() const { return m.empty(); }
 
-    void swap(CountedValueMap & rhs)
+    void swap(CountedValueTable & rhs)
     {
         std::swap(max_size, rhs.max_size);
         m.swap(rhs.m);
@@ -207,7 +223,7 @@ public:
 
     CountedValueArena<T> & getArena() { return *arena; }
 
-    static CountedValueMap & merge(CountedValueMap & lhs, CountedValueMap & rhs)
+    static CountedValueTable & merge(CountedValueTable & lhs, CountedValueTable & rhs)
     {
         if (rhs.size() > lhs.size())
             lhs.swap(rhs);
@@ -240,49 +256,64 @@ private:
         /// II) Slow path
         assert(!rhs.empty() && !empty());
 
-        /// Optimize path : if lhs is at capacity and rhs has no overlap of lhs
-        if (atCapacity())
+        if constexpr (std::is_same_v<Map, std::map<T, uint32_t, Compare>> || std::is_same_v<Map, absl::btree_map<T, uint32_t, Compare>>)
         {
-            /// If all values in lhs are less/greater (i.e. for minimum/maximum) than rhs
-            /// we don't need any merge
-            if (less(lastValue(), rhs.firstValue()))
-                return;
-
-            /// If all values in lhs are greater than rhs and rhs are at capacity as well
-            if (rhs.atCapacity() && rhs.capacity() == capacity() && greater(firstValue(), rhs.lastValue()))
+            /// Optimize path : if lhs is at capacity and rhs has no overlap of lhs
+            if (atCapacity())
             {
-                if constexpr (copy)
-                    return clearAndClone(rhs);
-                else
-                    return clearAndSwap(rhs);
+                /// If all values in lhs are less/greater (i.e. for minimum/maximum) than rhs
+                /// we don't need any merge
+                if (less(lastValue(), rhs.firstValue()))
+                    return;
+
+                /// If all values in lhs are greater than rhs and rhs are at capacity as well
+                if (rhs.atCapacity() && rhs.capacity() == capacity() && greater(firstValue(), rhs.lastValue()))
+                {
+                    if constexpr (copy)
+                        return clearAndClone(rhs);
+                    else
+                        return clearAndSwap(rhs);
+                }
+            }
+
+            if (rhs.atCapacity() && rhs.capacity() == capacity())
+            {
+                /// If all values in lhs are greater than rhs
+                /// we can clear up lhs elements and copy over elements from rhs
+                if (greater(firstValue(), rhs.lastValue()))
+                {
+                    if constexpr (copy)
+                        return clearAndClone(rhs);
+                    else
+                        return clearAndSwap(rhs);
+                }
+            }
+
+            /// Loop from min to max
+            for (auto src_iter = rhs.m.begin(); src_iter != rhs.m.end(); ++src_iter)
+            {
+                if (atCapacity() && less(lastValue(), src_iter->first))
+                    /// We reached maximum capacity and all other values from rhs will be
+                    /// greater than those already in lhs. Stop merging more
+                    break;
+
+                doMerge<copy>(src_iter);
+            }
+
+            eraseExtraElements();
+        }
+        else
+        {
+            for (auto src_iter = rhs.m.begin(); src_iter != rhs.m.end(); ++src_iter)
+            {
+                if (atCapacity())
+                    /// We reached maximum capacity. Stop merging more
+                    break;
+
+                doMerge<copy>(src_iter);
             }
         }
 
-        if (rhs.atCapacity() && rhs.capacity() == capacity())
-        {
-            /// If all values in lhs are greater than rhs
-            /// we can clear up lhs elements and copy over elements from rhs
-            if (greater(firstValue(), rhs.lastValue()))
-            {
-                if constexpr (copy)
-                    return clearAndClone(rhs);
-                else
-                    return clearAndSwap(rhs);
-            }
-        }
-
-        /// Loop from min to max
-        for (auto src_iter = rhs.m.begin(); src_iter != rhs.m.end(); ++src_iter)
-        {
-            if (atCapacity() && less(lastValue(), src_iter->first))
-                /// We reached maximum capacity and all other values from rhs will be
-                /// greater than those already in lhs. Stop merging more
-                break;
-
-            doMerge<copy>(src_iter);
-        }
-
-        eraseExtraElements();
     }
 
     template <bool copy, typename Iter>
@@ -304,18 +335,22 @@ private:
 
     void eraseExtraElements()
     {
+        /// Only can be used in ordered map
         if (max_size <= 0)
             return;
 
-        while (m.size() > max_size)
+        if constexpr (std::is_same_v<Map, std::map<T, uint32_t, Compare>> || std::is_same_v<Map, absl::btree_map<T, uint32_t, Compare>>)
         {
-            auto last_elem = --m.end();
-            arena->free(last_elem->first);
-            m.erase(last_elem);
+            while (m.size() > max_size)
+            {
+                auto last_elem = --m.end();
+                arena->free(last_elem->first);
+                m.erase(last_elem);
+            }
         }
     }
 
-    inline void clearAndClone(const CountedValueMap & rhs)
+    inline void clearAndClone(const CountedValueTable & rhs)
     {
         clear();
 
@@ -324,22 +359,41 @@ private:
             m.emplace(arena->emplace(src_iter->first), src_iter->second);
     }
 
-    inline void clearAndSwap(CountedValueMap & rhs)
+    inline void clearAndSwap(CountedValueTable & rhs)
     {
         clear();
         swap(rhs);
     }
 
     /// \returns: true means l < r for minimum order
-    inline bool less(const T & l, const T & r) const { return m.key_comp()(l, r); }
+    inline bool less(const T & l, const T & r) const 
+    { 
+        if constexpr (std::is_same_v<Map, std::map<T, uint32_t, Compare>> || std::is_same_v<Map, absl::btree_map<T, uint32_t, Compare>>)
+            return m.key_comp()(l, r);
+        else
+            return false; 
+    }
 
     /// \returns: true means l > r for minimum order
-    inline bool greater(const T & l, const T & r) const { return m.key_comp()(r, l); }
+    inline bool greater(const T & l, const T & r) const 
+    { 
+        if constexpr (std::is_same_v<Map, std::map<T, uint32_t, Compare>> || std::is_same_v<Map, absl::btree_map<T, uint32_t, Compare>>)
+            return m.key_comp()(r, l); 
+        else
+            return false; 
+    }
 
 private:
     size_type max_size;
     std::unique_ptr<CountedValueArena<T>> arena;
     Map m;
 };
+
+template <typename T, bool maximum, typename KeyCompare = void>
+using CountedValueMap = CountedValueTable<T, /*use_hash=*/false, std::conditional_t<std::is_void_v<KeyCompare>, std::conditional_t<maximum, std::greater<T>, std::less<T>>, KeyCompare>>;
+
+template <typename T, typename KeyCompare = void>
+using CountedValueSet = CountedValueTable<T, /*use_hash=*/true, std::conditional_t<std::is_void_v<KeyCompare>, std::equal_to<T>, KeyCompare>>;
+
 }
 }
