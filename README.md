@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="#-why-use-timeplus-proton"><strong>Why Use Timeplus Proton</strong></a> ·
-  <a href="#-how-is-it-different-from-clickhouse"><strong>How is it different from ClickHouse?</strong></a> .
+  <a href="#how-is-it-different-from-clickhouse"><strong>How is it different from ClickHouse?</strong></a> .
   <a href="#-demo-video"><strong>Demo Video</strong></a> ·
   <a href="#-deployment"><strong>Deployment</strong></a> ·
   <a href="#-whats-next"><strong>What's Next</strong></a> ·
