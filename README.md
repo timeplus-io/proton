@@ -16,12 +16,14 @@
 
 <p align="center">
   <a href="#-why-use-timeplus-proton"><strong>Why Use Timeplus Proton</strong></a> ·
+  <a href="#-how-is-it-different-from-clickhouse"><strong>How is it different from ClickHouse?</strong></a> .
   <a href="#-demo-video"><strong>Demo Video</strong></a> ·
   <a href="#-deployment"><strong>Deployment</strong></a> ·
   <a href="#-whats-next"><strong>What's Next</strong></a> ·
   <a href="#-integrations"><strong>Integrations</strong></a> ·
   <a href="#contributing"><strong>Contributing</strong></a> ·
-  <a href="#need-help"><strong>Need help?</strong></a>
+  <a href="#need-help"><strong>Need help?</strong></a> 
+  
 </p>
 
 Timeplus Proton is a stream processing engine and database. It is a fast and lightweight alternative to ksqlDB or Apache Flink, 🚀 powered by the libraries and engines in ClickHouse. It enables developers to solve streaming data processing, multi-stream JOINs, sophisticated incremental materialized views, routing and analytics challenges from Apache Kafka, Redpanda and more sources, and send aggregated data to the downstream streaming or database systems. Timeplus Proton is the core engine of [Timeplus Enterprise](https://timeplus.com).
