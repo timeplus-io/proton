@@ -37,71 +37,316 @@ class ASTStorage;
     M(String, row_delimiter, "\n", "The string to be considered as a delimiter in raw message.", 0) \
     M(UInt64, max_row_length, 4096, "Max row length", 0)
 
-#define ALL_EXTERNAL_STREAM_SETTINGS(M) \
-    M(String, type, "", "External stream type", 0) \
-    KAFKA_EXTERNAL_STREAM_SETTINGS(M) \
-    LOG_FILE_EXTERNAL_STREAM_SETTINGS(M)
-
-#define LIST_OF_EXTERNAL_STREAM_SETTINGS(M) \
-    ALL_EXTERNAL_STREAM_SETTINGS(M) \
-    FORMAT_FACTORY_SETTINGS(M)
-
-DECLARE_SETTINGS_TRAITS(KafkaExternalStreamSettingsTraits, KAFKA_EXTERNAL_STREAM_SETTINGS)
-
-struct KafkaExternalStreamSettings : public BaseSettings<KafkaExternalStreamSettingsTraits>
-{
-    bool usesSASL() const
-    {
-        return boost::istarts_with(security_protocol.value, "SASL_");
-    }
-
-    /// "SASL_SSL" or "SSL"
-    bool usesSecureConnection() const
-    {
-        return boost::iends_with(security_protocol.value, "SSL");
-    }
-};
-
-DECLARE_SETTINGS_TRAITS(ExternalStreamSettingsTraits, LIST_OF_EXTERNAL_STREAM_SETTINGS)
-
-/** Settings for the ExternalStream engine.
-  * Could be loaded from a CREATE EXTERNAL STREAM query (SETTINGS clause).
-  */
-struct ExternalStreamSettings : public BaseSettings<ExternalStreamSettingsTraits>
-{
-    void loadFromQuery(ASTStorage & storage_def);
-
-    KafkaExternalStreamSettings getKafkaSettings()
-    {
-        KafkaExternalStreamSettings settings {};
-#define SET_CHANGED_SETTINGS(TYPE, NAME, DEFAULT, DESCRIPTION, FLAGS) \
-        if ((NAME).changed) \
-            settings.NAME = (NAME);
-
-        KAFKA_EXTERNAL_STREAM_SETTINGS(SET_CHANGED_SETTINGS)
-
-#undef SET_CHANGED_SETTINGS
-        return settings;
-    }
-
-    FormatSettings getFormatSettings(const ContextPtr & context)
-    {
-        FormatFactorySettings settings {};
-        const auto & settings_from_context = context->getSettingsRef();
-
-        /// settings from context have higher priority
-#define SET_CHANGED_SETTINGS(TYPE, NAME, DEFAULT, DESCRIPTION, FLAGS) \
-        if (settings_from_context.NAME.changed) \
-            settings.NAME = settings_from_context.NAME; \
-        else if ((NAME).changed) \
-            settings.NAME = (NAME);
-
-        FORMAT_FACTORY_SETTINGS(SET_CHANGED_SETTINGS)
-
-#undef SET_CHANGED_SETTINGS
-
-        return DB::getFormatSettings(context, settings);
-    }
-};
-
-}
+#define NATS_EXTERNAL_STREAM_SETTINGS(M) \
+    M(String, nats_servers, "", "A comma-separated list of NATS servers.", 0) \
+    M(String, nats_subject, "", "NATS subject name.", 0) \
+    M(String, nats_queue_group, "", "NATS queue group name.", 0) \
+    M(String, nats_durable_name, "", "NATS durable name.", 0) \
+    M(String, nats_ack_wait, "30s", "NATS acknowledgment wait time.", 0) \
+    M(UInt64, nats_max_inflight, 1024, "Maximum number of inflight messages for NATS.", 0) \
+    M(String, nats_start_sequence, "", "NATS start sequence.", 0) \
+    M(String, nats_start_time, "", "NATS start time.", 0) \
+    M(String, nats_deliver_policy, "all", "NATS deliver policy.", 0) \
+    M(String, nats_ack_policy, "explicit", "NATS acknowledgment policy.", 0) \
+    M(String, nats_replay_policy, "instant", "NATS replay policy.", 0) \
+    M(String, nats_flow_control, "false", "Enable NATS flow control.", 0) \
+    M(String, nats_max_waiting, "512", "Maximum number of waiting messages for NATS.", 0) \
+    M(String, nats_max_deliver, "5", "Maximum number of delivery attempts for NATS.", 0) \
+    M(String, nats_backoff, "", "NATS backoff intervals.", 0) \
+    M(String, nats_filter_subject, "", "NATS filter subject.", 0) \
+    M(String, nats_replay_rate, "", "NATS replay rate.", 0) \
+    M(String, nats_max_ack_pending, "", "NATS maximum acknowledgment pending.", 0) \
+    M(String, nats_idle_heartbeat, "", "NATS idle heartbeat interval.", 0) \
+    M(String, nats_flow_control_subject, "", "NATS flow control subject.", 0) \
+    M(String, nats_max_consumers, "", "NATS maximum number of consumers.", 0) \
+    M(String, nats_max_messages, "", "NATS maximum number of messages.", 0) \
+    M(String, nats_max_bytes, "", "NATS maximum number of bytes.", 0) \
+    M(String, nats_max_age, "", "NATS maximum age of messages.", 0) \
+    M(String, nats_max_msg_size, "", "NATS maximum message size.", 0) \
+    M(String, nats_max_msg_size_bytes, "", "NATS maximum message size in bytes.", 0) \
+    M(String, nats_max_msg_size_kb, "", "NATS maximum message size in kilobytes.", 0) \
+    M(String, nats_max_msg_size_mb, "", "NATS maximum message size in megabytes.", 0) \
+    M(String, nats_max_msg_size_gb, "", "NATS maximum message size in gigabytes.", 0) \
+    M(String, nats_max_msg_size_tb, "", "NATS maximum message size in terabytes.", 0) \
+    M(String, nats_max_msg_size_pb, "", "NATS maximum message size in petabytes.", 0) \
+    M(String, nats_max_msg_size_eb, "", "NATS maximum message size in exabytes.", 0) \
+    M(String, nats_max_msg_size_zb, "", "NATS maximum message size in zettabytes.", 0) \
+    M(String, nats_max_msg_size_yb, "", "NATS maximum message size in yottabytes.", 0) \
+    M(String, nats_max_msg_size_bb, "", "NATS maximum message size in brontobytes.", 0) \
+    M(String, nats_max_msg_size_geopb, "", "NATS maximum message size in geopbytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String, nats_max_msg_size_hellabyte, "", "NATS maximum message size in hellabytes.", 0) \
+    M(String,
