@@ -28,6 +28,7 @@
 #include <AggregateFunctions/ThetaSketchData.h>
 #include <AggregateFunctions/UniqVariadicHash.h>
 #include <AggregateFunctions/Streaming/CountedValueMap.h>
+#include <AggregateFunctions/Streaming/CountedValueHashMap.h>
 
 #include "config.h"
 
@@ -52,7 +53,7 @@ namespace Streaming
 /// uniq
 struct AggregateFunctionUniqUniquesHashSetData
 {
-    using Set = CountedValueSet<UInt64>;
+    using Set = CountedValueHashMap<UInt64>;
     Set set;
 
     constexpr static bool is_able_to_parallelize_merge = false;
@@ -66,7 +67,7 @@ struct AggregateFunctionUniqUniquesHashSetData
 template <bool is_exact_, bool argument_is_tuple_>
 struct AggregateFunctionUniqUniquesHashSetDataForVariadic
 {
-    using Set = CountedValueSet<UInt64>;
+    using Set = CountedValueHashMap<UInt64>;
     Set set;
 
     constexpr static bool is_able_to_parallelize_merge = false;
@@ -83,7 +84,7 @@ struct AggregateFunctionUniqUniquesHashSetDataForVariadic
 template <typename T, bool is_able_to_parallelize_merge_>
 struct AggregateFunctionUniqExactData
 {
-    using Set = CountedValueSet<T>;
+    using Set = CountedValueHashMap<T>;
     Set set;
 
     constexpr static bool is_able_to_parallelize_merge = is_able_to_parallelize_merge_;
@@ -97,7 +98,7 @@ struct AggregateFunctionUniqExactData
 template <bool is_able_to_parallelize_merge_>
 struct AggregateFunctionUniqExactData<String, is_able_to_parallelize_merge_>
 {
-    using Set = CountedValueSet<UInt128>;
+    using Set = CountedValueHashMap<UInt128>;
     Set set;
 
     constexpr static bool is_able_to_parallelize_merge = is_able_to_parallelize_merge_;
@@ -126,8 +127,8 @@ struct IsUniqExactSet : std::false_type
 {
 };
 
-template <typename T1>
-struct IsUniqExactSet<CountedValueSet<T1>> : std::true_type
+template <typename T>
+struct IsUniqExactSet<CountedValueHashMap<T>> : std::true_type
 {
 };
 
