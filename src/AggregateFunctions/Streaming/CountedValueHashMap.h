@@ -45,9 +45,7 @@ private:
     ArenaWithFreeLists arena;
 };
 
-/// CountedValueHashMap maintain count for each key with maximum capacity
-/// When capacity hits the max capacity threshold, it will delete
-/// the minimum / maximum key in the map to maintain the capacity constrain
+/// CountedValueHashMap maintain count for each key with no maximum capacity
 template <typename T, typename KeyCompare = void>
 class CountedValueHashMap
 {
@@ -60,10 +58,6 @@ public:
     using key_type = T;
 
     CountedValueHashMap() = default;
-    explicit CountedValueHashMap(size_type max_size_, Compare && comp = Compare{})
-        : max_size(max_size_), arena(std::make_unique<CountedValueHashmapArena<T>>())
-    {
-    }
 
     /// This interface is used during deserialization of the map
     /// Assume `v` is not in the map
@@ -76,9 +70,6 @@ public:
     /// Return the emplaced element iterator, if failed to emplace, return invalid iterator, `m.end()`
     Map::iterator emplace(T v)
     {
-        if (atCapacity())
-            return m.end();
-
         if (auto iter = m.find(v); iter != m.end())
         {
             ++iter->second;
@@ -141,19 +132,12 @@ public:
         arena = std::make_unique<CountedValueHashmapArena<T>>();
     }
 
-    inline bool atCapacity() const { return max_size > 0 && m.size() == max_size; }
-
-    size_type capacity() const { return max_size; }
-
-    void setCapacity(size_type max_size_) { max_size = max_size_; }
-
     size_type size() const { return m.size(); }
 
     bool empty() const { return m.empty(); }
 
     void swap(CountedValueHashMap & rhs)
     {
-        std::swap(max_size, rhs.max_size);
         m.swap(rhs.m);
         std::swap(arena, rhs.arena);
     }
@@ -195,11 +179,6 @@ private:
         /// Directly loop all elements as there's no order nor capacity
         for (auto src_iter = rhs.m.begin(); src_iter != rhs.m.end(); ++src_iter)
         {
-            if (atCapacity())
-                /// We reached maximum capacity and all other values from rhs will be
-                /// greater than those already in lhs. Stop merging more
-                break;
-
             doMerge<copy>(src_iter);
         }
     }
@@ -237,7 +216,6 @@ private:
     }
 
 private:
-    size_type max_size;
     std::unique_ptr<CountedValueHashmapArena<T>> arena;
     Map m;
 };
