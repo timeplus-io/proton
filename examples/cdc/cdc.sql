@@ -16,24 +16,21 @@ CREATE MATERIALIZED VIEW mv_customers_r INTO customers AS
            raw:payload.after.email AS email, 
            1::int8 as _tp_delta
     FROM customers_cdc WHERE raw:payload.op='r' SETTINGS seek_to='earliest';  
+
 CREATE MATERIALIZED VIEW mv_customers_u INTO customers AS 
-    WITH before AS(
-        SELECT to_time(raw:payload.ts_ms)-1ms AS _tp_time, 
-           raw:payload.before.id::int AS id,
-           raw:payload.before.first_name AS first_name, 
-           raw:payload.before.last_name AS last_name, 
-           raw:payload.before.email AS email, 
-           -1::int8 as _tp_delta
-        FROM customers_cdc WHERE raw:payload.op='u' SETTINGS seek_to='earliest'
-    ),after AS(
-        SELECT to_time(raw:payload.ts_ms) AS _tp_time, 
-           raw:payload.after.id::int AS id,
-           raw:payload.after.first_name AS first_name, 
-           raw:payload.after.last_name AS last_name, 
-           raw:payload.after.email AS email, 
-           1::int8 as _tp_delta
-    FROM customers_cdc WHERE raw:payload.op='u' SETTINGS seek_to='earliest'
-    )SELECT * FROM before UNION SELECT * FROM after;
+  WITH cdc_changes AS (
+    SELECT ts_ms, array_join([-1::int8, 1::int8]) AS _tp_delta, after
+    FROM (
+         SELECT to_time(raw:payload.ts_ms) AS ts_ms, raw:payload.after AS after
+         FROM customers_cdc WHERE raw:payload.op='u' SETTINGS seek_to='earliest')
+  )
+  SELECT ts_ms AS _tp_time,
+      after:id::int AS id,
+      after:first_name AS first_name,
+      after:last_name AS last_name,
+      after:email AS email,
+      _tp_delta
+  FROM cdc_changes;
 
 CREATE MATERIALIZED VIEW mv_customers_d INTO customers AS 
     SELECT to_time(raw:payload.ts_ms) AS _tp_time, 
