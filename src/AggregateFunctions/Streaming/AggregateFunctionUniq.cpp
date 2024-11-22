@@ -126,7 +126,7 @@ void registerAggregateFunctionsUniqRetract(AggregateFunctionFactory & factory)
 {
     AggregateFunctionProperties properties = { .returns_default_when_only_null = true, .is_order_dependent = false };
 
-    factory.registerFunction("unique_retract",
+    factory.registerFunction("__unique_retract",
         {createAggregateFunctionUniq<AggregateFunctionUniqUniquesHashSetData, AggregateFunctionUniqUniquesHashSetDataForVariadic>, properties});
 
     auto assign_bool_param = [](const std::string & name, const DataTypes & argument_types, const Array & params, const Settings * settings)
@@ -134,7 +134,7 @@ void registerAggregateFunctionsUniqRetract(AggregateFunctionFactory & factory)
         return createAggregateFunctionUniq<
             true, AggregateFunctionUniqExactData, AggregateFunctionUniqExactDataForVariadic, false /* is_able_to_parallelize_merge */>(name, argument_types, params, settings);
     };
-    factory.registerFunction("unique_exact_retract", {assign_bool_param, properties});
+    factory.registerFunction("__unique_exact_retract", {assign_bool_param, properties});
 
 }
 }
