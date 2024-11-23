@@ -1,11 +1,11 @@
 
 # Demo for broken stream monitoring using global aggregation
 
-This demo shows how to leverage the new feature of proton SQL to monitor a broken stream, traditionally using watermark, the stream processing will generally stop processing when there is no new event which push the watermark farward.
+This demo shows how to leverage the new feature of stream SQL to monitor a broken stream, traditionally using watermark, the stream processing will generally stop processing when there is no new event which pushes the watermark farward.
 
-In this demo, we show how to use the new settings `EMIT PERIODIC time_interval REPEAT` to emit existing result to help monitor stream status.
+In this demo, we show how to use the new feature `EMIT PERIODIC time_interval REPEAT` to emit existing result to help monitor stream status.
 
-here is the steps
+here are the steps
 
 1. create a simulated data source using random stream
 
@@ -54,7 +54,7 @@ WITH accumulate_count AS (
     SELECT count(*) AS count FROM device_reader EMIT PERIODIC 2s REPEAT
 )
 SELECT count, lag(count) AS previous_count FROM accumulate_count
-WHERE count == previous_count
+WHERE count = previous_count
 ```
 
 5. now, we can drop the mv and the previouse query should emit the alert

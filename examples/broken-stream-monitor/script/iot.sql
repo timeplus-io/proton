@@ -36,7 +36,7 @@ WITH accumulate_count AS (
     SELECT count(*) AS count FROM device_reader EMIT PERIODIC 2s REPEAT
 )
 SELECT count, lag(count) AS previous_count FROM accumulate_count
-WHERE count == previous_count;
+WHERE count = previous_count;
 
 -- drop the mv to simulate the broken stream
 DROP VIEW mv_device_reader;
