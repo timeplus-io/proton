@@ -1,0 +1,182 @@
+test_suite_name: changelog_stream15
+tag: smoke
+test_suite_config:
+  tests_2_run:
+    ids_2_run:
+      - all
+    tags_2_run: []
+    tags_2_skip:
+      default:
+        - todo
+        - to_support
+        - change
+        - bug
+        - sample
+      cluster:
+        - view
+        - cluster_table_bug
+comments: Tests covering unique and unique_exact on changelog
+tests:
+  - id: 114
+    tags:
+      - unique
+      - changelog_kv
+      - single shard
+    name: "unique function simple test on changelog_kv stream with single shard, checkpoint"
+    description: unique function simple test on changelog_kv stream with single shard, checkpoint
+    steps:
+    - statements:
+      - client: python
+        query_type: table
+        query: drop stream if exists test_changelog_15
+
+      - client: python
+        query_type: table
+        wait: 2
+        query: create stream test_changelog_15(id int, val int) primary key id settings mode='changelog_kv';
+
+      - client: python
+        query_type: stream
+        wait: 2
+        depends_on_stream: test_changelog_15
+        query_id: '16114'
+        query: subscribe to select unique(val) from test_changelog_15;
+
+      - client: python
+        query_type: table
+        depends_on: '16114'
+        wait: 2
+        query: insert into test_changelog_15(id, val) values(1, 1), (2, 2);
+
+      - client: python
+        query_type: table
+        kill: '16114'
+        kill_wait: 3
+        wait: 2
+        query: insert into test_changelog_15(id, val, _tp_delta) values(3, 3, +1), (2, 2, -1);
+
+    - statements:
+      - client: python
+        query_type: stream
+        query_id: 16114-1
+        wait: 1
+        terminate: manual
+        query: recover from '16114'
+
+      - client: python
+        query_type: table
+        depends_on: '16114'
+        wait: 2
+        query: insert into test_changelog_15(id, val) values(4, 4), (5,5);
+
+      - client: python
+        query_type: table
+        wait: 2
+        query: insert into test_changelog_15(id, val, _tp_delta) values(3, 3, -1), (1, 1, -1);
+
+      - client: python
+        query_type: table
+        wait: 2
+        query: insert into test_changelog_15(id, val, _tp_delta) values(4, 4, -1), (1, 1, -1), (6, 6, -1);
+
+      - client: python
+        query_type: table
+        wait: 3
+        query: kill query where query_id='16114-1' sync
+
+      - client: python
+        query_type: table
+        query: unsubscribe to '16114'
+    expected_results:
+      - query_id: '16114'
+        expected_results:
+          - [2]
+          - [2]
+      - query_id: '16114-1'
+        expected_results:
+          - [2]
+          - [4]
+          - [2]
+          - [1]
+
+  - id: 115
+    tags:
+      - unique_exact
+      - changelog_kv
+      - single shard
+    name: "unique_exact function simple test on changelog_kv stream with single shard, checkpoint"
+    description: unique_exact function simple test on changelog_kv stream with single shard, checkpoint
+    steps:
+    - statements:
+      - client: python
+        query_type: table
+        query: drop stream if exists test_changelog_15
+
+      - client: python
+        query_type: table
+        wait: 2
+        query: create stream test_changelog_15(id int, val int) primary key id settings mode='changelog_kv';
+
+      - client: python
+        query_type: stream
+        wait: 2
+        depends_on_stream: test_changelog_15
+        query_id: '16115'
+        query: subscribe to select unique_exact(val) from test_changelog_15;
+
+      - client: python
+        query_type: table
+        depends_on: '16115'
+        wait: 2
+        query: insert into test_changelog_15(id, val) values(1, 1), (2, 2);
+
+      - client: python
+        query_type: table
+        kill: '16115'
+        kill_wait: 3
+        wait: 2
+        query: insert into test_changelog_15(id, val, _tp_delta) values(3, 3, +1), (2, 2, -1);
+
+    - statements:
+      - client: python
+        query_type: stream
+        query_id: 16115-1
+        wait: 1
+        terminate: manual
+        query: recover from '16115'
+
+      - client: python
+        query_type: table
+        depends_on: '16115'
+        wait: 2
+        query: insert into test_changelog_15(id, val) values(4, 4), (5,5);
+
+      - client: python
+        query_type: table
+        wait: 2
+        query: insert into test_changelog_15(id, val, _tp_delta) values(3, 3, -1), (1, 1, -1);
+
+      - client: python
+        query_type: table
+        wait: 2
+        query: insert into test_changelog_15(id, val, _tp_delta) values(4, 4, -1), (1, 1, -1), (6, 6, -1);
+
+      - client: python
+        query_type: table
+        wait: 3
+        query: kill query where query_id='16115-1' sync
+
+      - client: python
+        query_type: table
+        query: unsubscribe to '16115'
+    expected_results:
+      - query_id: '16115'
+        expected_results:
+          - [2]
+          - [2]
+      - query_id: '16115-1'
+        expected_results:
+          - [2]
+          - [4]
+          - [2]
+          - [1]

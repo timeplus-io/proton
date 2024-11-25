@@ -42,7 +42,9 @@ std::set<String> StreamingFunctionData::streaming_only_func
        "__max_retract",
        "__min_retract",
        "__arg_min_retract",
-       "__arg_max_retract"};
+       "__arg_max_retract",
+       "__unique_retract",
+       "__unique_exact_retract"};
 
 std::unordered_map<String, String> StreamingFunctionData::changelog_func_map = {
     {"count", "__count_retract"},
@@ -61,8 +63,8 @@ std::unordered_map<String, String> StreamingFunctionData::changelog_func_map = {
     {"top_k", ""},
     {"min_k", "__min_k_retract"},
     {"max_k", "__max_k_retract"},
-    {"unique", ""},
-    {"unique_exact", ""},
+    {"unique", "__unique_retract"},
+    {"unique_exact", "__unique_exact_retract"},
     {"median", ""},
     {"quantile", ""},
     {"p90", ""},
