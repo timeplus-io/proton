@@ -1,6 +1,6 @@
 # Demo for Grafana plugin with carsharing data
 
-This docker compose file demonstrates how to use Grafana to connect to Proton and visualize the data.
+This docker compose file demonstrates how to use Grafana to connect to Timeplus Proton and visualize the data.
 
 A YouTube video tutorial is available for visual learners: https://www.youtube.com/watch?v=cBRl1k9qWZc
 
@@ -10,7 +10,7 @@ Simply run `docker compose up` in this folder. Three docker containers in the st
 
 1. d.timeplus.com/timeplus-io/proton:latest, as the streaming SQL engine. Port 8463 and 3218 are exposed so that Grafana can connect to it.
 2. timeplus/cardemo:latest, as the data generator
-3. grafana/grafana:latest, with pre-configured Proton dashboard and a live dashboard
+3. grafana/grafana:latest, with pre-configured Timeplus data source and a live dashboard
 
 When all containers are up running, access http://localhost:3000 and open the `Carsharing Demo Dashboard` dashboard.
 
