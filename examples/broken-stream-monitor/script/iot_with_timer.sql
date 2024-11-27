@@ -26,7 +26,7 @@ AS
 SELECT
  'timer' as label, '' as sensor, 0 as temperature
 FROM
- device;
+ timer;
 
 CREATE MATERIALIZED VIEW mv_device_reader INTO device_reader
 AS
