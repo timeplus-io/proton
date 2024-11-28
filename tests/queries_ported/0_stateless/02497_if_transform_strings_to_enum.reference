@@ -1,0 +1,195 @@
+other
+other
+google
+other
+censor.net
+other
+yahoo
+other
+other
+other
+SELECT
+  transform(number, [2, 4, 6], _cast([\'google\', \'censor.net\', \'yahoo\'], \'array(enum8(\\\'censor.net\\\' = 1, \\\'google\\\' = 2, \\\'other\\\' = 3, \\\'yahoo\\\' = 4))\'), _cast(\'other\', \'enum8(\\\'censor.net\\\' = 1, \\\'google\\\' = 2, \\\'other\\\' = 3, \\\'yahoo\\\' = 4)\'))
+FROM
+  system.numbers
+LIMIT 10
+google
+google
+google
+google
+google
+google
+censor.net
+censor.net
+censor.net
+censor.net
+SELECT
+  if(number > 5, \'censor.net\', \'google\')
+FROM
+  system.numbers
+LIMIT 10
+other1
+other1
+google1
+other1
+censor.net1
+other1
+yahoo1
+other1
+other1
+other1
+SELECT
+  concat(transform(number, [2, 4, 6], [\'google\', \'censor.net\', \'yahoo\'], \'other\'), \'1\')
+FROM
+  system.numbers
+LIMIT 10
+google1
+google1
+google1
+google1
+google1
+google1
+censor.net1
+censor.net1
+censor.net1
+censor.net1
+SELECT
+  concat(if(number > 5, \'censor.net\', \'google\'), \'1\')
+FROM
+  system.numbers
+LIMIT 10
+google
+google
+google
+google
+google
+google
+censor.net
+censor.net
+censor.net
+censor.net
+SELECT
+  t1.value
+FROM
+  (
+    SELECT
+      if(number > 5, \'censor.net\', \'google\') AS value
+    FROM
+      system.numbers
+    LIMIT 10
+  ) AS t1
+other
+other
+google
+other
+censor.net
+other
+yahoo
+other
+other
+other
+SELECT
+  t1.value
+FROM
+  (
+    SELECT
+      transform(number, [2, 4, 6], _cast([\'google\', \'censor.net\', \'yahoo\'], \'array(enum8(\\\'censor.net\\\' = 1, \\\'google\\\' = 2, \\\'other\\\' = 3, \\\'yahoo\\\' = 4))\'), _cast(\'other\', \'enum8(\\\'censor.net\\\' = 1, \\\'google\\\' = 2, \\\'other\\\' = 3, \\\'yahoo\\\' = 4)\')) AS value
+    FROM
+      system.numbers
+    LIMIT 10
+  ) AS t1
+google	google
+google	google
+google	google
+google	google
+google	google
+google	google
+censor.net	censor.net
+censor.net	censor.net
+censor.net	censor.net
+censor.net	censor.net
+SELECT
+  if(number > 5, \'censor.net\', \'google\') AS value, value
+FROM
+  system.numbers
+LIMIT 10
+other	other
+other	other
+google	google
+other	other
+censor.net	censor.net
+other	other
+yahoo	yahoo
+other	other
+other	other
+other	other
+SELECT
+  transform(number, [2, 4, 6], _cast([\'google\', \'censor.net\', \'yahoo\'], \'array(enum8(\\\'censor.net\\\' = 1, \\\'google\\\' = 2, \\\'other\\\' = 3, \\\'yahoo\\\' = 4))\'), _cast(\'other\', \'enum8(\\\'censor.net\\\' = 1, \\\'google\\\' = 2, \\\'other\\\' = 3, \\\'yahoo\\\' = 4)\')) AS value, value
+FROM
+  system.numbers
+LIMIT 10
+\N
+\N
+\N
+\N
+\N
+\N
+\N
+\N
+\N
+\N
+SELECT
+  transform(number, [NULL], _cast([\'google\', \'censor.net\', \'yahoo\'], \'array(enum8(\\\'censor.net\\\' = 1, \\\'google\\\' = 2, \\\'other\\\' = 3, \\\'yahoo\\\' = 4))\'), _cast(\'other\', \'enum8(\\\'censor.net\\\' = 1, \\\'google\\\' = 2, \\\'other\\\' = 3, \\\'yahoo\\\' = 4)\'))
+FROM
+  (
+    SELECT
+      NULL AS number
+    FROM
+      system.numbers
+    LIMIT 10
+  )
+\N
+\N
+\N
+\N
+\N
+\N
+\N
+\N
+\N
+\N
+SELECT
+  transform(number, NULL, _cast([\'google\', \'censor.net\', \'yahoo\'], \'array(enum8(\\\'censor.net\\\' = 1, \\\'google\\\' = 2, \\\'other\\\' = 3, \\\'yahoo\\\' = 4))\'), _cast(\'other\', \'enum8(\\\'censor.net\\\' = 1, \\\'google\\\' = 2, \\\'other\\\' = 3, \\\'yahoo\\\' = 4)\'))
+FROM
+  system.numbers
+LIMIT 10
+other
+other
+google
+other
+censor.net
+other
+yahoo
+other
+other
+other
+SELECT
+  transform(number, [2, 4, 6], [\'google\', \'censor.net\', \'yahoo\'], \'other\')
+FROM
+  system.numbers
+LIMIT 10
+google
+google
+google
+google
+google
+google
+censor.net
+censor.net
+censor.net
+censor.net
+SELECT
+  if(number > 5, \'censor.net\', \'google\')
+FROM
+  system.numbers
+LIMIT 10

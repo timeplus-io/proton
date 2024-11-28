@@ -11,7 +11,6 @@
 #include <Common/AllocatorWithMemoryTracking.h>
 #include <Core/Types.h>
 #include <Core/Defines.h>
-#include <Core/DecimalFunctions.h>
 #include <Core/UUID.h>
 #include <base/IPv4andIPv6.h>
 #include <base/DayNum.h>
@@ -117,7 +116,7 @@ public:
 
     operator T() const { return dec; } /// NOLINT
     T getValue() const { return dec; }
-    T getScaleMultiplier() const { return DecimalUtils::scaleMultiplier<T>(scale); }
+    T getScaleMultiplier() const;
     UInt32 getScale() const { return scale; }
 
     template <typename U>
@@ -165,6 +164,12 @@ private:
     T dec;
     UInt32 scale;
 };
+
+extern template class DecimalField<Decimal32>;
+extern template class DecimalField<Decimal64>;
+extern template class DecimalField<Decimal128>;
+extern template class DecimalField<Decimal256>;
+extern template class DecimalField<DateTime64>;
 
 template <typename T> constexpr bool is_decimal_field = false;
 template <> constexpr inline bool is_decimal_field<DecimalField<Decimal32>> = true;
@@ -414,7 +419,7 @@ public:
 
     Types::Which getType() const { return which; }
 
-    constexpr std::string_view getTypeName() const { return magic_enum::enum_name(which); }
+    std::string_view getTypeName() const;
 
     bool isNull() const { return which == Types::Null; }
     template <typename T>
@@ -902,14 +907,15 @@ inline Field & Field::operator=(String && str)
 class ReadBuffer;
 class WriteBuffer;
 
-/// It is assumed that all elements of the array have the same type.
-void readBinary(Array & x, ReadBuffer & buf);
-[[noreturn]] inline void readText(Array &, ReadBuffer &) { throw Exception("Cannot read array.", ErrorCodes::NOT_IMPLEMENTED); }
-[[noreturn]] inline void readQuoted(Array &, ReadBuffer &) { throw Exception("Cannot read array.", ErrorCodes::NOT_IMPLEMENTED); }
+/// Binary serialization of generic field.
+void writeFieldBinary(const Field & x, WriteBuffer & buf);
+Field readFieldBinary(ReadBuffer & buf);
 
-/// It is assumed that all elements of the array have the same type.
-/// Also write size and type into buf. UInt64 and Int64 is written in variadic size form
-void writeBinary(const Array & x, WriteBuffer & buf);
+void readBinaryArray(Array & x, ReadBuffer & buf);
+[[noreturn]] inline void readText(Array &, ReadBuffer &) { throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cannot read Array."); }
+[[noreturn]] inline void readQuoted(Array &, ReadBuffer &) { throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cannot read Array."); }
+
+void writeBinaryArray(const Array & x, WriteBuffer & buf);
 void writeText(const Array & x, WriteBuffer & buf);
 [[noreturn]] inline void writeQuoted(const Array &, WriteBuffer &) { throw Exception("Cannot write array quoted.", ErrorCodes::NOT_IMPLEMENTED); }
 
@@ -957,7 +963,7 @@ void writeFieldText(const Field & x, WriteBuffer & buf);
 
 String toString(const Field & x);
 
-String fieldTypeToString(Field::Types::Which type);
+std::string_view fieldTypeToString(Field::Types::Which type);
 
 }
 

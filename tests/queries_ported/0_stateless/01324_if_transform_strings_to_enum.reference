@@ -9,7 +9,7 @@ other
 other
 other
 SELECT
-  transform(number, [2, 4, 6], [\'google\', \'yandex\', \'yahoo\'], \'other\')
+  transform(number, [2, 4, 6], _cast([\'google\', \'yandex\', \'yahoo\'], \'array(enum8(\\\'google\\\' = 1, \\\'other\\\' = 2, \\\'yahoo\\\' = 3, \\\'yandex\\\' = 4))\'), _cast(\'other\', \'enum8(\\\'google\\\' = 1, \\\'other\\\' = 2, \\\'yahoo\\\' = 3, \\\'yandex\\\' = 4)\'))
 FROM
   system.numbers
 LIMIT 10
