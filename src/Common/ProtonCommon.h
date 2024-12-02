@@ -4,6 +4,7 @@
 #include <base/types.h>
 
 #include <vector>
+#include <map>
 
 namespace DB
 {
@@ -65,7 +66,7 @@ const String JSON_VALUES_PREFIX = "__json_values_";
 /// PREFIX of UDF config files
 const String UDF_XML_PATTERN = "*_function.xml";
 /// UDF VERSION used by this version of proton
-constexpr uint32_t UDF_VERSION = 1;
+const uint32_t UDF_VERSION = 1;
 /// Prefix for all Javascript UDF or UDA loggers
 const String PROTON_JAVASCRIPT_UDF_LOGGER_PREFIX = "JavaScriptUDF";
 

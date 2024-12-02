@@ -1,4 +1,3 @@
-#include <Cluster/Protocol/UserDefinedFunctionDescription.h>
 #include <V8/ConvertDataTypes.h>
 #include <V8/Modules/Console.h>
 #include <V8/Utils.h>
