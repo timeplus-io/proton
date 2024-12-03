@@ -2,6 +2,7 @@
 
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/formatAST.h>
@@ -16,6 +17,7 @@ namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
 extern const int FUNCTION_NOT_ALLOWED;
+extern const int ILLEGAL_CODEC_PARAMETER;
 }
 
 namespace Streaming
@@ -131,6 +133,8 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
         return;
     }
 
+    translateTimeWeightedFunc(func, streaming);
+
     if (streaming)
     {
         auto func_name_lower = Poco::toLower(func.name);
@@ -217,6 +221,72 @@ void substitueFunction(ASTFunction & func, const String & new_name)
         func.covered_name = std::move(func.name);
 
     func.name = new_name;
+}
+
+bool translateTimeWeightedFunc(ASTFunction & func, bool streaming)
+{
+    static const std::unordered_map<String, String> map = {
+        {"time_weighted_avg", "avg_weighted"},
+        {"time_weighted_median", "median_timing_weighted"}
+    };
+
+    /// time_weighted_median(val, _tp_time) -> quantile_timing_weighted(__streaming_neighbor(val, -1, val), cast(date_diff('millisecond', neighbor(_tp_time, -1, _tp_time), _tp_time), 'uint64'))
+    /// time_weighted_avg(val, _tp_time) -> avg_weighted(__streaming_neighbor(val, -1, val), cast(date_diff('millisecond', neighbor(_tp_time, -1, _tp_time), _tp_time), 'uint64'))
+    if (!map.contains(func.name))
+        return false;
+
+    if (func.arguments->children.size() != 3 && func.arguments->children.size() != 2)
+        throw Exception(ErrorCodes::FUNCTION_NOT_ALLOWED, "{} aggregation function need two or three arguments", func.name);
+
+    String func_name = map.at(func.name);
+    auto val_arg = func.arguments->children[0];
+    auto time_arg = func.arguments->children[1];
+    String extra_arg = "";
+
+    if (func.arguments->children.size() == 3)
+    {
+        const auto * literal = func.arguments->children[2]->as<ASTLiteral>();
+        if (literal)
+        {
+            extra_arg = literal->value.safeGet<String>();
+            extra_arg = Poco::toLower(extra_arg);
+            if (extra_arg != "linear" && extra_arg != "locf")
+                throw Exception("Type argument can be linear or locf, given " + extra_arg, ErrorCodes::ILLEGAL_CODEC_PARAMETER);
+        }
+    }
+
+    auto neighbor_name = streaming ? "__streaming_neighbor" : "neighbor";
+    if (extra_arg == "linear")
+    {
+        auto translated_func = makeASTFunction(func_name,
+            makeASTFunction("divide",
+                makeASTFunction("plus",
+                    makeASTFunction(neighbor_name, val_arg->clone(), std::make_shared<ASTLiteral>(Int8(-1)), val_arg->clone()),
+                    val_arg->clone()),
+                std::make_shared<ASTLiteral>(2)),
+            makeASTFunction("cast",
+                makeASTFunction("date_diff",
+                    std::make_shared<ASTLiteral>("millisecond"),
+                    makeASTFunction("neighbor", time_arg->clone(), std::make_shared<ASTLiteral>(Int8(-1)), time_arg->clone()),
+                    time_arg->clone()),
+                std::make_shared<ASTLiteral>("uint64")));
+        func = *translated_func;
+    }
+    else
+    {
+        auto translated_func = makeASTFunction(func_name,
+            makeASTFunction(neighbor_name, val_arg->clone(), std::make_shared<ASTLiteral>(Int8(-1)), val_arg->clone()),
+            makeASTFunction("cast",
+                makeASTFunction("date_diff",
+                    std::make_shared<ASTLiteral>("millisecond"),
+                    makeASTFunction("neighbor", time_arg->clone(), std::make_shared<ASTLiteral>(Int8(-1)), time_arg->clone()),
+                    time_arg->clone()),
+                std::make_shared<ASTLiteral>("uint64")));
+        func = *translated_func;
+    }
+
+
+    return true;
 }
 }
 }

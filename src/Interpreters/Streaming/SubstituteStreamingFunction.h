@@ -40,6 +40,8 @@ using SubstituteStreamingFunctionVisitor
 
 
 void substitueFunction(ASTFunction & func, const String & new_name);
+bool translateTimeWeightedFunc(ASTFunction & func, bool streaming);
+
 
 struct SubstituteFunctionsData
 {
