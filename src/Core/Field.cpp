@@ -130,11 +130,43 @@ inline Field getBinaryValue(UInt8 type, ReadBuffer & buf)
             readBinary(value, buf);
             return bool(value);
         }
+        case Field::Types::Decimal32:
+        {
+            Decimal32 value;
+            UInt32 scale;
+            readBinary(value, buf);
+            readVarUInt(scale, buf);
+            return DecimalField<Decimal32>(value, scale);
+        }
+        case Field::Types::Decimal64:
+        {
+            Decimal64 value;
+            UInt32 scale;
+            readBinary(value, buf);
+            readVarUInt(scale, buf);
+            return DecimalField<Decimal64>(value, scale);
+        }
+        case Field::Types::Decimal128:
+        {
+            Decimal128 value;
+            UInt32 scale;
+            readBinary(value, buf);
+            readVarUInt(scale, buf);
+            return DecimalField<Decimal128>(value, scale);
+        }
+        case Field::Types::Decimal256:
+        {
+            Decimal256 value;
+            UInt32 scale;
+            readBinary(value, buf);
+            readVarUInt(scale, buf);
+            return DecimalField<Decimal256>(value, scale);
+        }
     }
-    return Field();
+    throw Exception(ErrorCodes::INCORRECT_DATA, "Unknown field type {}", std::to_string(type));
 }
 
-void readBinary(Array & x, ReadBuffer & buf)
+void readBinaryArray(Array & x, ReadBuffer & buf)
 {
     size_t size;
     UInt8 type;
@@ -292,6 +324,20 @@ void writeFieldText(const Field & x, WriteBuffer & buf)
     buf.write(res.data(), res.size());
 }
 
+void writeFieldBinary(const Field & x, WriteBuffer & buf)
+{
+    const UInt8 type = x.getType();
+    writeBinary(type, buf);
+
+    Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, x);
+}
+
+Field readFieldBinary(ReadBuffer & buf)
+{
+    UInt8 type;
+    readBinary(type, buf);
+    return getBinaryValue(type, buf);
+}
 
 String Field::dump() const
 {
