@@ -1,8 +1,11 @@
 #include <V8/ConvertDataTypes.h>
+#include <V8/Modules/Console.h>
 #include <V8/Utils.h>
 
 #include <Core/DecimalFunctions.h>
 #include <Functions/FunctionsConversion.h>
+#include <base/getMemoryAmount.h>
+
 
 #define FOR_V8_BASIC_NUMERIC_TYPES(M) \
     M(UInt16) \
@@ -289,8 +292,13 @@ void compileSource(
     /// try_catch.SetVerbose(true);
     try_catch.SetCaptureMessage(true);
 
-    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate);
+    /// Setup global object
+    v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
+    v8::Local<v8::Context> local_ctx = v8::Context::New(isolate, nullptr, global);
     v8::Context::Scope context_scope(local_ctx);
+
+    /// Setup 'console' object
+    installConsole(isolate, local_ctx, func_name);
 
     v8::Local<v8::String> script_code
         = v8::String::NewFromUtf8(isolate, source.data(), v8::NewStringType::kNormal, static_cast<int>(source.size())).ToLocalChecked();
