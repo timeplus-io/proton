@@ -1,6 +1,8 @@
 # Build From Source
 
-## Ubuntu Linux - x86
+Proton requires the Clang compiler and related LLVM toolchain. GCC is not supported.
+
+## Ubuntu/Debian Linux - x86
 
 ### Build with docker container
 
@@ -12,7 +14,7 @@
 
 #### Install toolchain
 
-- clang-17 /clang++-17 or above
+- clang-17 /clang++-17 or above (minimum supported version: Clang 16, GCC not supported)
 - cmake 3.20 or above
 - ninja
 
@@ -36,6 +38,19 @@ $ cd proton
 $ mkdir -p build && cd build && cmake ..
 $ ninja
 ```
+
+#### Issue: `Could NOT find Threads (missing: Threads_FOUND)`
+
+**Possible Solution:**
+
+1. Install the required packages:
+
+   ```sh
+   apt-get install -y build-essential cmake libc6-dev libpthread-stubs0-dev linux-libc-dev
+   ```
+
+2. Clean the build folder and rerun the CMake command.
+
 
 ## Redhat Linux - x86
 

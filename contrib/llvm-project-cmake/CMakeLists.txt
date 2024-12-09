@@ -1,4 +1,5 @@
-if (APPLE OR NOT ARCH_AMD64 OR SANITIZE STREQUAL "undefined")
+# missing https://github.com/ClickHouse/ClickHouse/pull/38217/
+if (APPLE OR NOT ARCH_AMD64 OR SANITIZE STREQUAL "undefined" OR SANITIZE STREQUAL "memory")
    set (ENABLE_EMBEDDED_COMPILER_DEFAULT OFF)
 else()
    set (ENABLE_EMBEDDED_COMPILER_DEFAULT ON)
