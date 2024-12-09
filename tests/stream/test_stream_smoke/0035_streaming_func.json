@@ -13,14 +13,14 @@
         {
             "id": 1,
             "tags": ["query_state"],
-            "name": "global_aggr_with_fun_time_weighted_avg",
-            "description": "global aggregation with function time_weighted_avg state checkpoint",
+            "name": "global_aggr_with_fun_avg_time_weighted",
+            "description": "global aggregation with function avg_time_weighted state checkpoint",
             "steps":[
                 {
                     "statements": [
                         {"client":"python", "query_type": "table", "query":"drop stream if exists test35_state_stream1"},
                         {"client":"python", "query_type": "table", "exist":"test35_state_stream1", "exist_wait":2, "wait":1, "query":"create stream test35_state_stream1 (val int32, timestamp datetime64(3) default now64(3))"}, 
-                        {"client":"python", "query_type": "stream", "query_id":"3600", "depends_on_stream":"test35_state_stream1", "wait":1, "terminate":"manual", "query":"subscribe to select time_weighted_avg(val, timestamp) from test35_state_stream1 emit periodic 1s settings checkpoint_interval=1"},
+                        {"client":"python", "query_type": "stream", "query_id":"3600", "depends_on_stream":"test35_state_stream1", "wait":1, "terminate":"manual", "query":"subscribe to select avg_time_weighted(val, timestamp) from test35_state_stream1 emit periodic 1s settings checkpoint_interval=1"},
                         {"client":"python", "query_type": "table", "depends_on":"3600",  "kill":"3600", "kill_wait":5, "wait":3, "query": "insert into test35_state_stream1(val, timestamp) values (1, '2020-02-02 20:00:00'), (2, '2020-02-02 20:00:01'), (3, '2020-02-02 20:00:03'), (3, '2020-02-02 20:00:04'), (3, '2020-02-02 20:00:05')"},
                         {"client":"python", "query_type": "table", "wait":1, "query":"unsubscribe to '3600'"}
                     ]

@@ -134,8 +134,6 @@ void StreamingFunctionData::visit(DB::ASTFunction & func, DB::ASTPtr)
         return;
     }
 
-    translateTimeWeightedFunc(func);
-
     if (streaming)
     {
         auto func_name_lower = Poco::toLower(func.name);
@@ -224,71 +222,5 @@ void substitueFunction(ASTFunction & func, const String & new_name)
     func.name = new_name;
 }
 
-bool translateTimeWeightedFunc(ASTFunction & func)
-{
-    static const std::unordered_map<String, String> map = {
-        {"time_weighted_avg", "avg_weighted"},
-        {"time_weighted_median", "median_timing_weighted"}
-    };
-
-    /// time_weighted_median(val, _tp_time) -> quantile_timing_weighted(lag(val, 1, val), cast(date_diff('millisecond', lag(_tp_time, 1, _tp_time), _tp_time), 'uint64'))
-    /// time_weighted_avg(val, _tp_time) -> avg_weighted(lag(val, 1, val), cast(date_diff('millisecond', lag(_tp_time, 1, _tp_time), _tp_time), 'uint64'))
-    if (!map.contains(func.name))
-        return false;
-
-    auto num_args = func.arguments->children.size();
-    if (num_args != 2 && num_args != 3)
-        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Number of arguments for function {} doesn't match: passed {}, should be 2 or 3", func.name, num_args);
-    
-    String func_name = map.at(func.name);
-    auto val_arg = func.arguments->children[0];
-    auto time_arg = func.arguments->children[1];
-    String algorithm = "locf"; /// LOCF or Linear
-
-    if (num_args == 3)
-    {
-        const auto * literal = func.arguments->children[2]->as<ASTLiteral>();
-        if (literal)
-            algorithm = Poco::toLower(literal->value.safeGet<String>());
-        if (!literal || (algorithm != "linear" && algorithm != "locf"))
-            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Third argument must be literal string of algorithm: 'linear' or 'locf', but given '{}'" , algorithm);
-    }
-    if (algorithm == "linear")
-    {
-        func.name = func_name;
-        func.arguments = std::make_shared<ASTExpressionList>();
-        func.children.push_back(func.arguments);
-        func.arguments->children = {
-            makeASTFunction("divide",
-                makeASTFunction("plus",
-                    makeASTFunction("lag", val_arg->clone(), std::make_shared<ASTLiteral>(Int8(1)), val_arg->clone()),
-                    val_arg->clone()),
-                std::make_shared<ASTLiteral>(2)),
-            makeASTFunction("cast",
-                makeASTFunction("date_diff",
-                    std::make_shared<ASTLiteral>("millisecond"),
-                    makeASTFunction("lag", time_arg->clone(), std::make_shared<ASTLiteral>(Int8(1)), time_arg->clone()),
-                    time_arg->clone()),
-                std::make_shared<ASTLiteral>("uint64"))
-        };
-    }
-    else
-    {
-        func.name = func_name;
-        func.arguments = std::make_shared<ASTExpressionList>();
-        func.children.push_back(func.arguments);
-        func.arguments->children = {
-            makeASTFunction("lag", val_arg->clone(), std::make_shared<ASTLiteral>(Int8(1)), val_arg->clone()),
-            makeASTFunction("cast",
-                makeASTFunction("date_diff",
-                    std::make_shared<ASTLiteral>("millisecond"),
-                    makeASTFunction("lag", time_arg->clone(), std::make_shared<ASTLiteral>(Int8(1)), time_arg->clone()),
-                    time_arg->clone()),
-                std::make_shared<ASTLiteral>("uint64"))
-        };
-    }
-
-    return true;
-}
 }
 }

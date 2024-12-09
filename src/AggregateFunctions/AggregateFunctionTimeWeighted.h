@@ -10,6 +10,7 @@
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/AggregateFunctionSum.h>
 #include <Core/DecimalFunctions.h>
+#include <Core/Field.h>
 #include <Common/logger_useful.h>
 #include <Poco/Logger.h>
 
@@ -23,38 +24,24 @@ namespace ErrorCodes
 
 struct Settings;
 
-template <typename T> constexpr bool DecimalOrExtendedInt =
-    is_decimal<T>
-    || std::is_same_v<T, Int128>
-    || std::is_same_v<T, Int256>
-    || std::is_same_v<T, UInt128>
-    || std::is_same_v<T, UInt256>;
-
-/**
- * Helper class to encapsulate values conversion for avg and avgWeighted.
- */
-template <typename Numerator, typename Denominator>
-struct AvgTimeFraction
+template <typename TimeType>
+struct TimeWeightedData
 {
 
     struct Last
     {
-        Numerator last_value;
-        Denominator last_time;
+        Field last_value;
+        TimeType last_time;
     };
     std::optional<Last> last;
-    std::optional<Denominator> current_time;
+    std::optional<TimeType> start_time;
+    std::optional<TimeType> end_time;
 
 };
 
-
-// template <typename T, typename U>
-// using MaxFieldType = std::conditional_t<(sizeof(AvgTimeWeightedFieldType<T>) > sizeof(AvgTimeWeightedFieldType<U>)),
-//     AvgTimeWeightedFieldType<T>, AvgTimeWeightedFieldType<U>>;
-
 template <typename Value, typename TimeWeight>
 class AggregateFunctionTimeWeighted:
-    public IAggregateFunctionDataHelper<AvgTimeFraction<Value, NearestFieldType<TimeWeight>>, 
+    public IAggregateFunctionDataHelper<TimeWeightedData<TimeWeight>, 
                                         AggregateFunctionTimeWeighted<Value, TimeWeight>>
 
 {
@@ -74,12 +61,9 @@ protected:
         return place + prefix_size;
     }
 public:
-    using Base = IAggregateFunctionDataHelper<AvgTimeFraction<Value, NearestFieldType<TimeWeight>>, 
+    using Base = IAggregateFunctionDataHelper<TimeWeightedData<TimeWeight>, 
                                         AggregateFunctionTimeWeighted<Value, TimeWeight>>;
 
-    using Numerator = Value;
-    using Denominator = NearestFieldType<TimeWeight>;
-    using Fraction = AvgTimeFraction<Numerator, Denominator>;
     AggregateFunctionTimeWeighted(AggregateFunctionPtr nested_func_, const DataTypes & arguments, const Array & params_)
     : Base(arguments, params_)
     , nested_func(nested_func_)
@@ -87,12 +71,49 @@ public:
     , logger(&Poco::Logger::get("AggregateFunctionTimeWeighted"))
     {
         size_t nested_size = nested_func->alignOfData();
-        prefix_size = (sizeof(AvgTimeFraction<Value, NearestFieldType<TimeWeight>>) + nested_size - 1) / nested_size * nested_size;
+        prefix_size = (sizeof(TimeWeightedData<TimeWeight>) + nested_size - 1) / nested_size * nested_size;
+    }
+
+    void last_time_calculation(size_t row_begin, size_t row_end, AggregateDataPtr __restrict place, const IColumn ** columns, Arena * arena) const
+    {
+        auto & data = this->data(place);
+        const auto & time_data = assert_cast<const ColumnVectorOrDecimal<TimeWeight> &>(*columns[1]).getData();
+        /// last time caculation
+        if (data.last.has_value())
+        {
+            MutableColumnPtr value_column, weight_column;
+            value_column = this->argument_types[0]->createColumn();
+            weight_column = ColumnUInt64::create();
+            if (time_data[row_begin] >= data.last->last_time) [[likely]]
+            {
+                value_column->insert(data.last->last_value);
+                weight_column->insert(static_cast<UInt64>(time_data[row_begin] - data.last->last_time));
+            }
+            else
+            {
+                LOG_WARNING(logger, "Illegal time argument, should be in ascending order, {}, {}" ,data.last->last_time ,time_data[row_begin]);
+            }
+            ColumnRawPtrs raw_columns{value_column.get(), weight_column.get()};
+            nested_func->add(getNestedPlace(place), raw_columns.data(), 0, arena);
+        }
+        
+        const auto & value_data = assert_cast<const ColumnVectorOrDecimal<Value> &>(*columns[0]).getData();
+        auto last_row_pos = row_end - 1;
+        data.last = {
+            static_cast<Value>(value_data[last_row_pos]),
+            static_cast<TimeWeight>(time_data[last_row_pos])
+        };
+        /// remember start time
+        data.start_time = time_data[row_begin];
+        /// remember current time
+        if (this->argument_types.size() == 3)
+            data.end_time = assert_cast<const ColumnVectorOrDecimal<TimeWeight> &>(*columns[2]).getData()[last_row_pos];
     }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "merge() function isn't implemented for {}", getName());
+      
+        last_time_calculation(row_num, row_num + 1, place, columns, arena);
     }
 
     void addBatchSinglePlace(
@@ -104,72 +125,29 @@ public:
         ssize_t if_argument_pos,
         const IColumn * delta_col [[maybe_unused]]) const final
     {
-        auto & data = this->data(place);
 
-        MutableColumnPtr value_column, weight_column;
-        const auto & value_data = assert_cast<const ColumnVectorOrDecimal<Value> &>(*columns[0]).getData();
+        if (if_argument_pos >= 0 || delta_col != nullptr)
+            return nested_func->addBatchSinglePlace(row_begin, row_end, place, columns, arena, if_argument_pos, delta_col);
+        else if (row_end - row_begin == 1)
+            return add(place, columns, 0, arena);
+
         const auto & time_data = assert_cast<const ColumnVectorOrDecimal<TimeWeight> &>(*columns[1]).getData();
+        last_time_calculation(row_begin, row_end, place, columns, arena);
+
         auto last_row_pos = row_end - 1;
-
-        /// last time caculation
-        if (data.last.has_value())
-        {
-            value_column = this->argument_types[0]->createColumn();
-            weight_column = ColumnUInt64::create();
-            value_column->insert(data.last->last_value);
-            weight_column->insert(static_cast<UInt64>(time_data[0] - data.last->last_time));
-            
-            ColumnRawPtrs raw_columns{value_column.get(), weight_column.get()};
-            nested_func->add(getNestedPlace(place), raw_columns.data(), 0, arena);
-        }
-
         /// caculate time
-        weight_column = ColumnUInt64::create();
-        if (if_argument_pos >= 0)
+        MutableColumnPtr weight_column = ColumnUInt64::create();
+        for (size_t i = row_begin; i < last_row_pos; i++)
         {
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            for (size_t i = row_begin; i < last_row_pos; i++)
-            {
-                if (flags[i])
-                {
-                    if (time_data[i + 1] < time_data[i])
-                        LOG_WARNING(logger, "Illegal time argument, should be in ascending order, {}, {}" ,time_data[i] ,time_data[i + 1]);
-                    else
-                        weight_column->insert(static_cast<UInt64>(time_data[i + 1] - time_data[i]));
-                }
-            }
+            if (time_data[i + 1] >= time_data[i]) [[likely]]
+                weight_column->insert(static_cast<UInt64>(time_data[i + 1] - time_data[i]));
+            else
+                LOG_WARNING(logger, "Illegal time argument, should be in ascending order, {}, {}" ,time_data[i] ,time_data[i + 1]);
         }
-        else
-        {
-            for (size_t i = row_begin; i < last_row_pos; i++)
-            {
-                if (time_data[i + 1] < time_data[i])
-                    LOG_WARNING(logger, "Illegal time argument, should be in ascending order, {}, {}" ,time_data[i] ,time_data[i + 1]);
-                else
-                    weight_column->insert(static_cast<UInt64>(time_data[i + 1] - time_data[i]));
-            }
-        }
-
-        //weight_column->insertDefault();
         /// prepare data
-        ColumnRawPtrs raw_columns{*columns[0].get(), weight_column.get()};
+        ColumnRawPtrs raw_columns{columns[0], weight_column.get()};
 
-        nested_func-> addBatchSinglePlace(row_begin, last_row_pos, getNestedPlace(place), raw_columns.data(), arena, if_argument_pos);
-        
-        // if (data.last_value.has_value())
-        // {
-        //     data.last_value.value() = static_cast<Numerator>(value_data[row_end - 1]);
-        //     data.last_time.value() = static_cast<Denominator>(time_data[row_end - 1]);
-        // }
-        // else
-        // {
-        data.last->last_value = static_cast<Numerator>(value_data[last_row_pos]);
-        data.last->last_time = static_cast<Denominator>(time_data[last_row_pos]);
-        /// remember current time
-        if (this->argument_types.size() == 3)
-            data.current_time = assert_cast<const ColumnVectorOrDecimal<TimeWeight> &>(*columns[2]).getData()[last_row_pos];
-
-        // }
+        nested_func->addBatchSinglePlace(row_begin, last_row_pos, getNestedPlace(place), raw_columns.data(), arena, if_argument_pos, delta_col);
     }
 
     void addBatchSinglePlaceNotNull(
@@ -183,139 +161,180 @@ public:
         const IColumn * delta_col [[maybe_unused]])
         const final
     {
-        auto & data = this->data(place);
-        MutableColumnPtr value_column, weight_column;
-        const auto & value_data = assert_cast<const ColumnVectorOrDecimal<Value> &>(*columns[0]).getData();
+        if (if_argument_pos >= 0 || delta_col != nullptr)
+            return nested_func->addBatchSinglePlaceNotNull(row_begin, row_end, place, columns, null_map, arena, if_argument_pos, delta_col);
+        else if (row_end - row_begin == 1)
+            return add(place, columns, 0, arena);
+
+        // const auto & value_data = assert_cast<const ColumnVectorOrDecimal<Value> &>(*columns[0]).getData();
         const auto & time_data = assert_cast<const ColumnVectorOrDecimal<TimeWeight> &>(*columns[1]).getData();
+
+        last_time_calculation(row_begin, row_end, place, columns, arena);        
+
         auto last_row_pos = row_end - 1;
-
-        /// last time caculation
-        if (data.last.has_value())
-        {
-            value_column = this->argument_types[0]->createColumn();
-            weight_column = ColumnUInt64::create();
-            value_column->insert(data.last->last_value);
-            weight_column->insert(static_cast<UInt64>(time_data[0] - data.last->last_time));
-            
-            ColumnRawPtrs raw_columns{value_column.get(), weight_column.get()};
-            nested_func->add(getNestedPlace(place), raw_columns.data(), 0, arena);
-        }
-
         /// caculate time
-        weight_column = ColumnUInt64::create();
-        if (if_argument_pos >= 0)
+        MutableColumnPtr weight_column = ColumnUInt64::create();
+        for (size_t i = row_begin; i < row_end - 1; i++)
         {
-            const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            for (size_t i = row_begin; i < row_end - 1; i++)
+            if (!null_map[i])
             {
-                if (flags[i] && !null_map[i])
-                {
-                    if (value_column[i + 1] < value_column[i])
-                        LOG_WARNING(logger, "Illegal time argument, should be in ascending order, {}, {}" ,value_column[i] ,value_column[i + 1]);
-                    else
-                        weight_column->insert(static_cast<UInt64>(value_column[i + 1] - value_column[i]));
-                }
+                if (time_data[i + 1] < time_data[i])
+                    LOG_WARNING(logger, "Illegal time argument, should be in ascending order, {}, {}" ,time_data[i] ,time_data[i + 1]);
+                else
+                    weight_column->insert(static_cast<UInt64>(time_data[i + 1] - time_data[i]));
             }
         }
-        else
-        {
-            for (size_t i = row_begin; i < row_end - 1; i++)
-            {
-                if (!null_map[i])
-                {
-                    if (value_column[i + 1] < value_column[i])
-                        LOG_WARNING(logger, "Illegal time argument, should be in ascending order, {}, {}" ,value_column[i] ,value_column[i + 1]);
-                    else
-                        weight_column->insert(static_cast<UInt64>(value_column[i + 1] - value_column[i]));
-                }
-            }
-        }
-        //weight_column->insertDefault();
+        ColumnRawPtrs raw_columns{columns[0], weight_column.get()};
 
-        ColumnRawPtrs raw_columns{columns[0].get(), weight_column.get()};
-
-        nested_func-> addBatchSinglePlace(row_begin, last_row_pos, getNestedPlace(place), raw_columns.data(), arena, if_argument_pos);
-        
-        // if (data.last_value.has_value())
-        // {
-        //     data.last_value.value() = static_cast<Numerator>(value_data[row_end - 1]);
-        //     data.last_time.value() = static_cast<Denominator>(time_data[row_end - 1]);
-        // }
-        // else
-        // {
-        data.last->last_value = static_cast<Numerator>(value_data[last_row_pos]);
-        data.last->last_time = static_cast<Denominator>(time_data[last_row_pos]);
-        /// remember current time
-        if (this->argument_types.size() == 3)
-            data.current_time = assert_cast<const ColumnVectorOrDecimal<TimeWeight> &>(*columns[2]).getData()[last_row_pos];
-
-        // }
-
+        nested_func-> addBatchSinglePlaceNotNull(row_begin, last_row_pos, getNestedPlace(place), raw_columns.data(), null_map, arena, if_argument_pos, delta_col);
     }
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         /// FIXME, time disorder may happen, the outcome might not be accurate
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "merge() function isn't implemented for {}", getName());
+        auto & data = this->data(place);
+        auto & rhs_data = this->data(rhs);
+        if (data.last.has_value())
+        {
+            if (rhs_data.start_time.has_value())
+            {
+                MutableColumnPtr value_column, weight_column;
+                value_column = this->argument_types[0]->createColumn();
+                weight_column = ColumnUInt64::create();
+                if (rhs_data.start_time.value() >= data.last->last_time)
+                {
+                    value_column->insert(data.last->last_value);
+                    weight_column->insert(static_cast<UInt64>(rhs_data.start_time.value() - data.last->last_time));
+                    if (rhs_data.last.has_value())
+                        data.last = rhs_data.last;
+                    if (rhs_data.end_time.has_value())
+                        data.end_time = rhs_data.end_time;
+                }
+                else
+                {
+                    if (data.start_time.has_value())
+                    {
+                        if (data.start_time.value() >= rhs_data.last->last_time)
+                        {
+                            value_column->insert(rhs_data.last->last_value);
+                            weight_column->insert(static_cast<UInt64>(data.last->last_time - rhs_data.start_time.value()));
+                            data.start_time.value() = rhs_data.start_time.value();
+                        }
+                        else
+                        {
+                            LOG_WARNING(logger, "Illegal time argument, should be in ascending order, {}, {}" ,data.last->last_time ,rhs_data.start_time.value());
+                        }
+                    }
+                }
+                ColumnRawPtrs raw_columns{value_column.get(), weight_column.get()};
+                nested_func->add(getNestedPlace(place), raw_columns.data(), 0, arena);
+            }
+        }
+        else
+        {
+            if (rhs_data.last.has_value())
+                data.last = rhs_data.last;
+            if (rhs_data.start_time.has_value())
+                data.start_time = rhs_data.start_time;
+            if (rhs_data.end_time.has_value())
+                data.end_time = rhs_data.end_time;
+        }
+
+        nested_func->merge(getNestedPlace(place), rhs, arena);
     }
 
     void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> /* version */) const override
     {
-        // if (this->data(place).last_value.has_value() && this->data(place).last_time.has_value())
-        // {
-        //     writeBinary(this->data(place).last_value.value(), buf);
-        //     if constexpr (std::is_unsigned_v<Denominator>)
-        //         writeVarUInt(this->data(place).last_time.value(), buf);
-        //     else
-        //         writeBinary(this->data(place).last_time.value(), buf);
-        // }
-        // if (this->data(place).current_time.has_value())
-        // {
-        //     if constexpr (std::is_unsigned_v<Denominator>)
-        //         writeVarUInt(this->data(place).current_time.value(), buf);
-        //     else
-        //         writeBinary(this->data(place).current_time.value(), buf);
-        // }
-        // nested_func->serialize(getNestedPlace(place), buf);
+        writeBinary(this->data(place).last.has_value(), buf);
+        if (this->data(place).last.has_value())
+        {
+            writeBinary(true, buf);
+            writeFieldBinary(this->data(place).last->last_value, buf);
+            if constexpr (std::is_unsigned_v<TimeWeight>)
+                writeVarUInt(this->data(place).last->last_time, buf);
+            else
+                writeBinary(this->data(place).last->last_time, buf);
+        }
+
+        writeBinary(this->data(place).start_time.has_value(), buf);
+        if (this->data(place).start_time.has_value())
+        {
+            writeBinary(true, buf);
+            if constexpr (std::is_unsigned_v<TimeWeight>)
+                writeVarUInt(this->data(place).start_time.value(), buf);
+            else
+                writeBinary(this->data(place).start_time.value(), buf);
+        }
+
+        writeBinary(this->data(place).end_time.has_value(), buf);
+        if (this->data(place).end_time.has_value())
+        {
+            writeBinary(true, buf);
+            if constexpr (std::is_unsigned_v<TimeWeight>)
+                writeVarUInt(this->data(place).end_time.value(), buf);
+            else
+                writeBinary(this->data(place).end_time.value(), buf);
+        }
+        nested_func->serialize(getNestedPlace(place), buf);
     }
 
     void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena * arena) const override
     {
-        // if (this->data(place).last_value.has_value() && this->data(place).last_time.has_value())
-        // {
-        //     readBinary(this->data(place).last_value.value(), buf);
-        //     if constexpr (std::is_unsigned_v<Denominator>)
-        //         readVarUInt(this->data(place).last_time.value(), buf);
-        //     else /// Floating point denominator type can be used
-        //         readBinary(this->data(place).last_time.value(), buf);
-        // }
-        // if (this->data(place).current_time.has_value())
-        // {
-        //     if constexpr (std::is_unsigned_v<Denominator>)
-        //         readVarUInt(this->data(place).current_time.value(), buf);
-        //     else
-        //         readBinary(this->data(place).current_time.value(), buf);
-        // }
-        // nested_func->deserialize(getNestedPlace(place), buf, std::nullopt /* version */, arena);
+        bool last_has_value, start_has_value, end_has_value;
+        readBinary(last_has_value, buf);
+        if(last_has_value)
+        {
+            this->data(place).last->last_value = readFieldBinary(buf);
+            if constexpr (std::is_unsigned_v<TimeWeight>)
+                readVarUInt(this->data(place).last->last_time, buf);
+            else /// Floating point TimeWeight type can be used
+                readBinary(this->data(place).last->last_time, buf);
+        }
+
+        readBinary(start_has_value, buf);
+        if(start_has_value)
+        {
+            if constexpr (std::is_unsigned_v<TimeWeight>)
+                readVarUInt(this->data(place).start_time.value(), buf);
+            else
+                readBinary(this->data(place).start_time.value(), buf);
+        }
+
+        readBinary(end_has_value, buf);
+        if(end_has_value)
+        {
+            if constexpr (std::is_unsigned_v<TimeWeight>)
+                readVarUInt(this->data(place).end_time.value(), buf);
+            else
+                readBinary(this->data(place).end_time.value(), buf);
+        }
+
+        nested_func->deserialize(getNestedPlace(place), buf, std::nullopt /* version */, arena);
     }
 
-    void insertResultIntoImpl(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const
+    void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
     {
         auto & data = this->data(place);
-        if (data.current_time.has_value())
+        if (data.end_time.has_value())
         {
             MutableColumnPtr value_column, weight_column;
-            ColumnRawPtrs argument_raw_columns(2);
 
             chassert(data.last.has_value());
             value_column = this->argument_types[0]->createColumn();
             weight_column = ColumnUInt64::create();
-            value_column->insert(data.last->last_value);
-            weight_column->insert(data.current_time.value() - data.last->last_value);
+            if (data.end_time.value() >= data.last->last_time) [[likely]]
+            {
+                value_column->insert(data.last->last_value);
+                weight_column->insert(static_cast<UInt64>(data.end_time.value() - data.last->last_time));
+            }
+            else
+            {
+                LOG_WARNING(logger, "Illegal time argument, should be in ascending order, {}, {}" ,data.last->last_time ,data.end_time.value());
+            }
+            
 
-            for (size_t i = 0; i < argument_columns.size(); ++i)
-                argument_raw_columns[i] = argument_columns[i].get();
+            ColumnRawPtrs raw_columns{value_column.get(), weight_column.get()};
 
-            nested_func -> add(getNestedPlace(place), argument_raw_columns.data(), 0, arena);
+            nested_func -> add(getNestedPlace(place), raw_columns.data(), 0, arena);
         }
 
         // assert(!data.arguments.empty());
@@ -323,15 +342,15 @@ public:
         nested_func->insertResultInto(getNestedPlace(place), to, arena);
     }
 
-    void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
-    {
-        insertResultIntoImpl(place, to, arena);
-    }
+    // void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
+    // {
+    //     insertResultIntoImpl(place, to, arena);
+    // }
 
-    void insertMergeResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
-    {
-        insertResultIntoImpl(place, to, arena);
-    }
+    // void insertMergeResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
+    // {
+    //     insertResultIntoImpl(place, to, arena);
+    // }
 
     size_t sizeOfData() const override
     {
@@ -340,30 +359,30 @@ public:
 
     void create(AggregateDataPtr __restrict place) const override
     {
-        new (place) AvgTimeFraction<Value, NearestFieldType<TimeWeight>>;
+        new (place) TimeWeightedData<TimeWeight>;
         nested_func->create(getNestedPlace(place));
     }
 
     void destroy(AggregateDataPtr __restrict place) const noexcept override
     {
-        this->data(place).~AvgTimeFraction<Value, NearestFieldType<TimeWeight>>();
+        this->data(place).~TimeWeightedData<TimeWeight>();
         nested_func->destroy(getNestedPlace(place));
     }
 
     bool hasTrivialDestructor() const override
     {
-        return std::is_trivially_destructible_v<AvgTimeFraction<Value, NearestFieldType<TimeWeight>>> && nested_func->hasTrivialDestructor();
+        return std::is_trivially_destructible_v<TimeWeightedData<TimeWeight>> && nested_func->hasTrivialDestructor();
     }
 
     void destroyUpToState(AggregateDataPtr __restrict place) const noexcept override
     {
-        this->data(place).~AvgTimeFraction<Value, NearestFieldType<TimeWeight>>();
+        this->data(place).~TimeWeightedData<TimeWeight>();
         nested_func->destroyUpToState(getNestedPlace(place));
     }
 
     String getName() const override
     {
-        return nested_func->getName() + "_time";
+        return nested_func->getName() + "_time_weighted";
     }
 
     DataTypePtr getReturnType() const override

@@ -183,8 +183,10 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
         if (combinator_name == "_time_weighted" && nested_name == "avg")
             nested_name = "avg_weighted";
         else if (combinator_name == "_time_weighted" && nested_name == "median")
-            nested_name = "median_timing";           
-
+            nested_name = "median_timing_weighted";           
+        else
+            throw Exception(ErrorCodes::ILLEGAL_AGGREGATION, "Combinator '{}' with {} is not supported", combinator_name, nested_name);
+        
         /// Nested identical combinators (i.e. uniqCombinedIfIf) is not
         /// supported (since they don't work -- silently).
         ///

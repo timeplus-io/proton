@@ -32,21 +32,7 @@ public:
             throw Exception("Incorrect number of arguments for aggregate function with " + getName() + " suffix",
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        DataTypes nested_arguments;
-        nested_arguments.push_back(arguments[0]);
-        //delete
-        if (isDate(*arguments.begin()))
-            return nested_arguments;
-        if (isDate(arguments.back()))
-            nested_arguments.push_back(std::make_shared<DataTypeUInt16>());
-        else if(isDate32(arguments.back()))
-            nested_arguments.push_back(std::make_shared<DataTypeInt32>());
-        else if(isDateTime(arguments.back()))
-            nested_arguments.push_back(std::make_shared<DataTypeUInt32>());
-        else if(isDateTime64(arguments.back()))
-            nested_arguments.push_back(std::make_shared<DataTypeFloat64>());
-
-        return nested_arguments;
+        return {arguments[0], std::make_shared<DataTypeUInt64>()};
     }
 
     /// Decimal128 and Decimal256 aren't supported
@@ -97,29 +83,17 @@ public:
 
         const auto data_type = static_cast<const DataTypePtr>(arguments[0]);
         const auto data_type_time_weight = static_cast<const DataTypePtr>(arguments[1]);
-        const WhichDataType dt(data_type), t_dt(data_type_time_weight);
+        const WhichDataType t_dt(data_type_time_weight);
 
-        if ((dt.isInt() || dt.isUInt() || dt.isFloat() || dt.isDecimal()) && (t_dt.isDateOrDate32() || t_dt.isDateTime()|| t_dt.isDateTime64()))
-        else    
-            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Types {} and {} are non-conforming as arguments for aggregate function {}", data_type->getName(), data_type_time_weight->getName(), this->getName());
+        if (!t_dt.isDateOrDate32() && !t_dt.isDateTime() && !t_dt.isDateTime64())
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Types {} are non-conforming as time weighted arguments for aggregate function {}", data_type_time_weight->getName(), this->getName());
 
         if (arguments.size() == 3)
         {
             const auto data_type_third_arg = static_cast<const DataTypePtr>(arguments[2]);
             
-            if(data_type_third_arg != data_type_time_weight)
-                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "The second and the third argument should be the same for aggregate function {}", this->getName());   
-            // AggregateFunctionPtr ptr;
-
-            // // const bool left_decimal = isDecimal(data_type);
-            // // data_type_time_weight = UInt64;
-            // // auto data_type_uint64 = std::make_shared<DataTypeUInt64>();
-            // // if (left_decimal)
-            // //     ptr.reset(create(*data_type, *data_type_time_weight, nested_function, arguments, params, 
-            // //         getDecimalScale(*data_type)));
-            // // else
-            // ptr.reset(create(*data_type, *data_type_time_weight, nested_function, arguments, params));      
-            // return ptr;
+            if(data_type_third_arg->getTypeId() != data_type_time_weight->getTypeId())
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "The second and the third argument should be the same for aggregate function {}", this->getName());
         }
         AggregateFunctionPtr ptr;
         ptr.reset(create(*data_type, *data_type_time_weight, nested_function, arguments, params));

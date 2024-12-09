@@ -30,7 +30,7 @@ public:
 
     using Numerator = typename Base::Numerator;
     using Denominator = typename Base::Denominator;
-     using Fraction = typename Base::Fraction;
+    using Fraction = typename Base::Fraction;
 
     void NO_SANITIZE_UNDEFINED add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
