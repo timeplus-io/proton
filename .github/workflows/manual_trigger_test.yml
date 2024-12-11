@@ -107,8 +107,8 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   smoke_test_on_arm:
     needs: prepare_smoke_test
@@ -132,8 +132,8 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   prepare_query_compability_test:
     runs-on: ubuntu-latest
@@ -208,8 +208,8 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
       TP_DEMO_API_KEY: ${{ secrets.TP_DEMO_API_KEY }}
       TP_DEMO_SITE_API_KEY: ${{ secrets.TP_DEMO_SITE_API_KEY }}  
@@ -235,8 +235,8 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
       TP_DEMO_API_KEY: ${{ secrets.TP_DEMO_API_KEY }}
       TP_DEMO_SITE_API_KEY: ${{ secrets.TP_DEMO_SITE_API_KEY }}         
@@ -283,8 +283,8 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   unit_test_on_arm:
     needs: prepare_unit_test
@@ -308,8 +308,8 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   prepare_stateless_test:
     runs-on: ubuntu-latest
@@ -355,8 +355,8 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateless_test_on_arm:
     needs: prepare_stateless_test
@@ -380,8 +380,8 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   prepare_stateful_test:
     runs-on: ubuntu-latest
@@ -427,8 +427,8 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
   stateful_test_on_arm:
     needs: prepare_stateful_test
@@ -452,6 +452,6 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
+      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
       TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
