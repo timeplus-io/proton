@@ -64,8 +64,12 @@ jobs:
         # compiling
         ./docker/packager/packager --package-type binary --docker-image-version clang-16 --sanitizer $SANITIZER --proton-build --enable-proton-local --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output
 
-        # clear compiling footprint
+        tar -zcf ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz -C $GITHUB_WORKSPACE/ccache .
+        aws s3 cp --no-progress ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz s3://tp-internal/proton/ci_cache/
+
+        # clean ccache and build footprint
         rm -rf $GITHUB_WORKSPACE/ccache
+        rm ./cache${SANITIZER:+_}$SANITIZER${ARCH:+_}$ARCH.tar.gz
         rm -rf build_docker
 
         # build unit test docker image
