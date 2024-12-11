@@ -10,3 +10,5 @@ uint64_t getMemoryAmountOrZero();
 /** Throws exception if it cannot determine the size of physical memory.
   */
 uint64_t getMemoryAmount();
+
+uint64_t getMemoryAmountOrZeroCached();

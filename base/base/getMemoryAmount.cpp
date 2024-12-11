@@ -56,11 +56,16 @@ uint64_t getMemoryAmountOrZero()
 
 }
 
-
 uint64_t getMemoryAmount()
 {
     auto res = getMemoryAmountOrZero();
     if (!res)
         throw std::runtime_error("Cannot determine memory amount");
+    return res;
+}
+
+uint64_t getMemoryAmountOrZeroCached()
+{
+    static auto res = getMemoryAmountOrZero();
     return res;
 }
