@@ -125,7 +125,7 @@ jobs:
       TAG: ${{ inputs.tag }}
       TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
       TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
       TP_DEMO_API_KEY: ${{ secrets.TP_DEMO_API_KEY }}
       TP_DEMO_SITE_API_KEY: ${{ secrets.TP_DEMO_SITE_API_KEY }}       
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}

@@ -60,7 +60,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
       TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
 
   compatibility_test:
     if: ${{ github.event.inputs.source!='' }}
@@ -114,4 +114,4 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
       TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
