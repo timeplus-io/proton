@@ -71,7 +71,7 @@
     },
     "new_setting_sample": {
         "description": "sample of a new setting",
-        "comment": "setting is for ci_runner to learn how to connect to proton, while how to start the env mapping to settings need to be configured in test_stream_smoke/configs/docker-compose.yaml, so far all setting env is all to be set in this unified docker compose file, #todo: split docker-compose for different settings",
+        "comment": "setting is for ci_runner to learn how to connect to proton, while how to start the env mapping to settings need to be configured in test_stream_smoke/configs/docker-compose.yaml, so far all setting env is all to be set in this unified docker-compose file, #todo: split docker-compose for different settings",
         "rest_setting": {
             "host_url": "http://localhost:3218",
             "http_snapshot_url": "http://localhost:8123",

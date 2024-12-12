@@ -16,13 +16,13 @@ def setup_debug_logging():
     root_logger.setLevel(logging.DEBUG)
 
 def verify_docker_environment():
-    """Check if docker and docker compose are properly installed and running"""
+    """Check if docker and docker-compose are properly installed and running"""
     try:
         # Check docker version
         docker_version = subprocess.check_output(["docker", "--version"], stderr=subprocess.STDOUT)
         logger.debug(f"Docker version: {docker_version.decode('utf-8').strip()}")
         
-        # Check docker compose version
+        # Check docker-compose version
         compose_version = subprocess.check_output(["docker", "compose", "version"], stderr=subprocess.STDOUT)
         logger.debug(f"Docker Compose version: {compose_version.decode('utf-8').strip()}")
         
@@ -48,7 +48,7 @@ def verify_compose_file(compose_file_path):
             logger.debug(f"Successfully read compose file: {compose_file_path}")
             
         # Validate docker-compose file
-        cmd = f"docker compose -f {compose_file_path} config"
+        cmd = f"docker-compose -f {compose_file_path} config"
         result = subprocess.check_output(cmd.split(), stderr=subprocess.STDOUT)
         logger.debug("Docker compose file validation successful")
         
@@ -73,17 +73,17 @@ def enhanced_compose_up(compose_file_path):
     
     try:
         # Try to bring down any existing containers first
-        down_cmd = f"docker compose -f {compose_file_path} down"
+        down_cmd = f"docker-compose -f {compose_file_path} down"
         logger.debug(f"Running command: {down_cmd}")
         subprocess.run(down_cmd.split(), stderr=subprocess.PIPE, stdout=subprocess.PIPE, check=True)
         
         # Now bring up the containers
-        up_cmd = f"docker compose -f {compose_file_path} up -d"
+        up_cmd = f"docker-compose -f {compose_file_path} up -d"
         logger.debug(f"Running command: {up_cmd}")
         result = subprocess.run(up_cmd.split(), stderr=subprocess.PIPE, stdout=subprocess.PIPE, check=True)
         
         # Check if containers are running
-        ps_cmd = f"docker compose -f {compose_file_path} ps"
+        ps_cmd = f"docker-compose -f {compose_file_path} ps"
         ps_output = subprocess.check_output(ps_cmd.split(), stderr=subprocess.STDOUT)
         logger.debug(f"Docker compose ps output:\n{ps_output.decode('utf-8')}")
         
@@ -93,5 +93,5 @@ def enhanced_compose_up(compose_file_path):
         logger.error(f"Command output:\n{e.output.decode('utf-8') if e.output else ''}")
         return False
     except Exception as e:
-        logger.error(f"Unexpected error during docker compose up: {str(e)}")
+        logger.error(f"Unexpected error during docker-compose up: {str(e)}")
         return False
