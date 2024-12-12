@@ -5,6 +5,7 @@ services:
     pull_policy: always
     container_name: proton-server
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - $GITHUB_WORKSPACE/data/proton-redp/datas:/var/lib/proton
       - $GITHUB_WORKSPACE/data/proton-redp/log:/var/log/proton-server
     ports:
@@ -36,7 +37,7 @@ services:
 
 
   stream-store:
-    image: vectorized/redpanda:v21.11.19
+    image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
     ports:
       - "9092:9092"
       - "29092:29092"
@@ -64,4 +65,5 @@ services:
     container_name: redpanda
     user: "0:0"
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - $GITHUB_WORKSPACE/data/redpanda:/var/lib/redpanda/data
