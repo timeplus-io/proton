@@ -1,4 +1,4 @@
-docker-compose down -v
+docker compose down -v
 sudo rm -rf ../../proton-server/*
 sudo rm -rf ../../proton-server1/*
 sudo rm -rf ../../proton-server2/*

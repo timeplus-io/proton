@@ -14,7 +14,7 @@ formatter = logging.Formatter(
 def compose_up(compose_file_path):
     logger.debug(f"compose_up: compose_file_path = {compose_file_path}")
     try:
-        cmd = f"docker-compose -f {compose_file_path} up -d"
+        cmd = f"docker compose -f {compose_file_path} up -d"
         logger.debug(f"compose_up: cmd = {cmd}")
         res = subprocess.check_output(cmd.split(), stderr=subprocess.STDOUT)
         return True
