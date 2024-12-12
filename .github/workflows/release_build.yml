@@ -24,7 +24,7 @@ jobs:
         ./release --version patch
 
         # prepare build cache
-        aws s3 cp --no-progress s3://tp-internal/proton/cache.tar.gz .
+        aws s3 cp --no-progress s3://tp-internal/proton/ci_cache/cache.tar.gz .
         mkdir $GITHUB_WORKSPACE/ccache
         tar -zxf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache
         rm cache.tar.gz
@@ -56,7 +56,7 @@ jobs:
 
         # upload build cache
         tar -zcf ./cache.tar.gz -C $GITHUB_WORKSPACE/ccache .
-        aws s3 cp --no-progress ./cache.tar.gz s3://tp-internal/proton/
+        aws s3 cp --no-progress ./cache.tar.gz s3://tp-internal/proton/ci_cache/
         
         mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/$PROTON_BINARY
     secrets:
@@ -86,7 +86,7 @@ jobs:
         ./release --version patch
 
         # prepare build cache
-        aws s3 cp --no-progress s3://tp-internal/proton/cache-arm.tar.gz .
+        aws s3 cp --no-progress s3://tp-internal/proton/ci_cache/cache-arm.tar.gz .
         mkdir $GITHUB_WORKSPACE/ccache
         tar -zxf ./cache-arm.tar.gz -C $GITHUB_WORKSPACE/ccache
         rm cache-arm.tar.gz
@@ -113,7 +113,7 @@ jobs:
 
         # upload build cache
         tar -zcf ./cache-arm.tar.gz -C $GITHUB_WORKSPACE/ccache .
-        aws s3 cp --no-progress ./cache-arm.tar.gz s3://tp-internal/proton/
+        aws s3 cp --no-progress ./cache-arm.tar.gz s3://tp-internal/proton/ci_cache/
         
         mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/$PROTON_BINARY
     secrets:
