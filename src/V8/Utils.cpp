@@ -431,22 +431,23 @@ void validateStatelessFunctionSource(const std::string & func_name, const std::s
     validateFunctionSource(func_name, source, validate_function);
 }
 
-std::string getHeapStatisticsString(v8::HeapStatistics& heap_statistics) {
+std::string getHeapStatisticsString(v8::HeapStatistics & heap_statistics)
+{
     return fmt::format(
-        "Total Heap Size: {}\t"
-        "Total Heap Size Executable: {}\t"
-        "Total Physical Size: {}\t"
-        "Total Available Size: {}\t"
-        "Used Heap Size: {}\t"
-        "Heap Size Limit: {}\t"
-        "Malloced Memory: {}\t"
-        "External Memory: {}\t"
-        "Peak Malloced Memory: {}\t"
-        "Does Zap Garbage: {}\t"
-        "Number Of Native Contexts: {}\t"
-        "Number Of Detached Contexts: {}\t"
-        "Total Global Handles Size: {}\t"
-        "Used Global Handles Size: {}",
+        "total_heap_size: {}\t"
+        "total_heap_size_executable: {}\t"
+        "total_physical_size: {}\t"
+        "total_available_size: {}\t"
+        "used_heap_size: {}\t"
+        "heap_size_limit: {}\t"
+        "malloced_memory: {}\t"
+        "external_memory: {}\t"
+        "peak_malloced_memory: {}\t"
+        "does_zap_garbage: {}\t"
+        "number_of_native_contexts: {}\t"
+        "number_of_detached_contexts: {}\t"
+        "total_global_handles_size: {}\t"
+        "used_global_handles_size: {}",
         heap_statistics.total_heap_size(),
         heap_statistics.total_heap_size_executable(),
         heap_statistics.total_physical_size(),
@@ -460,8 +461,7 @@ std::string getHeapStatisticsString(v8::HeapStatistics& heap_statistics) {
         heap_statistics.number_of_native_contexts(),
         heap_statistics.number_of_detached_contexts(),
         heap_statistics.total_global_handles_size(),
-        heap_statistics.used_global_handles_size()
-    );
+        heap_statistics.used_global_handles_size());
 }
 
 void checkHeapLimit(v8::Isolate * isolate, size_t max_v8_heap_size_in_bytes)

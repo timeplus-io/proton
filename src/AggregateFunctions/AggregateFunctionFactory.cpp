@@ -98,8 +98,8 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
         bool has_null_arguments = std::any_of(types_without_low_cardinality.begin(), types_without_low_cardinality.end(),
             [](const auto & type) { return type->onlyNull(); });
 
-        AggregateFunctionPtr nested_function = getImpl(
-            name, nested_types, nested_parameters, out_properties, has_null_arguments, context, is_changelog_input);
+        AggregateFunctionPtr nested_function
+            = getImpl(name, nested_types, nested_parameters, out_properties, has_null_arguments, context, is_changelog_input);
 
         // Pure window functions are not real aggregate functions. Applying
         // combinators doesn't make sense for them, they must handle the
@@ -110,7 +110,8 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
             return combinator->transformAggregateFunction(nested_function, out_properties, types_without_low_cardinality, parameters);
     }
 
-    auto with_original_arguments = getImpl(name, types_without_low_cardinality, parameters, out_properties, false, context, is_changelog_input);
+    auto with_original_arguments
+        = getImpl(name, types_without_low_cardinality, parameters, out_properties, false, context, is_changelog_input);
 
     if (!with_original_arguments)
         throw Exception("Logical error: AggregateFunctionFactory returned nullptr", ErrorCodes::LOGICAL_ERROR);
@@ -204,7 +205,8 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
     }
 
     /// proton: starts. Check user defined aggr function
-    auto aggr = UserDefinedFunctionFactory::getAggregateFunction(name, argument_types, parameters, out_properties, context, is_changelog_input);
+    auto aggr
+        = UserDefinedFunctionFactory::getAggregateFunction(name, argument_types, parameters, out_properties, context, is_changelog_input);
     if (aggr)
         return aggr;
     /// proton: ends

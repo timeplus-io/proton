@@ -88,7 +88,9 @@ v8::Isolate * V8::createIsolate()
     isolate_params.array_buffer_allocator = allocator.get();
 
     if (v8_max_heap_bytes > 0)
+    {
         isolate_params.constraints.set_max_old_generation_size_in_bytes(v8_max_heap_bytes);
+    }
     else
     {
         size_t max_heap_size_in_bytes = static_cast<size_t>(getMemoryAmountOrZeroCached() * 0.6);

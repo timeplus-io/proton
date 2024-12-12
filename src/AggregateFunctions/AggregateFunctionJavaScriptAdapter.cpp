@@ -1,12 +1,13 @@
 #include "AggregateFunctionJavaScriptAdapter.h"
 
-#include <base/getMemoryAmount.h>
 #include <Core/DecimalFunctions.h>
 #include <Functions/FunctionsConversion.h>
 #include <Functions/UserDefined/UserDefinedFunctionConfiguration.h>
 #include <V8/ConvertDataTypes.h>
 #include <V8/Utils.h>
+#include <base/getMemoryAmount.h>
 #include <Common/logger_useful.h>
+
 #include <span>
 
 namespace DB
