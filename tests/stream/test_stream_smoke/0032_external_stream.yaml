@@ -263,7 +263,7 @@ tests:
           - client: exec
             query_type: docker
             wait: 3
-            query: docker compose restart redpanda-1 -f ./configs/docker-compose-redp-single.yaml
+            query: docker-compose restart redpanda-1 -f ./configs/docker-compose-redp-single.yaml
 
           - client: exec
             query_type: docker
