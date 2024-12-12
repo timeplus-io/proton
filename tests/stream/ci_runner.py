@@ -1,7 +1,7 @@
 import os, sys, logging, subprocess, time, datetime, json, argparse, traceback
 from argparse import ArgumentParser
 from helpers.s3_helper import S3Helper
-from helpers.utils import compose_up
+from helpers.utils import enhanced_compose_up
 from helpers.event_util import Event, EventRecord, TestEventTag
 import multiprocessing as mp
 import pytest
@@ -484,7 +484,7 @@ if __name__ == "__main__":
         env_docker_compose_res = True
         logger.info(f"Bypass docker compose up.")
     else:
-        env_docker_compose_res = compose_up(docker_compose_file_path)
+        env_docker_compose_res = enhanced_compose_up(docker_compose_file_path)
         logger.info(f"docker compose up...")
     logger.debug(f"env_docker_compose_res: {env_docker_compose_res}")
     if not env_docker_compose_res:

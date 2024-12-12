@@ -290,7 +290,7 @@ services:
       - stream-store4      
 
   stream-store:
-    image: vectorized/redpanda:v21.11.19
+    image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
     ports:
       - "9092:9092"
       - "29092:29092"
@@ -318,7 +318,7 @@ services:
     container_name: redpanda-1
 
   stream-store1:
-    image: vectorized/redpanda:v21.11.19
+    image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
     ports:
       - "9093:9092"
       - "29093:29092"
@@ -346,7 +346,7 @@ services:
     container_name: redpanda-2
 
   stream-store2:
-    image: vectorized/redpanda:v21.11.19
+    image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
     ports:
       - "9094:9092"
       - "29094:29092"
@@ -374,7 +374,7 @@ services:
     container_name: redpanda-3
 
   stream-store3:
-    image: vectorized/redpanda:v21.11.19
+    image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
     ports:
       - "9095:9092"
       - "29095:29092"
@@ -402,7 +402,7 @@ services:
     container_name: redpanda-4 
 
   stream-store4:
-    image: vectorized/redpanda:v21.11.19
+    image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
     ports:
       - "9096:9092"
       - "29096:29092"
