@@ -23,7 +23,7 @@ def verify_docker_environment():
         logger.debug(f"Docker version: {docker_version.decode('utf-8').strip()}")
         
         # Check docker-compose version
-        compose_version = subprocess.check_output(["docker", "compose", "version"], stderr=subprocess.STDOUT)
+        compose_version = subprocess.check_output(["docker-compose", "--version"], stderr=subprocess.STDOUT)
         logger.debug(f"Docker Compose version: {compose_version.decode('utf-8').strip()}")
         
         # Check if docker daemon is running
