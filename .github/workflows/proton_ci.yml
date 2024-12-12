@@ -173,6 +173,8 @@ jobs:
         pip install docker==6.1.3
 
         pip install -r helpers/requirements.txt
+        pip list
+        docker-compose -f test_stream_smoke/configs/docker-compose.yaml down -v && sudo rm -rf ../../proton-{server,server1,server2,redp,redp1,redp2,redp3,redp4}
         df -h
         python ci_runner.py --settings=redp,nativelog
         df -h

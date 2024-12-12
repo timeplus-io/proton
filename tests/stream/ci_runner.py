@@ -488,7 +488,7 @@ if __name__ == "__main__":
         logger.info(f"docker compose up...")
     logger.debug(f"env_docker_compose_res: {env_docker_compose_res}")
     if not env_docker_compose_res:
-        raise Exception("Env docker compose up failure.")
+        raise Exception(f"Env docker compose up failure. path = {docker_compose_file_path}")
     if settings == []:
         # settings = ["nativelog"]
         settings = ["default"]
