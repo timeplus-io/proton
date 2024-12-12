@@ -168,6 +168,7 @@ tests:
       - view
       - left join
       - inner join
+      - bug
     name: issue 700,701
     description: no support to create view with changelog semantic but doesn't has _tp_delta column in select list
     steps:

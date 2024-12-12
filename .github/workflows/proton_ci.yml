@@ -105,13 +105,13 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.pull_request.draft == false
     with:
-      ec2-instance-type: c5.xlarge
+      ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
-      ec2-volume-size: '30'
+      ec2-volume-size: '50'
       submodules: false
       sanitizer: "address"
       arch: ${{ vars.X64_ARCH }}
-      timeout: 30
+      timeout: 50
       command: |
         cd $GITHUB_WORKSPACE/tests/proton_ci
         export PROTON_VERSION=testing-$SANITIZER-$ARCH-$GITHUB_SHA
