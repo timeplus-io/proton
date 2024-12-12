@@ -5,6 +5,7 @@ services:
     pull_policy: always
     container_name: proton-redp
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-redp/datas:/var/lib/proton
       - ../../proton-redp/log:/var/log/proton-server
     ports:
@@ -40,6 +41,7 @@ services:
     pull_policy: always
     container_name: proton-redp1
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-redp1/datas:/var/lib/proton
       - ../../proton-redp1/log:/var/log/proton-server
     ports:
@@ -76,6 +78,7 @@ services:
     pull_policy: always
     container_name: proton-redp2
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-redp2/datas:/var/lib/proton
       - ../../proton-redp2/log:/var/log/proton-server
     ports:
@@ -111,6 +114,7 @@ services:
     pull_policy: always
     container_name: proton-redp3
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-redp3/datas:/var/lib/proton
       - ../../proton-redp3/log:/var/log/proton-server
     ports:
@@ -146,6 +150,7 @@ services:
     pull_policy: always
     container_name: proton-redp4
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-redp4/datas:/var/lib/proton
       - ../../proton-redp4/log:/var/log/proton-server
     ports:
