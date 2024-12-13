@@ -39,7 +39,7 @@ jobs:
 
   build_address_x64:
     needs: verify
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -102,7 +102,7 @@ jobs:
 
   unit_test_address_x64:
     needs: build_address_x64
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: c5.2xlarge
@@ -140,7 +140,7 @@ jobs:
 
   smoke_test_address_x64:
     needs: build_address_x64
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: c7i.8xlarge
@@ -196,7 +196,7 @@ jobs:
 
   stateless_test_address_x64:
     needs: build_address_x64
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: c5.4xlarge
@@ -233,7 +233,7 @@ jobs:
 
   stateful_test_address_x64:
     needs: build_address_x64
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     if: github.event.pull_request.draft == false
     with:
       ec2-instance-type: c5.2xlarge

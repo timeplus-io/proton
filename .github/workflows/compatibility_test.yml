@@ -13,7 +13,7 @@ on:
         default: ''
 jobs:
   upload_data:
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -64,7 +64,7 @@ jobs:
 
   compatibility_test:
     if: ${{ github.event.inputs.source!='' }}
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}

@@ -342,7 +342,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   build_address_x64:
     needs: prepare_address_build
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -366,7 +366,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   unit_test_address_x64:
     needs: [prepare_sanitizer_unit_test, build_address_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -391,7 +391,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   smoke_test_address_x64:
     needs: [prepare_sanitizer_smoke_test, build_address_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -416,7 +416,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateless_test_address_x64:
     needs: [prepare_sanitizer_stateless_test, build_address_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -441,7 +441,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateful_test_address_x64:
     needs: [prepare_sanitizer_stateful_test, build_address_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -466,7 +466,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   build_thread_x64:
     needs: prepare_sanitizer_build
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -490,7 +490,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   unit_test_thread_x64:
     needs: [prepare_sanitizer_unit_test, build_thread_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -515,7 +515,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   smoke_test_thread_x64:
     needs: [prepare_sanitizer_smoke_test, build_thread_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -540,7 +540,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateless_test_thread_x64:
     needs: [prepare_sanitizer_stateless_test, build_thread_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -565,7 +565,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateful_test_thread_x64:
     needs: [prepare_sanitizer_stateful_test, build_thread_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -590,7 +590,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   build_memory_x64:
     needs: prepare_sanitizer_build
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -614,7 +614,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   unit_test_memory_x64:
     needs: [prepare_sanitizer_unit_test, build_memory_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -639,7 +639,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   smoke_test_memory_x64:
     needs: [prepare_sanitizer_smoke_test, build_memory_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -664,7 +664,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateless_test_memory_x64:
     needs: [prepare_sanitizer_stateless_test, build_memory_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -689,7 +689,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateful_test_memory_x64:
     needs: [prepare_sanitizer_stateful_test, build_memory_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -714,7 +714,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   build_undefined_x64:
     needs: prepare_sanitizer_build
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -738,7 +738,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   unit_test_undefined_x64:
     needs: [prepare_sanitizer_unit_test, build_undefined_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -763,7 +763,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   smoke_test_undefined_x64:
     needs: [prepare_sanitizer_smoke_test, build_undefined_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -788,7 +788,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateless_test_undefined_x64:
     needs: [prepare_sanitizer_stateless_test, build_undefined_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -813,7 +813,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateful_test_undefined_x64:
     needs: [prepare_sanitizer_stateful_test, build_undefined_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -838,7 +838,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   build_release_x64:
     needs: prepare_release_build
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_AMI }}
@@ -862,7 +862,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   smoke_test_release_x64:
     needs: [prepare_release_smoke_test, build_release_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -887,7 +887,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateless_test_release_x64:
     needs: [prepare_release_stateless_test, build_release_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -912,7 +912,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateful_test_release_x64:
     needs: [prepare_release_stateful_test, build_release_x64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
@@ -937,7 +937,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   build_address_arm:
     needs: prepare_sanitizer_build
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
@@ -961,7 +961,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   unit_test_address_arm:
     needs: [prepare_sanitizer_unit_test, build_address_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -986,7 +986,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   smoke_test_address_arm:
     needs: [prepare_sanitizer_smoke_test, build_address_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1011,7 +1011,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateless_test_address_arm:
     needs: [prepare_sanitizer_stateless_test, build_address_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1036,7 +1036,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateful_test_address_arm:
     needs: [prepare_sanitizer_stateful_test, build_address_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1063,7 +1063,7 @@ jobs:
     # temporarily disable tsan on arm due to ASLR stall
     if: false
     needs: prepare_sanitizer_build
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
@@ -1087,7 +1087,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   unit_test_thread_arm:
     needs: [prepare_sanitizer_unit_test, build_thread_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1112,7 +1112,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   smoke_test_thread_arm:
     needs: [prepare_sanitizer_smoke_test, build_thread_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1137,7 +1137,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateless_test_thread_arm:
     needs: [prepare_sanitizer_stateless_test, build_thread_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1162,7 +1162,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateful_test_thread_arm:
     needs: [prepare_sanitizer_stateful_test, build_thread_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1189,7 +1189,7 @@ jobs:
     # temporarily disable msan on arm due to ASLR stall
     if: false
     needs: prepare_sanitizer_build
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
@@ -1213,7 +1213,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   unit_test_memory_arm:
     needs: [prepare_sanitizer_unit_test, build_memory_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1238,7 +1238,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   smoke_test_memory_arm:
     needs: [prepare_sanitizer_smoke_test, build_memory_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1263,7 +1263,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateless_test_memory_arm:
     needs: [prepare_sanitizer_stateless_test, build_memory_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1288,7 +1288,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateful_test_memory_arm:
     needs: [prepare_sanitizer_stateful_test, build_memory_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1313,7 +1313,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   build_undefined_arm:
     needs: prepare_sanitizer_build
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
@@ -1337,7 +1337,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   unit_test_undefined_arm:
     needs: [prepare_sanitizer_unit_test, build_undefined_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1362,7 +1362,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   smoke_test_undefined_arm:
     needs: [prepare_sanitizer_smoke_test, build_undefined_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1387,7 +1387,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateless_test_undefined_arm:
     needs: [prepare_sanitizer_stateless_test, build_undefined_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1412,7 +1412,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateful_test_undefined_arm:
     needs: [prepare_sanitizer_stateful_test, build_undefined_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1437,7 +1437,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   build_release_arm:
     needs: prepare_release_build
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_AMI }}
@@ -1461,7 +1461,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   smoke_test_release_arm:
     needs: [prepare_release_smoke_test, build_release_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1486,7 +1486,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateless_test_release_arm:
     needs: [prepare_release_stateless_test, build_release_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
@@ -1511,7 +1511,7 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateful_test_release_arm:
     needs: [prepare_release_stateful_test, build_release_arm]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
     with:
       ec2-instance-type: ${{ vars.ARM_INSTANCE_TYPE }}
       ec2-image-id: ${{ vars.ARM_TEST_AMI }}
