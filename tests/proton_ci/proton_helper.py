@@ -21,6 +21,7 @@ class ProtonHelper:
         if api_address is None or api_key is None:
             logging.error(
                 f"one of TIMEPLUS_API_KEY,TIMEPLUS_ADDRESS,TIMEPLUS_WORKSPACE is not found in ENV")
+        logging.warning(f"api_key length: {len(api_key)}, api_address length: {len(api_address)}, work_space length: {len(work_space)}")
         self.env = Environment().address(api_address).workspace(work_space).apikey(api_key)
 
     def write(
