@@ -475,9 +475,9 @@ if __name__ == "__main__":
     
 
     #print(f"test_event = {test_event}")
-    api_key = os.environ.get("TIMEPLUS_API_KEY")
-    api_address = os.environ.get("TIMEPLUS_ADDRESS")
-    work_space = os.environ.get("TIMEPLUS_WORKSPACE")
+    api_key = os.environ.get("TIMEPLUS_API_KEY2")
+    api_address = os.environ.get("TIMEPLUS_ADDRESS2")
+    work_space = os.environ.get("TIMEPLUS_WORKSPACE2")
     env = Environment().address(api_address).workspace(work_space).apikey(api_key)
 
     test_setting_event1 = TestPerSetEvent(None,setting_name, test_suites, None, repo_name, test_name, test_type, event_type, detailed_type, details)
