@@ -6,7 +6,7 @@ on: # yamllint disable-line rule:truthy
 
 jobs:
   Build_Linux_X86_64:
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ami-042a37e33a285c22b
@@ -68,7 +68,7 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   Build_Linux_Arm64:
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c6g.4xlarge
       ec2-image-id: ami-0f3dbc4cc9994fdee
@@ -126,7 +126,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   CommitTag:
     needs: [Build_Linux_X86_64, Build_Linux_Arm64]
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.large
       ec2-image-id: ami-042a37e33a285c22b
@@ -178,7 +178,7 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
   Build_Darwin_X86_64:
-    uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ami-042a37e33a285c22b
@@ -240,7 +240,7 @@ jobs:
 
   Build_Darwin_Arm64:
       if: false
-      uses: timeplus-io/proton/.github/workflows/run_command.yml@bugfix/issue-881-try-fix-ci
+      uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
       with:
         ec2-instance-type: c6g.4xlarge
         ec2-image-id: ami-0f3dbc4cc9994fdee
