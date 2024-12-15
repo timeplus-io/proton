@@ -47,7 +47,11 @@ CREATE AGGREGATE FUNCTION test_sec_large_99010(value float32) RETURNS float32 LA
               $$;
 
 select sleep(1) FORMAT Null;
-insert into 99010_udf_types(f32) values(2.0);   
+insert into 99010_udf_types(f32) values(2.0);
+select sleep(1) FORMAT Null;
+insert into 99010_udf_types(f32) values(2.0);
+select sleep(1) FORMAT Null;
+insert into 99010_udf_types(f32) values(2.0);
 select sleep(1) FORMAT Null;
 
 
