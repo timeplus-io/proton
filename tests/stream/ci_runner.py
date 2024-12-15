@@ -414,9 +414,9 @@ if __name__ == "__main__":
     event_type = "test_event"
     event_detailed_type = "status"
     # stream_name = 'test_event_2' #todo: read from test config
-    api_key = os.environ.get("TIMEPLUS_API_KEY", None)
-    api_address = os.environ.get("TIMEPLUS_ADDRESS", "")
-    work_space = os.environ.get("TIMEPLUS_WORKSPACE", None)
+    api_key = os.environ.get("TIMEPLUS_API_KEY2", None)
+    api_address = os.environ.get("TIMEPLUS_ADDRESS2", "")
+    work_space = os.environ.get("TIMEPLUS_WORKSPACE2", None)
     if work_space is not None and work_space != "":
         api_address = api_address + "/" + work_space
     sanitizer = os.environ.get("SANITIZER", "")
@@ -470,7 +470,7 @@ if __name__ == "__main__":
             traceback.print_exc()
     else:
         print(
-            f"one of TIMEPLUS_API_KEY,TIMEPLUS_ADDRESS,TIMEPLUS_WORKSPACE is not found in ENV"
+            f"one of TIMEPLUS_API_KEY2,TIMEPLUS_ADDRESS2,TIMEPLUS_WORKSPACE2 is not found in ENV"
         )
 
     if (
