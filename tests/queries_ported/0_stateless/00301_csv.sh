@@ -6,6 +6,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 $CLICKHOUSE_CLIENT --query="DROP STREAM IF EXISTS csv";
 $CLICKHOUSE_CLIENT --query="create stream csv (s string, n uint64 DEFAULT 1, d date DEFAULT '2019-06-19') ";
+sleep 2s
 
 printf '"Hello, world", 123, "2016-01-01"
 "Hello, ""world""", "456", 2016-01-02,
@@ -15,7 +16,7 @@ Hello "world", 789 ,2016-01-03
  default,,
  default-eof,,' | $CLICKHOUSE_CLIENT --input_format_defaults_for_omitted_fields=1 --input_format_csv_empty_as_default=1 --query="INSERT INTO csv(s,n,d) FORMAT CSV";
 
-sleep 2
+sleep 2s
 $CLICKHOUSE_CLIENT --query="SELECT * FROM table(csv) ORDER BY d settings asterisk_include_reserved_columns=false";
 $CLICKHOUSE_CLIENT --query="DROP STREAM csv";
 

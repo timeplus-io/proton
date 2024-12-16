@@ -1,7 +1,7 @@
 import os, sys, logging, subprocess, time, datetime, json, argparse, traceback
 from argparse import ArgumentParser
 from helpers.s3_helper import S3Helper
-from helpers.utils import compose_up
+from helpers.utils import enhanced_compose_up
 from helpers.event_util import Event, EventRecord, TestEventTag
 import multiprocessing as mp
 import pytest
@@ -414,9 +414,9 @@ if __name__ == "__main__":
     event_type = "test_event"
     event_detailed_type = "status"
     # stream_name = 'test_event_2' #todo: read from test config
-    api_key = os.environ.get("TIMEPLUS_API_KEY", None)
-    api_address = os.environ.get("TIMEPLUS_ADDRESS", "")
-    work_space = os.environ.get("TIMEPLUS_WORKSPACE", None)
+    api_key = os.environ.get("TIMEPLUS_API_KEY2", None)
+    api_address = os.environ.get("TIMEPLUS_ADDRESS2", "")
+    work_space = os.environ.get("TIMEPLUS_WORKSPACE2", None)
     if work_space is not None and work_space != "":
         api_address = api_address + "/" + work_space
     sanitizer = os.environ.get("SANITIZER", "")
@@ -470,7 +470,7 @@ if __name__ == "__main__":
             traceback.print_exc()
     else:
         print(
-            f"one of TIMEPLUS_API_KEY,TIMEPLUS_ADDRESS,TIMEPLUS_WORKSPACE is not found in ENV"
+            f"one of TIMEPLUS_API_KEY2,TIMEPLUS_ADDRESS2,TIMEPLUS_WORKSPACE2 is not found in ENV"
         )
 
     if (
@@ -482,13 +482,13 @@ if __name__ == "__main__":
         )
     if run_mode == "local":
         env_docker_compose_res = True
-        logger.info(f"Bypass docker compose up.")
+        logger.info(f"Bypass docker-compose up.")
     else:
-        env_docker_compose_res = compose_up(docker_compose_file_path)
-        logger.info(f"docker compose up...")
+        env_docker_compose_res = enhanced_compose_up(docker_compose_file_path)
+        logger.info(f"docker-compose up...")
     logger.debug(f"env_docker_compose_res: {env_docker_compose_res}")
     if not env_docker_compose_res:
-        raise Exception("Env docker compose up failure.")
+        raise Exception(f"Env docker-compose up failure. path = {docker_compose_file_path}")
     if settings == []:
         # settings = ["nativelog"]
         settings = ["default"]

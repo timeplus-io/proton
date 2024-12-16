@@ -72,11 +72,11 @@ on:
         required: true
       DOCKERHUB_TOKEN:
         required: true
-      TIMEPLUS_ADDRESS:
+      TIMEPLUS_ADDRESS2:     # Changed from TIMEPLUS_ADDRESS
         required: false
-      TIMEPLUS_API_KEY:
+      TIMEPLUS_API_KEY2:     # Changed from TIMEPLUS_API_KEY
         required: false
-      TIMEPLUS_WORKSPACE:
+      TIMEPLUS_WORKSPACE2:   # Changed from TIMEPLUS_WORKSPACE
         required: false
       TP_DEMO_API_KEY:
         required: false
@@ -123,9 +123,9 @@ jobs:
       SANITIZER: ${{ inputs.sanitizer }}
       ARCH: ${{ inputs.arch }}
       TAG: ${{ inputs.tag }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY }}
-      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE }}
+      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
+      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
       TP_DEMO_API_KEY: ${{ secrets.TP_DEMO_API_KEY }}
       TP_DEMO_SITE_API_KEY: ${{ secrets.TP_DEMO_SITE_API_KEY }}       
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}

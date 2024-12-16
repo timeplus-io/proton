@@ -11,17 +11,27 @@
 #include <Common/FieldVisitorWriteBinary.h>
 
 
+using namespace std::literals;
+
 namespace DB
 {
+
 namespace ErrorCodes
 {
     extern const int CANNOT_RESTORE_FROM_FIELD_DUMP;
     extern const int DECIMAL_OVERFLOW;
+    extern const int INCORRECT_DATA;
 }
 
-inline Field getBinaryValue(UInt8 type, ReadBuffer & buf)
+template <typename T>
+T DecimalField<T>::getScaleMultiplier() const
 {
-    switch (type)
+    return DecimalUtils::scaleMultiplier<T>(scale);
+}
+
+Field getBinaryValue(UInt8 type, ReadBuffer & buf)
+{
+    switch (static_cast<Field::Types::Which>(type))
     {
         case Field::Types::Null:
         {
@@ -96,7 +106,7 @@ inline Field getBinaryValue(UInt8 type, ReadBuffer & buf)
         case Field::Types::Array:
         {
             Array value;
-            readBinary(value, buf);
+            readBinaryArray(value, buf);
             return value;
         }
         case Field::Types::Tuple:
@@ -130,32 +140,31 @@ inline Field getBinaryValue(UInt8 type, ReadBuffer & buf)
             readBinary(value, buf);
             return bool(value);
         }
+        case Field::Types::Decimal32:
+        case Field::Types::Decimal64:
+        case Field::Types::Decimal128:
+        case Field::Types::Decimal256:
+            return Field();
     }
-    return Field();
+    throw Exception(ErrorCodes::INCORRECT_DATA, "Unknown field type {}", std::to_string(type));
 }
 
-void readBinary(Array & x, ReadBuffer & buf)
+void readBinaryArray(Array & x, ReadBuffer & buf)
 {
     size_t size;
-    UInt8 type;
-    readBinary(type, buf);
     readBinary(size, buf);
 
     for (size_t index = 0; index < size; ++index)
-        x.push_back(getBinaryValue(type, buf));
+        x.push_back(readFieldBinary(buf));
 }
 
-void writeBinary(const Array & x, WriteBuffer & buf)
+void writeBinaryArray(const Array & x, WriteBuffer & buf)
 {
-    UInt8 type = Field::Types::Null;
     size_t size = x.size();
-    if (size)
-        type = x.front().getType();
-    writeBinary(type, buf);
     writeBinary(size, buf);
 
     for (const auto & elem : x)
-        Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, elem);
+        writeFieldBinary(elem, buf);
 }
 
 void writeText(const Array & x, WriteBuffer & buf)
@@ -170,11 +179,7 @@ void readBinary(Tuple & x, ReadBuffer & buf)
     readBinary(size, buf);
 
     for (size_t index = 0; index < size; ++index)
-    {
-        UInt8 type;
-        readBinary(type, buf);
-        x.push_back(getBinaryValue(type, buf));
-    }
+        x.push_back(readFieldBinary(buf));
 }
 
 void writeBinary(const Tuple & x, WriteBuffer & buf)
@@ -183,11 +188,7 @@ void writeBinary(const Tuple & x, WriteBuffer & buf)
     writeBinary(size, buf);
 
     for (const auto & elem : x)
-    {
-        const UInt8 type = elem.getType();
-        writeBinary(type, buf);
-        Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, elem);
-    }
+        writeFieldBinary(elem, buf);
 }
 
 void writeText(const Tuple & x, WriteBuffer & buf)
@@ -201,11 +202,7 @@ void readBinary(Map & x, ReadBuffer & buf)
     readBinary(size, buf);
 
     for (size_t index = 0; index < size; ++index)
-    {
-        UInt8 type;
-        readBinary(type, buf);
-        x.push_back(getBinaryValue(type, buf));
-    }
+        x.push_back(readFieldBinary(buf));
 }
 
 void writeBinary(const Map & x, WriteBuffer & buf)
@@ -214,11 +211,7 @@ void writeBinary(const Map & x, WriteBuffer & buf)
     writeBinary(size, buf);
 
     for (const auto & elem : x)
-    {
-        const UInt8 type = elem.getType();
-        writeBinary(type, buf);
-        Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, elem);
-    }
+        writeFieldBinary(elem, buf);
 }
 
 void writeText(const Map & x, WriteBuffer & buf)
@@ -292,6 +285,19 @@ void writeFieldText(const Field & x, WriteBuffer & buf)
     buf.write(res.data(), res.size());
 }
 
+void writeFieldBinary(const Field & x, WriteBuffer & buf)
+{
+    const UInt8 type = x.getType();
+    writeBinary(type, buf);
+    Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, x);
+}
+
+Field readFieldBinary(ReadBuffer & buf)
+{
+    UInt8 type;
+    readBinary(type, buf);
+    return getBinaryValue(type, buf);
+}
 
 String Field::dump() const
 {
@@ -549,7 +555,7 @@ template bool decimalLessOrEqual<Decimal256>(Decimal256 x, Decimal256 y, UInt32 
 template bool decimalLessOrEqual<DateTime64>(DateTime64 x, DateTime64 y, UInt32 x_scale, UInt32 y_scale);
 
 
-inline void writeText(const Null & x, WriteBuffer & buf)
+void writeText(const Null & x, WriteBuffer & buf)
 {
     if (x.isNegativeInfinity())
         writeText("-inf", buf);
@@ -571,33 +577,44 @@ String toString(const Field & x)
         x);
 }
 
-String fieldTypeToString(Field::Types::Which type)
+std::string_view fieldTypeToString(Field::Types::Which type)
 {
     switch (type)
     {
-        case Field::Types::Which::Null: return "null";
-        case Field::Types::Which::Array: return "array";
-        case Field::Types::Which::Tuple: return "tuple";
-        case Field::Types::Which::Map: return "map";
-        case Field::Types::Which::Object: return "json";
-        case Field::Types::Which::AggregateFunctionState: return "aggregate_function_state";
-        case Field::Types::Which::Bool: return "bool";
-        case Field::Types::Which::String: return "string";
-        case Field::Types::Which::Decimal32: return "decimal32";
-        case Field::Types::Which::Decimal64: return "decimal64";
-        case Field::Types::Which::Decimal128: return "decimal128";
-        case Field::Types::Which::Decimal256: return "decimal256";
-        case Field::Types::Which::Float64: return "float64";
-        case Field::Types::Which::Int64: return "int64";
-        case Field::Types::Which::Int128: return "int128";
-        case Field::Types::Which::Int256: return "int256";
-        case Field::Types::Which::UInt64: return "uint64";
-        case Field::Types::Which::UInt128: return "uint128";
-        case Field::Types::Which::UInt256: return "uint256";
-        case Field::Types::Which::UUID: return "uuid";
-        case Field::Types::Which::IPv4: return "ipv4";
-        case Field::Types::Which::IPv6: return "ipv6";
+        case Field::Types::Which::Null: return "null"sv;
+        case Field::Types::Which::Array: return "array"sv;
+        case Field::Types::Which::Tuple: return "tuple"sv;
+        case Field::Types::Which::Map: return "map"sv;
+        case Field::Types::Which::Object: return "json"sv;
+        case Field::Types::Which::AggregateFunctionState: return "aggregate_function_state"sv;
+        case Field::Types::Which::Bool: return "bool"sv;
+        case Field::Types::Which::String: return "string"sv;
+        case Field::Types::Which::Decimal32: return "decimal32"sv;
+        case Field::Types::Which::Decimal64: return "decimal64"sv;
+        case Field::Types::Which::Decimal128: return "decimal128"sv;
+        case Field::Types::Which::Decimal256: return "decimal256"sv;
+        case Field::Types::Which::Float64: return "float64"sv;
+        case Field::Types::Which::Int64: return "int64"sv;
+        case Field::Types::Which::Int128: return "int128"sv;
+        case Field::Types::Which::Int256: return "int256"sv;
+        case Field::Types::Which::UInt64: return "uint64"sv;
+        case Field::Types::Which::UInt128: return "uint128"sv;
+        case Field::Types::Which::UInt256: return "uint256"sv;
+        case Field::Types::Which::UUID: return "uuid"sv;
+        case Field::Types::Which::IPv4: return "ipv4"sv;
+        case Field::Types::Which::IPv6: return "ipv6"sv;
     }
 }
 
+/// Keep in mind, that "magic_enum" is very expensive for compiler, that's why we don't use it.
+std::string_view Field::getTypeName() const
+{
+    return fieldTypeToString(which);
+}
+
+template class DecimalField<Decimal32>;
+template class DecimalField<Decimal64>;
+template class DecimalField<Decimal128>;
+template class DecimalField<Decimal256>;
+template class DecimalField<DateTime64>;
 }

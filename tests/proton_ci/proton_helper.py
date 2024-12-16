@@ -12,15 +12,16 @@ TIMEPLUS_CONNECTION_RETRY = 3
 class ProtonHelper:
     def __init__(self, api_address=None, work_space=None, api_key=None):
         if api_address is None:
-            api_address = os.environ.get("TIMEPLUS_ADDRESS")
+            api_address = os.environ.get("TIMEPLUS_ADDRESS2")
         if work_space is None:
-            work_space = os.environ.get("TIMEPLUS_WORKSPACE")
+            work_space = os.environ.get("TIMEPLUS_WORKSPACE2")
         if api_key is None:
-            api_key = os.environ.get("TIMEPLUS_API_KEY")
+            api_key = os.environ.get("TIMEPLUS_API_KEY2")
 
         if api_address is None or api_key is None:
             logging.error(
-                f"one of TIMEPLUS_API_KEY,TIMEPLUS_ADDRESS,TIMEPLUS_WORKSPACE is not found in ENV")
+                f"one of TIMEPLUS_API_KEY2,TIMEPLUS_ADDRESS2,TIMEPLUS_WORKSPACE2 is not found in ENV")
+        logging.warning(f"api_key length: {len(api_key)}, api_address length: {len(api_address)}, work_space length: {len(work_space)}")
         self.env = Environment().address(api_address).workspace(work_space).apikey(api_key)
 
     def write(

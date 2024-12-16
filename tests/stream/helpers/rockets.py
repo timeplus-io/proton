@@ -4110,9 +4110,9 @@ class TestSuite(object):
             test_suite_config = {}
         client = None
         test_run_list_len_total = 0
-        api_key = os.environ.get("TIMEPLUS_API_KEY")
-        api_address = os.environ.get("TIMEPLUS_ADDRESS", "")
-        work_space = os.environ.get("TIMEPLUS_WORKSPACE")
+        api_key = os.environ.get("TIMEPLUS_API_KEY2")
+        api_address = os.environ.get("TIMEPLUS_ADDRESS2", "")
+        work_space = os.environ.get("TIMEPLUS_WORKSPACE2")
         if work_space is not None and work_space != "":
             api_address = api_address + "/" + work_space
         timeplus_env = None

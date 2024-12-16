@@ -5,6 +5,7 @@ services:
     #pull_policy: always
     container_name: proton-server
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-server/datas:/var/lib/proton
       - ../../proton-server/log:/var/log/proton-server
     ports:
@@ -37,6 +38,7 @@ services:
     #pull_policy: always
     container_name: proton-server1
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-server1/datas:/var/lib/proton
       - ../../proton-server1/log:/var/log/proton-server
     ports:
@@ -70,6 +72,7 @@ services:
     #pull_policy: always
     container_name: proton-server2
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-server2/datas:/var/lib/proton
       - ../../proton-server2/log:/var/log/proton-server
     ports:
@@ -102,6 +105,7 @@ services:
     #pull_policy: always
     container_name: proton-server3
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-server3/datas:/var/lib/proton
       - ../../proton-server3/log:/var/log/proton-server
     ports:
@@ -134,6 +138,7 @@ services:
     #pull_policy: always
     container_name: proton-server4
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-server4/datas:/var/lib/proton
       - ../../proton-server4/log:/var/log/proton-server
     ports:
@@ -167,6 +172,7 @@ services:
     #pull_policy: always
     container_name: proton-redp
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-redp/datas:/var/lib/proton
       - ../../proton-redp/log:/var/log/proton-server
     ports:
@@ -206,6 +212,7 @@ services:
     #pull_policy: always
     container_name: proton-redp1
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-redp1/datas:/var/lib/proton
       - ../../proton-redp1/log:/var/log/proton-server
     ports:
@@ -246,6 +253,7 @@ services:
     #pull_policy: always
     container_name: proton-redp2
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-redp2/datas:/var/lib/proton
       - ../../proton-redp2/log:/var/log/proton-server
     ports:
@@ -285,6 +293,7 @@ services:
     #pull_policy: always
     container_name: proton-redp3
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-redp3/datas:/var/lib/proton
       - ../../proton-redp3/log:/var/log/proton-server
     ports:
@@ -324,6 +333,7 @@ services:
     #pull_policy: always
     container_name: proton-redp4
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-redp4/datas:/var/lib/proton
       - ../../proton-redp4/log:/var/log/proton-server
     ports:
@@ -363,6 +373,7 @@ services:
     #pull_policy: always
     container_name: proton-redp5
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-redp5/datas:/var/lib/proton
       - ../../proton-redp5/log:/var/log/proton-server
     ports:
@@ -402,6 +413,7 @@ services:
     #pull_policy: always
     container_name: proton-redp6
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # To solve docker.sock permission error
       - ../../proton-redp6/datas:/var/lib/proton
       - ../../proton-redp6/log:/var/log/proton-server
     ports:
@@ -437,7 +449,7 @@ services:
         hard: 262144       
 
   stream-store:
-    image: vectorized/redpanda:v21.11.19
+    image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
     ports:
       - "9092:9092"
       - "29092:29092"
@@ -465,7 +477,7 @@ services:
     container_name: redpanda-1
 
   stream-store1:
-    image: vectorized/redpanda:v21.11.19
+    image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
     ports:
       - "9093:9092"
       - "29093:29092"
@@ -493,7 +505,7 @@ services:
     container_name: redpanda-2
 
   stream-store2:
-    image: vectorized/redpanda:v21.11.19
+    image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
     ports:
       - "9094:9092"
       - "29094:29092"
@@ -521,7 +533,7 @@ services:
     container_name: redpanda-3
 
   stream-store3:
-    image: vectorized/redpanda:v21.11.19
+    image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
     ports:
       - "9095:9092"
       - "29095:29092"
@@ -549,7 +561,7 @@ services:
     container_name: redpanda-4 
 
   stream-store4:
-    image: vectorized/redpanda:v21.11.19
+    image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
     ports:
       - "9096:9092"
       - "29096:29092"
@@ -577,7 +589,7 @@ services:
     container_name: redpanda-5 
 
   stream-store5:
-    image: vectorized/redpanda:v21.11.19
+    image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
     ports:
       - "9097:9092"
       - "29097:29092"
@@ -605,7 +617,7 @@ services:
     container_name: redpanda-6 
 
   stream-store6:
-    image: vectorized/redpanda:v21.11.19
+    image: docker.redpanda.com/redpandadata/redpanda:v23.2.15
     ports:
       - "9098:9092"
       - "29098:29092"

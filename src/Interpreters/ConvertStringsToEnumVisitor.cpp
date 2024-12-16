@@ -14,9 +14,9 @@ namespace
 /// @note We place strings in ascending order here under the assumption it colud speed up String to Enum conversion.
 String makeStringsEnum(const std::set<String> & values)
 {
-    String enum_string = "Enum8(";
+    String enum_string = "enum8(";
     if (values.size() >= 255)
-        enum_string = "Enum16(";
+        enum_string = "enum16(";
 
     size_t number = 1;
     for (const auto & item : values)
