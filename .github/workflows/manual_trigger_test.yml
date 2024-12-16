@@ -110,9 +110,9 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
+      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   smoke_test_on_arm:
     needs: prepare_smoke_test
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
@@ -135,9 +135,9 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
+      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   prepare_query_compability_test:
     runs-on: ubuntu-latest
     if: ${{ github.event.inputs.has_query_compatibility_test == 'true' }}
@@ -211,9 +211,9 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
+      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
       TP_DEMO_API_KEY: ${{ secrets.TP_DEMO_API_KEY }}
       TP_DEMO_SITE_API_KEY: ${{ secrets.TP_DEMO_SITE_API_KEY }}  
   query_compability_on_arm:
@@ -238,9 +238,9 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
+      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
       TP_DEMO_API_KEY: ${{ secrets.TP_DEMO_API_KEY }}
       TP_DEMO_SITE_API_KEY: ${{ secrets.TP_DEMO_SITE_API_KEY }}         
   prepare_unit_test:
@@ -286,9 +286,9 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
+      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   unit_test_on_arm:
     needs: prepare_unit_test
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
@@ -311,9 +311,9 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
+      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   prepare_stateless_test:
     runs-on: ubuntu-latest
     if: ${{ github.event.inputs.has_stateless_test == 'true' }}
@@ -358,9 +358,9 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
+      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateless_test_on_arm:
     needs: prepare_stateless_test
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
@@ -383,9 +383,9 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
+      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   prepare_stateful_test:
     runs-on: ubuntu-latest
     if: ${{ github.event.inputs.has_stateful_test == 'true' }}
@@ -413,7 +413,7 @@ jobs:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     if: github.event.inputs.arch == 'x64'
     with:
-      ec2-instance-type: ${{ vars.X64_INSTANCE_TYPE }}
+      ec2-instance-type: c5.2xlarge
       ec2-image-id: ${{ vars.X64_TEST_AMI }}
       ec2-volume-size: '40'
       submodules: false
@@ -430,9 +430,9 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
+      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   stateful_test_on_arm:
     needs: prepare_stateful_test
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
@@ -455,6 +455,6 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      TIMEPLUS_ADDRESS: ${{ secrets.TIMEPLUS_ADDRESS2 }}
-      TIMEPLUS_API_KEY: ${{ secrets.TIMEPLUS_API_KEY2 }}
-      TIMEPLUS_WORKSPACE: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
+      TIMEPLUS_ADDRESS2: ${{ secrets.TIMEPLUS_ADDRESS2 }}
+      TIMEPLUS_API_KEY2: ${{ secrets.TIMEPLUS_API_KEY2 }}
+      TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
