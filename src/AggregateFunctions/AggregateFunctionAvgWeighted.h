@@ -15,7 +15,7 @@ using AvgWeightedFieldType = std::conditional_t<is_decimal<T>,
         NearestFieldType<T>>>;
 
 template <typename T, typename U>
-using MaxFieldType = std::conditional_t<(sizeof(AvgWeightedFieldType<T>) > sizeof(AvgWeightedFieldType<U>)),
+using MaxFieldType = std::conditional_t<(sizeof(AvgWeightedFieldType<T>) >= sizeof(AvgWeightedFieldType<U>)),
     AvgWeightedFieldType<T>, AvgWeightedFieldType<U>>;
 
 template <typename Value, typename Weight>

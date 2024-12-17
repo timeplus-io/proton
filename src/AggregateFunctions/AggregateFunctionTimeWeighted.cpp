@@ -13,11 +13,6 @@
 namespace DB
 {
 
-namespace ErrorCodes
-{
-
-}
-
 namespace
 {
 
@@ -29,11 +24,9 @@ public:
     DataTypes transformArguments(const DataTypes & arguments) const override
     {
         if (arguments.size() != 2 && arguments.size() != 3)
-            throw Exception("Incorrect number of arguments for aggregate function with " + getName() + " suffix",
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-        
-        const auto data_type = static_cast<const DataTypePtr>(arguments[0]);
-        const auto data_type_time_weight = static_cast<const DataTypePtr>(arguments[1]);
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Incorrect number of arguments for aggregate function with {} suffix", this->getName());
+
+        const auto & data_type_time_weight = arguments[1];
         const WhichDataType t_dt(data_type_time_weight);
 
         if (!t_dt.isDateOrDate32() && !t_dt.isDateTime() && !t_dt.isDateTime64())
@@ -41,9 +34,9 @@ public:
 
         if (arguments.size() == 3)
         {
-            const auto data_type_third_arg = static_cast<const DataTypePtr>(arguments[2]);
+            const auto & data_type_third_arg = arguments[2];
             
-            if(data_type_third_arg->getTypeId() != data_type_time_weight->getTypeId())
+            if(!data_type_third_arg->equals(*data_type_time_weight))
                 throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "The second and the third argument should be the same for aggregate function {}, but now it's {} and {}", this->getName(), data_type_third_arg->getName(), data_type_time_weight->getName());
         }
 
@@ -94,9 +87,11 @@ public:
         const Array & params) const override
     {
         AggregateFunctionPtr ptr;
-        const auto data_type = static_cast<const DataTypePtr>(arguments[0]);
-        const auto data_type_time_weight = static_cast<const DataTypePtr>(arguments[1]);
+        const auto & data_type = arguments[0];
+        const auto & data_type_time_weight = arguments[1];
         ptr.reset(create(*data_type, *data_type_time_weight, nested_function, arguments, params));
+        if(!ptr)
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal argument types existed in {} function", this->getName());
 
         return ptr;
     }
