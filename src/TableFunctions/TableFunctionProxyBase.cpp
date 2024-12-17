@@ -76,8 +76,8 @@ StoragePtr TableFunctionProxyBase::calculateColumnDescriptions(ContextPtr contex
     }
     else if (subquery)
     {
-        auto interpreter_subquery
-            = std::make_unique<InterpreterSelectWithUnionQuery>(subquery->children[0], context, SelectQueryOptions().subquery().analyze());
+        auto interpreter_subquery = std::make_unique<InterpreterSelectWithUnionQuery>(
+            subquery->children[0], context, SelectQueryOptions().subquery().analyze().removeDuplicates());
 
         auto source_header = interpreter_subquery->getSampleBlock();
         columns = ColumnsDescription(source_header.getNamesAndTypesList());

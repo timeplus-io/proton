@@ -35,6 +35,8 @@ DedupTransformStep::DedupTransformStep(
 
 void DedupTransformStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings & /* settings */)
 {
+    /// Use one dedup transform for all input streams
+    pipeline.resize(1);
     pipeline.addSimpleTransform([&](const Block & header) { /// STYLE_CHECK_ALLOW_BRACE_SAME_LINE_LAMBDA
         return std::make_shared<DedupTransform>(header, getOutputStream().header, dedup_func_desc);
     });
