@@ -31,6 +31,21 @@ public:
         if (arguments.size() != 2 && arguments.size() != 3)
             throw Exception("Incorrect number of arguments for aggregate function with " + getName() + " suffix",
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        
+        const auto data_type = static_cast<const DataTypePtr>(arguments[0]);
+        const auto data_type_time_weight = static_cast<const DataTypePtr>(arguments[1]);
+        const WhichDataType t_dt(data_type_time_weight);
+
+        if (!t_dt.isDateOrDate32() && !t_dt.isDateTime() && !t_dt.isDateTime64())
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Types {} are non-conforming as time weighted arguments for aggregate function {}", data_type_time_weight->getName(), this->getName());
+
+        if (arguments.size() == 3)
+        {
+            const auto data_type_third_arg = static_cast<const DataTypePtr>(arguments[2]);
+            
+            if(data_type_third_arg->getTypeId() != data_type_time_weight->getTypeId())
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "The second and the third argument should be the same for aggregate function {}, but now it's {} and {}", this->getName(), data_type_third_arg->getName(), data_type_time_weight->getName());
+        }
 
         return {arguments[0], std::make_shared<DataTypeUInt64>()};
     }
@@ -78,24 +93,9 @@ public:
         const DataTypes & arguments,
         const Array & params) const override
     {
-        if (arguments.size() != 3 && arguments.size() != 2)
-            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Function {} should have two or three arguments",this->getName());
-
+        AggregateFunctionPtr ptr;
         const auto data_type = static_cast<const DataTypePtr>(arguments[0]);
         const auto data_type_time_weight = static_cast<const DataTypePtr>(arguments[1]);
-        const WhichDataType t_dt(data_type_time_weight);
-
-        if (!t_dt.isDateOrDate32() && !t_dt.isDateTime() && !t_dt.isDateTime64())
-            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Types {} are non-conforming as time weighted arguments for aggregate function {}", data_type_time_weight->getName(), this->getName());
-
-        if (arguments.size() == 3)
-        {
-            const auto data_type_third_arg = static_cast<const DataTypePtr>(arguments[2]);
-            
-            if(data_type_third_arg->getTypeId() != data_type_time_weight->getTypeId())
-                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "The second and the third argument should be the same for aggregate function {}", this->getName());
-        }
-        AggregateFunctionPtr ptr;
         ptr.reset(create(*data_type, *data_type_time_weight, nested_function, arguments, params));
 
         return ptr;

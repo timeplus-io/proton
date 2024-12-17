@@ -2,7 +2,6 @@
 
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/formatAST.h>
@@ -17,8 +16,6 @@ namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
 extern const int FUNCTION_NOT_ALLOWED;
-extern const int ILLEGAL_CODEC_PARAMETER;
-extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
 namespace Streaming
@@ -221,6 +218,5 @@ void substitueFunction(ASTFunction & func, const String & new_name)
 
     func.name = new_name;
 }
-
 }
 }

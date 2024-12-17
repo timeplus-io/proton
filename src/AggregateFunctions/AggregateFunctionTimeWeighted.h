@@ -6,9 +6,6 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnsCommon.h>
 #include <DataTypes/DataTypesDecimal.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <AggregateFunctions/IAggregateFunction.h>
-#include <AggregateFunctions/AggregateFunctionSum.h>
 #include <Core/DecimalFunctions.h>
 #include <Core/Field.h>
 #include <Common/logger_useful.h>
@@ -112,7 +109,6 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
-      
         last_time_calculation(row_num, row_num + 1, place, columns, arena);
     }
 
