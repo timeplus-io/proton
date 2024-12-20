@@ -263,6 +263,20 @@ void tryTranslateToParametricAggregateFunction(
         argument_names = {argument_names[0]};
         types = {types[0]};
     }
+    else if (lower_name == "largest_triangle_three_buckets" || lower_name == "lttb")
+    {
+        /// Translate `largest_triangle_three_buckets(x, y, n)` to `largest_triangle_three_buckets(n)(x, y)`
+        if (arguments.size() != 3)
+            throw Exception(
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 3 arguments", node->name);
+
+        ASTPtr expression_list = std::make_shared<ASTExpressionList>();
+        expression_list->children.emplace_back(arguments.back());
+        parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+
+        argument_names.pop_back();
+        types.pop_back();
+    }
 };
 
 /// proton: starts. Add 'is_changelog_input' param to allow aggregate function being aware whether the input stream is a changelog

@@ -1,0 +1,1 @@
+SELECT largest_triangle_three_buckets(1, nan, 1);
