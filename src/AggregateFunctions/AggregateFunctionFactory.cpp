@@ -187,7 +187,7 @@ AggregateFunctionPtr AggregateFunctionFactory::getImpl(
             else if (nested_name == "median")
                 nested_name = "median_exact_weighted";           
             else
-                throw Exception(ErrorCodes::ILLEGAL_AGGREGATION, "Combinator '{}' with {} is not supported", combinator_name, nested_name);
+                throw Exception(ErrorCodes::ILLEGAL_AGGREGATION, "Unknown aggregate function '{}'", name);
         }
 
         /// Nested identical combinators (i.e. uniqCombinedIfIf) is not

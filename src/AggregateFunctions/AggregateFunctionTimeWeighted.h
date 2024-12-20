@@ -17,6 +17,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+    extern const int INVALID_DATA;
 }
 
 struct Settings;
@@ -24,7 +25,6 @@ struct Settings;
 template <typename TimeType>
 struct TimeWeightedData
 {
-
     struct Last
     {
         Field last_value;
@@ -89,6 +89,7 @@ public:
             {
                 LOG_WARNING(logger, "Illegal time argument, should be in ascending order, {}, {}" , data.last->last_time, end_time);
             }
+
             ColumnRawPtrs raw_columns{value_column.get(), weight_column.get()};
             nested_func->add(getNestedPlace(place), raw_columns.data(), 0, arena);
         }
@@ -154,9 +155,9 @@ public:
             else
                 LOG_WARNING(logger, "Illegal time argument, should be in ascending order, {}, {}" ,time_data[i] ,time_data[i + 1]);
         }
+
         /// prepare data
         ColumnRawPtrs raw_columns{columns[0], weight_column.get()};
-
         nested_func->addBatchSinglePlace(row_begin, last_row_pos, getNestedPlace(place), raw_columns.data(), arena, if_argument_pos, delta_col);
 
         storeLastData(last_row_pos, place, columns);
@@ -205,6 +206,7 @@ public:
     
         storeLastData(last_row_pos, place, columns);
     }
+
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         /// FIXME, time disorder may happen, the outcome might not be accurate
@@ -214,22 +216,20 @@ public:
         {
             if (rhs_data.start_time.has_value())
             {
+                if (rhs_data.start_time.value() < data.last->last_time)
+                    throw Exception(ErrorCodes::INVALID_DATA, "Illegal time argument, should be in ascending order, {}, {}" ,data.last->last_time ,rhs_data.start_time.value());
+                
                 MutableColumnPtr value_column, weight_column;
                 value_column = this->argument_types[0]->createColumn();
                 weight_column = ColumnUInt64::create();
-                if (rhs_data.start_time.value() >= data.last->last_time)
-                {
-                    value_column->insert(data.last->last_value);
-                    weight_column->insert(static_cast<UInt64>(rhs_data.start_time.value() - data.last->last_time));
-                    if (rhs_data.last.has_value())
-                        data.last = rhs_data.last;
-                    if (rhs_data.end_time.has_value())
-                        data.end_time = rhs_data.end_time;
-                }
-                else
-                {
-                    throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal time argument, should be in ascending order, {}, {}" ,data.last->last_time ,rhs_data.start_time.value());
-                }
+
+                value_column->insert(data.last->last_value);
+                weight_column->insert(static_cast<UInt64>(rhs_data.start_time.value() - data.last->last_time));
+                if (rhs_data.last.has_value())
+                    data.last = rhs_data.last;
+                if (rhs_data.end_time.has_value())
+                    data.end_time = rhs_data.end_time;
+
                 ColumnRawPtrs raw_columns{value_column.get(), weight_column.get()};
                 nested_func->add(getNestedPlace(place), raw_columns.data(), 0, arena);
             }
@@ -245,7 +245,7 @@ public:
         nested_func->merge(getNestedPlace(place), getNestedPlace(rhs), arena);
     }
 
-    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> /* version */) const override
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> version) const override
     {
         auto & data = this->data(place);
         auto has_last = data.last.has_value();
@@ -273,10 +273,10 @@ public:
             writeBinary(data.end_time.value(), buf);
         }
 
-        nested_func->serialize(getNestedPlace(place), buf);
+        nested_func->serialize(getNestedPlace(place), buf, version);
     }
 
-    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena * arena) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> version , Arena * arena) const override
     {
         auto & data = this->data(place);
         bool last_has_value;
@@ -297,7 +297,7 @@ public:
         if (end_has_value)
             readBinary(data.end_time.emplace(), buf);
 
-        nested_func->deserialize(getNestedPlace(place), buf, std::nullopt /* version */, arena);
+        nested_func->deserialize(getNestedPlace(place), buf, version, arena);
     }
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
@@ -349,7 +349,7 @@ public:
 
     bool allocatesMemoryInArena() const override
     {
-        return true;
+        return nested_func->allocatesMemoryInArena();
     }
 
     bool isState() const override
