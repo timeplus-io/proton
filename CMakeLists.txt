@@ -189,6 +189,35 @@ if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
 endif()
 option(USE_DEBUG_HELPERS "Enable debug helpers" ${USE_DEBUG_HELPERS})
 
+# proton : starts
+# to fix linker complain `libunwind: malformed __unwind_info at 0x11BDC292C bad second level page`
+# Skip generation of the unwind tables, as they might require a lot of space when sanitizers
+# are enabled and not fit into the .eh_frame section. Disabling the unwind tables might have
+# side effects on code which does frame walking, such as
+#   - backtrace()
+#   - __attribute__((__cleanup__(f)))
+#   - __builtin_return_address(n), for n > 0
+#   - pthread_cleanup_push when it is implemented using __attribute__((__cleanup__(f)))
+# It should not have affect on debugging, since it uses -g flag which generates debugging
+# tables in the .debug_frame section.
+# At the time of adding these flags calling backtrace() from C code on Apple M2 did not
+# affect on the printed backtrace, and exception handling was correct as well.
+#
+# Related discussion:
+#  https://stackoverflow.com/questions/26300819/why-gcc-compiled-c-program-needs-eh-frame-section
+if (OS_DARWIN)
+    set(_is_CONFIG_DEBUG "$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>")
+
+    add_compile_options("$<${_is_CONFIG_DEBUG}:-fno-unwind-tables>")
+    add_compile_options("$<${_is_CONFIG_DEBUG}:-fno-asynchronous-unwind-tables>")
+
+    add_compile_options("$<${_is_CONFIG_DEBUG}:-fno-omit-frame-pointer>")
+    add_link_options("$<${_is_CONFIG_DEBUG}:-fno-omit-frame-pointer;-fsanitize=address>")
+
+    unset(_is_CONFIG_DEBUG)
+endif ()
+# proton : ends
+
 # Create BuildID when using lld. For other linkers it is created by default.
 if (LINKER_NAME MATCHES "lld")
     # SHA1 is not cryptographically secure but it is the best what lld is offering.
