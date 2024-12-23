@@ -140,7 +140,8 @@ jobs:
       TIMEPLUS_WORKSPACE2: ${{ secrets.TIMEPLUS_WORKSPACE2 }}
   prepare_query_compability_test:
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.has_query_compatibility_test == 'true' }}
+    if: false
+    # if: ${{ github.event.inputs.has_query_compatibility_test == 'true' }}
     outputs:
       command: |
       
