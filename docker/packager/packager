@@ -241,8 +241,10 @@ def parse_env_variables(build_type, compiler, sanitizer, package_type, image_typ
         cmake_flags.append('-DENABLE_TESTS=OFF')
         cmake_flags.append('-DENABLE_UTILS=OFF')
         cmake_flags.append('-DENABLE_EXAMPLES=OFF')
+        cmake_flags.append('-DENABLE_CURL=OFF')
         cmake_flags.append('-DENABLE_PULSAR=OFF')
     else:
+        cmake_flags.append('-DENABLE_CURL=ON')
         cmake_flags.append('-DENABLE_PULSAR=ON')
 
     if build_type == "release":

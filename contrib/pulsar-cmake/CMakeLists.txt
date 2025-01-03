@@ -6,6 +6,10 @@ if (NOT ENABLE_PULSAR)
     return()
 endif()
 
+if (NOT ENABLE_CURL)
+    message(FATAL_ERROR "Pulsar requires curl")
+endif()
+
 if (OS_DARWIN)
     message(FATAL_ERROR "Pulsar is not supported on MacOS yet")
 endif()
