@@ -31,6 +31,7 @@ KafkaSource::KafkaSource(
     std::optional<Int64> high_watermark_,
     size_t max_block_size_,
     ExternalStreamCounterPtr external_stream_counter_,
+    Poco::Logger * logger_,
     ContextPtr query_context_)
     : Streaming::ISource(header_, true, ProcessorID::KafkaSourceID)
     , kafka(kafka_)
@@ -50,7 +51,7 @@ KafkaSource::KafkaSource(
     , reached_the_end(high_watermark_.has_value() && offset == high_watermark_)
     , external_stream_counter(external_stream_counter_)
     , query_context(std::move(query_context_))
-    , logger(&Poco::Logger::get(fmt::format("{}.{}", kafka.getLoggerName(), consumer->name())))
+    , logger(logger_)
 {
     assert(external_stream_counter);
 

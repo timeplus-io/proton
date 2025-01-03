@@ -129,6 +129,7 @@ if (NOT OS_DARWIN)
     add_contrib (curl-cmake curl)
     add_contrib (azure-cmake azure)
     add_contrib (sentry-native-cmake sentry-native) # requires: curl
+    add_contrib (pulsar-cmake) # requires: curl
 endif()
 
 add_contrib (fmtlib-cmake fmtlib)

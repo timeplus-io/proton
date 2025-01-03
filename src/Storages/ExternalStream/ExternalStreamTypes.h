@@ -6,6 +6,7 @@ namespace StreamTypes
 {
     const String KAFKA = "kafka";
     const String REDPANDA = "redpanda";
+    const String PULSAR = "pulsar";
     const String LOG = "log";
 }
 }

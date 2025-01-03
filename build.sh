@@ -4,6 +4,12 @@
 build_type="$1"
 build_type="${build_type:=Release}"
 
+is_not_darwin=1
+if [[ "$(uname)" == "Darwin" ]]; then
+    is_not_darwin=0
+    echo "=== This is Darwin ==="
+fi
+
 sanitizer=""
 if [ "$build_type" = "Debug" ]; then
     sanitizer="address"
@@ -74,5 +80,7 @@ cmake .. \
     -DENABLE_ENCRYPT_DECRYPT_FUNCS=ON \
     -DENABLE_DEBUG_FUNCS=ON \
     -DENABLE_URL_FUNCS=ON \
-    -DENABLE_AVRO=ON
+    -DENABLE_AVRO=ON \
+    -DENABLE_CURL=${is_not_darwin} \
+    -DENABLE_PULSAR=${is_not_darwin}
 

@@ -225,7 +225,7 @@ jobs:
           export CC=$(brew --prefix llvm@17)/bin/clang
           export CXX=$(brew --prefix llvm@17)/bin/clang++
           export PATH=$(brew --prefix llvm@17)/bin:$PATH
-          cmake -B ${{ env.build_directory }} -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.build_type }} -DENABLE_TESTS=OFF -DENABLE_UTILS=OFF -DENABLE_EXAMPLES=OFF
+          cmake -B ${{ env.build_directory }} -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.build_type }} -DENABLE_TESTS=OFF -DENABLE_UTILS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_PULSAR=OFF
 
       - name: Build with Ninja
         run: cmake --build ${{ env.build_directory }}

@@ -68,6 +68,7 @@ public:
         const Block & header,
         const ASTPtr & message_key,
         ExternalStreamCounterPtr external_stream_counter_,
+        Poco::Logger * logger_,
         ContextPtr context);
     ~KafkaSink() override;
 
@@ -78,7 +79,6 @@ public:
     void checkpoint(CheckpointContextPtr) override;
 
 private:
-    // void onMessageDelivery(const rd_kafka_message_t * msg);
     void onMessageDelivery(rd_kafka_resp_err_t err);
     void addMessageToBatch(char * pos, size_t len, size_t total_len);
     void tryCarryOverPendingData();

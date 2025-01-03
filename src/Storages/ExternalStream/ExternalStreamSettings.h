@@ -37,10 +37,23 @@ class ASTStorage;
     M(String, row_delimiter, "\n", "The string to be considered as a delimiter in raw message.", 0) \
     M(UInt64, max_row_length, 4096, "Max row length", 0)
 
+#define PULSAR_EXTERNAL_STREAM_SETTINGS(M) \
+    M(String, service_url, "", "The Pulsar protocol URL", 0) \
+    M(Bool, skip_server_cert_check, false, "If set to true, it will accept untrusted TLS certificates from brokers", 0) \
+    M(Bool, validate_hostname, false, "Configure whether it allows validating hostname verification when a client connects to a broker over TLS", 0) \
+    M(String, ca_cert, "", "The CA certificate (PEM format), which will be used to verify the server's certificate.", 0) \
+    M(String, client_cert, "", "The certificate (PEM format) for the client to use mTLS authentication.", 0) \
+    M(String, client_key, "", "The private key (PEM format) for the client to use mTLS authentication.", 0) \
+    M(String, jwt, "", "The JSON web token for the client to use JWT authentication.", 0) \
+    M(UInt64, connections_per_broker, 1, "Sets the max number of connection that this external stream will open to a single broker. By default, the connection pool will use a single connection for all the producers and consumers. Increasing this parameter may improve throughput when using many producers over a high latency connection.", 0) \
+    M(UInt64, memory_limit, 0, "Configure a limit on the amount of memory that will be allocated by this external stream. Setting this to 0 will disable the limit. By default this is disabled.", 0) \
+    M(UInt64, io_threads, 1, "Set the number of IO threads to be used by the Pulsar client. Default is 1 thread.", 0)
+
 #define ALL_EXTERNAL_STREAM_SETTINGS(M) \
     M(String, type, "", "External stream type", 0) \
     KAFKA_EXTERNAL_STREAM_SETTINGS(M) \
-    LOG_FILE_EXTERNAL_STREAM_SETTINGS(M)
+    LOG_FILE_EXTERNAL_STREAM_SETTINGS(M) \
+    PULSAR_EXTERNAL_STREAM_SETTINGS(M)
 
 #define LIST_OF_EXTERNAL_STREAM_SETTINGS(M) \
     ALL_EXTERNAL_STREAM_SETTINGS(M) \
@@ -103,5 +116,7 @@ struct ExternalStreamSettings : public BaseSettings<ExternalStreamSettingsTraits
         return DB::getFormatSettings(context, settings);
     }
 };
+
+using ExternalStreamSettingsPtr = std::unique_ptr<ExternalStreamSettings>;
 
 }

@@ -30,6 +30,7 @@ public:
         std::optional<Int64> high_watermark_,
         size_t max_block_size_,
         ExternalStreamCounterPtr external_stream_counter_,
+        Poco::Logger * logger_,
         ContextPtr query_context_);
 
     ~KafkaSource() override;

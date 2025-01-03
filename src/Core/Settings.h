@@ -787,6 +787,10 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(String, kafka_schema_registry_cert_file, "", "Path to the certificate file (in PEM format). If the private key and the certificate are stored in the same file, this can be empty if kakfa_schema_registry_private_key_file is given.", 0) \
     M(String, kafka_schema_registry_ca_location, "", "Path to the file or directory containing the CA/root certificates.", 0) \
     M(Bool, kafka_schema_registry_skip_cert_check, false, "If set to true, ignore server certificate check result.", 0) \
+    M(UInt64, output_batch_max_messages, 1000, "For external streams that support sending data in batch. Set the max number of messages permitted in a batch. If you set this option to a value greater than 1, messages are queued until this threshold is reached or batch interval has elapsed.", 0) \
+    M(UInt64, output_batch_max_size_bytes, 10 * 1024 * 1024, "For external streams that support sending data in batch. Set the max size of messages permitted in a batch. If you set this option to a value greater than 1,  messages are queued until this threshold is reached or batch interval has elapsed.", 0) \
+    M(UInt64, output_batch_max_delay_ms, 50, "For external streams that support sending data in batch. Set the max time for message publish delay permitted in a batch.", 0) \
+    M(UInt64, pulsar_max_pending_messages, 1000, "Set the max size of the producer's queue holding the messages pending to receive an acknowledgment from the broker. When the queue is full, the producer will be blocked.", 0) \
     /** proton: ends. */
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.
@@ -797,6 +801,7 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(UInt64, max_windows, 1000, "Maximum number of streaming windows in one streaming query.", 0) \
     M(UInt64, fetch_buffer_size, 4 * 1024 * 1024, "Fetch buffer per query", 0) \
     M(UInt64, record_consume_batch_count, 1000, "Maximum number for consuming records at once", 0) \
+    M(UInt64, record_consume_batch_size, 10 * 1024 * 1024, "Maximum size for consuming records at once, in bytes", 0) \
     M(Int64, record_consume_timeout_ms, 100, "Timeout of consuming record", 0) \
     M(Int64, kafka_fetch_wait_max_ms, 100, "When reading from Kafka, max wait time", 0) \
     M(Int64, kafka_fetch_max_bytes, 52428800, "When reading from Kafka, max bytes to fetch per read", 0) \
@@ -852,6 +857,9 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(UInt64, max_number_of_parameters_for_json_values, 1000, "Max arguments number of json_values limit", 0) \
     M(UInt64, max_block_size, DEFAULT_BLOCK_SIZE, "Maximum block size for reading", 0) \
     M(UInt64, max_insert_block_size, DEFAULT_INSERT_BLOCK_SIZE, "The maximum block size for insertion, if we control the creation of blocks for insertion.", 0) \
+    /* proton: starts */ \
+    M(UInt64, max_insert_block_bytes, 1024 * 1024, "The maximum size in bytes of block for insertion, if we control the creation of blocks for insertion.", 0) \
+    /* proton: ends */ \
 // End of CONFIGURABLE_GLOBAL_SETTINGS
 
 #define LIST_OF_SETTINGS(M)    \

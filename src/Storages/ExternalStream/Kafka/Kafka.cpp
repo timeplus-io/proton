@@ -12,6 +12,7 @@
 #include <Storages/ExternalStream/Kafka/Kafka.h>
 #include <Storages/ExternalStream/Kafka/KafkaSink.h>
 #include <Storages/ExternalStream/Kafka/KafkaSource.h>
+#include <Storages/ExternalStream/parseShards.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Common/ProtonCommon.h>
@@ -229,12 +230,10 @@ Kafka::Kafka(
     ContextPtr context)
     : StorageExternalStreamImpl(storage, std::move(settings_), context)
     , engine_args(engine_args_)
-    , data_format(StorageExternalStreamImpl::dataFormat())
     , external_stream_counter(external_stream_counter_)
     , conf(createRdConf(settings->getKafkaSettings()))
     , poll_timeout_ms(settings->poll_waittime_ms.value)
     , max_consumers(context->getConfigRef().getInt(MAX_CONSUMERS_CONFIG_KEY, DEFAULT_MAX_CONSUMERS))
-    , logger(&Poco::Logger::get(getLoggerName()))
 {
     assert(settings->type.value == StreamTypes::KAFKA || settings->type.value == StreamTypes::REDPANDA);
     assert(external_stream_counter);
@@ -257,18 +256,15 @@ Kafka::Kafka(
     rd_kafka_conf_get(conf.get(), "topic.metadata.refresh.interval.ms", topic_refresh_interval_ms_value, &value_size);
     topic_refresh_interval_ms = std::stoi(topic_refresh_interval_ms_value);
 
-    calculateDataFormat(storage);
-
     /// For raw format, one_message_per_row default to true. Because if multiple rows are combined together,
     /// it could be hard to separate them again.
     if (data_format == "RawBLOB" && !settings->isChanged("one_message_per_row"))
         settings->set("one_message_per_row", true);
 
     /// Only optimize trivial count on some specific formats, and settings.
-    support_count_optimization = data_format == "RawBLOB" ||
-        data_format == "ProtobufSingle" ||
-        (data_format == "Avro" && (!settings->format_schema.value.empty() || !settings->kafka_schema_registry_url.value.empty())) ||
-        settings->one_message_per_row.value;
+    support_count_optimization = data_format == "RawBLOB" || data_format == "ProtobufSingle"
+        || (data_format == "Avro" && (!settings->format_schema.value.empty() || !settings->kafka_schema_registry_url.value.empty()))
+        || settings->one_message_per_row.value;
 
     cacheVirtualColumnNamesAndTypes();
 
@@ -335,26 +331,6 @@ std::vector<Int64> Kafka::getOffsets(
     }
 }
 
-void Kafka::calculateDataFormat(const IStorage * storage)
-{
-    if (!data_format.empty())
-        return;
-
-    /// If there is only one column and its type is a string type, use RawBLOB. Use JSONEachRow otherwise.
-    auto column_names_and_types{storage->getInMemoryMetadata().getColumns().getOrdinary()};
-    if (column_names_and_types.size() == 1)
-    {
-        auto type = column_names_and_types.begin()->type->getTypeId();
-        if (type == TypeIndex::String || type == TypeIndex::FixedString)
-        {
-            data_format = "RawBLOB";
-            return;
-        }
-    }
-
-    data_format = "JSONEachRow";
-}
-
 void Kafka::validateMessageKey(const String & message_key_, IStorage * storage, const ContextPtr & context)
 {
     const auto & key = message_key_.c_str();
@@ -398,35 +374,6 @@ void Kafka::validate()
 
 namespace
 {
-std::vector<int32_t> parseShards(const std::string & shards_setting)
-{
-    std::vector<String> shard_strings;
-    boost::split(shard_strings, shards_setting, boost::is_any_of(","));
-
-    std::vector<int32_t> specified_shards;
-    specified_shards.reserve(shard_strings.size());
-    for (const auto & shard_string : shard_strings)
-    {
-        try
-        {
-            specified_shards.push_back(std::stoi(shard_string));
-        }
-        catch (std::invalid_argument &)
-        {
-            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Invalid shard : {}", shard_string);
-        }
-        catch (std::out_of_range &)
-        {
-            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Shard {} is too big", shard_string);
-        }
-
-        if (specified_shards.back() < 0)
-            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Invalid shard: {}", shard_string);
-    }
-
-    return specified_shards;
-}
-
 std::vector<Int32> getShardsToQuery(const String & shards_exp, Int32 parition_count)
 {
     std::vector<Int32> ret;
@@ -456,12 +403,15 @@ std::vector<Int32> getShardsToQuery(const String & shards_exp, Int32 parition_co
 }
 }
 
-std::optional<UInt64> Kafka::totalRows(const Settings & settings_ref)
+std::optional<UInt64> Kafka::totalRows(const Settings & settings_ref) const
 {
     if (!support_count_optimization)
         return {};
 
-    auto consumer = getConsumer();
+    /// Not using getConsumer:
+    /// 1. getConsumer is not a const function
+    /// 2. just a short-live consumer is needed to fetch the offsets
+    auto consumer = newConsumer();
     auto topic = RdKafka::Topic(*consumer->getHandle(), topicName());
     auto shards_to_query = getShardsToQuery(settings_ref.shards.value, topic.getPartitionCount());
     LOG_INFO(logger, "Counting number of messages topic={} partitions=[{}]", topicName(), fmt::join(shards_to_query, ","));
@@ -543,6 +493,7 @@ Pipe Kafka::read(
                 high_watermark,
                 max_block_size,
                 external_stream_counter,
+                &Poco::Logger::get(fmt::format("{}.{}", getLoggerName(), consumer->name())),
                 context));
         }
     }
@@ -560,6 +511,11 @@ Pipe Kafka::read(
         pipe.resize(min_threads);
 
     return pipe;
+}
+
+std::shared_ptr<RdKafka::Consumer> Kafka::newConsumer() const
+{
+    return std::make_shared<RdKafka::Consumer>(*conf, poll_timeout_ms, getLoggerName());
 }
 
 std::shared_ptr<RdKafka::Consumer> Kafka::getConsumer()
@@ -622,7 +578,13 @@ SinkToStoragePtr Kafka::write(const ASTPtr & /*query*/, const StorageMetadataPtr
 {
     /// always validate before actual use
     validate();
-    return std::make_shared<KafkaSink>(*this, metadata_snapshot->getSampleBlock(), message_key_ast, external_stream_counter, context);
+    return std::make_shared<KafkaSink>(
+        *this,
+        metadata_snapshot->getSampleBlock(),
+        message_key_ast,
+        external_stream_counter,
+        &Poco::Logger::get(fmt::format("{}.{}", getLoggerName(), getProducer()->name())),
+        context);
 }
 
 int Kafka::onStats(struct rd_kafka_s * rk, char * json, size_t json_len, void * /*opaque*/)

@@ -23,6 +23,11 @@ public:
     FileLog(IStorage * storage, std::unique_ptr<ExternalStreamSettings> settings_, ContextPtr context);
     ~FileLog() override = default;
 
+    String getName() const override { return "FileLogExternalStream"; }
+
+    bool supportsAccurateSeekTo() const noexcept override { return false; }
+    bool supportsSubcolumns() const override { return false; }
+
     void startup() override { }
     void shutdown() override { }
 

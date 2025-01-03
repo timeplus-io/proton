@@ -251,6 +251,7 @@ enum class ProcessorID : UInt32
     ConvertingAggregatedToChunksSourceShuffledID = 10'047,
     /// proton: starts
     ClickHouseSourceID = 11'000,
+    PulsarSourceID = 11'054,
     /// proton: ends
 
     /// Sink Processors

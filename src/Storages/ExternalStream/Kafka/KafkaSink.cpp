@@ -127,6 +127,7 @@ KafkaSink::KafkaSink(
     const Block & header,
     const ASTPtr & message_key_ast,
     ExternalStreamCounterPtr external_stream_counter_,
+    Poco::Logger * logger_,
     ContextPtr context)
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
     , producer(kafka.getProducer())
@@ -136,7 +137,7 @@ KafkaSink::KafkaSink(
     , topic_refresh_interval_ms(kafka.topicRefreshIntervalMs())
     , pending_data(context->getSettingsRef().kafka_max_message_size.value)
     , external_stream_counter(external_stream_counter_)
-    , logger(&Poco::Logger::get(fmt::format("{}.{}", kafka.getLoggerName(), producer->name())))
+    , logger(logger_)
 {
     /// If the buffer_size (kafka_max_message_size) is reached, the buffer will be forced to flush.
     wb = std::make_unique<WriteBufferFromKafkaSink>(
