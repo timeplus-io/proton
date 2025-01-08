@@ -109,7 +109,12 @@ ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 ENV TZ UTC
 
-RUN mkdir /docker-entrypoint-initdb.d
+RUN mkdir /docker-entrypoint-initdb.d \
+ && mkdir -p /var/lib/proton/lib \
+ && mkdir -p /usr/share/proton
+
+COPY resources/protos /usr/share/proton/protos/
+RUN chown -R timeplus:timeplus /usr/share/proton/
 
 COPY docker_related_config.xml /etc/proton-server/config.d/
 COPY entrypoint.sh /entrypoint.sh

@@ -53,5 +53,5 @@
 
     <!-- Directory containing the proto files for the well-known Protobuf types.
       -->
-    <google_protos_path>/usr/share/timeplusd/protos/</google_protos_path>
+    <google_protos_path>/usr/share/proton/protos/</google_protos_path>
 </config>

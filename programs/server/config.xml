@@ -1269,7 +1269,7 @@
 
     <!-- Directory containing the proto files for the well-known Protobuf types.
       -->
-    <google_protos_path>/usr/share/timeplusd/protos/</google_protos_path>
+    <google_protos_path>/usr/share/proton/protos/</google_protos_path>
 
     <!-- Default query masking rules, matching lines would be replaced with something else in the logs
         (both text logs and system.query_log).

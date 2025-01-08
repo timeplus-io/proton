@@ -54,7 +54,7 @@ REGISTER_FUNCTION(Hashing)
     FunctionDocumentation{
         .description=R"(
 Calculates BLAKE3 hash string and returns the resulting set of bytes as fixed_string.
-This cryptographic hash-function is integrated into timeplusd with BLAKE3 Rust library.
+This cryptographic hash-function is integrated into proton with BLAKE3 Rust library.
 The function is rather fast and shows approximately two times faster performance compared to SHA-2, while generating hashes of the same length as SHA-256.
 It returns a blake3 hash as a byte array with type fixed_string(32).
 )",
