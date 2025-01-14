@@ -70,6 +70,7 @@
 /// proton: starts.
 #include <Interpreters/Cluster.h>
 #include <Interpreters/ActionLocksManager.h>
+#include <Interpreters/CollectCreateTelemetry.h>
 #include <Interpreters/Streaming/ColumnValidateVisitor.h>
 #include <Interpreters/Streaming/DDLHelper.h>
 #include <NativeLog/Server/NativeLog.h>
@@ -1258,6 +1259,9 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
 
         throw;
     }
+
+    if (database->getDatabaseName() != "system")
+        collectCreateTelemetry(res, getContext());
     /// proton: ends.
 
     return true;

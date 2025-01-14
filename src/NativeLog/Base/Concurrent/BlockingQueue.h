@@ -1,5 +1,7 @@
 #pragma once
 
+#include <base/types.h>
+
 #include <queue>
 #include <shared_mutex>
 #include <condition_variable>
@@ -40,6 +42,28 @@ public:
 
         /// Notify front() we have value
         cv.notify_one();
+    }
+
+    bool add(T && v, int64_t timeout_ms)
+    {
+        {
+            std::unique_lock lock{qlock};
+
+            if (queue.size() >= max_size)
+            {
+                auto status = cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this] { return queue.size() < max_size; });
+                if (!status)
+                    return false;
+            }
+
+            queue.push(std::move(v));
+            assert(queue.size() <= max_size);
+        }
+
+        /// Notify one waiting thread we have one item to consume
+        cv.notify_one();
+
+        return true;
     }
 
     template <typename... Args>
@@ -105,6 +129,45 @@ public:
         std::shared_lock guard{qlock};
         cv.wait(guard, [this] { return !queue.empty(); });
         return queue.front();
+    }
+
+    std::queue<T> drain()
+    {
+        std::queue<T> r;
+        {
+            std::unique_lock lock{qlock};
+            /// When queue is empty, we don't want to steal its
+            /// underlying allocated memory.
+            if (queue.empty())
+                return {};
+
+            r.swap(queue);
+            assert(queue.empty());
+        }
+        cv.notify_all();
+
+        return r;
+    }
+
+    std::queue<T> drain(int64_t timeout_ms)
+    {
+        std::queue<T> r;
+        {
+            std::unique_lock lock{qlock};
+
+            if (queue.empty())
+            {
+                auto status = cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this] { return !queue.empty(); });
+                if (!status)
+                    return {};
+            }
+
+            r.swap(queue);
+            assert(queue.empty());
+        }
+        cv.notify_all();
+
+        return r;
     }
 
     size_t size() const

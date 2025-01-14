@@ -94,6 +94,7 @@ Timeplus::Timeplus(
     , cache_dir(
           fs::path(context->getConfigRef().getString("path", DBMS_DEFAULT_PATH)) / "cache" / "external_streams"
           / toString(getStorageID().uuid))
+    , secure(settings_->secure)
     , logger(&Poco::Logger::get(getName()))
 {
     createDirIfNotExists(cache_dir);
@@ -102,7 +103,6 @@ Timeplus::Timeplus(
     if (hosts.empty())
         throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Setting `hosts` cannot be empty.");
 
-    auto secure = settings_->secure;
     auto default_port = secure ? DBMS_DEFAULT_SECURE_PORT : DBMS_DEFAULT_PORT;
     auto addresses = parseRemoteDescriptionForExternalDatabase(hosts, /*max_addresses=*/10, /*default_port=*/default_port);
 

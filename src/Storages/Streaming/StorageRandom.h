@@ -64,6 +64,7 @@ public:
     bool supportsStreamingQuery() const override { return true; }
     bool hasEvenlyDistributedRead() const override { return true; }
 
+    Float64 getEventsPerSecond() const { return events_per_second; }
 private:
     UInt64 shards;
     UInt64 random_seed = 0;

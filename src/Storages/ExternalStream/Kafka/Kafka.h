@@ -98,6 +98,13 @@ public:
     std::shared_ptr<RdKafka::Topic> getProducerTopic();
     std::shared_ptr<RdKafka::Consumer> getConsumer();
 
+    const String & secureProtocol() const { return settings->security_protocol.value; }
+    const String & saslMechanism() const { return settings->sasl_mechanism.value; }
+    bool hasSchemaRegistryUrl() const { return !settings->kafka_schema_registry_url.value.empty(); }
+    bool skipSslCertCheck() const { return settings->skip_ssl_cert_check.value; }
+    bool hasSslCaCertFile() const { return !settings->ssl_ca_cert_file.value.empty(); }
+    bool hasSslCaPem() const { return !settings->ssl_ca_pem.value.empty(); }
+
 private:
     Kafka::ConfPtr createRdConf(KafkaExternalStreamSettings settings_);
     void cacheVirtualColumnNamesAndTypes();

@@ -267,6 +267,10 @@ public:
 
     std::vector<nlog::RecordSN> getLastSNs() const;
 
+    const String & getStorageType() const { return getSettings()->storage_type.value; }
+
+    const String & getEngineMode() const { return getSettings()->mode; }
+
     bool supportsStreamingQuery() const override { return true; }
 
     friend class StreamSink;
