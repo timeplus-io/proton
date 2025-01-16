@@ -291,7 +291,7 @@ void SerializationObject<Parser>::serializeBinaryBulkWithMultipleStreams(
     }
 
     settings.path.push_back(Substream::ObjectData);
-    if (auto * stream = settings.getter(settings.path))
+    if (auto * /*stream*/ _ = settings.getter(settings.path))
     {
         state_object->nested_serialization->serializeBinaryBulkWithMultipleStreams(
             *tuple_column, offset, limit, settings, state_object->nested_state);
