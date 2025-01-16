@@ -7,6 +7,10 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Poco/String.h>
+/// proton: starts
+#include <Common/parseRemoteDescription.h>
+#include <Storages/ExternalStream/ExternalStreamSettings.h>
+/// proton: ends
 
 namespace DB
 {
@@ -83,10 +87,47 @@ void DDLDependencyVisitor::visit(const ASTFunctionWithKeyValueArguments & dict_s
     data.dependencies.emplace(std::move(info->table_name));
 }
 
+/// proton: starts
+namespace
+{
+bool hasLocalAddress(const String & hosts, bool secure)
+{
+    auto global_context = Context::getGlobalContextInstance();
+    UInt16 default_port = secure ? global_context->getTCPPortSecure().value_or(0) : global_context->getTCPPort();
+    auto addresses = parseRemoteDescriptionForExternalDatabase(hosts, /*max_addresses=*/ 10, /*default_port=*/ default_port);
+    for (const auto & addr : addresses)
+        if (isLocalAddress({addr.first, addr.second}, default_port))
+            return true;
+
+    return false;
+}
+}
+/// proton: ends
+
 void DDLDependencyVisitor::visit(const ASTStorage & storage, Data & data)
 {
     if (!storage.engine)
         return;
+
+    /// proton: starts
+    /// Because Timeplus external streams need to get the structure of the target stream,
+    /// it depends on the target stream. Thus, if a Timeplus external stream is pointing to
+    /// a local stream, then add the target stream to dependencies, to make sure that the
+    /// target stream is loaded before the external stream.
+    if (storage.engine->name == "ExternalStream")
+    {
+        ExternalStreamSettings settings;
+        settings.loadFromQuery(const_cast<ASTStorage &>(storage));
+        if (settings.type.value == "timeplus" && hasLocalAddress(settings.hosts, settings.secure))
+        {
+            QualifiedTableName name{settings.db, settings.stream};
+            data.dependencies.emplace(std::move(name));
+        }
+
+        return;
+    }
+    /// proton: ends
+
     if (storage.engine->name != "Dictionary")
         return;
 

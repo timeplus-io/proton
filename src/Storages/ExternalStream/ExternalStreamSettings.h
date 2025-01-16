@@ -49,11 +49,19 @@ class ASTStorage;
     M(UInt64, memory_limit, 0, "Configure a limit on the amount of memory that will be allocated by this external stream. Setting this to 0 will disable the limit. By default this is disabled.", 0) \
     M(UInt64, io_threads, 1, "Set the number of IO threads to be used by the Pulsar client. Default is 1 thread.", 0)
 
+#define TIMEPLUS_EXTERNAL_STREAM_SETTINGS(M, ALIAS) \
+    M(String, hosts, "", "A remote server address or an expression that generates multiple addresses of remote servers. Format: host or host:port.", 0) \
+    M(String, db, "default", "Database name.", 0) \
+    M(String, stream, "", "Stream name.", 0) \
+    M(String, user, "", "User name. If not specified, `default` is be used.", 0) \
+    M(Bool, secure, false, "Use secure connection.", 0)
+
 #define ALL_EXTERNAL_STREAM_SETTINGS(M) \
     M(String, type, "", "External stream type", 0) \
     KAFKA_EXTERNAL_STREAM_SETTINGS(M) \
     LOG_FILE_EXTERNAL_STREAM_SETTINGS(M) \
-    PULSAR_EXTERNAL_STREAM_SETTINGS(M)
+    PULSAR_EXTERNAL_STREAM_SETTINGS(M) \
+    TIMEPLUS_EXTERNAL_STREAM_SETTINGS(M, ALIAS)
 
 #define LIST_OF_EXTERNAL_STREAM_SETTINGS(M) \
     ALL_EXTERNAL_STREAM_SETTINGS(M) \

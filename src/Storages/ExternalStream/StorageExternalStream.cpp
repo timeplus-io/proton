@@ -9,6 +9,7 @@
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/ExternalStream/Kafka/Kafka.h>
 #include <Storages/ExternalStream/Pulsar/Pulsar.h>
+#include <Storages/ExternalStream/Timeplus/Timeplus.h>
 #ifdef OS_LINUX
 #    include <Storages/ExternalStream/Log/FileLog.h>
 #endif
@@ -66,6 +67,7 @@ StoragePtr createExternalStream(
     IStorage * storage,
     ExternalStreamSettingsPtr settings,
     const ASTs & engine_args,
+    StorageInMemoryMetadata & storage_metadata,
     bool attach,
     ExternalStreamCounterPtr external_stream_counter,
     ContextPtr context_)
@@ -78,6 +80,9 @@ StoragePtr createExternalStream(
 
     if (type == StreamTypes::KAFKA || type == StreamTypes::REDPANDA)
         return std::make_unique<Kafka>(storage, std::move(settings), engine_args, attach, external_stream_counter, std::move(context_));
+
+    if (type == StreamTypes::TIMEPLUS)
+        return std::make_unique<ExternalStream::Timeplus>(storage, storage_metadata, std::move(settings), attach, std::move(context_));
 
 #ifdef OS_LINUX
     if (type == StreamTypes::LOG && context_->getSettingsRef()._tp_enable_log_stream_expr.value)
@@ -121,7 +126,7 @@ StorageExternalStream::StorageExternalStream(
         }
     }
 
-    if (columns_.empty())
+    if (columns_.empty() && external_stream_settings->type.value != StreamTypes::TIMEPLUS)
         /// This is the same error reported by InterpreterCreateQuery
         throw Exception(
             ErrorCodes::INCORRECT_QUERY, "Incorrect CREATE query: required list of column descriptions or AS section or SELECT.");
@@ -145,8 +150,10 @@ StorageExternalStream::StorageExternalStream(
 
     auto metadata = getInMemoryMetadata();
     auto stream = createExternalStream(
-        this, std::move(external_stream_settings), engine_args, attach, external_stream_counter, std::move(context_));
+        this, std::move(external_stream_settings), engine_args, metadata, attach, external_stream_counter, std::move(context_));
     external_stream.swap(stream);
+    /// Some external streams fetch the structure in other ways, thus need to set the metadata again here in case it's updated.
+    setInMemoryMetadata(metadata);
 }
 
 void StorageExternalStream::read(

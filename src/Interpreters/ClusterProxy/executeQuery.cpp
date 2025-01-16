@@ -94,6 +94,10 @@ ContextMutablePtr updateSettingsForCluster(const Cluster & cluster, ContextPtr c
         new_settings.limit = 0;
         new_settings.limit.changed = false;
     }
+    /// proton: starts
+    if (settings.query_mode.value == "table")
+        new_settings.query_mode = settings.query_mode;
+    /// proton: ends
 
     auto new_context = Context::createCopy(context);
     new_context->setSettings(new_settings);

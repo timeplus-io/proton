@@ -8,7 +8,7 @@
 namespace DB
 {
 
-RemoteSource::RemoteSource(RemoteQueryExecutorPtr executor, bool add_aggregation_info_, bool async_read_)
+RemoteSource::RemoteSource(RemoteQueryExecutorPtr executor, bool add_aggregation_info_, bool async_read_, std::optional<bool> is_streaming_)
     : ISource(executor->getHeader(), false, ProcessorID::RemoteSourceID)
     , add_aggregation_info(add_aggregation_info_), query_executor(std::move(executor))
     , async_read(async_read_)
@@ -18,6 +18,11 @@ RemoteSource::RemoteSource(RemoteQueryExecutorPtr executor, bool add_aggregation
     for (auto & type : sample.getDataTypes())
         if (typeid_cast<const DataTypeAggregateFunction *>(type.get()))
             add_aggregation_info = true;
+
+    /// proton: starts
+    if (is_streaming_)
+        setStreaming(is_streaming_.value());
+    /// proton: ends
 }
 
 RemoteSource::~RemoteSource() = default;

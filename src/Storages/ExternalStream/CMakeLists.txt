@@ -10,6 +10,7 @@ endif()
 
 add_headers_and_sources(external_stream Kafka)
 add_headers_and_sources(external_stream Pulsar)
+add_headers_and_sources(external_stream Timeplus)
 
 add_library(external_stream ${external_stream_headers} ${external_stream_sources})
 

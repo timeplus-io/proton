@@ -20,7 +20,7 @@ public:
     /// Flag add_aggregation_info tells if AggregatedChunkInfo should be added to result chunk.
     /// AggregatedChunkInfo stores the bucket number used for two-level aggregation.
     /// This flag should be typically enabled for queries with GROUP BY which are executed till WithMergeableState.
-    RemoteSource(RemoteQueryExecutorPtr executor, bool add_aggregation_info_, bool async_read_);
+    RemoteSource(RemoteQueryExecutorPtr executor, bool add_aggregation_info_, bool async_read_, std::optional<bool> is_streaming_=std::nullopt); /// proton: added is_streaming_
     ~RemoteSource() override;
 
     Status prepare() override;
