@@ -68,9 +68,18 @@ void collectCreateTelemetry(const StoragePtr & storage, ContextPtr context)
             builder.isExternalTarget(!materialized_view->getExternalTargetTableID().empty());
 
             if (auto target = materialized_view->tryGetTargetTable())
-                builder.withTargetStorageType(target->getName());
+            {
+                if (auto * target_external_stream = target->as<StorageExternalStream>())
+                    builder.withTargetStorageType(target_external_stream->getType());
+                else if (auto * target_external_table = target->as<StorageExternalTable>())
+                    builder.withTargetStorageType(target_external_table->getType());
+                else
+                    builder.withTargetStorageType(target->getName());
+            }
             else
+            {
                 builder.withTargetStorageType("Stream");
+            }
         });
     }
     else if (auto random_stream = storage->as<StorageRandom>())

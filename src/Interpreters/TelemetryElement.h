@@ -51,6 +51,7 @@ public:
         getObject()->set("properties", properties);
 
         withServerUUID();
+        withEdition();
     }
 
     std::shared_ptr<TelemetryElement> build() { return std::move(element); }
@@ -73,6 +74,8 @@ protected:
         setProperty("server_id", server_uuid_str);
     }
 
+    void withEdition() { setProperty("edition", EDITION); }
+
 private:
     std::shared_ptr<TelemetryElement> element;
     Poco::JSON::Object::Ptr properties;
@@ -84,11 +87,7 @@ class TelemetryStatsElementBuilder final : public TelemetryElementBuilderBase
 public:
     using Self = TelemetryStatsElementBuilder;
 
-    TelemetryStatsElementBuilder() : TelemetryElementBuilderBase("proton_ping")
-    {
-        setEdition();
-        setVersion();
-    }
+    TelemetryStatsElementBuilder() : TelemetryElementBuilderBase("proton_ping") { setVersion(); }
 
     Self & useCPU(unsigned int cpu_)
     {
@@ -163,12 +162,6 @@ public:
     }
 
 private:
-    Self & setEdition()
-    {
-        setProperty("edition", EDITION);
-        return *this;
-    }
-
     Self & setVersion()
     {
         setProperty("version", VERSION_STRING);
