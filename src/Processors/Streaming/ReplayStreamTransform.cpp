@@ -32,7 +32,7 @@ ReplayStreamTransform::ReplayStreamTransform(const Block & header, Float32 repla
     , replay_time_col(replay_time_col_)
     , replay_speed(replay_speed_)
     , last_sn(last_sn_)
-    , replay_finished(last_sn < 0)
+    , replay_finished(false)
     , logger(&Poco::Logger::get("ReplayStreamTransform"))
 {
     time_index = header.getPositionByName(replay_time_col);

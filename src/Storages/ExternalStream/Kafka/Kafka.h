@@ -92,6 +92,8 @@ public:
     }
     bool hasCustomShardingExpr() const;
 
+    std::vector<int64_t> getLastSNs() const override;
+
     std::shared_ptr<RdKafka::Producer> getProducer();
     std::shared_ptr<RdKafka::Topic> getProducerTopic();
     std::shared_ptr<RdKafka::Consumer> getConsumer();

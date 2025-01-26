@@ -64,6 +64,9 @@
 #include <Processors/Transforms/FilterTransform.h>
 #include <QueryPipeline/QueryPipelineBuilder.h>
 
+#include <Storages/ExternalStream/Kafka/Kafka.h>
+#include <Storages/ExternalStream/StorageExternalStream.h>
+#include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 #include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
 #include <Storages/StorageView.h>
 #include <Storages/StorageDistributed.h>
@@ -3851,6 +3854,7 @@ std::vector<nlog::RecordSN> InterpreterSelectQuery::checkReplaySettingsAndGetLas
 
     /// So far, only support append-only stream (or proxyed)
     StorageStream * storagestream = nullptr;
+    StorageExternalStream * external_stream = nullptr;
     if (Streaming::isAppendStorage(storage->dataStreamSemantic()))
     {
         if (const auto * proxy = storage->as<Streaming::ProxyStream>())
@@ -3863,9 +3867,27 @@ std::vector<nlog::RecordSN> InterpreterSelectQuery::checkReplaySettingsAndGetLas
         else
             storagestream = storage->as<StorageStream>();
     }
+    else if (const auto * proxy = storage->as<Streaming::ProxyStream>())
+    {
+        const auto & proxyed = proxy->getProxyStorageOrSubquery();
+        const auto * nested_storage = std::get_if<StoragePtr>(&proxyed);
+        if (nested_storage)
+            external_stream = (*nested_storage)->as<StorageExternalStream>();
+    }
 
-    if (!storagestream)
-        throw Exception("Replay Stream is only support append-only stream", ErrorCodes::NOT_IMPLEMENTED);
+    external_stream = storage->as<StorageExternalStream>();
+    std::vector<int64_t> Last_sns;
+    if (external_stream)
+    {
+        auto nested_storage = external_stream->getNested();
+        if (auto * Kafka = nested_storage->as<ExternalStream::Kafka>())
+            Last_sns = Kafka->getLastSNs();
+        else
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Replay Stream is only support append-only stream and external stream Kafka");
+    }
+
+    if (!storagestream && !external_stream)
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Replay Stream is only support append-only stream and external stream Kafka");
 
     const String & replay_time_col = settings.replay_time_column;
 
@@ -3884,7 +3906,10 @@ std::vector<nlog::RecordSN> InterpreterSelectQuery::checkReplaySettingsAndGetLas
             required_columns, [](const auto & name) { return name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID; }))
         required_columns.emplace_back(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID);
 
-    return storagestream->getLastSNs();
+    if(storagestream)
+        return storagestream->getLastSNs();
+    else
+        return Last_sns;
 }
 
 /// Preliminary LIMIT - is used in every source, if there are several sources, before they are combined.
