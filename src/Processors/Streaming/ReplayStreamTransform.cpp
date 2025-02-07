@@ -27,7 +27,7 @@ constexpr Int64 MAX_WAIT_INTERVAL_US = 500000;
 constexpr Int64 LOG_INTERVAL_US = 30000000;
 constexpr Int64 MAX_WAIT_OUTPUT_INTERVAL_US = 60000000;
 
-ReplayStreamTransform::ReplayStreamTransform(const Block & header, Float32 replay_speed_, Int64 last_sn_, const String & replay_time_col_, std::optional<String> start_time_)
+ReplayStreamTransform::ReplayStreamTransform(const Block & header, Float32 replay_speed_, Int64 last_sn_, const String & replay_time_col_, std::optional<String> start_time_, std::optional<String> end_time_)
     : IProcessor({std::move(header)}, {std::move(header)}, ProcessorID::ReplayStreamTransformID)
     , replay_time_col(replay_time_col_)
     , replay_speed(replay_speed_)
@@ -66,12 +66,34 @@ ReplayStreamTransform::ReplayStreamTransform(const Block & header, Float32 repla
         parseDateTime64BestEffort(res, time_scale, in, timezone, DateLUT::instance("UTC"));
         last_batch_time = static_cast<Int64>(res);
     }
+
+    if (end_time_.value() != "")
+    {
+        ReadBufferFromString in(end_time_.value());
+        DateTime64 res;
+        parseDateTime64BestEffort(res, time_scale, in, timezone, DateLUT::instance("UTC"));
+        end_time = static_cast<Int64>(res);
+    }
+
+    if (last_batch_time.has_value() && end_time.has_value() && last_batch_time.value() > end_time.value())
+    {
+        reach_end_time = true;
+        LOG_WARNING(logger, "The end time is earlier than the start time (start time: {}, end time: {}), resulting in no output.", last_batch_time.value(), end_time.value());
+    }
 }
 
 ReplayStreamTransform::Status ReplayStreamTransform::prepare()
 {
     auto & input = inputs.front();
     auto & output = outputs.front();
+
+    /// If reach end time.
+    if (reach_end_time)
+    {
+        input.close();
+        output.finish();
+        return Status::Finished;
+    }
 
     /// Check can output.
     if (output.isFinished())
@@ -134,7 +156,6 @@ void ReplayStreamTransform::work()
 {
     auto start_ns = MonotonicNanoseconds::now();
     metrics.processed_bytes += input_chunk.bytes();
-
     if (input_chunk.hasRows())
     {
         chassert(chunks_to_replay.empty());
@@ -152,6 +173,7 @@ void ReplayStreamTransform::work()
  * For example: input_chunk: [1, 1, 1, 2, 2, 2, 3, 3, 3]
  * After the cutChunk, the chunks_to_replay will be [[1, 1, 1], [2, 2, 2], [3, 3, 3]]
  */
+
 std::queue<Chunk> ReplayStreamTransform::splitChunkByTime()
 {
     assert(input_chunk.rows() > 0);
@@ -216,6 +238,13 @@ Chunk ReplayStreamTransform::replayOneChunk()
             auto chunk = std::move(chunks_to_replay.front());
             chunks_to_replay.pop();
             last_batch_time = chunk.getColumns()[time_index]->getInt(0);
+  
+            if (end_time.has_value() && last_batch_time.value() >= end_time.value())
+            {
+                reach_end_time = true;
+                return Chunk{};
+            }
+
             return chunk; /// No sleep for first batch if there is no \replay_start_times
         }
     }
@@ -244,11 +273,18 @@ Chunk ReplayStreamTransform::replayOneChunk()
             chunk.clear();
             continue;
         }
-        
+
+
         last_batch_time = this_batch_time;
         break;
     }
     while (!chunks_to_replay.empty());
+
+    if (end_time.has_value() && last_batch_time.value() >= end_time.value())
+    {
+        reach_end_time = true;
+        return Chunk{};
+    } 
 
     if (wait_interval_us > MAX_WAIT_OUTPUT_INTERVAL_US)
         LOG_WARNING(logger, "Next replaying data output may be slow, need to wait {}s", wait_interval_us / std::pow(10, 6));

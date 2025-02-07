@@ -13,7 +13,7 @@ namespace Streaming
 class ReplayStreamTransform final : public IProcessor
 {
 public:
-    ReplayStreamTransform(const Block & header, Float32 replay_speed_, Int64 last_sn_, const String & replay_time_col_, std::optional<String> start_time = std::nullopt);
+    ReplayStreamTransform(const Block & header, Float32 replay_speed_, Int64 last_sn_, const String & replay_time_col_, std::optional<String> start_time = std::nullopt, std::optional<String> end_time = std::nullopt);
     String getName() const override { return "ReplayStreamTransform"; }
     void work() override;
     Status prepare() override;
@@ -42,10 +42,12 @@ private:
     /// this shard's last sequence number;
     Int64 last_sn = 0;
     std::optional<Int64> last_batch_time;
+    std::optional<Int64> end_time;
     Int64 replay_clock = -1;
 
     bool initialized = false;
     bool replay_finished = false;
+    bool reach_end_time = false;
 
     std::queue<Chunk> chunks_to_replay;
 

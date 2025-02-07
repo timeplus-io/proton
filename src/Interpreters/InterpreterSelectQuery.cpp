@@ -2384,7 +2384,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             storage->read(
                 query_plan, required_columns, storage_snapshot, query_info, context, processing_stage, max_block_size, max_streams);
             auto replay_step = std::make_unique<Streaming::ReplayStreamStep>(
-                query_plan.getCurrentDataStream(), settings.replay_speed, settings.replay_time_column, std::move(last_sns), settings.replay_start_time);
+                query_plan.getCurrentDataStream(), settings.replay_speed, settings.replay_time_column, std::move(last_sns), settings.replay_start_time, settings.replay_end_time);
             query_plan.addStep(std::move(replay_step));
         }
         else
