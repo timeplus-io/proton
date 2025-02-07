@@ -6,6 +6,7 @@
 #include <base/types.h>
 #include <Common/DateLUT.h>
 #include <Common/IntervalKind.h>
+#include <Common/logger_useful.h>
 #include <Common/ProtonCommon.h>
 #include <Common/assert_cast.h>
 #include <DataTypes/IDataType.h>
