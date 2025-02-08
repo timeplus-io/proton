@@ -428,13 +428,16 @@ std::optional<UInt64> Kafka::totalRows(const Settings & settings_ref) const
 
 std::vector<int64_t> Kafka::getLastSNs() const
 {
-    auto partitions = client->getPartitionCount(topicName());
+    auto consumer = const_cast<DB::Kafka*>(this)->getConsumer();
+    auto produce = const_cast<DB::Kafka*>(this)->getProducer();
+    RdKafka::Topic topic{*consumer->getHandle(), topicName()};
+    auto partitions = topic.getPartitionCount();
 
     std::vector<int64_t> result;
     result.reserve(partitions);
 
     for (int32_t i = 0; i < partitions; ++i)
-        result.push_back(client->getWatermarkOffsets(topicName(), i).high);
+        result.push_back(produce->getWatermarkOffsets(i, topicName()).high);
     return result;
 }
 

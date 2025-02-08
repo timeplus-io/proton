@@ -407,8 +407,8 @@ tests:
     tags:
       - replay_stream
       - stream query
-    name: replay two streams using the same start_time to keep the replay timelines of the two streams aligned.
-    description: replay two streams using the same start_time to keep the replay timelines of the two streams aligned.
+    name: test replay_start_time and replay_end_time settings.
+    description: replay two streams using the same start_time and replay_end_time to keep the replay timelines of the two streams aligned.
     steps:
       - statements:
           - client: python
@@ -446,7 +446,7 @@ tests:
           - client: python
             query_type: stream
             terminate: manual
-            query_id: '2907'
+            query_id: '2907-1'
             wait: 1
             query: select id from test29_stream_1 where _tp_time > earliest_timestamp() 
               settings replay_speed=5, replay_time_column='time_col', replay_start_time = '2024-01-20 16:01:14.000'
@@ -455,12 +455,32 @@ tests:
 
           - client: python
             query_type: table
-            depends_on: '2907'
-            wait: 10
+            depends_on: '2907-1'
+            wait: 5
             query: insert into test29_stream_1(id, time_col) values (9, '2024-01-20 16:01:20.100');
 
+          - client: python
+            query_type: stream
+            terminate: manual
+            query_id: '2907-2'
+            wait: 1
+            query: select id from test29_stream_1 where _tp_time > earliest_timestamp() 
+              settings replay_speed=5, replay_time_column='time_col', replay_start_time = '2024-01-20 16:01:14.000', replay_end_time = '2024-01-20 16:01:16.000'
+              UNION select id from test29_stream_2 where _tp_time > earliest_timestamp()
+              settings replay_speed=5, replay_time_column='time_col', replay_start_time = '2024-01-20 16:01:14.000', replay_end_time = '2024-01-20 16:01:16.000'
+
+          - client: python
+            query_type: table
+            kill: '2907-1'
+            kill_wait: 5
+
+          - client: python
+            query_type: table
+            kill: '2907-2'
+            kill_wait: 1
+
     expected_results:
-      - query_id: '2907'
+      - query_id: '2907-1'
         expected_results:
           - [1]
           - [2]
@@ -471,3 +491,9 @@ tests:
           - [7]
           - [8]
           - [9]
+      - query_id: '2907-2'
+        expected_results:
+          - [1]
+          - [2]
+          - [3]
+          - [4]

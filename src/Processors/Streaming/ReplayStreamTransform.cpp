@@ -1,5 +1,10 @@
 #include <Processors/Streaming/ReplayStreamTransform.h>
 
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeDateTime64.h>
+#include <DataTypes/IDataType.h>
+#include <IO/ReadBufferFromString.h>
+#include <IO/parseDateTimeBestEffort.h>
 #include <Processors/ISimpleTransform.h>
 #include <Processors/ProcessorID.h>
 #include <base/ClockUtils.h>
@@ -9,11 +14,6 @@
 #include <Common/logger_useful.h>
 #include <Common/ProtonCommon.h>
 #include <Common/assert_cast.h>
-#include <DataTypes/IDataType.h>
-#include <DataTypes/DataTypeDateTime.h>
-#include <DataTypes/DataTypeDateTime64.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/parseDateTimeBestEffort.h>
 
 #include <thread>
 
@@ -27,7 +27,8 @@ constexpr Int64 MAX_WAIT_INTERVAL_US = 500000;
 constexpr Int64 LOG_INTERVAL_US = 30000000;
 constexpr Int64 MAX_WAIT_OUTPUT_INTERVAL_US = 60000000;
 
-ReplayStreamTransform::ReplayStreamTransform(const Block & header, Float32 replay_speed_, Int64 last_sn_, const String & replay_time_col_, std::optional<String> start_time_, std::optional<String> end_time_)
+ReplayStreamTransform::ReplayStreamTransform(
+    const Block & header, Float32 replay_speed_, Int64 last_sn_, const String & replay_time_col_, std::optional<String> start_time_, std::optional<String> end_time_)
     : IProcessor({std::move(header)}, {std::move(header)}, ProcessorID::ReplayStreamTransformID)
     , replay_time_col(replay_time_col_)
     , replay_speed(replay_speed_)
@@ -40,13 +41,13 @@ ReplayStreamTransform::ReplayStreamTransform(const Block & header, Float32 repla
     sn_index = header.getPositionByName(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID);
     DataTypePtr replay_time_type = header.getDataTypes()[time_index];
 
-    auto & timezone = (replay_time_col == ProtonConsts::RESERVED_APPEND_TIME || 
-                               replay_time_col == ProtonConsts::RESERVED_INGEST_TIME || 
-                               replay_time_col == ProtonConsts::RESERVED_PROCESS_TIME) 
-                              ? DateLUT::instance("UTC")
-                              : DateLUT::instance(getDateTimeTimezone(*replay_time_type));
+    auto & timezone = (replay_time_col == ProtonConsts::RESERVED_APPEND_TIME || replay_time_col == ProtonConsts::RESERVED_INGEST_TIME
+                       || replay_time_col == ProtonConsts::RESERVED_PROCESS_TIME)
+        ? DateLUT::instance("UTC")
+        : DateLUT::instance(getDateTimeTimezone(*replay_time_type));
 
-    if (replay_time_col == ProtonConsts::RESERVED_APPEND_TIME || replay_time_col == ProtonConsts::RESERVED_INGEST_TIME || replay_time_col == ProtonConsts::RESERVED_PROCESS_TIME)
+    if (replay_time_col == ProtonConsts::RESERVED_APPEND_TIME || replay_time_col == ProtonConsts::RESERVED_INGEST_TIME
+        || replay_time_col == ProtonConsts::RESERVED_PROCESS_TIME)
     {    
         time_scale = 3;
     }
@@ -140,7 +141,7 @@ ReplayStreamTransform::Status ReplayStreamTransform::prepare()
         return Status::NeedData;
 
     input_chunk = input.pull(/*set_not_needed=*/true);
-    
+
     /// After replay finshed, we just forward it
     if (replay_finished)
     {
@@ -159,13 +160,13 @@ void ReplayStreamTransform::work()
     if (input_chunk.hasRows())
     {
         chassert(chunks_to_replay.empty());
-        chunks_to_replay = splitChunkByTime(); //process input_chunk
+        chunks_to_replay = splitChunkByTime(); ///process input_chunk
     }
 
-    output_chunk = replayOneChunk();
+    if (!chunks_to_replay.empty())
+        output_chunk = replayOneChunk();
 
     metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
-
 }
 
 /**
@@ -176,16 +177,14 @@ void ReplayStreamTransform::work()
 
 std::queue<Chunk> ReplayStreamTransform::splitChunkByTime()
 {
-    assert(input_chunk.rows() > 0);
-    size_t index = 0;
-    size_t cur_index = 0;
-    auto & columns = input_chunk.getColumns();
+    size_t chunk_rows = input_chunk.rows();
+    chassert(chunk_rows > 0);
 
-    std::queue<Chunk> chunks;
-
+    const auto & columns = input_chunk.getColumns();
     const auto first_row_time = columns[time_index]->getInt(0);
     const auto last_row_time = columns[time_index]->getInt(input_chunk.rows() - 1);
 
+    std::queue<Chunk> chunks;
     /// fast path, the whole chunk has the same time, no need to traverse one by one.
     if (last_row_time == first_row_time)
     {
@@ -193,24 +192,26 @@ std::queue<Chunk> ReplayStreamTransform::splitChunkByTime()
         return chunks;
     }
 
-    auto cut_into_chunks = [&](size_t start_pos, size_t end_pos) {
+    auto cut_into_chunks = [&](size_t start_row, size_t end_row) {
         Chunk chunk;
         for (const auto & col : columns)
-            chunk.addColumn(col->cut(start_pos, end_pos - start_pos));
+            chunk.addColumn(col->cut(start_row, end_row - start_row));
         chunks.emplace(std::move(chunk));
     };
 
-    while (index < input_chunk.rows())
+    size_t row = 0;
+    size_t cur_row = 0;
+    while (row < chunk_rows)
     {
-        if (columns[time_index]->getInt(index) != columns[time_index]->getInt(cur_index))
+        if (columns[time_index]->getInt(row) != columns[time_index]->getInt(cur_row))
         {
-            cut_into_chunks(cur_index, index);
-            cur_index = index;
+            cut_into_chunks(cur_row, row);
+            cur_row = row;
         }
-        ++index;
+        ++row;
     }
 
-    cut_into_chunks(cur_index, index);
+    cut_into_chunks(cur_row, row);
     input_chunk.clear();
     return chunks;
 }
@@ -263,7 +264,9 @@ Chunk ReplayStreamTransform::replayOneChunk()
         {
             if (now - last_unordered_log_ts > LOG_INTERVAL_US)
             {
-                LOG_WARNING(logger, "Found unordered replay timestamp '{}', current_ts: {}, last_ts: {}",
+                LOG_WARNING(
+                    logger,
+                    "Found unordered replay timestamp '{}', current_ts: {}, last_ts: {}",
                     replay_time_col,
                     this_batch_time,
                     last_batch_time.value());
@@ -274,11 +277,9 @@ Chunk ReplayStreamTransform::replayOneChunk()
             continue;
         }
 
-
         last_batch_time = this_batch_time;
         break;
-    }
-    while (!chunks_to_replay.empty());
+    } while (!chunks_to_replay.empty());
 
     if (end_time.has_value() && last_batch_time.value() >= end_time.value())
     {
@@ -305,7 +306,10 @@ Chunk ReplayStreamTransform::replayOneChunk()
     {
         if (now - last_log_ts >= LOG_INTERVAL_US)
         {
-            LOG_WARNING(logger, "Delay occured in replay stream, delayed {} microseconds, output may be inaccurate", now - (wait_interval_us + replay_clock));
+            LOG_WARNING(
+                logger,
+                "Delay occured in replay stream, delayed {} microseconds, output may be inaccurate",
+                now - (wait_interval_us + replay_clock));
             last_log_ts = now;
         }
     }

@@ -544,3 +544,67 @@ tests:
           - - "1"
             - bbbb
 
+  - id: 6
+    tags:
+      - replay_stream
+      - stream query
+      - external_stream
+    name: test external stream replay
+    description: test external stream replay
+    steps:
+      - statements:
+          - client: exec
+            query_type: docker
+            query: docker exec redpanda-1 rpk topic delete test
+
+          - client: exec
+            query_type: docker
+            wait: 2
+            query: docker exec redpanda-1 rpk topic create test
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test29_stream_1
+
+          - client: python
+            query_type: table
+            exist: test29_stream_1
+            exist_wait: 2
+            wait: 1
+            query: "create external stream if not exists test29_stream_1 (id int, time datetime, time_datetime64 datetime64(3)) 
+              settings type='kafka', brokers='redpanda-1:9092', topic='test'"
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: insert into test29_stream_1 (id, time, time_datetime64) values 
+              (1, '2024-01-20 16:01:14', '2024-01-20 16:01:14.000')
+              (2, '2024-01-20 16:01:15', '2024-01-20 16:01:14.100')
+              (3, '2024-01-20 16:01:16', '2024-01-20 16:01:14.200')
+              (4, '2024-01-20 16:01:17', '2024-01-20 16:01:14.500')
+              (5, '2024-01-20 16:01:18', '2024-01-20 16:01:15.100')
+              (6, '2024-01-20 16:01:20', '2024-01-20 16:01:16.100')
+
+          - client: python
+            query_type: stream
+            terminate: manual
+            query_id: '3307'
+            wait: 5
+            query: select id from test29_stream_1 where _tp_time > earliest_timestamp()
+              settings replay_speed = 5, replay_time_column = 'time', replay_start_time = '2024-01-20 16:01:13'
+
+          - client: python
+            query_type: table
+            depends_on_query: "3307"
+            wait: 10
+            query: kill query where query_id = '3307'
+
+    expected_results:
+      - query_id: '3307'
+        expected_results:
+          - [1]
+          - [2]
+          - [3]
+          - [4]
+          - [5]
+          - [6]
