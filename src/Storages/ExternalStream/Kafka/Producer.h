@@ -2,7 +2,6 @@
 
 #include <Common/ThreadPool.h>
 #include <KafkaLog/KafkaWALCommon.h>
-#include "Topic.h"
 
 #include <boost/core/noncopyable.hpp>
 
@@ -25,8 +24,6 @@ public:
     void setStopped() { stopped.test_and_set(); }
 
     bool isStopped() const { return stopped.test(); }
-
-    WatermarkOffsets getWatermarkOffsets(int32_t partition, String topic_name) const;
 
 private:
     void backgroundPoll(UInt64 poll_timeout_ms) const;

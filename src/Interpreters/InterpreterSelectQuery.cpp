@@ -3876,12 +3876,12 @@ std::vector<nlog::RecordSN> InterpreterSelectQuery::checkReplaySettingsAndGetLas
     }
 
     external_stream = storage->as<StorageExternalStream>();
-    std::vector<int64_t> Last_sns;
+    std::vector<int64_t> last_sns;
     if (external_stream)
     {
         auto nested_storage = external_stream->getNested();
-        if (auto * Kafka_stream = nested_storage->as<Kafka>())
-            Last_sns = Kafka_stream->getLastSNs();
+        if (auto * kafka_stream = nested_storage->as<Kafka>())
+            last_sns = kafka_stream->getLastSNs();
         else
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Replay Stream is only support append-only stream and external stream Kafka");
     }
@@ -3909,7 +3909,7 @@ std::vector<nlog::RecordSN> InterpreterSelectQuery::checkReplaySettingsAndGetLas
     if(storagestream)
         return storagestream->getLastSNs();
     else
-        return Last_sns;
+        return last_sns;
 }
 
 /// Preliminary LIMIT - is used in every source, if there are several sources, before they are combined.

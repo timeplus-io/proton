@@ -47,23 +47,6 @@ void Producer::backgroundPoll(UInt64 poll_timeout_ms) const
 
     LOG_INFO(logger, "Producer poll stopped");
 }
-
-WatermarkOffsets Producer::getWatermarkOffsets(int32_t partition, String topic_name) const
-{
-    int64_t low, high;
-    auto err = rd_kafka_get_watermark_offsets(getHandle(), topic_name.c_str(), partition, &low, &high);
-
-    if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
-        throw Exception(
-            klog::mapErrorCode(err),
-            "Failed to get watermark offsets topic={} partition={} error={}",
-            topic_name,
-            partition,
-            rd_kafka_err2str(err));
-
-    return {low, high};
-}
-
 }
 
 }
