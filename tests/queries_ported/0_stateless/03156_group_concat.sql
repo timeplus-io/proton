@@ -25,6 +25,7 @@ SELECT group_concat(p_array, ',', 2) FROM test_group_concat;
 SELECT group_concat(p_int) FROM test_group_concat WHERE id = 1;
 
 INSERT INTO test_group_concat (id, p_int, p_string, p_array) VALUES (0, 95, 'abc', [1, 2, 3]), (1, NULL, 'a', [993, 986, 979, 972]), (2, 123, 'makson95', []);
+SELECT sleep(1);
 INSERT INTO test_group_concat (id, p_int, p_string, p_array) VALUES (0, 95, 'abc', [1, 2, 3]), (1, NULL, 'a', [993, 986, 979, 972]), (2, 123, 'makson95', []);
 
 SELECT sleep(3);
