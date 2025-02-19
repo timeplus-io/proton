@@ -1,4 +1,5 @@
 #include <DataTypes/DataTypeDateTime64.h>
+#include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <IO/WriteBufferFromFile.h>
@@ -304,6 +305,10 @@ void Kafka::cacheVirtualColumnNamesAndTypes()
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_SHARD, std::make_shared<DataTypeInt32>()));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, std::make_shared<DataTypeInt64>()));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_MESSAGE_KEY, std::make_shared<DataTypeString>()));
+
+    DataTypes header_types{/*key_type*/ std::make_shared<DataTypeString>(), /*value_type*/ std::make_shared<DataTypeString>()};
+    virtual_column_names_and_types.push_back(
+        NameAndTypePair(ProtonConsts::RESERVED_MESSAGE_HEADERS, std::make_shared<DataTypeMap>(header_types)));
 }
 
 std::vector<Int64> Kafka::getOffsets(
@@ -426,7 +431,7 @@ std::optional<UInt64> Kafka::totalRows(const Settings & settings_ref) const
 
 std::vector<int64_t> Kafka::getLastSNs() const
 {
-    auto produce = const_cast<DB::Kafka*>(this)->getProducer();
+    auto produce = const_cast<DB::Kafka *>(this)->getProducer();
     RdKafka::Topic topic{*produce->getHandle(), topicName()};
     auto partitions = topic.getPartitionCount();
 
