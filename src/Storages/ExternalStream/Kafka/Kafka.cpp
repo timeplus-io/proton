@@ -206,8 +206,6 @@ Kafka::ConfPtr createConfFromSettings(const KafkaExternalStreamSettings & settin
 
 }
 
-const String Kafka::VIRTUAL_COLUMN_MESSAGE_KEY = "_message_key";
-
 Kafka::ConfPtr Kafka::createRdConf(KafkaExternalStreamSettings settings_)
 {
     if (const auto & ca_pem = settings_.ssl_ca_pem.value; !ca_pem.empty())
@@ -305,7 +303,7 @@ void Kafka::cacheVirtualColumnNamesAndTypes()
         NameAndTypePair(ProtonConsts::RESERVED_PROCESS_TIME, std::make_shared<DataTypeDateTime64>(3, "UTC")));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_SHARD, std::make_shared<DataTypeInt32>()));
     virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_EVENT_SEQUENCE_ID, std::make_shared<DataTypeInt64>()));
-    virtual_column_names_and_types.push_back(NameAndTypePair(VIRTUAL_COLUMN_MESSAGE_KEY, std::make_shared<DataTypeString>()));
+    virtual_column_names_and_types.push_back(NameAndTypePair(ProtonConsts::RESERVED_MESSAGE_KEY, std::make_shared<DataTypeString>()));
 }
 
 std::vector<Int64> Kafka::getOffsets(
