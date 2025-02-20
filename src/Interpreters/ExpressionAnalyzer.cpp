@@ -117,13 +117,21 @@ bool allowEarlyConstantFolding(const ActionsDAG & actions, const Settings & sett
 Poco::Logger * getLogger() { return &Poco::Logger::get("ExpressionAnalyzer"); }
 
 /// proton: starts.
+/// Need exact match because _array is a special combinator suffix
+/// that would otherwise filter these functions incorrectly
+static const std::unordered_set<std::string> exact_match_functions = {
+    "group_array",
+    "group_uniq_array",
+    "group_array_last_array",
+};
+
 void tryTranslateToParametricAggregateFunction(
     const ASTFunction * node, DataTypes & types, Array & parameters, Names & argument_names, ContextPtr context)
 {
     if (!parameters.empty() || argument_names.empty())
         return;
 
-    if (AggregateFunctionCombinatorFactory::instance().tryFindSuffix(node->name))
+    if (AggregateFunctionCombinatorFactory::instance().tryFindSuffix(node->name) && !exact_match_functions.contains(node->name))
         return;
 
     assert(node->arguments);
@@ -150,8 +158,7 @@ void tryTranslateToParametricAggregateFunction(
         /// Translate `top_k_exact(key, num[, with_count, limit_memory_size])` to `top_k_exact(num[, with_count, limit_memory_size])(key)`
         auto size = arguments.size();
         if (size < 2 || size > 4)
-            throw Exception(
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 2 to 4 arguments.", node->name);
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 2 to 4 arguments.", node->name);
 
         ASTPtr expression_list = std::make_shared<ASTExpressionList>();
         expression_list->children.assign(arguments.begin() + 1, arguments.end());
@@ -166,8 +173,35 @@ void tryTranslateToParametricAggregateFunction(
         /// Translate `top_k_exact_weighted(key, weight, num, [, with_count, limit_memory_size])` to `top_k_exact_weighted(num[, with_count, limit_memory_size])(key, weighted)`
         auto size = arguments.size();
         if (size < 3 || size > 5)
-            throw Exception(
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 3 to 5 arguments.", node->name);
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 3 to 5 arguments.", node->name);
+
+        ASTPtr expression_list = std::make_shared<ASTExpressionList>();
+        expression_list->children.assign(arguments.begin() + 2, arguments.end());
+        parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+
+        argument_names = {argument_names[0], argument_names[1]};
+        types = {types[0], types[1]};
+    }
+    else if (lower_name == "approx_top_k" || lower_name == "approx_top_k_count")
+    {
+        /// approx_top_k(key, k, reserved) to approx_top_k(k, reserved)(key)
+        auto size = arguments.size();
+        if (size < 2 || size > 3)
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 2 to 3 arguments.", node->name);
+
+        ASTPtr expression_list = std::make_shared<ASTExpressionList>();
+        expression_list->children.assign(arguments.begin() + 1, arguments.end());
+        parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+
+        argument_names = {argument_names[0]};
+        types = {types[0]};
+    }
+    else if (lower_name == "approx_top_k_sum")
+    {
+        /// approx_top_k_sum(key, weight, k, reserved) to approx_top_sum(k, reserved)(key, weight)
+        auto size = arguments.size();
+        if (size < 3 || size > 4)
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 3 to 4 arguments.", node->name);
 
         ASTPtr expression_list = std::make_shared<ASTExpressionList>();
         expression_list->children.assign(arguments.begin() + 2, arguments.end());
@@ -191,7 +225,6 @@ void tryTranslateToParametricAggregateFunction(
                     for (size_t i = 2; i < arg_size; ++i)
                         expression_list->children.push_back(arguments[i]);
                     parameters = getAggregateFunctionParametersArray(expression_list, "", context);
-                    
                 }
                 argument_names = {argument_names[0], argument_names[1]};
                 types = {types[0], types[1]};
@@ -267,8 +300,7 @@ void tryTranslateToParametricAggregateFunction(
     {
         /// Translate `largest_triangle_three_buckets(x, y, n)` to `largest_triangle_three_buckets(n)(x, y)`
         if (arguments.size() != 3)
-            throw Exception(
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 3 arguments", node->name);
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 3 arguments", node->name);
 
         ASTPtr expression_list = std::make_shared<ASTExpressionList>();
         expression_list->children.emplace_back(arguments.back());
@@ -276,6 +308,22 @@ void tryTranslateToParametricAggregateFunction(
 
         argument_names.pop_back();
         types.pop_back();
+    }
+    else if (lower_name == "group_array")
+    {
+        if (arguments.size() != 1 && arguments.size() != 2)
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 1 or 2 arguments", node->name);
+
+        if (arguments.size() == 2)
+        {
+            /// Translate `group_array(column, max_elems)` to `group_array(max_elems)(column)`
+            ASTPtr expression_list = std::make_shared<ASTExpressionList>();
+            expression_list->children.push_back(arguments[1]);
+            parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+
+            argument_names.pop_back();
+            types.pop_back();
+        }
     }
     else if (lower_name == "group_concat")
     {
@@ -297,6 +345,18 @@ void tryTranslateToParametricAggregateFunction(
 
         argument_names = {argument_names[0]};
         types = {types[0]};
+    }
+    else if (lower_name.starts_with("group_array_last"))
+    {
+        if (arguments.size() != 2)
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 2 arguments", node->name);
+
+        /// Translate `group_array_last(column, max_size)` to `group_array_last(max_size)(column)`
+        ASTPtr expression_list = std::make_shared<ASTExpressionList>();
+        expression_list->children.push_back(arguments[1]);
+        parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+        argument_names.pop_back();
+        types.pop_back();
     }
 };
 

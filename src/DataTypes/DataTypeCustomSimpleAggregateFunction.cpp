@@ -32,7 +32,7 @@ void DataTypeCustomSimpleAggregateFunction::checkSupportedFunctions(const Aggreg
     /// TODO Make it sane.
     static const std::vector<String> supported_functions{"any", "any_last", "min",
         "max", "sum", "sum_with_overflow", "group_bit_and", "group_bit_or", "group_bit_xor",
-        "sum_map", "min_map", "max_map", "group_array_array", "group_uniq_array_array",
+        "sum_map", "min_map", "max_map", "group_array_array", "group_array_last_array", "group_uniq_array_array",
         "sum_mapped_arrays", "min_mapped_arrays", "max_mapped_arrays"};
 
     // check function

@@ -48,7 +48,7 @@ inline AggregateFunctionPtr createAggregateFunctionGroupArrayImpl(const DataType
     // return std::make_shared<GroupArrayGeneralListImpl<GroupArrayListNodeGeneral, Trait>>(argument_type, std::forward<TArgs>(args)...);
 }
 
-
+template <bool Tlast>
 AggregateFunctionPtr createAggregateFunctionGroupArray(
     const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
 {
@@ -79,9 +79,9 @@ AggregateFunctionPtr createAggregateFunctionGroupArray(
             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     if (!limit_size)
-        return createAggregateFunctionGroupArrayImpl<GroupArrayTrait<false, Sampler::NONE>>(argument_types[0], parameters);
+        return createAggregateFunctionGroupArrayImpl<GroupArrayTrait<false, Tlast, Sampler::NONE>>(argument_types[0], parameters);
     else
-        return createAggregateFunctionGroupArrayImpl<GroupArrayTrait<true, Sampler::NONE>>(argument_types[0], parameters, max_elems);
+        return createAggregateFunctionGroupArrayImpl<GroupArrayTrait<true, Tlast, Sampler::NONE>>(argument_types[0], parameters, max_elems);
 }
 
 AggregateFunctionPtr createAggregateFunctionGroupArraySample(
@@ -114,7 +114,7 @@ AggregateFunctionPtr createAggregateFunctionGroupArraySample(
     else
         seed = thread_local_rng();
 
-    return createAggregateFunctionGroupArrayImpl<GroupArrayTrait<true, Sampler::RNG>>(argument_types[0], parameters, max_elems, seed);
+    return createAggregateFunctionGroupArrayImpl<GroupArrayTrait<true,  /* Tlast= */ false, Sampler::RNG>>(argument_types[0], parameters, max_elems, seed);
 }
 
 }
@@ -124,8 +124,9 @@ void registerAggregateFunctionGroupArray(AggregateFunctionFactory & factory)
 {
     AggregateFunctionProperties properties = { .returns_default_when_only_null = false, .is_order_dependent = true };
 
-    factory.registerFunction("group_array", { createAggregateFunctionGroupArray, properties });
+    factory.registerFunction("group_array", { createAggregateFunctionGroupArray<false>, properties });
     factory.registerFunction("group_array_sample", { createAggregateFunctionGroupArraySample, properties });
+    factory.registerFunction("group_array_last", { createAggregateFunctionGroupArray<true>, properties });
 }
 
 }
