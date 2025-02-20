@@ -123,6 +123,8 @@ static const std::unordered_set<std::string> exact_match_functions = {
     "group_array",
     "group_uniq_array",
     "group_array_last_array",
+    "group_array_sorted_state",
+    "group_array_sorted_merge"
 };
 
 void tryTranslateToParametricAggregateFunction(
@@ -357,6 +359,19 @@ void tryTranslateToParametricAggregateFunction(
         parameters = getAggregateFunctionParametersArray(expression_list, "", context);
         argument_names.pop_back();
         types.pop_back();
+    }
+    else if (lower_name.starts_with("group_array_sorted"))
+    {
+        /// Translate `group_array_sorted(column, limit)` to `group_array_sorted(limit)(column)`
+        if (arguments.size() != 2)
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 2 arguments", node->name);
+            
+        ASTPtr expression_list = std::make_shared<ASTExpressionList>();
+        expression_list->children.push_back(arguments[1]);
+        parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+
+        argument_names = {argument_names[0]};
+        types = {types[0]};
     }
 };
 
