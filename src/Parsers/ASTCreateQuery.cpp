@@ -213,6 +213,8 @@ ASTPtr ASTCreateQuery::clone() const
     if (comment)
         res->set(res->comment, comment->clone());
 
+    res->data_schema = data_schema;
+
     cloneOutputOptions(*res);
     cloneTableOptions(*res);
 
@@ -252,6 +254,13 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << "COMMENT " << (settings.hilite ? hilite_none : "");
             comment->formatImpl(settings, state, frame);
+        }
+
+        if (data_schema)
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws
+                                  << "data_schema = " << (settings.hilite ? hilite_none : "")
+                                  << quoteString(*data_schema);
         }
 
         return;

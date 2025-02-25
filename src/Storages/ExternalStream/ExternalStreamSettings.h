@@ -58,6 +58,7 @@ class ASTStorage;
 
 #define ALL_EXTERNAL_STREAM_SETTINGS(M) \
     M(String, type, "", "External stream type", 0) \
+    M(String, data_schema, "", "Avro schema identifier for the stream", 0) \
     KAFKA_EXTERNAL_STREAM_SETTINGS(M) \
     LOG_FILE_EXTERNAL_STREAM_SETTINGS(M) \
     PULSAR_EXTERNAL_STREAM_SETTINGS(M) \

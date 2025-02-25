@@ -22,6 +22,14 @@ void ExecutableSettings::loadFromQuery(ASTStorage & storage_def)
     {
         try
         {
+            for (const auto & change : storage_def.settings->changes)
+            {
+                if (change.name == "data_schema")
+                {
+                    this->data_schema = change.value.safeGet<String>();
+                }
+            }
+
             applyChanges(storage_def.settings->changes);
         }
         catch (Exception & e)

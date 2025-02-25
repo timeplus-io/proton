@@ -76,6 +76,9 @@ public:
     /// CREATE EXTERNAL STREAM
     bool is_external = false;
 
+    /// For store data_schema
+    std::optional<String> data_schema;
+
     ASTColumns * columns_list = nullptr;
     ASTExpressionList * tables = nullptr;
 

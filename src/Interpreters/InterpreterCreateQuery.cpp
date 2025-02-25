@@ -13,6 +13,10 @@
 
 #include <Columns/ColumnString.h>
 
+#include <Formats/FormatSchemaInfo.h>
+
+#include <IO/ReadBufferFromFile.h>
+#include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 
@@ -25,6 +29,11 @@
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
+
+#include <Poco/JSON/Parser.h>
+#include <Poco/Dynamic/Var.h>
+#include <Poco/JSON/Object.h>
+#include <Poco/JSON/Array.h>
 
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageInMemoryMetadata.h>
@@ -1454,8 +1463,70 @@ BlockIO InterpreterCreateQuery::execute()
     /// CREATE|ATTACH DATABASE
     if (create.database && !create.table)
         return createDatabase(create);
-    else
-        return createTable(create);
+//    else
+//        return createTable(create);
+
+    /// CREATE EXTERNAL STREAM
+    if (create.is_external && create.storage && create.storage->settings)
+    {
+        // Extract data_schema from SETTINGS
+        auto * set_query = create.storage->settings;
+        for (const auto & change : set_query->changes)
+        {
+            if (change.name == "data_schema")
+                create.data_schema = change.value.safeGet<String>();
+        }
+        // Automatically derive schema
+        if (!create.columns_list && create.data_schema)
+        {
+            // FORMAT SCHEMA JSON
+            FormatSchemaInfo schema_info(*create.data_schema, "Avro", false, getContext()->getApplicationType() == Context::ApplicationType::SERVER, getContext()->getFormatSchemaPath());
+            String schema_path = schema_info.absoluteSchemaPath();
+
+            std::string avro_schema_json;
+            {
+                ReadBufferFromFile in(schema_path);
+                readStringUntilEOF(avro_schema_json, in);
+            }
+
+            Poco::JSON::Parser parser;
+            Poco::Dynamic::Var parsed_result = parser.parse(avro_schema_json);
+            Poco::JSON::Object::Ptr schema_obj = parsed_result.extract<Poco::JSON::Object::Ptr>();
+
+            if (!schema_obj->has("fields"))
+            {
+                throw Exception("Invalid Avro schema: 'fields' not found in schema: " + *create.data_schema,
+                                ErrorCodes::BAD_ARGUMENTS);
+            }
+
+    		Poco::JSON::Array::Ptr fields = schema_obj->getArray("fields");
+            auto columns_list = std::make_shared<ASTColumns>();
+            auto expr_list = std::make_shared<ASTExpressionList>();
+            columns_list->columns = expr_list.get();
+            columns_list->children.push_back(expr_list);
+
+            for (size_t i = 0; i < fields->size(); ++i)
+            {
+                Poco::JSON::Object::Ptr field = fields->getObject(i);
+                String column_name = field->getValue<String>("name");
+                String column_type = field->getValue<String>("type");
+
+                // Create ASTColumnDeclaration
+                auto column_decl = std::make_shared<ASTColumnDeclaration>();
+                column_decl->name = column_name;
+
+                // Change Avro type into ClickHouse Type
+                String clickhouse_type = DB::avroTypeToClickHouseType(column_type);
+                auto type_ast = std::make_shared<ASTIdentifier>(clickhouse_type);
+                column_decl->type = type_ast;
+
+                expr_list->children.push_back(column_decl);
+            }
+
+            create.set(create.columns_list, columns_list);
+        }
+    }
+    return createTable(create);
 }
 
 

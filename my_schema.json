@@ -1,0 +1,9 @@
+{
+  "type": "record",
+  "name": "Data",
+  "fields": [
+    {"name": "id", "type": "int"},
+    {"name": "name", "type": "string"},
+    {"name": "score", "type": "float"}
+  ]
+}

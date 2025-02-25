@@ -5,6 +5,8 @@
 
 namespace DB
 {
+String avroTypeToClickHouseType(const String & avro_type);
+
 class Context;
 
 /// Extracts information about where the format schema file is from passed context and keep it.

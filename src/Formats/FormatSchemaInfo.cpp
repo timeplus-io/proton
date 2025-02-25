@@ -2,10 +2,33 @@
 #include <Interpreters/Context.h>
 #include <Common/Exception.h>
 #include <filesystem>
+#include <unordered_map>
 
 
 namespace DB
 {
+String avroTypeToClickHouseType(const String & avro_type)
+{
+    static const std::unordered_map<String, String> avro_to_clickhouse = {
+        {"null", "Nullable(String)"},
+        {"boolean", "Bool"},
+        {"int", "int32"},
+        {"long", "int64"},
+        {"float", "float32"},
+        {"double", "float64"},
+        {"bytes", "string"},
+        {"string", "string"},
+        {"array", "Array(string)"},
+        {"map", "Map(string, string)"},
+        {"fixed", "FixedString(16)"}
+    };
+
+    auto it = avro_to_clickhouse.find(avro_type);
+    if (it != avro_to_clickhouse.end())
+        return it->second;
+
+    return "string";
+}
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
@@ -30,6 +53,7 @@ namespace
             return "";
     }
 }
+
 
 
 FormatSchemaInfo::FormatSchemaInfo(const String & format_schema, const String & format, bool require_message, bool is_server, const std::string & format_schema_path)
@@ -84,6 +108,19 @@ FormatSchemaInfo::FormatSchemaInfo(const String & format_schema, const String & 
     {
         if (is_server)
             throw Exception("Absolute path in the 'format_schema' setting is prohibited: " + path.string(), ErrorCodes::BAD_ARGUMENTS);
+        schema_path = path.filename();
+        schema_directory = path.parent_path() / "";
+    }
+    else if (path.has_parent_path() && !fs::weakly_canonical(default_schema_directory_path / path).string().starts_with(fs::weakly_canonical(default_schema_directory_path).string()))
+    {
+        if (is_server)
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS,
+                "Path in the 'format_schema' setting shouldn't go outside the 'format_schema_path' directory: {} ({} not in {})",
+                default_schema_directory(),
+                path.string(),
+                default_schema_directory());
+        path = default_schema_directory_path / path;
         schema_path = path.filename();
         schema_directory = path.parent_path() / "";
     }
