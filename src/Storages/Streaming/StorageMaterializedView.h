@@ -72,6 +72,8 @@ public:
 
     bool supportsStreamingQuery() const override { return true; }
 
+    StorageID getExternalTargetTableID() const noexcept { return target_table_id; }
+
 private:
     /// Return true on success, false on failure
     void createInnerTable();

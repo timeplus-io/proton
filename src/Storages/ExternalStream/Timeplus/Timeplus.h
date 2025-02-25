@@ -43,11 +43,15 @@ public:
 
     SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_) override;
 
+    bool isSecure() const { return secure; }
+
 private:
     StorageID remote_stream_id;
     StoragePtr storage_ptr;
 
     const fs::path cache_dir;
+
+    bool secure;
 
     Poco::Logger * logger;
 };

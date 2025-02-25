@@ -44,6 +44,11 @@ public:
 
     SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) override;
 
+    const String & formatSchema() const { return settings->format_schema.value; }
+    bool isOneMessagePerRow() const { return settings->one_message_per_row.value; }
+    bool skipServerCertCheck() const { return settings->skip_server_cert_check.value; }
+    bool validateHostname() const { return settings->validate_hostname.value; }
+
 private:
     inline const String & getTopic() const { return settings->topic.value; }
     inline const String & serviceUrl() const { return settings->service_url.value; }

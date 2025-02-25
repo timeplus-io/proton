@@ -28,6 +28,8 @@ public:
     bool supportsSubcolumns() const override { return true; }
     bool squashInsert() const noexcept override { return false; }
 
+    virtual std::vector<int64_t> getLastSNs() const { return {}; }
+
     void read(
         QueryPlan & query_plan,
         const Names & column_names,

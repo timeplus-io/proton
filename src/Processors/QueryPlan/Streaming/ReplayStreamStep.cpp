@@ -25,11 +25,13 @@ static ITransformingStep::Traits getTraits()
 }
 
 ReplayStreamStep::ReplayStreamStep(
-    const DataStream & input_stream_, Float32 replay_speed_, const String & replay_time_col_, std::vector<Int64> shards_last_sns_)
+    const DataStream & input_stream_, Float32 replay_speed_, const String & replay_time_col_, std::vector<Int64> shards_last_sns_, std::optional<String> start_time_, std::optional<String> end_time_)
     : ITransformingStep(input_stream_, input_stream_.header, getTraits())
     , replay_speed(replay_speed_)
     , shards_last_sns(std::move(shards_last_sns_))
     , replay_time_col(replay_time_col_)
+    , start_time(start_time_)
+    , end_time(end_time_)
 {
 }
 
@@ -41,7 +43,7 @@ void ReplayStreamStep::transformPipeline(QueryPipelineBuilder & pipeline, const 
 
     size_t index = 0;
     pipeline.addSimpleTransform([&](const Block & header) {
-        return std::make_shared<ReplayStreamTransform>(header, replay_speed, shards_last_sns[index++], replay_time_col);
+        return std::make_shared<ReplayStreamTransform>(header, replay_speed, shards_last_sns[index++], replay_time_col, start_time, end_time);
     });
 }
 

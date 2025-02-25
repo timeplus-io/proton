@@ -16,6 +16,8 @@ class ClickHouse final : public IExternalTable
 public:
     explicit ClickHouse(const String & name, ExternalTableSettingsPtr settings);
 
+    std::string getType() const override { return "ClickHouse"; }
+
     void startup() override;
     void shutdown() override {}
 

@@ -402,3 +402,98 @@ tests:
           - [2, "True"]
           - [3, "True"]
           - [4, "True"]
+
+  - id: 7
+    tags:
+      - replay_stream
+      - stream query
+    name: test replay_start_time and replay_end_time settings.
+    description: replay two streams using the same start_time and replay_end_time to keep the replay timelines of the two streams aligned.
+    steps:
+      - statements:
+          - client: python
+            query_type: table
+            query: drop stream if exists test29_stream_1
+
+          - client: python
+            query_type: table
+            exist: test29_stream_1
+            exist_wait: 2
+            wait: 1
+            query: create stream if not exists test29_stream_1 (id int, time_col datetime64(3));
+
+          - client: python
+            query_type: table
+            query: drop stream if exists test29_stream_2
+
+          - client: python
+            query_type: table
+            exist: test29_stream_2
+            exist_wait: 2
+            wait: 1
+            query: create stream if not exists test29_stream_2 (id int, time_col datetime64(3));
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: insert into test29_stream_1(id, time_col) values (1, '2024-01-20 16:01:14.000')(3, '2024-01-20 16:01:15.000')(6, '2024-01-20 16:01:17.000')(7, '2024-01-20 16:01:20.000');
+
+          - client: python
+            query_type: table
+            wait: 1
+            query: insert into test29_stream_2(id, time_col) values (2, '2024-01-20 16:01:14.500')(4, '2024-01-20 16:01:15.400')(5, '2024-01-20 16:01:16.000')(8, '2024-01-20 16:01:20.001');
+
+          - client: python
+            query_type: stream
+            terminate: manual
+            query_id: '2907-1'
+            wait: 1
+            query: select id from test29_stream_1 where _tp_time > earliest_timestamp() 
+              settings replay_speed=5, replay_time_column='time_col', replay_start_time = '2024-01-20 16:01:14.000'
+              UNION select id from test29_stream_2 where _tp_time > earliest_timestamp()
+              settings replay_speed=5, replay_time_column='time_col', replay_start_time = '2024-01-20 16:01:14.000'
+
+          - client: python
+            query_type: table
+            depends_on: '2907-1'
+            wait: 5
+            query: insert into test29_stream_1(id, time_col) values (9, '2024-01-20 16:01:20.100');
+
+          - client: python
+            query_type: stream
+            terminate: manual
+            query_id: '2907-2'
+            wait: 1
+            query: select id from test29_stream_1 where _tp_time > earliest_timestamp() 
+              settings replay_speed=5, replay_time_column='time_col', replay_start_time = '2024-01-20 16:01:14.000', replay_end_time = '2024-01-20 16:01:16.000'
+              UNION select id from test29_stream_2 where _tp_time > earliest_timestamp()
+              settings replay_speed=5, replay_time_column='time_col', replay_start_time = '2024-01-20 16:01:14.000', replay_end_time = '2024-01-20 16:01:16.000'
+
+          - client: python
+            query_type: table
+            kill: '2907-1'
+            kill_wait: 5
+
+          - client: python
+            query_type: table
+            kill: '2907-2'
+            kill_wait: 1
+
+    expected_results:
+      - query_id: '2907-1'
+        expected_results:
+          - [1]
+          - [2]
+          - [3]
+          - [4]
+          - [5]
+          - [6]
+          - [7]
+          - [8]
+          - [9]
+      - query_id: '2907-2'
+        expected_results:
+          - [1]
+          - [2]
+          - [3]
+          - [4]

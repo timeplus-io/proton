@@ -39,6 +39,8 @@ public:
         const StorageMetadataPtr & /*metadata_snapshot*/,
         ContextPtr /*context*/) override;
 
+    String getType() const { return external_table->getType(); }
+
 protected:
     StorageExternalTable(
         const StorageID & table_id,

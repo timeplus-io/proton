@@ -47,7 +47,6 @@ void Producer::backgroundPoll(UInt64 poll_timeout_ms) const
 
     LOG_INFO(logger, "Producer poll stopped");
 }
-
 }
 
 }

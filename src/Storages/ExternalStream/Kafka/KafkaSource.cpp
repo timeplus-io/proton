@@ -1,15 +1,16 @@
 #include <Checkpoint/CheckpointContext.h>
 #include <Checkpoint/CheckpointCoordinator.h>
-#include <Common/ProtonCommon.h>
+#include <Core/Field.h>
 #include <Formats/FormatFactory.h>
-#include <Interpreters/Context.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
 #include <Processors/Executors/StreamingFormatExecutor.h>
 #include <Storages/ExternalStream/Kafka/Kafka.h>
 #include <Storages/ExternalStream/Kafka/KafkaSource.h>
 #include <Storages/ExternalStream/Kafka/Topic.h>
+#include <Common/ProtonCommon.h>
 
 #include <base/ClockUtils.h>
 
@@ -114,7 +115,8 @@ Chunk KafkaSource::generate()
 
     if (!consume_started.test_and_set())
     {
-        LOG_INFO(logger, "Start consuming from topic={} shard={} offset={} high_watermark={}", topic->name(), shard, offset, high_watermark);
+        LOG_INFO(
+            logger, "Start consuming from topic={} shard={} offset={} high_watermark={}", topic->name(), shard, offset, high_watermark);
         consumer->startConsume(*topic, shard, offset, /*check_offset=*/is_streaming);
     }
 
@@ -143,17 +145,15 @@ void KafkaSource::readAndProcess()
     current_batch.clear();
     current_batch.reserve(header.columns());
 
-    auto callback = [this](void * rkmessage, size_t total_count, void * data) {
-        parseMessage(rkmessage, total_count, data);
-    };
+    auto callback = [this](void * rkmessage, size_t total_count, void * data) { parseMessage(rkmessage, total_count, data); };
 
-    auto error_callback = [this](rd_kafka_resp_err_t err)
-    {
+    auto error_callback = [this](rd_kafka_resp_err_t err) {
         LOG_ERROR(logger, "Failed to consume topic={} shard={} err={}", topic->name(), shard, rd_kafka_err2str(err));
         external_stream_counter->addToReadFailed(1);
     };
 
-    auto current_batch_last_sn = consumer->consumeBatch(*topic, shard, record_consume_batch_count, record_consume_timeout_ms, callback, error_callback);
+    auto current_batch_last_sn
+        = consumer->consumeBatch(*topic, shard, record_consume_batch_count, record_consume_timeout_ms, callback, error_callback);
 
     if (current_batch_last_sn >= 0) /// There are new messages
     {
@@ -176,7 +176,7 @@ void KafkaSource::readAndProcess()
     iter = result_chunks_with_sns.begin();
 }
 
-void KafkaSource::parseMessage(void * rkmessage, size_t  /*total_count*/, void *  /*data*/)
+void KafkaSource::parseMessage(void * rkmessage, size_t /*total_count*/, void * /*data*/)
 {
     auto * message = static_cast<rd_kafka_message_t *>(rkmessage);
     parseFormat(message);
@@ -267,18 +267,10 @@ void KafkaSource::initFormatExecutor()
     const auto & data_format = kafka.dataFormat();
 
     auto input_format = FormatFactory::instance().getInputFormat(
-        data_format,
-        read_buffer,
-        physical_header,
-        query_context,
-        max_block_size,
-        kafka.getFormatSettings(query_context));
+        data_format, read_buffer, physical_header, query_context, max_block_size, kafka.getFormatSettings(query_context));
 
     format_executor = std::make_unique<StreamingFormatExecutor>(
-        physical_header,
-        std::move(input_format),
-        [this](const MutableColumns &, Exception & ex) -> size_t
-        {
+        physical_header, std::move(input_format), [this](const MutableColumns &, Exception & ex) -> size_t {
             format_error = ex.what();
             return 0;
         });
@@ -288,23 +280,72 @@ void KafkaSource::calculateColumnPositions()
 {
     for (size_t pos = 0; const auto & column : header)
     {
+        /// For _tp_message_key and _tp_message_header, they always have the same meaning, users are not allowed to override them.
+        if (column.name == ProtonConsts::RESERVED_MESSAGE_KEY)
+        {
+            virtual_col_value_functions[pos]
+                = [](const rd_kafka_message_t * kmessage) -> String { return {static_cast<char *>(kmessage->key), kmessage->key_len}; };
+            virtual_col_types[pos] = column.type;
+        }
+        else if (column.name == ProtonConsts::RESERVED_MESSAGE_HEADERS)
+        {
+            virtual_col_value_functions[pos] = [](const rd_kafka_message_t * kmessage) -> Field {
+                /// The returned pointer in *hdrsp is associated with the rkmessage and must not be used after destruction of the message object.
+                rd_kafka_headers_t * hdrs;
+                auto err = rd_kafka_message_headers(kmessage, &hdrs);
+
+                Map result;
+                if (err == RD_KAFKA_RESP_ERR__NOENT)
+                    return result;
+
+                if (err != RD_KAFKA_RESP_ERR_NO_ERROR)
+                {
+                    result.reserve(1);
+                    result.push_back(
+                        Tuple{ProtonConsts::RESERVED_ERROR, fmt::format("Failed to parse headers, error: {}", rd_kafka_err2str(err))});
+                    return result;
+                }
+
+                size_t idx = 0;
+                const char * name;
+                const void * val;
+                size_t size;
+
+                result.reserve(rd_kafka_header_cnt(hdrs));
+
+                while (rd_kafka_header_get_all(hdrs, idx++, &name, &val, &size) == RD_KAFKA_RESP_ERR_NO_ERROR)
+                {
+                    if (val != nullptr)
+                    {
+                        const auto * val_str = static_cast<const char *>(val);
+                        result.push_back(Tuple{name, val_str});
+                    }
+                    else
+                        result.push_back(Tuple{name, "null"});
+                }
+
+                return result;
+            };
+            virtual_col_types[pos] = column.type;
+        }
         /// If a virtual column is explicitely defined as a physical column in the stream definition, we should honor it,
         /// just as the virutal columns document says, and users are not recommended to do this (and they still can).
-        if (std::any_of(non_virtual_header.begin(), non_virtual_header.end(), [&column](auto & non_virtual_column) { return non_virtual_column.name == column.name; }))
+        else if (std::any_of(non_virtual_header.begin(), non_virtual_header.end(), [&column](auto & non_virtual_column) {
+                     return non_virtual_column.name == column.name;
+                 }))
         {
             physical_header.insert(column);
         }
         else if (column.name == ProtonConsts::RESERVED_APPEND_TIME)
         {
-            virtual_col_value_functions[pos]
-                = [](const rd_kafka_message_t * kmessage) {
-                    rd_kafka_timestamp_type_t ts_type;
-                    auto ts = rd_kafka_message_timestamp(kmessage, &ts_type);
-                    /// Only set the append time when the timestamp is actually an append time.
-                    if (ts_type == RD_KAFKA_TIMESTAMP_LOG_APPEND_TIME)
-                        return Decimal64(ts);
-                    return Decimal64();
-                };
+            virtual_col_value_functions[pos] = [](const rd_kafka_message_t * kmessage) {
+                rd_kafka_timestamp_type_t ts_type;
+                auto ts = rd_kafka_message_timestamp(kmessage, &ts_type);
+                /// Only set the append time when the timestamp is actually an append time.
+                if (ts_type == RD_KAFKA_TIMESTAMP_LOG_APPEND_TIME)
+                    return Decimal64(ts);
+                return Decimal64();
+            };
             /// We are assuming all virtual timestamp columns have the same data type
             virtual_col_types[pos] = column.type;
         }
@@ -333,11 +374,6 @@ void KafkaSource::calculateColumnPositions()
         else if (column.name == ProtonConsts::RESERVED_EVENT_SEQUENCE_ID)
         {
             virtual_col_value_functions[pos] = [](const rd_kafka_message_t * kmessage) -> Int64 { return kmessage->offset; };
-            virtual_col_types[pos] = column.type;
-        }
-        else if (column.name == Kafka::VIRTUAL_COLUMN_MESSAGE_KEY)
-        {
-            virtual_col_value_functions[pos] = [](const rd_kafka_message_t * kmessage) -> String { return {static_cast<char *>(kmessage->key), kmessage->key_len}; };
             virtual_col_types[pos] = column.type;
         }
         else

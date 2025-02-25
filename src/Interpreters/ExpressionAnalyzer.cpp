@@ -277,6 +277,27 @@ void tryTranslateToParametricAggregateFunction(
         argument_names.pop_back();
         types.pop_back();
     }
+    else if (lower_name == "group_concat")
+    {
+        /// Translate `group_concat(expression, delimiter, limit)` to `group_concat(delimiter, limit)(expression)`
+        if (arguments.size() > 3 || arguments.size() < 1)
+        {
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                "Incorrect number of parameters for aggregate function {}, should be 0, 1 or 2, got: {}", node->name, parameters.size());
+        }
+
+        if (arguments.size() > 1)
+        {
+            ASTPtr expression_list = std::make_shared<ASTExpressionList>();
+            for (size_t i = 1; i < arguments.size(); i++)
+                expression_list->children.push_back(arguments[i]);
+
+            parameters = getAggregateFunctionParametersArray(expression_list, "", context);
+        }
+
+        argument_names = {argument_names[0]};
+        types = {types[0]};
+    }
 };
 
 /// proton: starts. Add 'is_changelog_input' param to allow aggregate function being aware whether the input stream is a changelog
