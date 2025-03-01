@@ -576,7 +576,7 @@ if (ENABLE_TESTS)
     endif()
 
     if(TARGET ch_contrib::rapidjson)
-        target_include_directories(unit_tests_dbms PRIVATE ch_contrib::rapidjson)
+        target_link_libraries(unit_tests_dbms PRIVATE ch_contrib::rapidjson)
     endif()
 
     if (TARGET ch_contrib::yaml_cpp)
