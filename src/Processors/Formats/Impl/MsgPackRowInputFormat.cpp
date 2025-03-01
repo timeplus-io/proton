@@ -40,11 +40,11 @@ namespace ErrorCodes
     extern const int UNEXPECTED_END_OF_FILE;
 }
 
-MsgPackRowInputFormat::MsgPackRowInputFormat(const Block & header_, ReadBuffer & in_, Params params_, const FormatSettings & settings)
-    : MsgPackRowInputFormat(header_, std::make_unique<PeekableReadBuffer>(in_), params_, settings) {}
+MsgPackRowInputFormat::MsgPackRowInputFormat(const Block & header_, ReadBuffer & in_, Params params_)
+    : MsgPackRowInputFormat(header_, std::make_unique<PeekableReadBuffer>(in_), params_) {}
 
-MsgPackRowInputFormat::MsgPackRowInputFormat(const Block & header_, std::unique_ptr<PeekableReadBuffer> buf_, Params params_, const FormatSettings & settings)
-    : IRowInputFormat(header_, *buf_, std::move(params_), ProcessorID::MsgPackRowInputFormatID), buf(std::move(buf_)), visitor(settings.null_as_default), parser(visitor), data_types(header_.getDataTypes())  {}
+MsgPackRowInputFormat::MsgPackRowInputFormat(const Block & header_, std::unique_ptr<PeekableReadBuffer> buf_, Params params_)
+    : IRowInputFormat(header_, *buf_, std::move(params_), ProcessorID::MsgPackRowInputFormatID), buf(std::move(buf_)), parser(visitor), data_types(header_.getDataTypes())  {}
 
 void MsgPackRowInputFormat::resetParser()
 {

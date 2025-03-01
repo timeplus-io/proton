@@ -82,7 +82,7 @@ void registerInputFormatProtobufList(FormatFactory & factory)
                 settings.protobuf.input_flatten_google_wrappers,
                 settings.protobuf.google_protos_path);
         });
-    factory.markFormatSupportsSubsetOfColumns("ProtobufList");
+    factory.markFormatAsColumnOriented("ProtobufList");
 }
 
 void registerProtobufListSchemaReader(FormatFactory & factory)
