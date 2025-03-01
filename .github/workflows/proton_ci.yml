@@ -17,6 +17,10 @@ on: # yamllint disable-line rule:truthy
       - 'utils/check-style/aspell-ignore/**'
       - 'examples/**'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     name: Labels check
@@ -27,7 +31,7 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4.2.2
         with:
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           submodules: false

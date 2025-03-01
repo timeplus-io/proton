@@ -209,7 +209,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64]
     env:
       build_directory: ${{ github.workspace }}/build
-      build_type: Release
+      build_type: RelWithDebInfo
     if: github.event.inputs.enable_native_build_for_macOS == 'true' && github.event.inputs.arch == 'arm'
     steps:
       - name: Checkout
