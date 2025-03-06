@@ -28,7 +28,7 @@ public:
 private:
     void nextImpl() override
     {
-        if (!offset())
+        if (offset() == 0u)
             return;
 
         on_next(working_buffer.begin(), marked_offset, offset());

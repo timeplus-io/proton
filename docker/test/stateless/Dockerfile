@@ -17,7 +17,6 @@ RUN apt-get update -y \
             nodejs \
             npm \
             openssl \
-            protobuf-compiler \
             python3 \
             python3-lxml \
             python3-requests \
@@ -34,7 +33,13 @@ RUN apt-get update -y \
             mysql-client=8.0* \
             postgresql-client \
             sqlite3 \
+            unzip \
             awscli
+
+ARG PROTOC_VERSION=25.1
+RUN curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip \
+    && unzip protoc-${PROTOC_VERSION}-linux-x86_64.zip -d /usr/local \
+    && rm protoc-${PROTOC_VERSION}-linux-x86_64.zip
 
 RUN pip3 install numpy scipy pandas Jinja2
 

@@ -86,8 +86,10 @@ if (TARGET ch_contrib::rocksdb)
     add_headers_and_sources(dbms Storages/RocksDB)
 endif()
 
-if (TARGET ch_contrib::aws_s3)
+if (TARGET ch_contrib::aws_sdk) # proton: added
     add_headers_and_sources(dbms Common/S3)
+endif()
+if (TARGET ch_contrib::aws_s3)
     add_headers_and_sources(dbms Disks/ObjectStorages/S3)
 endif()
 
@@ -249,6 +251,8 @@ endif()
 
 add_subdirectory(ClickHouse)
 add_object_library(clickhouse_clickhouse ClickHouse)
+
+add_subdirectory(IO/Kafka)
 
 add_subdirectory(Storages/ExternalStream)
 add_subdirectory(Storages/ExternalTable)
@@ -417,8 +421,8 @@ dbms_target_link_libraries (
         boost::circular_buffer
         boost::heap)
 
-target_include_directories(clickhouse_common_io PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/Core/include") # uses some includes from core
-dbms_target_include_directories(PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/Core/include")
+#target_include_directories(clickhouse_common_io PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/Core/include") # uses some includes from core
+#dbms_target_include_directories(PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/Core/include")
 
 target_link_libraries(clickhouse_common_io PUBLIC
     ch_contrib::miniselect
@@ -468,8 +472,8 @@ if (TARGET clickhouse_grpc_protos)
     dbms_target_link_libraries (PUBLIC clickhouse_grpc_protos)
 endif()
 
-if (TARGET ch_contrib::aws_s3)
-    target_link_libraries (clickhouse_common_io PUBLIC ch_contrib::aws_s3)
+if (TARGET ch_contrib::aws_sdk) # proton: updated
+    target_link_libraries (clickhouse_common_io PUBLIC ch_contrib::aws_sdk)
 endif()
 
 if (TARGET ch_contrib::azure_sdk)
@@ -562,6 +566,7 @@ if (ENABLE_TESTS)
     target_link_libraries(unit_tests_dbms PRIVATE
         ch_contrib::gtest_all
         clickhouse_functions
+        clickhouse_table_functions
         clickhouse_aggregate_functions
         clickhouse_parsers
         clickhouse_storages_system
@@ -575,7 +580,7 @@ if (ENABLE_TESTS)
     endif()
 
     if(TARGET ch_contrib::rapidjson)
-        target_include_directories(unit_tests_dbms PRIVATE ch_contrib::rapidjson)
+        target_link_libraries(unit_tests_dbms PRIVATE ch_contrib::rapidjson)
     endif()
 
     if (TARGET ch_contrib::yaml_cpp)

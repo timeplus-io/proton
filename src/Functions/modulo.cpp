@@ -1,16 +1,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionBinaryArithmetic.h>
 
-#if defined(__SSE2__)
-#    define LIBDIVIDE_SSE2
-#elif defined(__AVX512F__) || defined(__AVX512BW__) || defined(__AVX512VL__)
-#    define LIBDIVIDE_AVX512
-#elif defined(__AVX2__)
-#    define LIBDIVIDE_AVX2
-#elif defined(__aarch64__) && defined(__ARM_NEON)
-#    define LIBDIVIDE_NEON
-#endif
-
+#include <libdivide-config.h>
 #include <libdivide.h>
 
 
@@ -183,15 +174,15 @@ using FunctionPositiveModulo = BinaryArithmeticOverloadResolver<PositiveModuloIm
 
 REGISTER_FUNCTION(PositiveModulo)
 {
-    factory.registerFunction<FunctionPositiveModulo>(
+    factory.registerFunction<FunctionPositiveModulo>(FunctionDocumentation
         {
-            R"(
+            .description=R"(
 Calculates the remainder when dividing `a` by `b`. Similar to function `modulo` except that `positiveModulo` always return non-negative number.
 Returns the difference between `a` and the nearest integer not greater than `a` divisible by `b`.
 In other words, the function returning the modulus (modulo) in the terms of Modular Arithmetic.
         )",
-            Documentation::Examples{{"positiveModulo", "SELECT positive_modulo(-1, 10);"}},
-            Documentation::Categories{"Arithmetic"}},
+            .examples{{"positiveModulo", "SELECT positive_modulo(-1, 10);", ""}},
+            .categories{"Arithmetic"}},
         FunctionFactory::CaseInsensitive);
 
     /// Compatibility with Spark:

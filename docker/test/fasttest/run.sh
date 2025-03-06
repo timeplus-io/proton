@@ -157,6 +157,7 @@ function clone_submodules
             contrib/base64
             contrib/cctz
             contrib/libcpuid
+            contrib/libdivide
             contrib/double-conversion
             contrib/llvm-project
             contrib/lz4

@@ -11,4 +11,11 @@
             </invalidCertificateHandler>
         </client>
     </openSSL>
+
+    <!-- Default timeout is 5 sec. Set it to 10 to avoid tests flakiness with slow builds (debug, tsan) -->
+    <sync_request_timeout>10</sync_request_timeout>
+
+    <!-- Directory containing the proto files for the well-known Protobuf types. -->
+    <google_protos_path>/usr/share/proton/protos/</google_protos_path>
+
 </config>

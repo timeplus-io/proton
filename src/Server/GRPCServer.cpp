@@ -111,7 +111,7 @@ namespace
         else if (str == "gzip")
             return GRPC_COMPRESS_GZIP;
         else if (str == "stream_gzip")
-            return GRPC_COMPRESS_STREAM_GZIP;
+            throw Exception(ErrorCodes::INVALID_GRPC_QUERY_INFO, "STREAM_GZIP is no longer supported"); /// was flagged experimental in gRPC, removed as per v1.44
         else
             throw Exception("Unknown compression algorithm: '" + str + "'", ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
@@ -139,7 +139,7 @@ namespace
         else if (algorithm == ::proton::grpc::GZIP)
             return GRPC_COMPRESS_GZIP;
         else if (algorithm == ::proton::grpc::STREAM_GZIP)
-            return GRPC_COMPRESS_STREAM_GZIP;
+            throw Exception(ErrorCodes::INVALID_GRPC_QUERY_INFO, "STREAM_GZIP is no longer supported"); /// was flagged experimental in gRPC, removed as per v1.44
         else
             throw Exception("Unknown compression algorithm: '" + ::proton::grpc::CompressionAlgorithm_Name(algorithm) + "'", ErrorCodes::INVALID_GRPC_QUERY_INFO);
     }

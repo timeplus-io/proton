@@ -335,8 +335,8 @@ private:
 
 REGISTER_FUNCTION(MortonEncode)
 {
-    factory.registerFunction<FunctionMortonEncode>({
-    R"(
+    factory.registerFunction<FunctionMortonEncode>(FunctionDocumentation{
+    .description=R"(
 Calculates Morton encoding (ZCurve) for a list of unsigned integers
 
 The function has two modes of operation:
@@ -373,20 +373,20 @@ The function also accepts columns as arguments:
 But the range tuple must still be a constant:
 [example:from_table_range]
 
-Please note that you can fit only so much bits of information into Morton code as UInt64 has.
+Please note that you can fit only so much bits of information into Morton code as uint64 has.
 Two arguments will have a range of maximum 2^32 (64/2) each
 Three arguments: range of max 2^21 (64/3) each
 And so on, all overflow will be clamped to zero
 )",
-        Documentation::Examples{
-            {"simple", "SELECT morton_encode(1, 2, 3)"},
-            {"range_expanded", "SELECT morton_encode((1,2), 1024, 16)"},
-            {"identity", "SELECT morton_encode(1)"},
-            {"identity_expanded", "SELECT morton_encode(tuple(2), 128)"},
-            {"from_table", "SELECT morton_encode(n1, n2) FROM table"},
-            {"from_table_range", "SELECT morton_encode((1,2), n1, n2) FROM table"},
+        .examples{
+            {"simple", "SELECT morton_encode(1, 2, 3)", ""},
+            {"range_expanded", "SELECT morton_encode((1,2), 1024, 16)", ""},
+            {"identity", "SELECT morton_encode(1)", ""},
+            {"identity_expanded", "SELECT morton_encode(tuple(2), 128)", ""},
+            {"from_table", "SELECT morton_encode(n1, n2) FROM table", ""},
+            {"from_table_range", "SELECT morton_encode((1,2), n1, n2) FROM table", ""},
             },
-        Documentation::Categories {"ZCurve", "Morton coding"}
+        .categories {"ZCurve", "Morton coding"}
     });
 }
 

@@ -3,7 +3,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Common/register_objects.h>
 #include <Common/IFactoryWithAliases.h>
-#include <Common/Documentation.h>
+#include <Common/FunctionDocumentation.h>
 #include <Functions/IFunction.h>
 #include <Functions/IFunctionAdaptors.h>
 
@@ -17,7 +17,7 @@ namespace DB
 {
 
 using FunctionCreator = std::function<FunctionOverloadResolverPtr(ContextPtr)>;
-using FunctionFactoryData = std::pair<FunctionCreator, Documentation>;
+using FunctionFactoryData = std::pair<FunctionCreator, FunctionDocumentation>;
 
 /** Creates function by name.
   * Function could use for initialization (take ownership of shared_ptr, for example)
@@ -29,13 +29,13 @@ public:
     static FunctionFactory & instance();
 
     template <typename Function>
-    void registerFunction(Documentation doc = {}, CaseSensitiveness case_sensitiveness = CaseInsensitive)
+    void registerFunction(FunctionDocumentation doc = {}, CaseSensitiveness case_sensitiveness = CaseInsensitive)
     {
         registerFunction<Function>(Function::name, std::move(doc), case_sensitiveness);
     }
 
     template <typename Function>
-    void registerFunction(const std::string & name, Documentation doc = {}, CaseSensitiveness case_sensitiveness = CaseInsensitive)
+    void registerFunction(const std::string & name, FunctionDocumentation doc = {}, CaseSensitiveness case_sensitiveness = CaseInsensitive)
     {
 
         if constexpr (std::is_base_of_v<IFunction, Function>)
@@ -64,10 +64,10 @@ public:
     void registerFunction(
         const std::string & name,
         FunctionCreator creator,
-        Documentation doc = {},
+        FunctionDocumentation doc = {},
         CaseSensitiveness case_sensitiveness = CaseInsensitive);
 
-    Documentation getDocumentation(const std::string & name) const;
+    FunctionDocumentation getDocumentation(const std::string & name) const;
 
     /// proton: starts
     bool hasNameOrAlias(const String & name) const override;

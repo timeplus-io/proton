@@ -30,7 +30,7 @@ jobs:
         env:
           TAG: ${{ github.event.inputs.tag }}
       - name: Add tag to image
-        uses: shrink/actions-docker-registry-tag@v3
+        uses: shrink/actions-docker-registry-tag@v4.0.0
         with:
           registry: ghcr.io
           repository: ${{ github.repository }}

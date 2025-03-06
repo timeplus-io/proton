@@ -271,7 +271,7 @@ void GroupingAggregatedTransform::addChunk(Chunk chunk, size_t input)
             last_bucket_number[input] = bucket;
         }
     }
-    else if (const auto * in_order_info = typeid_cast<const ChunkInfoWithAllocatedBytes *>(info.get()))
+    else if (const auto * /*in_order_info*/ _ = typeid_cast<const ChunkInfoWithAllocatedBytes *>(info.get()))
     {
         single_level_chunks.emplace_back(std::move(chunk));
     }
@@ -339,7 +339,7 @@ void MergingAggregatedBucketTransform::transform(Chunk & chunk)
 
             blocks_list.emplace_back(std::move(block));
         }
-        else if (const auto * in_order_info = typeid_cast<const ChunkInfoWithAllocatedBytes *>(cur_info.get()))
+        else if (const auto * /*in_order_info*/ _ = typeid_cast<const ChunkInfoWithAllocatedBytes *>(cur_info.get()))
         {
             Block block = header.cloneWithColumns(cur_chunk.detachColumns());
             block.info.is_overflows = false;

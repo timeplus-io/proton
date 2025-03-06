@@ -84,8 +84,10 @@ void registerTableFunctionSession(TableFunctionFactory & factory)
 {
     factory.registerFunction(
         "session",
-        []() -> TableFunctionPtr { return std::make_shared<TableFunctionSession>("session"); },
-        {},
+        TableFunctionFactoryData{
+            []() -> TableFunctionPtr { return std::make_shared<TableFunctionSession>("session"); },
+            /*properties_=*/ {},
+        },
         TableFunctionFactory::CaseSensitive,
         /*support subquery*/ true);
 }

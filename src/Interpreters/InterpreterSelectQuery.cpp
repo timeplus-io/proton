@@ -3880,7 +3880,7 @@ std::vector<nlog::RecordSN> InterpreterSelectQuery::checkReplaySettingsAndGetLas
     if (external_stream)
     {
         auto nested_storage = external_stream->getNested();
-        if (auto * kafka_stream = nested_storage->as<Kafka>())
+        if (auto * kafka_stream = nested_storage->as<ExternalStream::Kafka>())
             last_sns = kafka_stream->getLastSNs();
         else
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Replay Stream is only support append-only stream and external stream Kafka");

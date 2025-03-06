@@ -1,10 +1,10 @@
 #pragma once
 
+#include <Storages/IStorage.h>
+#include <Common/SettingsChanges.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
-#include <Storages/IStorage.h>
 #include <Storages/StorageProxy.h>
-#include <Common/SettingsChanges.h>
 
 #include <base/shared_ptr_helper.h>
 

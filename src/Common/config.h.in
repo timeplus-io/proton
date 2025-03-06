@@ -79,4 +79,5 @@
 #cmakedefine01 USE_ENCRYPT_DECRYPT_FUNCS
 #cmakedefine01 USE_ARG_MIN_MAX_FUNCS
 #cmakedefine01 USE_PULSAR
+#cmakedefine01 USE_AWS_MSK_IAM
 /// proton: ends.

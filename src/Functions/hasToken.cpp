@@ -1,12 +1,10 @@
-#include "FunctionsStringSearch.h"
 #include <Functions/FunctionFactory.h>
-#include "HasTokenImpl.h"
+#include <Functions/FunctionsStringSearch.h>
+#include <Functions/HasTokenImpl.h>
+
 #include <Common/Volnitsky.h>
 
-
 namespace DB
-{
-namespace
 {
 
 struct NameHasToken
@@ -14,13 +12,12 @@ struct NameHasToken
     static constexpr auto name = "has_token";
 };
 
-using FunctionHasToken = FunctionsStringSearch<HasTokenImpl<NameHasToken, VolnitskyCaseSensitiveToken, false>>;
-
-}
+using FunctionHasToken = DB::FunctionsStringSearch<DB::HasTokenImpl<NameHasToken, DB::VolnitskyCaseSensitiveToken, false>>;
 
 REGISTER_FUNCTION(HasToken)
 {
-    factory.registerFunction<FunctionHasToken>();
+    factory.registerFunction<FunctionHasToken>(FunctionDocumentation
+        {.description="Performs lookup of needle in haystack using tokenbf_v1 index."}, DB::FunctionFactory::CaseSensitive);
 }
 
 }

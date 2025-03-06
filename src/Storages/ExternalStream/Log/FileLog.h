@@ -5,8 +5,6 @@
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 
-#include <filesystem>
-
 namespace re2
 {
 class RE2;

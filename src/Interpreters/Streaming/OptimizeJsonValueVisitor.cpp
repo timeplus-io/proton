@@ -42,7 +42,7 @@ bool OptimizeJsonValueMatcher::needChildVisit(ASTPtr & node, ASTPtr &, Data & da
 
 void OptimizeJsonValueMatcher::visit(ASTPtr & ast, Data & data)
 {
-    if (auto select = ast->as<ASTSelectQuery>())
+    if (auto /*select*/ _ = ast->as<ASTSelectQuery>())
     {
         finalizeJsonValues(data);
         return;

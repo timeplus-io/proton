@@ -17,6 +17,7 @@
 #include <DataTypes/DataTypeFunction.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
 
 #include <Functions/FunctionHelpers.h>
@@ -115,6 +116,7 @@ public:
             throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
                             "Function {} needs one argument with data", getName());
 
+        size_t tuple_argument_size = 0;
         size_t nested_types_count = is_argument_type_map ? (arguments.size() - 1) * 2 : (arguments.size() - 1);
         DataTypes nested_types(nested_types_count);
         for (size_t i = 0; i < arguments.size() - 1; ++i)
@@ -128,6 +130,10 @@ public:
                     getName(),
                     argument_type_name,
                     arguments[i + 1]->getName());
+
+            if (const auto * tuple_type = checkAndGetDataType<DataTypeTuple>(array_type->getNestedType().get()))
+                tuple_argument_size = tuple_type->getElements().size();
+
             if constexpr (is_argument_type_map)
             {
                 nested_types[2 * i] = recursiveRemoveLowCardinality(array_type->getKeyType());
@@ -137,14 +143,41 @@ public:
             {
                 nested_types[i] = recursiveRemoveLowCardinality(array_type->getNestedType());
             }
+
         }
 
         const DataTypeFunction * function_type = checkAndGetDataType<DataTypeFunction>(arguments[0].get());
-        if (!function_type || function_type->getArgumentTypes().size() != nested_types.size())
+        if (!function_type)
             throw Exception(
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                 "First argument for this overload of {} must be a function with {} arguments, found {} instead",
-                getName(), nested_types.size(), arguments[0]->getName());
+                getName(),
+                nested_types.size(),
+                arguments[0]->getName());
+
+        size_t num_function_arguments = function_type->getArgumentTypes().size();
+        if (tuple_argument_size > 1
+            && tuple_argument_size == num_function_arguments)
+        {
+            assert(nested_types.size() == 1);
+
+            auto argument_type = nested_types[0];
+            const auto & tuple_type = assert_cast<const DataTypeTuple &>(*argument_type);
+
+            nested_types.clear();
+            nested_types.reserve(tuple_argument_size);
+
+            for (const auto & element : tuple_type.getElements())
+                nested_types.push_back(element);
+        }
+
+        if (num_function_arguments != nested_types.size())
+            throw Exception(
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "First argument for this overload of {} must be a function with {} arguments, found {} instead",
+                getName(),
+                nested_types.size(),
+                arguments[0]->getName());
 
         arguments[0] = std::make_shared<DataTypeFunction>(nested_types);
     }
@@ -268,6 +301,9 @@ public:
                 throw Exception("First argument for function " + getName() + " must be a function.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
+            const auto & type_function = assert_cast<const DataTypeFunction &>(*arguments[0].type);
+            size_t num_function_arguments = type_function.getArgumentTypes().size();
+
             ColumnPtr offsets_column;
 
             ColumnPtr column_first_array_ptr;
@@ -316,24 +352,45 @@ public:
                             getName());
                 }
 
+                const auto * column_tuple = dynamic_cast<const DB::ColumnMap*>(column_array) 
+                    ? checkAndGetColumn<ColumnTuple>(&dynamic_cast<const DB::ColumnMap*>(column_array)->getNestedData()) 
+                    : (dynamic_cast<const DB::ColumnArray*>(column_array)
+                        ? checkAndGetColumn<ColumnTuple>(&dynamic_cast<const DB::ColumnArray*>(column_array)->getData())
+                        : throw Exception(ErrorCodes::BAD_ARGUMENTS, "Expected ColumnMap or ColumnArray, but received a different type."));
+
+                size_t tuple_size = column_tuple ? column_tuple->getColumns().size() : 0;
+
                 if (i == 1)
                 {
                     column_first_array_ptr = column_array_ptr;
                     column_first_array = column_array;
                 }
 
-                if constexpr (is_argument_type_map)
+                if (tuple_size > 1 && tuple_size == num_function_arguments)
                 {
-                    arrays.emplace_back(ColumnWithTypeAndName(
-                        column_array->getNestedData().getColumnPtr(0), recursiveRemoveLowCardinality(array_type->getKeyType()), array_with_type_and_name.name+".key"));
-                    arrays.emplace_back(ColumnWithTypeAndName(
-                        column_array->getNestedData().getColumnPtr(1), recursiveRemoveLowCardinality(array_type->getValueType()), array_with_type_and_name.name+".value"));
+                    const auto & type_tuple = assert_cast<const DataTypeTuple &>(*array_type->getNestedType());
+                    const auto & tuple_names = type_tuple.getElementNames();
+
+                    arrays.reserve(column_tuple->getColumns().size());
+                    for (size_t j = 0; j < tuple_size; ++j)
+                        arrays.emplace_back(ColumnWithTypeAndName(
+                            column_tuple->getColumnPtr(j), recursiveRemoveLowCardinality(type_tuple.getElement(j)), array_with_type_and_name.name + "." + tuple_names[j]));
                 }
                 else
                 {
-                    arrays.emplace_back(ColumnWithTypeAndName(column_array->getDataPtr(),
-                                                            recursiveRemoveLowCardinality(array_type->getNestedType()),
-                                                            array_with_type_and_name.name));
+                    if constexpr (is_argument_type_map)
+                    {
+                        arrays.emplace_back(ColumnWithTypeAndName(
+                            column_array->getNestedData().getColumnPtr(0), recursiveRemoveLowCardinality(array_type->getKeyType()), array_with_type_and_name.name+".key"));
+                        arrays.emplace_back(ColumnWithTypeAndName(
+                            column_array->getNestedData().getColumnPtr(1), recursiveRemoveLowCardinality(array_type->getValueType()), array_with_type_and_name.name+".value"));
+                    }
+                    else
+                    {
+                        arrays.emplace_back(ColumnWithTypeAndName(column_array->getDataPtr(),
+                                                                recursiveRemoveLowCardinality(array_type->getNestedType()),
+                                                                array_with_type_and_name.name));
+                    }
                 }
             }
 

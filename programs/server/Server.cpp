@@ -1451,6 +1451,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setFormatSchemaPath(format_schema_path);
     fs::create_directories(format_schema_path);
 
+    /// Set the path for google proto files
+    if (config().has("google_protos_path"))
+        global_context->setGoogleProtosPath(fs::weakly_canonical(config().getString("google_protos_path")));
+
     /// Check sanity of MergeTreeSettings on server startup
     /// proton: starts. replace 'merge tree' to stream settings
     global_context->getStreamSettings().sanityCheck(settings);

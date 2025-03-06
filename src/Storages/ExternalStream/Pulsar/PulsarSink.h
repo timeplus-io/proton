@@ -4,8 +4,9 @@
 
 #if USE_PULSAR
 
-#    include <NativeLog/Base/ByteVector.h>
-#    include <Interpreters/Context.h>
+#    include <Base/ByteVector.h>
+#    include <Formats/FormatFactory.h>
+#    include <Interpreters/Context_fwd.h>
 #    include <Processors/Formats/IOutputFormat.h>
 #    include <Processors/Sinks/SinkToStorage.h>
 #    include <Storages/ExternalStream/ExternalStreamCounter.h>

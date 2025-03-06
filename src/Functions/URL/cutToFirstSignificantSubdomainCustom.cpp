@@ -43,39 +43,39 @@ using FunctionCutToFirstSignificantSubdomainCustomWithWWWRFC = FunctionCutToFirs
 REGISTER_FUNCTION(CutToFirstSignificantSubdomainCustom)
 {
     factory.registerFunction<FunctionCutToFirstSignificantSubdomainCustom>(
-        {
-        R"(
+        FunctionDocumentation{
+        .description=R"(
 Returns the part of the domain that includes top-level subdomains up to the first significant subdomain. Accepts custom TLD list name.
 
 Can be useful if you need fresh TLD list or you have custom.
         )",
-        Documentation::Examples{
-            {"cutToFirstSignificantSubdomainCustom", "SELECT cut_to_first_significant_subdomain_custom('bar.foo.there-is-no-such-domain', 'public_suffix_list');"},
+        .examples{
+            {"cutToFirstSignificantSubdomainCustom", "SELECT cut_to_first_significant_subdomain_custom('bar.foo.there-is-no-such-domain', 'public_suffix_list');", ""},
         },
-        Documentation::Categories{"URL"}
+        .categories{"URL"}
         });
     factory.registerFunction<FunctionCutToFirstSignificantSubdomainCustomWithWWW>(
-        {
-        R"(
+        FunctionDocumentation{
+        .description=R"(
 Returns the part of the domain that includes top-level subdomains up to the first significant subdomain without stripping `www`.
 Accepts custom TLD list name from config.
 
 Can be useful if you need fresh TLD list or you have custom.
         )",
-        Documentation::Examples{{"cutToFirstSignificantSubdomainCustomWithWWW", "SELECT cut_to_first_significant_subdomain_custom_with_www('www.foo', 'public_suffix_list')"}},
-        Documentation::Categories{"URL"}
+        .examples{{"cutToFirstSignificantSubdomainCustomWithWWW", "SELECT cut_to_first_significant_subdomain_custom_with_www('www.foo', 'public_suffix_list')", ""}},
+        .categories{"URL"}
         });
     factory.registerFunction<FunctionCutToFirstSignificantSubdomainCustomRFC>(
-        {
-        R"(Similar to `cut_to_first_significant_subdomain_custom` but follows stricter rules according to RFC 3986.)",
-        Documentation::Examples{},
-        Documentation::Categories{"URL"}
+        FunctionDocumentation{
+        .description=R"(Similar to `cut_to_first_significant_subdomain_custom` but follows stricter rules according to RFC 3986.)",
+        .examples{},
+        .categories{"URL"}
         });
     factory.registerFunction<FunctionCutToFirstSignificantSubdomainCustomWithWWWRFC>(
-        {
-        R"(Similar to `cut_to_first_significant_subdomain_custom_with_www` but follows stricter rules according to RFC 3986.)",
-        Documentation::Examples{},
-        Documentation::Categories{"URL"}
+        FunctionDocumentation{
+        .description=R"(Similar to `cut_to_first_significant_subdomain_custom_with_www` but follows stricter rules according to RFC 3986.)",
+        .examples{},
+        .categories{"URL"}
         });
 }
 

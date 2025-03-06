@@ -32,7 +32,8 @@ public:
               const std::shared_ptr<Throttler> & parent_ = nullptr);
 
     /// Use `amount` tokens, sleeps if required or throws exception on limit overflow.
-    void add(size_t amount);
+    /// Returns duration of sleep in microseconds (to distinguish sleeping on different kinds of throttlers for metrics)
+    uint64_t add(size_t amount);
 
     /// Not thread safe
     void setParent(const std::shared_ptr<Throttler> & parent_)

@@ -1,7 +1,7 @@
-#include <Storages/ExternalStream/StorageExternalStreamImpl.h>
-
+#include <Processors/Formats/RowInputFormatWithNamesAndTypes.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Common/ProtonCommon.h>
 
@@ -65,6 +65,8 @@ FormatSettings StorageExternalStreamImpl::getFormatSettings(const ContextPtr & c
     /// This is needed otherwise using an external stream with ProtobufSingle format as the target stream
     /// of a MV (or in `INSERT ... SELECT ...`), i.e. more than one rows sent to the stream, exception will be thrown.
     ret.protobuf.allow_multiple_rows_without_delimiter = true;
+    /// In case of kafka schema registry is used, the topic name needs to be passed to the output format to fetch the schema.
+    ret.kafka_schema_registry.topic_name = settings->topic;
     return ret;
 }
 
@@ -109,50 +111,6 @@ void StorageExternalStreamImpl::adjustSettingsForDataFormat()
             settings->set("one_message_per_row", true);
         }
     }
-}
-
-Block StorageExternalStreamImpl::getPhysicalColumns(const StorageSnapshotPtr & storage_snapshot, const Block & header)
-{
-    auto non_virtual_header = storage_snapshot->metadata->getSampleBlockNonMaterialized();
-    Block result;
-    for (const auto & col : header)
-    {
-        if (std::any_of(non_virtual_header.begin(), non_virtual_header.end(), [&col](auto & non_virtual_column) {
-                return non_virtual_column.name == col.name;
-            }))
-            result.insert(col);
-    }
-
-    /// Clients like to read virtual columns only, add the first physical column, then we know how many rows
-    if (result.columns() == 0)
-    {
-        const auto & physical_columns = storage_snapshot->getColumns(GetColumnsOptions::Ordinary);
-        const auto & physical_column = physical_columns.front();
-        result.insert({physical_column.type->createColumn(), physical_column.type, physical_column.name});
-    }
-
-    return result;
-}
-
-std::unique_ptr<StreamingFormatExecutor> StorageExternalStreamImpl::createInputFormatExecutor(
-    const StorageSnapshotPtr & storage_snapshot,
-    const Block & header,
-    ReadBuffer & read_buffer,
-    size_t max_block_size,
-    const ContextPtr & query_context)
-{
-    auto physical_header = getPhysicalColumns(storage_snapshot, header);
-    /// The buffer is only for initialzing the input format, it won't be actually used, because the executor will keep setting new buffers.
-    auto input_format = FormatFactory::instance().getInput(
-        data_format,
-        read_buffer,
-        physical_header,
-        query_context,
-        max_block_size,
-        getFormatSettings(query_context));
-
-    return std::make_unique<StreamingFormatExecutor>(
-        physical_header, std::move(input_format), [](const MutableColumns &, Exception & ex) -> size_t { throw std::move(ex); });
 }
 
 void StorageExternalStreamImpl::read(

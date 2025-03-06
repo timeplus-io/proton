@@ -123,8 +123,10 @@ void registerTableFunctionDedup(TableFunctionFactory & factory)
 {
     factory.registerFunction(
         "dedup",
-        []() -> TableFunctionPtr { return std::make_shared<TableFunctionDedup>("dedup"); },
-        {},
+        TableFunctionFactoryData{
+            []() -> TableFunctionPtr { return std::make_shared<TableFunctionDedup>("dedup"); },
+            {},
+        },
         TableFunctionFactory::CaseSensitive,
         /*support subquery*/ true);
 }

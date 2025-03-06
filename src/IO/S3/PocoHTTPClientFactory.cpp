@@ -1,6 +1,6 @@
 #include "config.h"
 
-#if USE_AWS_S3
+#if USE_AWS_MSK_IAM || USE_AWS_S3 /// proton: updated
 
 #include "PocoHTTPClientFactory.h"
 

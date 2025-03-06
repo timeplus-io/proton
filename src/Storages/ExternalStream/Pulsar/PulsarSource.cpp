@@ -50,22 +50,20 @@ Int64 getGenerateTimeoutMs(const ContextPtr & context)
 
 PulsarSource::PulsarSource(
     const Block & header_,
+    const StorageSnapshotPtr & storage_snapshot_,
     std::map<size_t, std::pair<DataTypePtr, std::function<Field(const pulsar::Message &)>>> virtual_header_,
     bool is_streaming_,
-    std::unique_ptr<ReadBuffer> read_buffer_,
-    std::unique_ptr<StreamingFormatExecutor> format_executor_,
+    const String & data_format,
+    const FormatSettings & format_settings,
     pulsar::Reader && reader_,
     ExternalStreamCounterPtr counter,
     Poco::Logger * logger_,
     const ContextPtr & context_)
     : Streaming::ISource(header_, true, ProcessorID::PulsarSourceID)
+    , ExternalStreamSource(header_, storage_snapshot_, context_->getSettingsRef().max_block_size.value, context_)
     , virtual_header(virtual_header_)
-    , header_chunk(Chunk(header_.getColumns(), 0))
     , generate_timeout_ms(getGenerateTimeoutMs(context_))
-    , read_buffer(std::move(read_buffer_))
-    , format_executor(std::move(format_executor_))
     , reader(std::move(reader_))
-    , max_block_size(context_->getSettingsRef().max_block_size.value)
     , external_stream_counter(counter)
     , logger(logger_)
 {
@@ -76,6 +74,8 @@ PulsarSource::PulsarSource(
             throw Exception(
                 ErrorCodes::CANNOT_CONNECT_SERVER, "Failed to get last message id of topic {}: {}", getTopic(), pulsar::strResult(res));
     }
+
+    initInputFormatExecutor(data_format, format_settings);
 }
 
 PulsarSource::~PulsarSource()
@@ -125,6 +125,8 @@ Chunk PulsarSource::generate()
                 logger, "Message {} skipped as start SN reset, {} more to skip", formatMessageId(msg.getMessageId()), messages_to_skip);
             continue;
         }
+
+        external_stream_counter->addReadBytes(msg.getLength());
 
         ReadBufferFromMemory buf(static_cast<const char *>(msg.getData()), msg.getLength());
         size_t new_rows = 0;
@@ -195,6 +197,7 @@ Chunk PulsarSource::generate()
 
     if (rows != 0u)
     {
+        external_stream_counter->addReadRows(rows);
         return {std::move(batch), rows};
     }
     else

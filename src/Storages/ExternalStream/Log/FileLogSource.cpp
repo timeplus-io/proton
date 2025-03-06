@@ -1,5 +1,6 @@
-#include <Storages/ExternalStream/Log/FileLog.h>
 #include <Storages/ExternalStream/Log/FileLogSource.h>
+
+#include <Storages/ExternalStream/Log/FileLog.h>
 #include <Storages/ExternalStream/Log/fileLastModifiedTime.h>
 
 #include <Storages/ExternalStream/BreakLines.h>
@@ -28,7 +29,7 @@ FileLogSource::FileLogSource(
     size_t max_block_size_,
     Int64 start_timestamp_,
     FileLogSource::FileContainer files_,
-    Poco::Logger * log_)
+    Poco::Logger * logger_)
     : Streaming::ISource(header_, true, ProcessorID::FileLogSourceID)
     , file_log(file_log_)
     , query_context(query_context_)
@@ -37,7 +38,7 @@ FileLogSource::FileLogSource(
     , max_block_size(max_block_size_)
     , start_timestamp(start_timestamp_)
     , files(std::move(files_))
-    , log(log_)
+    , logger(logger_)
 {
     iter = files.begin();
 
@@ -201,7 +202,7 @@ void FileLogSource::checkNewFiles()
             if (new_fd < 0)
             {
                 new_iter = new_files.erase(new_iter);
-                LOG_ERROR(log, "Failed to open log file {}. Skip analyzing it for now", filename);
+                LOG_ERROR(logger, "Failed to open log file {}. Skip analyzing it for now", filename);
                 continue;
             }
 
@@ -210,7 +211,7 @@ void FileLogSource::checkNewFiles()
             {
                 new_iter = new_files.erase(new_iter);
                 ::close(new_fd);
-                LOG_INFO(log, "Found handled log file {}. Skip analyzing it", filename);
+                LOG_INFO(logger, "Found handled log file {}. Skip analyzing it", filename);
             }
             else
             {
@@ -222,13 +223,13 @@ void FileLogSource::checkNewFiles()
                 else
                     ::close(new_fd);
 
-                LOG_INFO(log, "Found new log file {} ", filename);
+                LOG_INFO(logger, "Found new log file {} ", filename);
             }
         }
 
         if (!new_files.empty())
         {
-            LOG_INFO(log, "Closing current log file {} and progress to {}", iter->second.c_str(), new_files.begin()->second.c_str());
+            LOG_INFO(logger, "Closing current log file {} and progress to {}", iter->second.c_str(), new_files.begin()->second.c_str());
 
             ::close(current_fd);
             assert(first_new_fd >= 0);
@@ -254,12 +255,12 @@ bool FileLogSource::handleCurrentFile()
         ::close(current_fd);
         current_fd = -1;
 
-        LOG_INFO(log, "Log file was handled, prev_name={} current_name={} hash={}", hash_iter->second, filename, hash_val);
+        LOG_INFO(logger, "Log file was handled, prev_name={} current_name={} hash={}", hash_iter->second, filename, hash_val);
         iter = files.erase(iter);
         return false;
     }
 
-    LOG_INFO(log, "Processing log file {}, hash={} hashed_bytes={}", filename, hash_val, 1024);
+    LOG_INFO(logger, "Processing log file {}, hash={} hashed_bytes={}", filename, hash_val, 1024);
 
     return true;
 }
@@ -281,7 +282,7 @@ size_t FileLogSource::calculateFileHash(int fd, std::vector<char> & read_buf, si
         else if (n == 0)
         {
             /// EOF
-            LOG_INFO(log, "Wait for more data in file={} to calculate its hash", filename);
+            LOG_INFO(logger, "Wait for more data in file={} to calculate its hash", filename);
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
         else
