@@ -23,6 +23,13 @@ void abortOnFailedAssertion(const String & description);
 class Exception : public Poco::Exception
 {
 public:
+    /// This creator is for exceptions that should format a message using fmt::format from the variadic ctor Exception(code, fmt, ...),
+    /// but were not rewritten yet. It will be removed.
+    static Exception createDeprecated(const std::string & msg, int code, bool remote_ = false)
+    {
+        return Exception(msg, code, remote_);
+    }
+
     using FramePointers = std::vector<void *>;
 
     Exception() = default;

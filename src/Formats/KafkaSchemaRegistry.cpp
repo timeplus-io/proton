@@ -3,6 +3,7 @@
 #include <IO/ReadHelpers.h>
 #include <format>
 
+#include <IO/WriteHelpers.h>
 #include <Poco/JSON/Parser.h>
 #include <Poco/Net/HTTPBasicCredentials.h>
 #include <boost/algorithm/string/predicate.hpp>
@@ -40,7 +41,7 @@ KafkaSchemaRegistry::KafkaSchemaRegistry(
     }
 }
 
-String KafkaSchemaRegistry::fetchSchema(UInt32 id)
+String KafkaSchemaRegistry::fetchSchema(UInt32 id) const
 {
     try
     {
@@ -50,8 +51,7 @@ String KafkaSchemaRegistry::fetchSchema(UInt32 id)
             Poco::URI url(base_url, std::format("schemas/ids/{}", id));
             LOG_TRACE(logger, "Fetching schema id = {}", id);
 
-            /// One second for connect/send/receive. Just in case.
-            ConnectionTimeouts timeouts({1, 0}, {1, 0}, {1, 0});
+            ConnectionTimeouts timeouts({5, 0}, {5, 0}, {5, 0});
 
             Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_GET, url.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1);
             request.setHost(url.getHost());
@@ -97,6 +97,117 @@ String KafkaSchemaRegistry::fetchSchema(UInt32 id)
     }
 }
 
+std::pair<UInt32, String> KafkaSchemaRegistry::fetchLatestSchemaForTopic(const String & topic_name) const
+{
+    auto subject_name = topic_name + "-value";
+    auto latest_schema_version = fetchLatestSubjectVersion(subject_name);
+    try
+    {
+        try
+        {
+            Poco::URI url(base_url, std::format("subjects/{}/versions/{}", subject_name, latest_schema_version));
+            LOG_TRACE(logger, "Fetching subject = {} versions = {}", subject_name, latest_schema_version);
+
+            ConnectionTimeouts timeouts({5, 0}, {5, 0}, {5, 0});
+
+            Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_GET, url.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1);
+            request.setHost(url.getHost());
+
+            if (!credentials.empty())
+                credentials.authenticate(request);
+
+            auto session = makePooledHTTPSession(url, private_key_file, certificate_file, ca_location, Verification_mode, timeouts, 1);
+            std::istream * response_body{};
+            try
+            {
+                session->sendRequest(request);
+
+                Poco::Net::HTTPResponse response;
+                response_body = receiveResponse(*session, request, response, false);
+            }
+            catch (const Poco::Exception & e)
+            {
+                /// We use session data storage as storage for exception text
+                /// Depend on it we can deduce to reconnect session or reresolve session host
+                session->attachSessionData(e.message());
+                throw;
+            }
+            Poco::JSON::Parser parser;
+            auto json_body = parser.parse(*response_body).extract<Poco::JSON::Object::Ptr>();
+            auto schema_id = json_body->getValue<uint32_t>("id");
+            auto schema = json_body->getValue<std::string>("schema");
+            LOG_TRACE(logger, "Successfully fetched schema from subject = {} version = {} id = {}\n{}", subject_name, latest_schema_version, schema_id, schema);
+            return {schema_id, schema};
+        }
+        catch (const Exception &)
+        {
+            throw;
+        }
+        catch (const Poco::Exception & e)
+        {
+            throw Exception(Exception::CreateFromPocoTag{}, e);
+        }
+    }
+    catch (Exception & e)
+    {
+        e.addMessage(std::format("while fetching latest schema for topic {}", topic_name));
+        throw;
+    }
+}
+
+UInt32 KafkaSchemaRegistry::fetchLatestSubjectVersion(const String & subject_name) const
+{
+    try
+    {
+        try
+        {
+            Poco::URI url(base_url, std::format("subjects/{}/versions", subject_name));
+            LOG_TRACE(logger, "Fetching subject versions for {}", subject_name);
+
+            ConnectionTimeouts timeouts({5, 0}, {5, 0}, {5, 0});
+
+            Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_GET, url.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1);
+            request.setHost(url.getHost());
+
+            if (!credentials.empty())
+                credentials.authenticate(request);
+
+            auto session = makePooledHTTPSession(url, private_key_file, certificate_file, ca_location, Verification_mode, timeouts, 1);
+            std::istream * response_body{};
+            try
+            {
+                session->sendRequest(request);
+
+                Poco::Net::HTTPResponse response;
+                response_body = receiveResponse(*session, request, response, false);
+            }
+            catch (const Poco::Exception & e)
+            {
+                /// We use session data storage as storage for exception text
+                /// Depend on it we can deduce to reconnect session or reresolve session host
+                session->attachSessionData(e.message());
+                throw;
+            }
+            Poco::JSON::Parser parser;
+            auto versions = parser.parse(*response_body).extract<Poco::JSON::Array::Ptr>();
+            return versions->getElement<UInt32>(static_cast<UInt32>(versions->size()) - 1);
+        }
+        catch (const Exception &)
+        {
+            throw;
+        }
+        catch (const Poco::Exception & e)
+        {
+            throw Exception(Exception::CreateFromPocoTag{}, e);
+        }
+    }
+    catch (Exception & e)
+    {
+        e.addMessage(std::format("while fetching subject versions for {}", subject_name));
+        throw;
+    }
+}
+
 UInt32 KafkaSchemaRegistry::readSchemaId(ReadBuffer & in)
 {
     uint8_t magic;
@@ -121,6 +232,13 @@ UInt32 KafkaSchemaRegistry::readSchemaId(ReadBuffer & in)
             " Must be zero byte, found 0x{:x} instead", magic);
 
     return schema_id;
+}
+
+void KafkaSchemaRegistry::writeSchemaId(WriteBuffer & out, UInt32 schema_id)
+{
+    uint8_t magic = 0x00;
+    writeBinaryBigEndian(magic, out);
+    writeBinaryBigEndian(schema_id, out);
 }
 
 }

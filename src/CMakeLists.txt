@@ -209,6 +209,8 @@ add_object_library(clickhouse_formats Formats)
 add_object_library(clickhouse_processors Processors)
 # proton : starts
 add_object_library(clickhouse_processors_streaming Processors/Streaming)
+
+add_object_library(clickhouse_formats_avro Formats/Avro)
 # proton : ends
 add_object_library(clickhouse_processors_executors Processors/Executors)
 add_object_library(clickhouse_processors_formats Processors/Formats)

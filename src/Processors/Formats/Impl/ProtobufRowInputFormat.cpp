@@ -204,9 +204,9 @@ public:
         if (mt_count < indexes[0] + 1)
             throw Exception(ErrorCodes::INVALID_DATA, "Invalid message index={} max_index={}", indexes[0], mt_count);
 
-        const auto * descriptor = fd->message_type(indexes[0]);
+        const auto * descriptor = fd->message_type(static_cast<int32_t>(indexes[0]));
 
-        for (auto i : std::span(indexes.begin() + 1, indexes.end()))
+        for (int64_t i : std::span(indexes.begin() + 1, indexes.end()))
         {
             if (i > descriptor->nested_type_count())
                 throw Exception(
@@ -215,7 +215,7 @@ public:
                     i,
                     descriptor->nested_type_count(),
                     descriptor->name());
-            descriptor = descriptor->nested_type(i);
+            descriptor = descriptor->nested_type(static_cast<int32_t>(i));
         }
 
         return descriptor;
@@ -325,29 +325,26 @@ bool ProtobufConfluentRowInputFormat::readRow(MutableColumns & columns, RowReadE
     return true;
 }
 
-ProtobufSchemaWriter::ProtobufSchemaWriter(const FormatSettings & settings_)
-    : IExternalSchemaWriter(settings_)
+ProtobufSchemaWriter::ProtobufSchemaWriter(std::string_view schema_body_, const FormatSettings & settings_)
+    : IExternalSchemaWriter(schema_body_, settings_)
+    , schema_info(settings.schema.format_schema, "Protobuf", false, settings.schema.is_server, settings.schema.format_schema_path)
 {
 }
 
-String ProtobufSchemaWriter::getFormatName() const
-{
-    return "Protobuf";
-}
-
-void ProtobufSchemaWriter::validate(std::string_view schema_body)
+void ProtobufSchemaWriter::validate()
 {
     ProtobufSchemas::instance().validateSchema(schema_body);
 }
 
-void ProtobufSchemaWriter::onReplaced()
+bool ProtobufSchemaWriter::write(bool replace_if_exist)
 {
-    ProtobufSchemas::instance().clear();
-}
+    if (std::filesystem::exists(schema_info.absoluteSchemaPath()))
+        if (!replace_if_exist)
+            return false;
 
-void ProtobufSchemaWriter::onDeleted()
-{
-    ProtobufSchemas::instance().clear();
+    WriteBufferFromFile write_buffer{schema_info.absoluteSchemaPath()};
+    write_buffer.write(schema_body.data(), schema_body.size());
+    return true;
 }
 /// proton: ends
 
@@ -359,8 +356,8 @@ void registerProtobufSchemaReader(FormatFactory & factory)
     /// proton: starts
     factory.registerSchemaFileExtension("proto", "Protobuf");
 
-    factory.registerExternalSchemaWriter("Protobuf", [](const FormatSettings & settings) {
-        return std::make_shared<ProtobufSchemaWriter>(settings);
+    factory.registerExternalSchemaWriter("Protobuf", [](std::string_view schema_body, const FormatSettings & settings) {
+        return std::make_shared<ProtobufSchemaWriter>(schema_body, settings);
     });
     /// proton: ends
 

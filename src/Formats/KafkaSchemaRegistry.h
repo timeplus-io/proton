@@ -2,6 +2,7 @@
 
 #include <Common/SipHash.h>
 #include <IO/ReadBuffer.h>
+#include <IO/WriteBuffer.h>
 
 #include <Poco/Net/Context.h>
 #include <Poco/Net/HTTPBasicCredentials.h>
@@ -15,6 +16,7 @@ class KafkaSchemaRegistry final
 {
 public:
     static UInt32 readSchemaId(ReadBuffer & in);
+    static void writeSchemaId(WriteBuffer & out, UInt32 schema_id);
 
     /// The key type for caching KafkaSchemaRegistry
     struct CacheKey
@@ -58,9 +60,12 @@ public:
         const String & ca_location_,
         bool skip_cert_check);
 
-    String fetchSchema(UInt32 id);
+    String fetchSchema(UInt32 id) const;
+    std::pair<UInt32, String> fetchLatestSchemaForTopic(const String & topic_name) const;
 
 private:
+    UInt32 fetchLatestSubjectVersion(const String & subject_name) const;
+
     Poco::URI base_url;
     Poco::Net::HTTPBasicCredentials credentials;
     String private_key_file;

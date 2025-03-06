@@ -33,6 +33,11 @@
 
 #include <re2/re2.h>
 
+/// proton: starts
+#include <Formats/Avro/OutputStreamWriteBufferAdapter.h>
+#include <Processors/Formats/Impl/AvroConfluentRowOutputFormat.h>
+/// proton: ends
+
 namespace DB
 {
 namespace ErrorCodes
@@ -40,6 +45,9 @@ namespace ErrorCodes
     extern const int ILLEGAL_COLUMN;
     extern const int BAD_ARGUMENTS;
     extern const int CANNOT_COMPILE_REGEXP;
+    /// proton: starts
+    extern const int INVALID_SETTING_VALUE;
+    /// proton: ends
 }
 
 class AvroSerializerTraits
@@ -49,10 +57,9 @@ public:
         : string_to_string_regexp(settings_.avro.string_column_pattern)
     {
         if (!string_to_string_regexp.ok())
-            throw DB::Exception(
-                "Avro: cannot compile re2: " + settings_.avro.string_column_pattern + ", error: " + string_to_string_regexp.error()
-                    + ". Look at https://github.com/google/re2/wiki/Syntax for reference.",
-                DB::ErrorCodes::CANNOT_COMPILE_REGEXP);
+            throw DB::Exception(DB::ErrorCodes::CANNOT_COMPILE_REGEXP, "Avro: cannot compile re2: {}, error: {}. "
+                "Look at https://github.com/google/re2/wiki/Syntax for reference.",
+                settings_.avro.string_column_pattern, string_to_string_regexp.error());
     }
 
     bool isStringAsString(const String & column_name)
@@ -63,32 +70,6 @@ public:
 private:
     const RE2 string_to_string_regexp;
 };
-
-
-class OutputStreamWriteBufferAdapter : public avro::OutputStream
-{
-public:
-    explicit OutputStreamWriteBufferAdapter(WriteBuffer & out_) : out(out_) {}
-
-    bool next(uint8_t ** data, size_t * len) override
-    {
-        out.nextIfAtEnd();
-        *data = reinterpret_cast<uint8_t *>(out.position());
-        *len = out.available();
-        out.position() += out.available();
-
-        return true;
-    }
-
-    void backup(size_t len) override { out.position() -= len; }
-
-    uint64_t byteCount() const override { return out.count(); }
-    void flush() override { }
-
-private:
-    WriteBuffer & out;
-};
-
 
 AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeFn(DataTypePtr data_type, size_t & type_name_increment, const String & column_name)
 {
@@ -127,6 +108,11 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
             return {avro::IntSchema(), [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
             {
                 encoder.encodeInt(assert_cast<const ColumnUInt32 &>(column).getElement(row_num));
+            }};
+        case TypeIndex::IPv4:
+            return {avro::IntSchema(), [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
+            {
+                encoder.encodeInt(assert_cast<const ColumnIPv4 &>(column).getElement(row_num));
             }};
         case TypeIndex::Int32:
             return {avro::IntSchema(), [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
@@ -203,6 +189,15 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
             return {schema, [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
             {
                 const std::string_view & s = assert_cast<const ColumnFixedString &>(column).getDataAt(row_num).toView();
+                encoder.encodeFixed(reinterpret_cast<const uint8_t *>(s.data()), s.size());
+            }};
+        }
+        case TypeIndex::IPv6:
+        {
+            auto schema = avro::FixedSchema(sizeof(IPv6), "ipv6_" + toString(type_name_increment));
+            return {schema, [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
+            {
+                const std::string_view & s = assert_cast<const ColumnIPv6 &>(column).getDataAt(row_num).toView();
                 encoder.encodeFixed(reinterpret_cast<const uint8_t *>(s.data()), s.size());
             }};
         }
@@ -384,7 +379,7 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
         default:
             break;
     }
-    throw Exception("Type " + data_type->getName() + " is not supported for Avro output", ErrorCodes::ILLEGAL_COLUMN);
+    throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Type {} is not supported for Avro output", data_type->getName());
 }
 
 
@@ -438,7 +433,7 @@ static avro::Codec getCodec(const std::string & codec_name)
     if (codec_name == "snappy")  return avro::Codec::SNAPPY_CODEC;
 #endif
 
-    throw Exception("Avro codec " + codec_name + " is not available", ErrorCodes::BAD_ARGUMENTS);
+    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Avro codec {} is not available", codec_name);
 }
 
 AvroRowOutputFormat::AvroRowOutputFormat(
@@ -454,7 +449,7 @@ AvroRowOutputFormat::~AvroRowOutputFormat() = default;
 void AvroRowOutputFormat::createFileWriter()
 {
     file_writer_ptr = std::make_unique<avro::DataFileWriterBase>(
-        std::make_unique<OutputStreamWriteBufferAdapter>(out),
+        std::make_unique<Avro::OutputStreamWriteBufferAdapter>(out), /// proton: updated
         serializer.getSchema(),
         settings.avro.output_sync_interval,
         getCodec(settings.avro.output_codec));
@@ -535,10 +530,29 @@ void registerOutputFormatAvro(FormatFactory & factory)
         WriteBuffer & buf,
         const Block & sample,
         const RowOutputFormatParams & params,
-        const FormatSettings & settings)
+        const FormatSettings & settings) -> OutputFormatPtr
     {
-        return std::make_shared<AvroRowOutputFormat>(buf, sample, params, settings);
-    });
+            /// proton: starts
+            /// Use only one format name "Avro" to support both schema registry and non-schema registry use cases, rather than using another name "AvroConfluent",
+            /// which is what ClickHouse did.
+
+            /// Non-schema registry case
+            if (settings.avro.schema_registry_url.empty() && settings.kafka_schema_registry.url.empty())
+            {
+                /// Schema is part of the data
+                if (settings.schema.format_schema.empty())
+                    return std::make_shared<AvroRowOutputFormat>(buf, sample, params, settings);
+
+                /// Using a separate schema
+                return std::make_shared<AvroSchemaRowOutputFormat>(buf, sample, params, FormatSchemaInfo(settings, "Avro", false), settings);
+            }
+
+            if (!settings.schema.format_schema.empty())
+                throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "schema_registry_url and format_schema cannot be used at the same time");
+
+            return std::make_shared<AvroConfluentRowOutputFormat>(buf, sample, params, settings);
+            /// proton: ends
+        });
     factory.markFormatHasNoAppendSupport("Avro");
 }
 
