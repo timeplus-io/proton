@@ -301,7 +301,7 @@ Chain buildPushingToViewsChain(
     }
 
     /// proton: starts.
-    else if (auto * materialized_view = dynamic_cast<StorageMaterializedView *>(storage.get()))
+    else if (auto * /*materialized_view*/ _ = dynamic_cast<StorageMaterializedView *>(storage.get()))
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "No support insert into MaterializedView");
     }

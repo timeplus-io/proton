@@ -878,6 +878,10 @@ graphite_rollup_example:
 # The directory will be created if it doesn't exist.
 format_schema_path: /var/lib/proton/format_schemas/
 
+# Directory to look for protobuf files for the well-known types:
+# https://protobuf.dev/reference/protobuf/google.protobuf/
+google_protos_path: /usr/share/proton/protos/
+
 # Default query masking rules, matching lines would be replaced with something else in the logs
 # (both text logs and system.query_log).
 # name - name for the rule (optional)

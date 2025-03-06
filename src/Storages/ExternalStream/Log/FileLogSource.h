@@ -28,7 +28,7 @@ public:
         size_t max_block_size,
         Int64 start_timestamp_,
         FileContainer files_,
-        Poco::Logger * log_);
+        Poco::Logger * logger_);
 
     ~FileLogSource() override;
 
@@ -46,7 +46,6 @@ private:
     Chunk flushBuffer();
     void checkNewFiles();
 
-private:
     FileLog * file_log;
     StorageMetadataPtr metadata_snapshot;
     ContextPtr query_context;
@@ -73,6 +72,6 @@ private:
 
     std::unordered_map<size_t, std::string> file_hashes;
 
-    Poco::Logger * log;
+    Poco::Logger * logger;
 };
 }

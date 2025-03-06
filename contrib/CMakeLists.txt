@@ -57,7 +57,7 @@ add_contrib (dragonbox-cmake dragonbox)
 add_contrib (vectorscan-cmake vectorscan)
 add_contrib (jemalloc-cmake jemalloc)
 add_contrib (libcpuid-cmake libcpuid)
-add_contrib (libdivide)
+add_contrib (libdivide-cmake)
 add_contrib (libmetrohash)
 add_contrib (lz4-cmake lz4)
 add_contrib (murmurhash)
@@ -79,7 +79,7 @@ add_contrib (thrift-cmake thrift)
 # parquet/arrow/orc
 add_contrib (arrow-cmake arrow) # requires: snappy, thrift, double-conversion
 add_contrib (avro-cmake avro) # requires: snappy
-add_contrib (protobuf-cmake protobuf)
+add_contrib (google-protobuf-cmake google-protobuf)
 add_contrib (openldap-cmake openldap)
 add_contrib (grpc-cmake grpc)
 add_contrib (msgpack-c-cmake msgpack-c)
@@ -136,7 +136,7 @@ add_contrib (fmtlib-cmake fmtlib)
 add_contrib (krb5-cmake krb5)
 add_contrib (cyrus-sasl-cmake cyrus-sasl) # for krb5
 add_contrib (libgsasl-cmake libgsasl) # requires krb5
-add_contrib (libhdfs3-cmake libhdfs3) # requires: protobuf, krb5
+add_contrib (libhdfs3-cmake libhdfs3) # requires: google-protobuf, krb5
 add_contrib (librdkafka-cmake librdkafka) # requires: libgsasl
 add_contrib (libpqxx-cmake libpqxx)
 add_contrib (libpq-cmake libpq)

@@ -11,6 +11,8 @@ namespace DB
 namespace ProtonConsts
 {
 constexpr int64_t LogStartSN = 0;
+static constexpr int64_t LatestSN = -1;
+static constexpr int64_t EarliestSN = -2;
 
 /// Reserved column names / aliases for streaming processing
 const String STREAMING_WINDOW_START = "window_start";

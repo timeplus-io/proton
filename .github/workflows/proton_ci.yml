@@ -17,6 +17,10 @@ on: # yamllint disable-line rule:truthy
       - 'utils/check-style/aspell-ignore/**'
       - 'examples/**'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     name: Labels check
@@ -27,7 +31,7 @@ jobs:
       GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4.2.2
         with:
           token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
           submodules: false
@@ -80,6 +84,11 @@ jobs:
 
         docker run --name static-server -p 8080:80 -v $GITHUB_WORKSPACE/output:/usr/share/nginx/html:ro -d nginx
         cd $GITHUB_WORKSPACE/docker/server
+
+        # prepare files to be copied to the image
+        mkdir -p resources/protos/google/protobuf
+        cp -r $GITHUB_WORKSPACE/contrib/google-protobuf/src/google/protobuf/*.proto ./resources/protos/google/protobuf/
+        rm -rf resources/protos/google/protobuf/unittest_*
 
         # build docker image
         docker build . --network host --build-arg single_binary_location_url=http://localhost:8080/proton -t ghcr.io/timeplus-io/proton:testing-$SANITIZER-$ARCH-$GITHUB_SHA

@@ -105,7 +105,7 @@ namespace DB
             /// Invert values since Arrow interprets 1 as a non-null value, while CH as a null
             arrow_null_bytemap.reserve(end - start);
             for (size_t i = start; i < end; ++i)
-                arrow_null_bytemap.template emplace_back(!(*null_bytemap)[i]);
+                arrow_null_bytemap.emplace_back(!(*null_bytemap)[i]);
 
             arrow_null_bytemap_raw_ptr = arrow_null_bytemap.data();
         }

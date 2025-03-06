@@ -141,7 +141,7 @@ namespace
             return false;
         if (google_wrappers_special_treatment && isGoogleWrapperField(field_descriptor))
             return false;
-        return field_descriptor.message_type() || (field_descriptor.file()->syntax() == google::protobuf::FileDescriptor::SYNTAX_PROTO3);
+        return field_descriptor.message_type() || !field_descriptor.has_presence();
     }
 
     // Should we pack repeated values while storing them.
@@ -2925,11 +2925,10 @@ namespace
 
             if (!message_serializer)
             {
-                throw Exception(
-                    "Not found matches between the names of the columns {" + boost::algorithm::join(column_names, ", ")
-                        + "} and the fields {" + boost::algorithm::join(getFieldNames(message_descriptor), ", ") + "} of the message "
-                        + quoteString(message_descriptor.full_name()) + " in the protobuf schema",
-                    ErrorCodes::NO_COLUMNS_SERIALIZED_TO_PROTOBUF_FIELDS);
+                throw Exception(ErrorCodes::NO_COLUMNS_SERIALIZED_TO_PROTOBUF_FIELDS,
+                     "Not found matches between the names of the columns ({}) and the fields ({}) of the message {} in the protobuf schema",
+                     boost::algorithm::join(column_names, ", "), boost::algorithm::join(getFieldNames(message_descriptor), ", "),
+                     quoteString(message_descriptor.full_name()));
             }
 
             missing_column_indices.clear();
@@ -3346,16 +3345,16 @@ namespace
             }
 
             /// Check that we've found matching columns for all the required fields.
-            if ((message_descriptor.file()->syntax() == google::protobuf::FileDescriptor::SYNTAX_PROTO2)
-                    && reader_or_writer.writer)
+            if (reader_or_writer.writer)
             {
                 for (int i : collections::range(message_descriptor.field_count()))
                 {
                     const auto & field_descriptor = *message_descriptor.field(i);
                     if (field_descriptor.is_required() && !field_descriptors_in_use.count(&field_descriptor))
                         throw Exception(
-                            "Field " + quoteString(field_descriptor.full_name()) + " is required to be set",
-                            ErrorCodes::NO_COLUMN_SERIALIZED_TO_REQUIRED_PROTOBUF_FIELD);
+                            ErrorCodes::NO_COLUMN_SERIALIZED_TO_REQUIRED_PROTOBUF_FIELD,
+                            "Field {} is required to be set",
+                            quoteString(field_descriptor.full_name()));
                 }
             }
 
@@ -3492,12 +3491,12 @@ namespace
 
                         if (!message_serializer)
                         {
-                            throw Exception(
-                                "Not found matches between the names of the tuple's elements {"
-                                    + boost::algorithm::join(tuple_data_type.getElementNames(), ", ") + "} and the fields {"
-                                    + boost::algorithm::join(getFieldNames(*field_descriptor.message_type()), ", ") + "} of the message "
-                                    + quoteString(field_descriptor.message_type()->full_name()) + " in the protobuf schema",
-                                ErrorCodes::NO_COLUMNS_SERIALIZED_TO_PROTOBUF_FIELDS);
+                            throw Exception(ErrorCodes::NO_COLUMNS_SERIALIZED_TO_PROTOBUF_FIELDS,
+                                 "Not found matches between the names of the tuple's elements ({}) and the fields ({}) "
+                                 "of the message {} in the protobuf schema",
+                                 boost::algorithm::join(tuple_data_type.getElementNames(), ", "),
+                                 boost::algorithm::join(getFieldNames(*field_descriptor.message_type()), ", "),
+                                 quoteString(field_descriptor.message_type()->full_name()));
                         }
 
                         return std::make_unique<ProtobufSerializerTupleAsNestedMessage>(std::move(message_serializer));

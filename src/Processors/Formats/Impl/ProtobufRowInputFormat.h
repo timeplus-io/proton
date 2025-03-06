@@ -37,9 +37,10 @@ public:
         ReadBuffer & in_,
         const Block & header_,
         const Params & params_,
-        const FormatSchemaInfo & schema_info_,
+        const ProtobufSchemaInfo & schema_info_,
         bool with_length_delimiter_,
-        bool flatten_google_wrappers_);
+        bool flatten_google_wrappers_,
+        const String & google_protos_path);
 
     String getName() const override { return "ProtobufRowInputFormat"; }
 
@@ -67,6 +68,7 @@ public:
 private:
     const FormatSchemaInfo schema_info;
     bool skip_unsupported_fields;
+    String google_protos_path;
 };
 
 /// proton: starts

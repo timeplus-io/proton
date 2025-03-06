@@ -2,7 +2,6 @@
 
 #if USE_PULSAR
 
-#    include <Formats/FormatFactory.h>
 #    include <Common/ProtonCommon.h>
 #    include <Common/logger_useful.h>
 
@@ -131,7 +130,7 @@ void PulsarSink::onWriteBufferNext(char * pos, size_t len, size_t total_len)
             memcpy(payload.data(), pending_data.data(), pending_size);
         memcpy(payload.data() + pending_size, pos, len);
 
-        b.setContent(payload.data(), payload.size());
+        b.setContent({payload.data(), payload.size()});
         producer.sendAsync(b.build(), send_async_callback);
         ++state.outstandings;
         external_stream_counter->addToMessagesBySize(1);

@@ -264,7 +264,7 @@ std::pair<String, Int32> SQLAnalyzerRestRouterHandler::executePost(const Poco::J
         bool is_streaming = true;
         std::set<String> group_by_columns;
 
-        if (auto * const select = ast->as<ASTSelectWithUnionQuery>())
+        if (auto * const /*select*/_ = ast->as<ASTSelectWithUnionQuery>())
         {
             /// Interpreter will trigger ast analysis. One side effect is collecting
             /// required columns during the analysis process

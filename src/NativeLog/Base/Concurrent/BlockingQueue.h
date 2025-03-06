@@ -5,6 +5,7 @@
 #include <queue>
 #include <shared_mutex>
 #include <condition_variable>
+#include <cassert>
 
 namespace nlog
 {

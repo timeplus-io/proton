@@ -33,7 +33,7 @@ class AggregateFunctionGroupUniqArrayRetract : public IAggregateFunctionDataHelp
                                                    AggregateFunctionGroupUniqArrayRetract<T, LimitNumElems>>
 {
     static constexpr bool limit_num_elems = LimitNumElems::value;
-    Int64 max_elems;
+    UInt64 max_elems;
 
 private:
     using State = AggregateFunctionGroupUniqArrayRetractData<T>;
@@ -148,7 +148,7 @@ class AggregateFunctionGroupUniqArrayRetractGeneric : public IAggregateFunctionD
     DataTypePtr & input_data_type;
 
     static constexpr bool limit_num_elems = LimitNumElems::value;
-    Int64 max_elems;
+    UInt64 max_elems;
 
     using State = AggregateFunctionGroupUniqArrayRetractGenericData;
 

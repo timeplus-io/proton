@@ -3,7 +3,7 @@ FROM ubuntu:20.04
 # FIXME, XXX, timeplus deb repo
 # ARG repository="deb https://repo.timeplus/deb/stable/ main/"
 ARG repository=""
-ARG version=1.6.10
+ARG version=1.6.11
 ARG gosu_ver=1.10
 
 # set non-empty deb_location_url url to create a docker image
@@ -109,7 +109,12 @@ ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 ENV TZ UTC
 
-RUN mkdir /docker-entrypoint-initdb.d
+RUN mkdir /docker-entrypoint-initdb.d \
+ && mkdir -p /var/lib/proton/lib \
+ && mkdir -p /usr/share/proton
+
+COPY resources/protos /usr/share/proton/protos/
+RUN chown -R timeplus:timeplus /usr/share/proton/
 
 COPY docker_related_config.xml /etc/proton-server/config.d/
 COPY entrypoint.sh /entrypoint.sh

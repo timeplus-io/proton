@@ -92,10 +92,15 @@ public:
         else
         {
             /// Didn't find v in the map
-            auto [new_iter, inserted] = m.emplace(arena->emplace(std::move(v)), 1);
+            T stored_value = arena->emplace(std::move(v));
+            auto [new_iter, inserted] = m.emplace(stored_value, 1);
             assert(inserted);
 
-            eraseExtraElements();
+            /// If an element was removed, refind the iterator to ensure validity
+            bool erased = eraseExtraElements();
+            if (erased)
+                return m.find(stored_value);
+
             return new_iter;
         }
     }
@@ -127,7 +132,7 @@ public:
     }
 
     /// Return true if the element exists in the map.
-    template<typename TT>
+    template <typename TT>
     bool contains(const TT & v) const
     {
         return m.find(v) != m.end();
@@ -302,17 +307,20 @@ private:
         }
     }
 
-    void eraseExtraElements()
+    bool eraseExtraElements()
     {
         if (max_size <= 0)
-            return;
+            return false;
 
+        bool erased = false;
         while (m.size() > max_size)
         {
             auto last_elem = --m.end();
             arena->free(last_elem->first);
             m.erase(last_elem);
+            erased = true;
         }
+        return erased;
     }
 
     inline void clearAndClone(const CountedValueMap & rhs)

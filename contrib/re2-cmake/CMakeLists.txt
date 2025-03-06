@@ -37,6 +37,18 @@ set(RE2_SOURCES
 )
 add_library(re2 ${RE2_SOURCES})
 target_include_directories(re2 PUBLIC "${SRC_DIR}")
+target_link_libraries(re2 PRIVATE
+    absl::base
+    absl::core_headers
+    absl::fixed_array
+    absl::flat_hash_map
+    absl::flat_hash_set
+    absl::inlined_vector
+    absl::strings
+    absl::str_format
+    absl::synchronization
+    absl::optional
+    absl::span)
 
 # Building re2 which is thread-safe and re2_st which is not.
 # re2 changes its state during matching of regular expression, e.g. creates temporary DFA.

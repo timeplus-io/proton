@@ -1,13 +1,13 @@
-#include <Interpreters/Context.h>
-#include <NativeLog/Base/Stds.h>
-#include <NativeLog/Record/Record.h>
-#include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/ExternalStream/Log/FileLog.h>
 #include <Storages/ExternalStream/Log/FileLogSource.h>
 #include <Storages/ExternalStream/Log/fileLastModifiedTime.h>
+
+#include <Interpreters/Context.h>
+#include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/Streaming/storageUtil.h>
+#include <Common/ProtonCommon.h>
 #include <Common/logger_useful.h>
 
 #include <boost/algorithm/string.hpp>
@@ -146,7 +146,7 @@ FileLogSource::FileContainer FileLog::searchForCandidates(bool table_query)
         }
     }
 
-    if (!table_query && start_timestamp == nlog::LATEST_SN)
+    if (!table_query && start_timestamp == ProtonConsts::LatestSN)
     {
         /// Tail the log last file
         /// Remove all other files except the last one

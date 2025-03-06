@@ -10,8 +10,7 @@ namespace DB
 REGISTER_FUNCTION(UniqTheta)
 {
     factory.registerFunction<FunctionUniqThetaIntersect>(
-            {
-              R"(
+            FunctionDocumentation{.description = R"(
 Two uniqThetaSketch objects to do intersect calculation(set operation ∩), the result is a new uniqThetaSketch.
 
 A uniqThetaSketch object is to be constructed by aggregation function uniqTheta with -State.
@@ -22,14 +21,13 @@ For more information on RoaringBitmap, see: [Theta Sketch Framework](https://dat
 Typical usage:
 [example:typical]
 )",
-                    Documentation::Examples{
-                            {"typical", "select finalize_aggregation(uniq_theta_intersect(array_reduce('uniq_theta_state',[1,2]), array_reduce('uniq_theta_state',[2,3,4])));"}},
-                    Documentation::Categories{"uniqTheta"}
+                    .examples{
+                            {"typical", "select finalize_aggregation(uniq_theta_intersect(arrayReduce('uniq_theta_state',[1,2]), array_reduce('uniq_theta_state',[2,3,4])));", ""}},
+                    .categories{"uniqTheta"}
             });
 
     factory.registerFunction<FunctionUniqThetaUnion>(
-            {
-              R"(
+            FunctionDocumentation{.description = R"(
 Two uniqThetaSketch objects to do union calculation(set operation ∪), the result is a new uniqThetaSketch.
 
 A uniqThetaSketch object is to be constructed by aggregation function uniqTheta with -State.
@@ -40,13 +38,12 @@ For more information on RoaringBitmap, see: [Theta Sketch Framework](https://dat
 Typical usage:
 [example:typical]
 )",
-                    Documentation::Examples{
-                            {"typical", "select finalize_aggregation(uniq_theta_union(array_reduce('uniq_theta_state',[1,2]), array_reduce('uniq_theta_state',[2,3,4])));"}},
-                    Documentation::Categories{"uniqTheta"}
+                    .examples{
+                            {"typical", "select finalize_aggregation(uniq_theta_union(array_reduce('uniq_theta_state',[1,2]), array_reduce('uniq_theta_state',[2,3,4])));", ""}},
+                    .categories{"uniqTheta"}
             });
     factory.registerFunction<FunctionUniqThetaNot>(
-            {
-              R"(
+            FunctionDocumentation{.description = R"(
 Two uniqThetaSketch objects to do a_not_b calculation(set operation ×), the result is a new uniqThetaSketch.
 
 A uniqThetaSketch object is to be constructed by aggregation function uniqTheta with -State.
@@ -57,9 +54,9 @@ For more information on RoaringBitmap, see: [Theta Sketch Framework](https://dat
 Typical usage:
 [example:typical]
 )",
-                    Documentation::Examples{
-                            {"typical", "select finalize_aggregation(uniq_theta_not(array_reduce('uniq_theta_state',[1,2]), array_reduce('uniq_theta_state',[2,3,4])));"}},
-                    Documentation::Categories{"uniqTheta"}
+                    .examples{
+                            {"typical", "select finalize_aggregation(uniq_theta_not(array_reduce('uniq_theta_state',[1,2]), array_reduce('uniq_theta_state',[2,3,4])));", ""}},
+                    .categories{"uniqTheta"}
             });
 }
 

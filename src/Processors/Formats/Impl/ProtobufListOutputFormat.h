@@ -4,10 +4,10 @@
 
 #if USE_PROTOBUF
 #    include <Processors/Formats/IRowOutputFormat.h>
+#    include <Formats/FormatSchemaInfo.h>
 
 namespace DB
 {
-class FormatSchemaInfo;
 class ProtobufWriter;
 class ProtobufSerializer;
 
@@ -27,8 +27,9 @@ public:
         WriteBuffer & out_,
         const Block & header_,
         const RowOutputFormatParams & params_,
-        const FormatSchemaInfo & schema_info_,
-        bool defaults_for_nullable_google_wrappers_);
+        const ProtobufSchemaInfo & schema_info_,
+        bool defaults_for_nullable_google_wrappers_,
+        const String & google_protos_path);
 
     String getName() const override { return "ProtobufListOutputFormat"; }
 

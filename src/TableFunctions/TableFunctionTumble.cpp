@@ -50,8 +50,10 @@ void registerTableFunctionTumble(TableFunctionFactory & factory)
 {
     factory.registerFunction(
         "tumble",
-        []() -> TableFunctionPtr { return std::make_shared<TableFunctionTumble>("tumble"); },
-        {},
+        TableFunctionFactoryData{
+            []() -> TableFunctionPtr { return std::make_shared<TableFunctionTumble>("tumble"); },
+            {},
+        },
         TableFunctionFactory::CaseSensitive,
         /*support subquery*/ true);
 }

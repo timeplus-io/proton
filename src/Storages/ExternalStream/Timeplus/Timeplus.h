@@ -17,7 +17,7 @@ public:
     Timeplus(
         IStorage * storage,
         StorageInMemoryMetadata & storage_metadata,
-        ExternalStreamSettingsPtr settings_,
+        std::unique_ptr<ExternalStreamSettings> settings_,
         bool attach,
         ContextPtr context);
     ~Timeplus() override = default;

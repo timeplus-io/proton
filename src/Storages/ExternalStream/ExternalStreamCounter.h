@@ -1,5 +1,7 @@
 #pragma once
 
+#include <base/ClockUtils.h>
+
 #include <atomic>
 
 namespace DB
@@ -8,45 +10,100 @@ namespace DB
 class ExternalStreamCounter
 {
 public:
-    inline uint64_t getReadBytes() const { return read_bytes.load(); }
-    inline uint64_t getReadCounts() const { return read_counts.load(); }
-    inline uint64_t getReadFailed() const { return read_failed.load(); }
-    inline uint64_t getWriteBytes() const { return write_bytes.load(); }
-    inline uint64_t getWriteCounts() const { return write_counts.load(); }
-    inline uint64_t getWriteFailed() const { return write_failed.load(); }
-    inline uint64_t getMessageSizeLimit() const { return messages_by_row.load(); }
-    inline uint64_t getMessageRowsLimit() const { return messages_by_row.load(); }
+    inline int64_t getMetricTime(bool reset = true)
+    {
+        if (reset)
+            return metric_time.exchange(MonotonicMilliseconds::now(), std::memory_order_relaxed);
+        else
+            return metric_time.load(std::memory_order_relaxed);
+    }
 
-    inline void addToReadBytes(uint64_t bytes) { read_bytes.fetch_add(bytes); }
-    inline void addToReadCounts(uint64_t counts) { read_counts.fetch_add(counts); }
-    inline void addToReadFailed(uint64_t amount) { read_failed.fetch_add(amount); }
-    inline void addToWriteBytes(uint64_t bytes) { write_bytes.fetch_add(bytes); }
-    inline void addToWriteCounts(uint64_t counts) { write_counts.fetch_add(counts); }
-    inline void addToWriteFailed(uint64_t amount) { write_failed.fetch_add(amount); }
-    inline void addToMessagesBySize(uint64_t counts) { messages_by_size.fetch_add(counts); }
-    inline void addToMessagesByRow(uint64_t counts) { messages_by_row.fetch_add(counts); }
+    inline uint64_t readBytes(bool reset = true)
+    {
+        if (reset)
+            return read_bytes.exchange(0ull, std::memory_order_relaxed);
+        else
+            return read_bytes.load(std::memory_order_relaxed);
+    }
+
+    inline uint64_t readRows(bool reset = true)
+    {
+        if (reset)
+            return read_rows.exchange(0, std::memory_order_relaxed);
+        else
+            return read_rows.load(std::memory_order_relaxed);
+    }
+
+    inline uint64_t readFailed(bool reset = true)
+    {
+        if (reset)
+            return read_failed.exchange(0, std::memory_order_relaxed);
+        else
+            return read_failed.load(std::memory_order_relaxed);
+    }
+
+    inline uint64_t writtenBytes(bool reset = true)
+    {
+        if (reset)
+            return written_bytes.exchange(0, std::memory_order_relaxed);
+        else
+            return written_bytes.load(std::memory_order_relaxed);
+    }
+
+    inline uint64_t writtenRows(bool reset = true)
+    {
+        if (reset)
+            return written_rows.exchange(0, std::memory_order_relaxed);
+        else
+            return written_rows.load(std::memory_order_relaxed);
+    }
+
+    inline uint64_t writtenFailed(bool reset = true)
+    {
+        if (reset)
+            return written_failed.exchange(0, std::memory_order_relaxed);
+        else
+            return written_failed.load(std::memory_order_relaxed);
+    }
+
+    inline void addReadBytes(uint64_t bytes) { read_bytes += bytes; }
+    inline void addReadRows(uint64_t counts) { read_rows += counts; }
+    inline void addReadFailed(uint64_t amount) { read_failed += amount; }
+    inline void addWrittenBytes(uint64_t bytes) { written_bytes += bytes; }
+    inline void addWrittenRows(uint64_t counts) { written_rows += counts; }
+    inline void addWrittenFailed(uint64_t amount) { written_failed += amount; }
+    inline void addToMessagesBySize(uint64_t counts) { messages_by_size += counts; }
+    inline void addToMessagesByRow(uint64_t counts) { messages_by_row += counts; }
+
+    inline void setReadBytes(uint64_t bytes) { read_bytes = bytes; }
+    inline void setReadRows(uint64_t counts) { read_rows = counts; }
+    inline void setReadFailed(uint64_t amount) { read_failed = amount; }
+    inline void setWrittenBytes(uint64_t bytes) { written_bytes = bytes; }
+    inline void setWrittenRows(uint64_t counts) { written_rows = counts; }
+    inline void setWrittenFailed(uint64_t amount) { written_failed = amount; }
 
     std::map<String, uint64_t> getCounters() const
     {
         return {
             {"ReadBytes", read_bytes.load()},
-            {"ReadCounts", read_counts.load()},
+            {"ReadRows", read_rows.load()},
             {"ReadFailed", read_failed.load()},
-            {"WriteBytes", write_bytes.load()},
-            {"WriteCounts", write_counts.load()},
-            {"WriteFailed", write_failed.load()},
+            {"WrittenBytes", written_bytes.load()},
+            {"WrittenRows", written_rows.load()},
+            {"WrittenFailed", written_failed.load()},
             {"MessagesBySize", messages_by_size.load()},
             {"MessagesByRow", messages_by_row.load()},
         };
     }
 
 private:
+    std::atomic<int64_t> metric_time = MonotonicMilliseconds::now();
     std::atomic<uint64_t> read_bytes;
-    std::atomic<uint64_t> read_counts;
+    std::atomic<uint64_t> read_rows;
     std::atomic<uint64_t> read_failed;
-    std::atomic<uint64_t> write_bytes;
-    std::atomic<uint64_t> write_counts;
-    std::atomic<uint64_t> write_failed;
+    std::atomic<uint64_t> written_bytes;
+    std::atomic<uint64_t> written_rows;
+    std::atomic<uint64_t> written_failed;
     /// Number of Kafka messages generated by reaching the `kafka_max_message_size` limit.
     std::atomic<uint64_t> messages_by_size;
     /// Number of Kafka messages generated by reaching the `kafka_max_message_rows` limit.
