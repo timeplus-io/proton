@@ -64,6 +64,11 @@ endif()
 if (TARGET ch_contrib::aws_s3)
     set(USE_AWS_S3 1)
 endif()
+# proton: starts
+if (TARGET ch_contrib::aws_msk_iam)
+   set(USE_AWS_MSK_IAM 1)
+endif()
+# proton: ends
 if (ENABLE_NLP)
     set(USE_NLP 1)
 endif()

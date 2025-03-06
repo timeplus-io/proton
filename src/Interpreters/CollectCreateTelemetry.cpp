@@ -32,7 +32,7 @@ void collectCreateTelemetry(const StoragePtr & storage, ContextPtr context)
 
             auto nested_storage = external_stream->getNested();
 
-            if (auto * kafka = nested_storage->as<Kafka>())
+            if (auto * kafka = nested_storage->as<ExternalStream::Kafka>())
             {
                 builder.withSecurityProtocol(kafka->secureProtocol())
                     .withSaslMechanism(kafka->saslMechanism())

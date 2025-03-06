@@ -112,6 +112,8 @@ struct ConnectionTimeouts
     /// Timeouts for the case when we will try many addresses in a loop.
     static ConnectionTimeouts getTCPTimeoutsWithFailover(const Settings & settings);
     static ConnectionTimeouts getHTTPTimeouts(ContextPtr context);
+
+    ConnectionTimeouts getAdaptiveTimeouts(const String & method, bool first_attempt, bool first_byte) const;
 };
 
 }

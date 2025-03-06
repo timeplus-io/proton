@@ -1,5 +1,6 @@
 #include <Storages/ExternalStream/StorageExternalStream.h>
 
+#include <IO/Kafka/Connection.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -8,12 +9,10 @@
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
 #include <Storages/ExternalStream/ExternalStreamTypes.h>
 #include <Storages/ExternalStream/Kafka/Kafka.h>
+#include <Storages/ExternalStream/Log/FileLog.h>
 #include <Storages/ExternalStream/Pulsar/Pulsar.h>
-#include <Storages/ExternalStream/Timeplus/Timeplus.h>
-#ifdef OS_LINUX
-#    include <Storages/ExternalStream/Log/FileLog.h>
-#endif
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
+#include <Storages/ExternalStream/Timeplus/Timeplus.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageFactory.h>
@@ -65,39 +64,60 @@ void validateEngineArgs(ContextPtr context, ASTs & engine_args, const ColumnsDes
 
 StoragePtr createExternalStream(
     IStorage * storage,
-    ExternalStreamSettingsPtr settings,
+    std::unique_ptr<ExternalStreamSettings> external_stream_settings,
+    ContextPtr context [[maybe_unused]],
     const ASTs & engine_args,
     StorageInMemoryMetadata & storage_metadata,
     bool attach,
     ExternalStreamCounterPtr external_stream_counter,
     ContextPtr context_)
 {
-    auto type = settings->type.value;
+    auto type = external_stream_settings->type.value;
 
     if (type.empty())
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "External stream type is required in settings");
 
 
     if (type == StreamTypes::KAFKA || type == StreamTypes::REDPANDA)
-        return std::make_unique<Kafka>(storage, std::move(settings), engine_args, attach, external_stream_counter, std::move(context_));
+        return std::make_unique<ExternalStream::Kafka>(
+            storage,
+            std::move(external_stream_settings),
+            engine_args,
+            storage_metadata,
+            attach,
+            std::move(external_stream_counter),
+            std::move(context_));
 
     if (type == StreamTypes::TIMEPLUS)
-        return std::make_unique<ExternalStream::Timeplus>(storage, storage_metadata, std::move(settings), attach, std::move(context_));
+        return std::make_unique<ExternalStream::Timeplus>(
+            storage, storage_metadata, std::move(external_stream_settings), attach, std::move(context_));
 
-#ifdef OS_LINUX
-    if (type == StreamTypes::LOG && context_->getSettingsRef()._tp_enable_log_stream_expr.value)
-        return std::make_unique<FileLog>(storage, std::move(settings), std::move(context_));
+    if (type == StreamTypes::LOG && context->getSettingsRef()._tp_enable_log_stream_expr.value)
+        return std::make_unique<FileLog>(storage, std::move(external_stream_settings), std::move(context_));
 
-#endif
 #if USE_PULSAR
     if (type == StreamTypes::PULSAR)
         return std::make_unique<ExternalStream::Pulsar>(
-            storage, std::move(settings), attach, std::move(external_stream_counter), std::move(context_));
+            storage, std::move(external_stream_settings), attach, std::move(external_stream_counter), std::move(context_));
 
 #endif
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unknown external stream type: {}", type);
 }
 
+}
+
+UInt64 StorageExternalStream::readFailed(bool reset) const
+{
+    if (!external_stream_counter)
+        return 0;
+    return external_stream_counter->readFailed(reset);
+}
+
+UInt64 StorageExternalStream::writtenFailed(bool reset) const
+{
+    if (!external_stream_counter)
+        return 0;
+    return external_stream_counter->writtenFailed(reset);
 }
 
 StorageExternalStream::StorageExternalStream(
@@ -110,21 +130,9 @@ StorageExternalStream::StorageExternalStream(
     bool attach)
     : StorageProxy(table_id_), WithContext(context_->getGlobalContext()), external_stream_counter(std::make_shared<ExternalStreamCounter>())
 {
-    auto settings = std::make_unique<Settings>();
     auto external_stream_settings = std::make_unique<ExternalStreamSettings>();
-
-    if (storage_def->settings != nullptr)
-    {
-        for (const auto & change : storage_def->settings->changes)
-        {
-            if (change.name.starts_with("s3_") && settings->has(change.name))
-                settings->set(change.name, change.value);
-            else if (external_stream_settings->has(change.name))
-                external_stream_settings->set(change.name, change.value);
-            else
-                throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Unknow settings '{}'", change.name);
-        }
-    }
+    external_stream_settings->loadFromQuery(*storage_def);
+    external_stream_settings->loadFromConfigFile();
 
     if (columns_.empty() && external_stream_settings->type.value != StreamTypes::TIMEPLUS)
         /// This is the same error reported by InterpreterCreateQuery
@@ -150,7 +158,14 @@ StorageExternalStream::StorageExternalStream(
 
     auto metadata = getInMemoryMetadata();
     auto stream = createExternalStream(
-        this, std::move(external_stream_settings), engine_args, metadata, attach, external_stream_counter, std::move(context_));
+        this,
+        std::move(external_stream_settings),
+        context_,
+        engine_args,
+        metadata,
+        attach,
+        external_stream_counter,
+        std::move(context_));
     external_stream.swap(stream);
     /// Some external streams fetch the structure in other ways, thus need to set the metadata again here in case it's updated.
     setInMemoryMetadata(metadata);

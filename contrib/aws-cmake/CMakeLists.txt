@@ -1,12 +1,15 @@
 set(ENABLE_AWS_S3_DEFAULT OFF)
+set(ENABLE_AWS_MSK_IAM_DEFAULT OFF) # proton: added
 
 if(ENABLE_LIBRARIES AND (OS_LINUX OR OS_DARWIN) AND TARGET OpenSSL::Crypto)
     set(ENABLE_AWS_S3_DEFAULT ON)
+    set(ENABLE_AWS_MSK_IAM_DEFAULT ON) # proton: added
 endif()
 
 option(ENABLE_AWS_S3 "Enable AWS S3" ${ENABLE_AWS_S3_DEFAULT})
+option(ENABLE_AWS_MSK_IAM "Enable AWS MSK IAM" ${ENABLE_AWS_MSK_IAM_DEFAULT}) # proton: added
 
-if(ENABLE_AWS_S3)
+if(ENABLE_AWS_S3 OR ENABLE_AWS_MSK_IAM) # proton: updated
     if(NOT TARGET OpenSSL::Crypto)
         message (${RECONFIGURE_MESSAGE_LEVEL} "Can't use AWS SDK without OpenSSL")
     elseif(NOT (OS_LINUX OR OS_DARWIN))
@@ -14,11 +17,10 @@ if(ENABLE_AWS_S3)
     endif()
 endif()
 
-if(NOT ENABLE_AWS_S3)
-    message(STATUS "Not using AWS S3")
+if(NOT (ENABLE_AWS_S3 OR ENABLE_AWS_MSK_IAM)) # proton: updated
+    message(STATUS "Not using AWS SDK") # proton: updated
     return()
 endif()
-
 
 # Utilities.
 include("${proton_SOURCE_DIR}/contrib/aws-cmake/AwsFeatureTests.cmake")
@@ -91,8 +93,8 @@ file(GLOB AWS_SDK_CORE_SRC
     "${AWS_SDK_CORE_DIR}/source/utils/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/base64/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/crypto/*.cpp"
-    "${AWS_SDK_CORE_DIR}/source/utils/crypto/openssl/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/crypto/factory/*.cpp"
+    "${AWS_SDK_CORE_DIR}/source/utils/crypto/openssl/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/event/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/json/*.cpp"
     "${AWS_SDK_CORE_DIR}/source/utils/logging/*.cpp"
@@ -373,4 +375,15 @@ if (OMIT_HEAVY_DEBUG_SYMBOLS)
     target_compile_options (_aws PRIVATE -g0)
 endif()
 
-add_library(ch_contrib::aws_s3 ALIAS _aws)
+# proton: starts
+# Add aliases for feature-checks.
+if (ENABLE_AWS_S3)
+    add_library(ch_contrib::aws_s3 ALIAS _aws)
+endif()
+
+if (ENABLE_AWS_MSK_IAM)
+    add_library(ch_contrib::aws_msk_iam ALIAS _aws)
+endif()
+
+add_library(ch_contrib::aws_sdk ALIAS _aws)
+# proton: ends

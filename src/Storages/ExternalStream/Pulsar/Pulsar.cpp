@@ -8,12 +8,11 @@
 #    include <DataTypes/DataTypeString.h>
 #    include <IO/WriteBufferFromFile.h>
 #    include <Interpreters/TreeRewriter.h>
-#    include <Record/Record.h>
 #    include <Storages/ExternalStream/ExternalStreamTypes.h>
 #    include <Storages/ExternalStream/Pulsar/Logger.h>
 #    include <Storages/ExternalStream/Pulsar/PulsarSource.h>
-#    include <Storages/ExternalStream/parseShards.h>
 #    include <Storages/SelectQueryInfo.h>
+#    include <Storages/parseShards.h>
 #    include <Common/ProtonCommon.h>
 
 #    include <pulsar/Client.h>
@@ -72,7 +71,7 @@ Pulsar::Pulsar(IStorage * storage, ExternalStreamSettingsPtr settings_, bool att
         if (res != pulsar::ResultOk)
             throw Exception(
                 ErrorCodes::INVALID_SETTING_VALUE,
-                "Failed to get paritions of topic {} on {}, error={}",
+                "Failed to get partitions of topic {} on {}, error={}",
                 settings->topic.value,
                 serviceUrl(),
                 pulsar::strResult(res));
@@ -185,7 +184,6 @@ void Pulsar::cacheVirtualColumnNamesAndTypes()
                                                                   return Decimal64(msg.getPublishTimestamp());
                                                           }};
 
-    DataTypePtr dptr = std::make_shared<DataTypeDateTime64>(3, "UTC");
     virtual_columns[ProtonConsts::RESERVED_PROCESS_TIME]
         = {std::make_shared<DataTypeDateTime64>(3, "UTC"), [](const pulsar::Message &) { return Decimal64(UTCMilliseconds::now()); }};
 
@@ -211,7 +209,7 @@ std::vector<String> Pulsar::getPartitions(const ContextPtr & query_context)
     if (auto res = client.getPartitionsForTopic(settings->topic.value, partitions); res != pulsar::ResultOk)
         throw Exception(
             ErrorCodes::CANNOT_CONNECT_SERVER,
-            "Failed to get paritions of topic {} on {}: {}",
+            "Failed to get partitions of topic {} on {}: {}",
             settings->topic.value,
             serviceUrl(),
             pulsar::strResult(res));
@@ -237,7 +235,7 @@ std::vector<String> Pulsar::getPartitions(const ContextPtr & query_context)
             result.push_back(*it);
         else
             throw Exception(
-                ErrorCodes::INVALID_SETTING_VALUE, "Invalid shard {}, available paritions: {}", shard, fmt::join(partitions, ", "));
+                ErrorCodes::INVALID_SETTING_VALUE, "Invalid shard {}, available partitions: {}", shard, fmt::join(partitions, ", "));
     }
 
     return result;
@@ -249,7 +247,7 @@ Pipe Pulsar::read(
     SelectQueryInfo & query_info,
     ContextPtr query_context,
     QueryProcessingStage::Enum /*processed_stage*/,
-    size_t max_block_size,
+    size_t /*max_block_size*/,
     size_t /*num_streams*/)
 {
     /// TODO check IProcessor::Status::ExpandPipeline
@@ -258,7 +256,14 @@ Pipe Pulsar::read(
     /// `SELECT * FROM pulsar_stream SETTINGS shards=0,3`
     auto partitions = getPartitions(query_context);
 
-    auto header = storage_snapshot->getSampleBlockForColumns(column_names);
+    /// For queries like `SELECT count(*) FROM tumble(table, now(), 5s) GROUP BY window_end` don't have required column from table.
+    /// We will need add one
+    Block header;
+    if (!column_names.empty())
+        header = storage_snapshot->getSampleBlockForColumns(column_names);
+    else
+        header = storage_snapshot->getSampleBlockForColumns({ProtonConsts::RESERVED_EVENT_SEQUENCE_ID});
+
     auto virtual_header = calculateVirtualHeader(header, storage_snapshot->metadata->getSampleBlockNonMaterialized());
 
     auto streaming = query_info.syntax_analyzer_result->streaming;
@@ -272,11 +277,13 @@ Pipe Pulsar::read(
     const auto & seek_points = seek_to_info->getSeekPoints();
     if (!seek_to_info->isTimeBased())
         for (auto p : seek_points)
-            if (p != nlog::LATEST_SN && p != nlog::EARLIEST_SN)
+            if (p != ProtonConsts::LatestSN && p != ProtonConsts::EarliestSN)
                 throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Number based seek_to is not supported in Pulsar external stream");
 
     Pipes pipes;
     pipes.reserve(partitions.size());
+
+    auto format_settings = getFormatSettings(query_context);
 
     for (size_t i = 0; const auto & pa : partitions)
     {
@@ -284,17 +291,15 @@ Pipe Pulsar::read(
         if (seek_to_info->isTimeBased())
             reader.seek(seek_points[i++]);
         else
-            reader.seek(seek_points[i++] == nlog::LATEST_SN ? pulsar::MessageId::latest() : pulsar::MessageId::earliest());
-
-        auto read_buffer = std::make_unique<ReadBufferFromMemory>("", 0);
-        auto format_executor = createInputFormatExecutor(storage_snapshot, header, *read_buffer, max_block_size, query_context);
+            reader.seek(seek_points[i++] == ProtonConsts::LatestSN ? pulsar::MessageId::latest() : pulsar::MessageId::earliest());
 
         pipes.emplace_back(std::make_shared<PulsarSource>(
             header,
+            storage_snapshot,
             virtual_header,
             streaming,
-            std::move(read_buffer),
-            std::move(format_executor),
+            dataFormat(),
+            format_settings,
             std::move(reader),
             external_stream_counter,
             logger,
@@ -360,6 +365,8 @@ pulsar::Producer Pulsar::createProducer(const ContextPtr & context)
 
     pulsar::ProducerConfiguration config;
     /// Producer name must be unique. Otherwise, it will return ProducerBusy error (because the producer already exists).
+    /// So, we need to make sure that when a MV creates a pipeline on each node (when the MV gets created),
+    /// it will have a unique producer name on each node.
     auto name = fmt::format("tp-{}-{}", getLoggerName(), context->getCurrentQueryId());
     config.setProducerName(name);
 

@@ -47,16 +47,6 @@ namespace ErrorCodes
 
 namespace
 {
-    void setTimeouts(Poco::Net::HTTPClientSession & session, const ConnectionTimeouts & timeouts)
-    {
-#if defined(POCO_CLICKHOUSE_PATCH) || POCO_VERSION >= 0x02000000
-        session.setTimeout(timeouts.connection_timeout, timeouts.send_timeout, timeouts.receive_timeout);
-#else
-        session.setTimeout(std::max({timeouts.connection_timeout, timeouts.send_timeout, timeouts.receive_timeout}));
-#endif
-        session.setKeepAliveTimeout(timeouts.http_keep_alive_timeout);
-    }
-
     bool isHTTPS(const Poco::URI & uri)
     {
         if (uri.getScheme() == "https")
@@ -403,6 +393,12 @@ void assertResponseIsOk(const Poco::Net::HTTPRequest & request, Poco::Net::HTTPR
 
         throw HTTPException(code, request.getURI(), status, response.getReason(), body.str());
     }
+}
+
+void setTimeouts(Poco::Net::HTTPClientSession & session, const ConnectionTimeouts & timeouts)
+{
+    session.setTimeout(timeouts.connection_timeout, timeouts.send_timeout, timeouts.receive_timeout);
+    session.setKeepAliveTimeout(timeouts.http_keep_alive_timeout);
 }
 
 std::string HTTPException::makeExceptionMessage(

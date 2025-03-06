@@ -40,16 +40,14 @@ public:
         size_t max_block_size,
         size_t num_streams) override;
 
+    String getLoggerName() const;
+
 protected:
     void inferDataFormat(const IStorage & storage);
-    void adjustSettingsForDataFormat();
-    std::unique_ptr<StreamingFormatExecutor> createInputFormatExecutor(const StorageSnapshotPtr & storage_snapshot, const Block & header, ReadBuffer & read_buffer, size_t max_block_size, const ContextPtr & query_context);
 
     /// Creates a temporary directory for the external stream to store temporary data.
     void createTempDirIfNotExists() const;
     void tryRemoveTempDir() const;
-
-    String getLoggerName() const;
 
     ExternalStreamSettingsPtr settings;
     fs::path tmpdir;
@@ -59,7 +57,7 @@ protected:
     Poco::Logger * logger;
 
 private:
-    static Block getPhysicalColumns(const StorageSnapshotPtr & storage_snapshot, const Block & header);
+    void adjustSettingsForDataFormat();
 
     Pipe read(
         const Names & /*column_names*/,

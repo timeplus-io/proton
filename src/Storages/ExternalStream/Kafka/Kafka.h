@@ -1,11 +1,8 @@
 #pragma once
 
-#include <KafkaLog/KafkaWALCommon.h>
-#include <KafkaLog/KafkaWALSimpleConsumer.h>
+#include <IO/Kafka/Connection.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
 #include <Storages/ExternalStream/ExternalStreamSettings.h>
-#include <Storages/ExternalStream/Kafka/Consumer.h>
-#include <Storages/ExternalStream/Kafka/Producer.h>
 #include <Storages/ExternalStream/StorageExternalStreamImpl.h>
 #include <Storages/Streaming/SeekToInfo.h>
 
@@ -14,12 +11,13 @@ namespace DB
 
 class IStorage;
 
+namespace ExternalStream
+{
+
 class Kafka final : public StorageExternalStreamImpl
 {
 public:
     using ConfPtr = std::unique_ptr<rd_kafka_conf_t, decltype(rd_kafka_conf_destroy) *>;
-
-    static const String VIRTUAL_COLUMN_MESSAGE_KEY;
 
     static Poco::Logger * cbLogger()
     {
@@ -36,6 +34,7 @@ public:
         IStorage * storage,
         std::unique_ptr<ExternalStreamSettings> settings_,
         const ASTs & engine_args_,
+        StorageInMemoryMetadata & storage_metadata,
         bool attach,
         ExternalStreamCounterPtr external_stream_counter_,
         ContextPtr context);
@@ -43,40 +42,13 @@ public:
 
     String getName() const override { return "KafkaExternalStream"; }
 
+    void startup() override;
+    void shutdown() override;
+
     bool supportsAccurateSeekTo() const noexcept override { return true; }
-
-    bool squashInsert() const noexcept override { return false; }
-    void startup() override { LOG_INFO(logger, "Starting Kafka External Stream"); }
-    void shutdown() override
-    {
-        LOG_INFO(logger, "Shutting down Kafka External Stream");
-
-        /// Must release all resources here rather than relying on the deconstructor.
-        /// Because the `Kafka` instance will not be destroyed immediately when the external stream gets dropped.
-        {
-            std::lock_guard<std::mutex> lock{consumer_mutex};
-            for (const auto & consumer_ptr : consumers)
-                /// if the consumer is still running, mark it stopped
-                if (auto consumer = consumer_ptr.lock())
-                    consumer->setStopped();
-
-            consumers.clear();
-        }
-
-        if (producer)
-            producer->setStopped();
-
-        if (producer_topic)
-            producer_topic.reset();
-
-        if (producer)
-            producer.reset();
-
-        tryRemoveTempDir();
-    }
     bool supportsSubcolumns() const override { return true; }
+    bool squashInsert() const noexcept override { return false; }
     NamesAndTypesList getVirtuals() const override;
-
     std::optional<UInt64> totalRows(const Settings &) const override;
 
     SinkToStoragePtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) override;
@@ -94,10 +66,6 @@ public:
 
     std::vector<int64_t> getLastSNs() const override;
 
-    std::shared_ptr<RdKafka::Producer> getProducer();
-    std::shared_ptr<RdKafka::Topic> getProducerTopic();
-    std::shared_ptr<RdKafka::Consumer> getConsumer();
-
     const String & secureProtocol() const { return settings->security_protocol.value; }
     const String & saslMechanism() const { return settings->sasl_mechanism.value; }
     bool hasSchemaRegistryUrl() const { return !settings->kafka_schema_registry_url.value.empty(); }
@@ -106,13 +74,14 @@ public:
     bool hasSslCaPem() const { return !settings->ssl_ca_pem.value.empty(); }
 
 private:
-    Kafka::ConfPtr createRdConf(KafkaExternalStreamSettings settings_);
+    DB::Kafka::Conf createConf(KafkaExternalStreamSettings settings_);
     void cacheVirtualColumnNamesAndTypes();
+
     std::vector<Int64>
-    getOffsets(const RdKafka::Consumer & consumer, const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const;
+    getOffsets(const SeekToInfoPtr & seek_to_info, const std::vector<int32_t> & shards_to_query) const;
+
     void validateMessageKey(const String & message_key, IStorage * storage, const ContextPtr & context);
     void validate();
-    std::shared_ptr<RdKafka::Consumer> newConsumer() const;
 
     Pipe read(
         const Names & /*column_names*/,
@@ -133,21 +102,11 @@ private:
     std::vector<Int32> shards_from_settings;
     fs::path broker_ca_file;
 
-    bool support_count_optimization = false;
+    DB::Kafka::ConnectionPtr client;
 
-    ConfPtr conf;
     UInt64 poll_timeout_ms = 0;
-
-    /// The Producer instance and Topic instance can be used by multiple sinks at the same time, thus we only need one of each.
-    std::mutex producer_mutex;
-    std::shared_ptr<RdKafka::Producer> producer;
-    std::shared_ptr<RdKafka::Topic> producer_topic;
-
-    /// A Consumer can only be used by one source at the same time (technically speaking, it can be used by multple sources as long as each source read from a different topic,
-    /// but we will leave this as an enhancement later, probably when we introduce the `Connection` concept), thus we need a consumer pool.
-    std::mutex consumer_mutex;
-    size_t max_consumers = 0;
-    std::vector<std::weak_ptr<RdKafka::Consumer>> consumers;
 };
+
+}
 
 }

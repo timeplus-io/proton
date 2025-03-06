@@ -1,3 +1,5 @@
+#include <Storages/ExternalStream/Timeplus/Timeplus.h>
+
 #include "config_version.h"
 
 #include <DataTypes/DataTypeFactory.h>
@@ -8,7 +10,6 @@
 #include <Processors/QueryPlan/ExpressionStep.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Storages/Distributed/DistributedSettings.h>
-#include <Storages/ExternalStream/Timeplus/Timeplus.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/getStreamShardsOfRemoteStream.h>
 #include <Poco/Util/AbstractConfiguration.h>
@@ -86,7 +87,7 @@ namespace ExternalStream
 Timeplus::Timeplus(
     IStorage * storage,
     StorageInMemoryMetadata & storage_metadata,
-    ExternalStreamSettingsPtr settings_,
+    std::unique_ptr<ExternalStreamSettings> settings_,
     bool attach,
     ContextPtr context)
     : StorageProxy(storage->getStorageID())
@@ -112,13 +113,12 @@ Timeplus::Timeplus(
         names.push_back({fmt::format("{}:{}", addr.first, addr.second)});
 
     auto user = settings_->user.value;
-
     Cluster init_cluster
         = {context->getSettings(),
            names,
            /*username=*/user.empty() ? "default" : user,
            /*password=*/settings_->password.value,
-           static_cast<UInt16>(default_port),
+           context->getTCPPort(),
            /*treat_local_as_remote=*/true, /// always treat the connection as remote to avoid confusion
            /*treat_local_port_as_remote*/ true,
            secure};
@@ -249,20 +249,14 @@ void Timeplus::read(
     size_t max_block_size,
     size_t num_streams)
 {
-    auto nested_snapshot = storage_ptr->getStorageSnapshot(storage_ptr->getInMemoryMetadataPtr(), context_);
+    auto new_context = Context::createCopy(context_);
+    /// client_name is required (and it MUST start with VERSION_NAME) to enable internal channel on the remote server to set the SN on blocks.
+    /// When timeplusd restarts, and a stream is used in a MV, when the MV recovers, client_name will be empty.
+    if (new_context->getClientInfo().client_name.empty())
+        new_context->getClientInfo().client_name = VERSION_NAME;
 
-    if (query_info.syntax_analyzer_result->streaming)
-    {
-        /// No need to create a new context
-        storage_ptr->read(query_plan, column_names, nested_snapshot, query_info, context_, processed_stage, max_block_size, num_streams);
-    }
-    else
-    {
-        auto new_context = Context::createCopy(context_);
-        new_context->setSetting("query_mode", Field("table"));
-
-        storage_ptr->read(query_plan, column_names, nested_snapshot, query_info, new_context, processed_stage, max_block_size, num_streams);
-    }
+    auto nested_snapshot = storage_ptr->getStorageSnapshot(storage_ptr->getInMemoryMetadataPtr(), new_context);
+    storage_ptr->read(query_plan, column_names, nested_snapshot, query_info, new_context, processed_stage, max_block_size, num_streams);
 }
 
 SinkToStoragePtr Timeplus::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context_)

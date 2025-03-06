@@ -1,17 +1,25 @@
 #pragma once
 
+#include <Base/ByteVector.h>
 #include <Core/BlockWithShard.h>
 #include <Formats/FormatFactory.h>
 #include <Processors/Sinks/SinkToStorage.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
 #include <Storages/ExternalStream/Kafka/Kafka.h>
 #include <Storages/ExternalStream/Kafka/WriteBufferFromKafkaSink.h>
+#include <Common/CurrentMetrics.h>
 #include <Common/ThreadPool.h>
+
+namespace CurrentMetrics
+{
+    extern const Metric LocalThread;
+    extern const Metric LocalThreadActive;
+}
 
 namespace DB
 {
 
-namespace KafkaStream
+namespace ExternalStream
 {
 
 /// Shard Chunk's to shards (or partitions in Kafka's term) by the sharding expression.
@@ -21,7 +29,7 @@ public:
     ChunkSharder(ExpressionActionsPtr sharding_expr_, const String & column_name);
     ChunkSharder();
 
-    BlocksWithShard shard(Block block, Int32 shard_cnt);
+    BlocksWithShard shard(Block block, UInt32 shard_cnt);
 
 private:
     /// We could simply return `RD_KAFKA_PARTITION_UA` for next shard ID, which means letting librdkafka to calculate the partition ID. However, there is an issue, details:
@@ -31,42 +39,41 @@ private:
     /// https://github.com/confluentinc/librdkafka/blob/c96878a32bdc668287cf9b11c7b32e810f762376/src/rdkafka_msg.c#L797.
     ///
     /// There is one known situation can trigger this issue:
-    /// * create a kafka topic and make sure that topic has more than 1 partitions (not sure why it requires more than 1 paritions)
+    /// * create a kafka topic and make sure that topic has more than 1 partitions (not sure why it requires more than 1 partitions)
     /// * create an external stream
     /// * start inserting data to that stream in a streaming way
     /// * delete the kafka topic
     /// * then double-free error happens
     ///
     /// Also, with this simple logic, it will be much faster than using `RD_KAFKA_PARTITION_UA`.
-    Int32 getNextShardIndex(Int32 shard_cnt) noexcept
+    UInt32 getNextShardIndex(UInt32 shard_cnt) noexcept
     {
         if (next_shard >= shard_cnt)
             next_shard = 0;
         return next_shard++;
     }
 
-    BlocksWithShard doSharding(Block block, Int32 shard_cnt) const;
+    BlocksWithShard doSharding(Block block, UInt32 shard_cnt) const;
 
-    IColumn::Selector createSelector(Block block, Int32 shard_cnt) const;
+    IColumn::Selector createSelector(Block block, UInt32 shard_cnt) const;
 
     ExpressionActionsPtr sharding_expr;
     String sharding_key_column_name;
     bool random_sharding = false;
-    Int32 next_shard = 0;
+    UInt32 next_shard = 0;
 };
-
-}
 
 class KafkaSink final : public SinkToStorage
 {
 public:
     /// Callback for Kafka message delivery report
-    static void onMessageDelivery(rd_kafka_t * /* producer */, const rd_kafka_message_t * msg, void *  /*opaque*/);
+    static void onMessageDelivery(rd_kafka_t * /* producer */, const rd_kafka_message_t * msg, void * /*opaque*/);
 
     KafkaSink(
         Kafka & kafka,
         const Block & header,
         const ASTPtr & message_key,
+        const DB::Kafka::ProducerPtr & producer_,
         ExternalStreamCounterPtr external_stream_counter_,
         Poco::Logger * logger_,
         ContextPtr context);
@@ -95,19 +102,18 @@ private:
     /// for all out-go messages, regardless if a message is successfully delivered or not)
     size_t outstandingMessages() const noexcept { return state.outstandings - (state.acked + state.error_count); }
 
-    std::shared_ptr<RdKafka::Producer> producer;
-    std::shared_ptr<RdKafka::Topic> topic;
+    DB::Kafka::ProducerPtr producer;
 
-    Int32 partition_cnt {0};
-    bool one_message_per_row {false};
+    Int32 partition_cnt{0};
+    bool one_message_per_row{false};
     Int32 topic_refresh_interval_ms = 0;
 
-    ThreadPool background_jobs {1};
-    std::atomic_flag is_finished {false};
+    ThreadPool background_jobs{CurrentMetrics::LocalThread, CurrentMetrics::LocalThreadActive, 1};
+    std::atomic_flag is_finished{false};
 
     std::unique_ptr<WriteBufferFromKafkaSink> wb;
     OutputFormatPtr writer;
-    std::unique_ptr<KafkaStream::ChunkSharder> partitioner;
+    std::unique_ptr<ChunkSharder> partitioner;
 
     ExpressionActionsPtr message_key_expr;
     String message_key_column_name;
@@ -123,10 +129,10 @@ private:
 
     struct State
     {
-        std::atomic_size_t outstandings {0};
-        std::atomic_size_t acked {0};
-        std::atomic_size_t error_count {0};
-        std::atomic_int32_t last_error_code {0};
+        std::atomic_size_t outstandings{0};
+        std::atomic_size_t acked{0};
+        std::atomic_size_t error_count{0};
+        std::atomic_int32_t last_error_code{0};
 
         /// allows to reset the state after each checkpoint
         void reset();
@@ -137,5 +143,7 @@ private:
     ExternalStreamCounterPtr external_stream_counter;
     Poco::Logger * logger;
 };
+
+}
 
 }

@@ -93,6 +93,7 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(UInt64, s3_max_get_burst, 0, "Max number of requests that can be issued simultaneously before hitting request per second limit. By default (0) equals to `s3_max_get_rps`", 0) \
     M(UInt64, s3_max_put_rps, 0, "Limit on S3 PUT request per second rate before throttling. Zero means unlimited.", 0) \
     M(UInt64, s3_max_put_burst, 0, "Max number of requests that can be issued simultaneously before hitting request per second limit. By default (0) equals to `s3_max_put_rps`", 0) \
+    M(Bool, s3_use_adaptive_timeouts, true, "When adaptive timeouts are enabled first two attempts are made with low receive a       nd send timeout", 0) \
     M(Bool, s3_truncate_on_insert, false, "Enables or disables truncate before insert in s3 engine tables.", 0) \
     M(Bool, s3_create_new_file_on_insert, false, "Enables or disables creating a new file on each insert in s3 engine tables", 0) \
     M(Bool, s3_check_objects_after_upload, false, "Check each uploaded object to s3 with head request to be sure that upload was successful", 0) \
@@ -792,6 +793,7 @@ static constexpr UInt64 operator""_GiB(unsigned long long value)
     M(String, kafka_schema_registry_cert_file, "", "Path to the certificate file (in PEM format). If the private key and the certificate are stored in the same file, this can be empty if kakfa_schema_registry_private_key_file is given.", 0) \
     M(String, kafka_schema_registry_ca_location, "", "Path to the file or directory containing the CA/root certificates.", 0) \
     M(Bool, kafka_schema_registry_skip_cert_check, false, "If set to true, ignore server certificate check result.", 0) \
+    M(Bool, force_refresh_schema, false, "If set to true, force fetching the sche       ma from schema registry (otherwise the cached schema, if exists, will be used).", 0) \
     M(UInt64, output_batch_max_messages, 1000, "For external streams that support sending data in batch. Set the max number of messages permitted in a batch. If you set this option to a value greater than 1, messages are queued until this threshold is reached or batch interval has elapsed.", 0) \
     M(UInt64, output_batch_max_size_bytes, 10 * 1024 * 1024, "For external streams that support sending data in batch. Set the max size of messages permitted in a batch. If you set this option to a value greater than 1,  messages are queued until this threshold is reached or batch interval has elapsed.", 0) \
     M(UInt64, output_batch_max_delay_ms, 50, "For external streams that support sending data in batch. Set the max time for message publish delay permitted in a batch.", 0) \

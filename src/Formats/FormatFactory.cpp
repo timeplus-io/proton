@@ -122,6 +122,7 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.kafka_schema_registry.certificate_file = settings.kafka_schema_registry_cert_file;
     format_settings.kafka_schema_registry.ca_location = settings.kafka_schema_registry_ca_location;
     format_settings.kafka_schema_registry.skip_cert_check = settings.kafka_schema_registry_skip_cert_check;
+    format_settings.kafka_schema_registry.force_refresh_schema = settings.force_refresh_schema;
     /// proton: ends
     format_settings.skip_unknown_fields = settings.input_format_skip_unknown_fields;
     format_settings.template_settings.resultset_format = settings.format_template_resultset;

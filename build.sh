@@ -81,6 +81,7 @@ cmake .. \
     -DENABLE_DEBUG_FUNCS=ON \
     -DENABLE_URL_FUNCS=ON \
     -DENABLE_AVRO=ON \
+    -DENABLE_AWS_MSK_IAM=ON \
     -DENABLE_CURL=${is_not_darwin} \
     -DENABLE_PULSAR=${is_not_darwin}
 

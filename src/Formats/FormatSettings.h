@@ -219,13 +219,15 @@ struct FormatSettings
     /// proton: starts
     struct
     {
+        bool skip_cert_check = false;
+        bool force_refresh_schema = false;
         std::string url;
         std::string credentials;
         std::string private_key_file;
         std::string certificate_file;
         std::string ca_location;
-        bool skip_cert_check = false;
-    } kafka_schema_registry;
+        std::string topic_name; /// for output to fetch the schema
+    } kafka_schema_registry{};
     /// proton: ends
 
     struct
