@@ -62,7 +62,7 @@ if (TARGET ch_contrib::datasketches)
     set(USE_DATASKETCHES 1)
 endif()
 if (TARGET ch_contrib::aws_s3)
-    set(USE_AWS_S3 1)
+    set(USE_AWS_S3 0)
 endif()
 # proton: starts
 if (TARGET ch_contrib::aws_msk_iam)

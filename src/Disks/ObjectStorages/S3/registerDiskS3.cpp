@@ -196,6 +196,6 @@ void registerDiskS3(DiskFactory & factory)
 
 #else
 
-void registerDiskS3(DiskFactory &) {}
+void registerDiskS3(DB::DiskFactory &) {}
 
 #endif
