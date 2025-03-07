@@ -358,7 +358,7 @@ else ()
 
         # This is quite ugly but I cannot make dependencies work propery.
 
-        set(abseil_source_dir "${ClickHouse_SOURCE_DIR}/contrib/abseil-cpp")
+        set(abseil_source_dir "${proton_SOURCE_DIR}/contrib/abseil-cpp")
 
         execute_process(
             COMMAND mkdir -p ${PROTOC_BUILD_DIR}
