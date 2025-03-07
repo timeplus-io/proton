@@ -2,7 +2,7 @@ set(ENABLE_AWS_S3_DEFAULT OFF)
 set(ENABLE_AWS_MSK_IAM_DEFAULT OFF) # proton: added
 
 if(ENABLE_LIBRARIES AND (OS_LINUX OR OS_DARWIN) AND TARGET OpenSSL::Crypto)
-    set(ENABLE_AWS_S3_DEFAULT ON)
+    set(ENABLE_AWS_S3_DEFAULT OFF) # proton: added https://github.com/timeplus-io/proton/issues/918
     set(ENABLE_AWS_MSK_IAM_DEFAULT ON) # proton: added
 endif()
 
@@ -15,6 +15,11 @@ if(ENABLE_AWS_S3 OR ENABLE_AWS_MSK_IAM) # proton: updated
     elseif(NOT (OS_LINUX OR OS_DARWIN))
         message (${RECONFIGURE_MESSAGE_LEVEL} "Can't use AWS SDK with platform ${CMAKE_SYSTEM_NAME}")
     endif()
+endif()
+
+if(NOT ENABLE_AWS_S3)
+    message(STATUS "Not using AWS S3")
+    return()
 endif()
 
 if(NOT (ENABLE_AWS_S3 OR ENABLE_AWS_MSK_IAM)) # proton: updated
