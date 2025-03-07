@@ -509,7 +509,7 @@ String FormatFactory::getFormatFromFileName(String file_name, bool throw_if_not_
     if (pos == String::npos)
     {
         if (throw_if_not_found)
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot determine the file format by it's extension");
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot find file extension name for '{}'", file_name); /// proton: updated
         return "";
     }
 
@@ -519,7 +519,7 @@ String FormatFactory::getFormatFromFileName(String file_name, bool throw_if_not_
     if (it == file_extension_formats.end())
     {
         if (throw_if_not_found)
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot determine the file format by it's extension");
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot determine the file format by it's extension '{}'", file_extension); /// proton: updated
         return "";
     }
     return it->second;
@@ -586,15 +586,16 @@ bool FormatFactory::checkIfFormatHasExternalSchemaWriter(const String & name)
 
 ExternalSchemaWriterPtr FormatFactory::getExternalSchemaWriter(
     const String & name,
-    const ContextPtr & context,
-    std::optional<FormatSettings> format_settings_) const
+    std::string_view body,
+    ContextPtr & context,
+    const std::optional<FormatSettings> & _format_settings) const
 {
     const auto & external_schema_writer_creator = dict.at(name).external_schema_writer_creator;
     if (!external_schema_writer_creator)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "FormatFactory: Format {} doesn't support schema creation.", name);
 
-    auto format_settings = format_settings_ ? *format_settings_ : getFormatSettings(context);
-    return external_schema_writer_creator(std::move(format_settings));
+    auto format_settings = _format_settings ? *_format_settings : getFormatSettings(context);
+    return external_schema_writer_creator(body, format_settings);
 }
 /// proton: ends
 

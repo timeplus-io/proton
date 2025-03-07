@@ -1,8 +1,6 @@
 #pragma once
 #include "config.h"
 #if USE_AVRO
-#include <unordered_map>
-
 #include <Core/Block.h>
 #include <Formats/FormatSchemaInfo.h>
 #include <Formats/FormatSettings.h>

@@ -106,7 +106,7 @@ private:
     using ExternalSchemaReaderCreator = std::function<ExternalSchemaReaderPtr(const FormatSettings & settings)>;
 
     /// proton: starts
-    using ExternalSchemaWriterCreator = std::function<ExternalSchemaWriterPtr(FormatSettings settings)>;
+    using ExternalSchemaWriterCreator = std::function<ExternalSchemaWriterPtr(std::string_view schema_body, const FormatSettings & settings)>;
     /// proton: ends
 
     /// Some formats can extract different schemas from the same source depending on
@@ -220,8 +220,9 @@ public:
 
     ExternalSchemaWriterPtr getExternalSchemaWriter(
         const String & name,
-        const ContextPtr & context,
-        std::optional<FormatSettings> format_settings_ = std::nullopt) const;
+        std::string_view body,
+        ContextPtr & context,
+        const std::optional<FormatSettings> & format_settings = std::nullopt) const;
     /// proton: ends
 
     /// Register schema readers for format its name.

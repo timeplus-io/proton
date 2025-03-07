@@ -100,14 +100,13 @@ private:
 class ProtobufSchemaWriter : public IExternalSchemaWriter
 {
 public:
-    explicit ProtobufSchemaWriter(const FormatSettings & settings_);
+    explicit ProtobufSchemaWriter(std::string_view schema_body_, const FormatSettings & settings_);
 
-    void validate(std::string_view schema_body) override;
+    void validate() override;
+    bool write(bool replace_if_exist) override;
 
-protected:
-    String getFormatName() const override;
-    void onReplaced() override;
-    void onDeleted() override;
+private:
+    FormatSchemaInfo schema_info;
 };
 /// proton: ends
 
