@@ -329,9 +329,9 @@ jobs:
       - name: Create and Configure Build
         run: |
           mkdir -p ${{ env.build_directory }}
-          export CC=$(brew --prefix llvm@17)/bin/clang
-          export CXX=$(brew --prefix llvm@17)/bin/clang++
-          export PATH=$(brew --prefix llvm@17)/bin:$PATH
+          export CC=$(brew --prefix llvm@19)/bin/clang
+          export CXX=$(brew --prefix llvm@19)/bin/clang++
+          export PATH=$(brew --prefix llvm@19)/bin:$PATH
           cmake -B ${{ env.build_directory }} -G "Ninja" -DCMAKE_BUILD_TYPE=${{ env.build_type }} -DENABLE_TESTS=OFF -DENABLE_UTILS=OFF -DENABLE_EXAMPLES=OFF -DENABLE_PULSAR=OFF
 
       # Compile the project using Ninja
@@ -343,7 +343,7 @@ jobs:
         run: |
           ORIGINAL_BINARY=${{ env.build_directory }}/programs/proton
           STRIPPED_BINARY=${{ env.build_directory }}/programs/proton-${{ env.LATEST_TAG }}-Darwin-arm64
-          /opt/homebrew/opt/llvm@17/bin/llvm-strip $ORIGINAL_BINARY -o $STRIPPED_BINARY
+          /opt/homebrew/opt/llvm@19/bin/llvm-strip $ORIGINAL_BINARY -o $STRIPPED_BINARY
 
       # Set up AWS credentials for S3 upload
       - name: Configure AWS credentials

@@ -1,5 +1,5 @@
 # rebuild in https://github.com/timeplus-io/proton/pull/921
-# docker build -t ghcr.io/timeplus-io/proton-binary-builder .
+# docker build -t timeplus/proton-binary-builder .
 FROM ubuntu:20.04
 
 # ARG for quick switch to a given ubuntu mirror

@@ -7,14 +7,14 @@ Proton requires the Clang compiler and related LLVM toolchain. GCC is not suppor
 ### Build with docker container
 
 ```sh
-./docker/packager/packager --package-type binary --docker-image-version clang-17 --proton-build --enable-proton-local --output-dir `pwd`/build_output
+./docker/packager/packager --package-type binary --docker-image-version clang-19 --proton-build --enable-proton-local --output-dir `pwd`/build_output
 ```
 
 ### Bare metal build
 
 #### Install toolchain
 
-- clang-17 /clang++-17 or above (minimum supported version: Clang 16, GCC not supported)
+- clang-19 /clang++-19 or above (minimum supported version: Clang 16, GCC not supported)
 - cmake 3.20 or above
 - ninja
 
@@ -22,12 +22,12 @@ Proton requires the Clang compiler and related LLVM toolchain. GCC is not suppor
 apt install git cmake ccache python3 ninja-build wget apt-transport-https apt-utils ca-certificates dnsutils gnupg iputils-ping lsb-release gpg curl software-properties-common
 ```
 
-install llvm-17 compiler
+install llvm-19 compiler
 
 ```sh
 wget https://apt.llvm.org/llvm.sh
 chmod +x llvm.sh
-sudo ./llvm.sh 17
+sudo ./llvm.sh 19
 ```
 
 #### Build
@@ -60,7 +60,7 @@ $ ninja
 
 #### Install toolchain
 
-- clang-17 /clang++-17 or above
+- clang-19 /clang++-19 or above
 - cmake 3.20 or above
 - ninja
 
@@ -81,7 +81,7 @@ $ ninja
 
 #### Install toolchain
 
-- clang-17 /clang++-17 or above
+- clang-19 /clang++-19 or above
 - cmake 3.20 or above
 - ninja
 
@@ -102,7 +102,7 @@ $ ninja
 
 #### Install toolchain
 
-- clang-17 /clang++-17 or above
+- clang-19 /clang++-19 or above
 - cmake 3.20 or above
 - ninja
 
@@ -126,10 +126,10 @@ Not supported.
 #### Install toolchain
 
 We don't support build Proton by using Apple Clang. Please use `brew install llvm` to install
-clang-17 / clang++-17.
+clang-19 / clang++-19.
 
 
-- clang-17 /clang++-17 or above
+- clang-19 /clang++-19 or above
 - cmake 3.20 or above
 - ninja
 
@@ -177,9 +177,9 @@ Build version 15C5042i
 
 #### Step 2: Install Dependencies with Homebrew
 
-Proton build is not supported with Apple Clang. Use Homebrew to install LLVM version 17 instead:
+Proton build is not supported with Apple Clang. Use Homebrew to install LLVM version 19 instead:
 ```shell
-brew install llvm@17
+brew install llvm@19
 ```
 
 First, if you haven't installed Homebrew yet, follow the instructions at [https://brew.sh/](https://brew.sh/).
@@ -187,16 +187,16 @@ First, if you haven't installed Homebrew yet, follow the instructions at [https:
 Next, install the required dependencies using the following commands:
 ```shell
 brew update
-brew install ccache cmake ninja libtool gettext llvm@17 gcc binutils grep findutils libiconv
+brew install ccache cmake ninja libtool gettext llvm@19 gcc binutils grep findutils libiconv
 ```
 
 #### Step 3: Build Proton Manually
 
 Set up the environment variables required for building Proton:
 ```shell
-export PATH=$(brew --prefix llvm@17)/bin:$PATH
-export CC=$(brew --prefix llvm@17)/bin/clang
-export CXX=$(brew --prefix llvm@17)/bin/clang++
+export PATH=$(brew --prefix llvm@19)/bin:$PATH
+export CC=$(brew --prefix llvm@19)/bin/clang
+export CXX=$(brew --prefix llvm@19)/bin/clang++
 ```
 
 Clone the Proton repository and initiate the build process:
