@@ -8,7 +8,7 @@ jobs:
   Build_Linux_X86_64:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: c5.4xlarge
+      ec2-instance-type: c7i.8xlarge
       ec2-image-id: ami-042a37e33a285c22b
       submodules: 'recursive'
       run_mode: 'start' # start ec2 on demand instance
@@ -75,7 +75,7 @@ jobs:
   Build_Linux_Arm64:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: c6g.4xlarge
+      ec2-instance-type: c6g.8xlarge
       ec2-image-id: ami-0f3dbc4cc9994fdee
       submodules: 'recursive'
       run_mode: 'start' # start ec2 on demand instance
@@ -190,7 +190,7 @@ jobs:
   Build_Darwin_X86_64:
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: c5.4xlarge
+      ec2-instance-type: c7i.8xlarge
       ec2-image-id: ami-042a37e33a285c22b
       submodules: 'recursive'
       run_mode: 'start' # start ec2 on demand instance
@@ -353,11 +353,44 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # Upload the stripped binary to an AWS S3 bucket
+      # Upload the stripped binary to an AWS S3 bucket with improved retry
       - name: Upload Artifact To S3
         run: |
           STRIPPED_BINARY=${{ env.build_directory }}/programs/proton-${{ env.LATEST_TAG }}-Darwin-arm64
-          aws s3 cp --no-progress $STRIPPED_BINARY s3://tp-internal/proton/native_build_macOS/
+          
+          # Advanced retry logic with exponential backoff
+          max_attempts=5
+          attempt=1
+          wait_time=15
+
+          while [ $attempt -le $max_attempts ]; do
+            echo "S3 upload attempt $attempt of $max_attempts"
+
+            # Using specific AWS CLI options to handle large file uploads more reliably
+            if aws s3 cp \
+               --no-progress \
+               --only-show-errors \
+               --cli-connect-timeout 30 \
+               --cli-read-timeout 600 \
+               "$STRIPPED_BINARY" \
+               "s3://tp-internal/proton/native_build_macOS/"; then
+              echo "Upload successful"
+              break
+            else
+              upload_status=$?
+              echo "Upload failed on attempt $attempt with exit code $upload_status"
+
+              if [ $attempt -eq $max_attempts ]; then
+                echo "All upload attempts failed"
+                exit 1
+              fi
+
+              echo "Retrying in $wait_time seconds..."
+              sleep $wait_time
+              wait_time=$((wait_time * 2))  # Exponential backoff
+              attempt=$((attempt + 1))
+            fi
+          done
 
       # Print SHA256 Checksum
       - name: Print SHA256 Checksum
