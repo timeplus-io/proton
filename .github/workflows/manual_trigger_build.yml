@@ -289,7 +289,7 @@ jobs:
         chmod a+x $GITHUB_WORKSPACE/contrib/v8-cmake/torque
 
         # compiling
-        ./docker/packager/packager --package-type binary --docker-image-version clang-19 --build-type release --proton-build --disable-python-udf --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output --compiler clang-19-darwin
+        ./docker/packager/packager --package-type binary --docker-image-version clang-19 --build-type release --proton-build --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output --compiler clang-19-darwin
 
         if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
           echo "Compiling proton Failed"
