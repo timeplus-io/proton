@@ -11,7 +11,7 @@ SCRIPT_PATH = os.path.realpath(__file__)
 # proton: starts.
 IMAGE_MAP = {
     "deb": "ghcr.io/timeplus-io/proton-deb-builder",        # Not used
-    "binary": "timeplus/proton-binary-builder",
+    "binary": "ghcr.io/timeplus-io/proton-binary-builder",
 }
 # proton: ends.
 
@@ -281,14 +281,14 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", required=True)
 
     parser.add_argument("--compiler", choices=(
-                                        "clang-19",
-                                        "clang-19-darwin",
-                                        "clang-19-darwin-aarch64",
-                                        "clang-19-aarch64",
-                                        "clang-19-ppc64le",
-                                        "clang-19-freebsd",
+                                        "clang-16",
+                                        "clang-16-darwin",
+                                        "clang-16-darwin-aarch64",
+                                        "clang-16-aarch64",
+                                        "clang-16-ppc64le",
+                                        "clang-16-freebsd",
                                     ),
-                                    default="clang-19")
+                                    default="clang-16")
 
     parser.add_argument("--sanitizer", choices=("address", "thread", "memory", "undefined", ""), default="")
     parser.add_argument("--clang-tidy", action="store_true")
