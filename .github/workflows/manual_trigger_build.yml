@@ -27,8 +27,8 @@ on: # yamllint disable-line rule:truthy
         required: true
         type: string
         default: 'manual'
-      enable_native_build_for_macOS:
-        description: 'Experimental try to build macos binary native'
+      build_for_macOS:
+        description: 'build macos binary, upload to s3 bucket'
         required: false
         default: 'false'
         type: choice
@@ -39,7 +39,7 @@ on: # yamllint disable-line rule:truthy
 jobs:
   prepare_sanitizer:
     runs-on: ubuntu-latest
-    if: github.event.inputs.enable_native_build_for_macOS == 'false' && github.event.inputs.build_type != 'release'
+    if: github.event.inputs.build_for_macOS == 'false' && github.event.inputs.build_type != 'release'
     outputs:
       command: |
         cd $GITHUB_WORKSPACE
@@ -87,7 +87,7 @@ jobs:
           echo 'command: ${{ steps.set_command.outputs.command }}'
   prepare_release:
     runs-on: ubuntu-latest
-    if:  github.event.inputs.enable_native_build_for_macOS == 'false' && github.event.inputs.build_type == 'release'
+    if:  github.event.inputs.build_for_macOS == 'false' && github.event.inputs.build_type == 'release'
     outputs:
       command: |
         cd $GITHUB_WORKSPACE
@@ -220,7 +220,7 @@ jobs:
     env:
       build_directory: ${{ github.workspace }}/build
       build_type: RelWithDebInfo
-    if: github.event.inputs.enable_native_build_for_macOS == 'true' && github.event.inputs.arch == 'arm'
+    if: github.event.inputs.build_for_macOS == 'true' && github.event.inputs.arch == 'arm'
     steps:
       - name: Checkout
         uses: actions/checkout@v4.1.7
@@ -264,3 +264,95 @@ jobs:
           ARCH=$(uname -m)
           STRIPPED_BINARY=${{ env.build_directory }}/programs/proton_${COMMIT_HASH}_${ARCH}
           aws s3 cp --no-progress $STRIPPED_BINARY s3://tp-internal/proton/native_build_macOS/
+  Build_macOS_X86_64:
+    if: github.event.inputs.build_for_macOS == 'true' && github.event.inputs.arch == 'x64'
+    uses: timeplus-io/proton-enterprise/.github/workflows/run_command.yml@develop
+    with:
+      ec2-instance-type: c5.4xlarge
+      ec2-image-id: ami-042a37e33a285c22b
+      submodules: 'recursive'
+      run_mode: 'start'
+      command: |
+        cd $GITHUB_WORKSPACE
+
+        # git config
+        git config user.name "proton-robot"
+        git config user.email "proton_robot@timeplus.io"
+
+        mkdir -p $GITHUB_WORKSPACE/ccache    
+        # Download pre-built v8 binary for cross-compilation
+        aws s3 cp --no-progress s3://tp-internal/proton/cross-compile-prebuilt-binary/v8-cmake-x64.tar.gz $GITHUB_WORKSPACE/contrib/v8-cmake/
+        tar -zxf $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-x64.tar.gz -C $GITHUB_WORKSPACE/contrib/v8-cmake/
+        rm $GITHUB_WORKSPACE/contrib/v8-cmake/v8-cmake-x64.tar.gz
+        chmod a+x $GITHUB_WORKSPACE/contrib/v8-cmake/bytecode_builtins_list_generator
+        chmod a+x $GITHUB_WORKSPACE/contrib/v8-cmake/mksnapshot
+        chmod a+x $GITHUB_WORKSPACE/contrib/v8-cmake/torque
+
+        # compiling
+        ./docker/packager/packager --package-type binary --docker-image-version clang-19 --build-type release --proton-build --disable-python-udf --cache ccache --ccache_dir $GITHUB_WORKSPACE/ccache --output-dir $GITHUB_WORKSPACE/output --compiler clang-19-darwin
+
+        if [ ! -f "$GITHUB_WORKSPACE/output/proton" ]; then
+          echo "Compiling proton Failed"
+          exit 127
+        fi
+
+        # get proton tag and rename binary
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        PROTON_BINARY=proton-${COMMIT_HASH}-Darwin-x86_64
+        echo "PROTON_BINARY=${PROTON_BINARY}" >> $GITHUB_ENV
+
+        # Only strip if strip_binary is true  
+        echo "Stripping the binary..."
+        ls -lh $GITHUB_WORKSPACE/output/proton
+        docker run --rm -v $GITHUB_WORKSPACE/output:/work -w /work timeplus/proton-binary-builder:clang-19 /usr/bin/llvm-strip-19 proton
+        ls -lh $GITHUB_WORKSPACE/output/proton
+
+        # Calculate checksum
+        sha256sum $GITHUB_WORKSPACE/output/proton > $GITHUB_WORKSPACE/output/proton.sha256
+        cat $GITHUB_WORKSPACE/output/proton.sha256
+
+        # Rename binary
+        mv $GITHUB_WORKSPACE/output/proton $GITHUB_WORKSPACE/output/${PROTON_BINARY}
+
+        # S3 upload with advanced retry mechanism
+        max_attempts=5
+        attempt=1
+        wait_time=15
+
+        while [ $attempt -le $max_attempts ]; do
+          echo "S3 upload attempt $attempt of $max_attempts"
+
+          if aws s3 cp \
+             --no-progress \
+             --cli-connect-timeout 30 \
+             --cli-read-timeout 600 \
+             "$GITHUB_WORKSPACE/output/${PROTON_BINARY}" \
+             "s3://tp-internal/proton/cross-compile/macOS-x86/"; then
+            echo "Binary upload successful"
+            break
+          else
+            upload_status=$?
+            echo "Binary upload failed on attempt $attempt with exit code $upload_status"
+
+            if [ $attempt -eq $max_attempts ]; then
+              echo "All binary upload attempts failed"
+              exit 1
+            fi
+
+            echo "Retrying in $wait_time seconds..."
+            sleep $wait_time
+            wait_time=$((wait_time * 2))  # Exponential backoff
+            attempt=$((attempt + 1))
+          fi
+        done
+
+        echo "Build and upload complete for ${PROTON_BINARY}"
+        echo "S3 location: s3://tp-internal/proton/cross-compile/macOS-x86/${PROTON_BINARY}"
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
