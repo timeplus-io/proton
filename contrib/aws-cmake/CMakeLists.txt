@@ -17,11 +17,6 @@ if(ENABLE_AWS_S3 OR ENABLE_AWS_MSK_IAM) # proton: updated
     endif()
 endif()
 
-if(NOT ENABLE_AWS_S3)
-    message(STATUS "Not using AWS S3")
-    return()
-endif()
-
 if(NOT (ENABLE_AWS_S3 OR ENABLE_AWS_MSK_IAM)) # proton: updated
     message(STATUS "Not using AWS SDK") # proton: updated
     return()
