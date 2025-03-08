@@ -1,4 +1,4 @@
-# rebuild in https://github.com/timeplus-io/proton/pull/921
+# rebuild in https://github.com/timeplus-io/proton/pull/924
 # docker build -t timeplus/proton-binary-builder .
 FROM ubuntu:20.04
 
@@ -79,8 +79,8 @@ RUN ln -s /usr/lib/llvm-${LLVM_VERSION}/bin/llvm-profdata /usr/bin/llvm-profdata
 ENV CC=clang-${LLVM_VERSION}
 ENV CXX=clang++-${LLVM_VERSION}
 
-# Copy pre-built cctools from the clickhouse/cctools image
-COPY --from=clickhouse/cctools:d9e3596e706b /cctools /cctools
+# Copy pre-built cctools from the timeplus/cctools image
+COPY --from=timeplus/cctools:clang-17 /cctools /cctools
 
 # Download toolchain and SDK for Darwin
 RUN curl -sL -O https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.0.sdk.tar.xz
