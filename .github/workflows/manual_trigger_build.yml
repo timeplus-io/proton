@@ -268,7 +268,7 @@ jobs:
     if: github.event.inputs.build_for_macOS == 'true' && github.event.inputs.arch == 'x64'
     uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
-      ec2-instance-type: c5.4xlarge
+      ec2-instance-type: c7i.8xlarge
       ec2-image-id: ami-042a37e33a285c22b
       submodules: 'recursive'
       run_mode: 'start'
