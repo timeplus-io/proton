@@ -266,7 +266,7 @@ jobs:
           aws s3 cp --no-progress $STRIPPED_BINARY s3://tp-internal/proton/native_build_macOS/
   Build_macOS_X86_64:
     if: github.event.inputs.build_for_macOS == 'true' && github.event.inputs.arch == 'x64'
-    uses: timeplus-io/proton-enterprise/.github/workflows/run_command.yml@develop
+    uses: timeplus-io/proton/.github/workflows/run_command.yml@develop
     with:
       ec2-instance-type: c5.4xlarge
       ec2-image-id: ami-042a37e33a285c22b
