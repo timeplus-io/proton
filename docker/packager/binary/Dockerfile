@@ -41,7 +41,7 @@ RUN apt-get update \
         build-essential \
         ccache \
         clang-${LLVM_VERSION} \
-        clang-tidy-${LLVM_VERSION} \
+        libdispatch-dev \
         cmake \
         fakeroot \
         gdb \
@@ -69,18 +69,33 @@ RUN apt-get update \
 # This symlink required by gcc to find lld compiler
 RUN ln -s /usr/bin/lld-${LLVM_VERSION} /usr/bin/ld.lld
 
-# This symlink is required by packager script
-RUN ln -s /usr/bin/clang-tidy-${LLVM_VERSION} /usr/bin/clang-tidy
-
-# python udf require
-RUN ln -s /usr/lib/llvm-${LLVM_VERSION}/bin/llvm-tblgen /usr/bin/llvm-tblgen
-RUN ln -s /usr/lib/llvm-${LLVM_VERSION}/bin/llvm-profdata /usr/bin/llvm-profdata
-
 ENV CC=clang-${LLVM_VERSION}
 ENV CXX=clang++-${LLVM_VERSION}
 
-# Copy pre-built cctools from the timeplus/cctools image
-COPY --from=timeplus/cctools:clang-17 /cctools /cctools
+# libtapi is required to support .tbh format from recent MacOS SDKs
+RUN git clone https://github.com/tpoechtrager/apple-libtapi.git \
+    && cd apple-libtapi \
+    && git checkout 15dfc2a8c9a2a89d06ff227560a69f5265b692f9 \
+    && INSTALLPREFIX=/cctools ./build.sh \
+    && ./install.sh \
+    && cd .. \
+    && rm -rf apple-libtapi
+
+# Build and install tools for cross-linking to Darwin (x86-64)
+# Build and install tools for cross-linking to Darwin (aarch64)
+RUN git clone https://github.com/tpoechtrager/cctools-port.git \
+    && cd cctools-port/cctools \
+    && git checkout 2a3e1c2a6ff54a30f898b70cfb9ba1692a55fad7 \
+    && ./configure --prefix=/cctools --with-libtapi=/cctools \
+        --target=x86_64-apple-darwin \
+    && make install -j$(nproc) \
+    && make clean \
+    && ./configure --prefix=/cctools --with-libtapi=/cctools \
+        --target=aarch64-apple-darwin \
+    && make install -j$(nproc) \
+    && cd ../.. \
+    && rm -rf cctools-port
+
 
 # Download toolchain and SDK for Darwin
 RUN curl -sL -O https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.0.sdk.tar.xz
