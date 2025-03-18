@@ -168,4 +168,11 @@ DECLARE_SETTING_ENUM_WITH_RENAME(EnumComparingMode, FormatSettings::EnumComparin
 
 DECLARE_SETTING_ENUM_WITH_RENAME(EscapingRule, FormatSettings::EscapingRule)
 
+enum class IcebergCatalogType : uint8_t
+{
+    REST,
+};
+
+DECLARE_SETTING_ENUM(IcebergCatalogType)
+
 }

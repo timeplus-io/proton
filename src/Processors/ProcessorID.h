@@ -249,15 +249,16 @@ enum class ProcessorID : UInt32
     GenerateRandomSourceID = 10'045,
     SourceFromQueryPipelineID = 10'046,
     ConvertingAggregatedToChunksSourceShuffledID = 10'047,
-    /// proton: starts
+
     ClickHouseSourceID = 11'000,
     PulsarSourceID = 11'054,
-    /// proton: ends
+    IcebergSourceID = 11'100,
 
     /// Sink Processors
     EmptySinkID = 20'000,
     NullSinkID = 20'001,
     ExternalTableDataSinkID = 20'002,
+    IcebergSinkID = 20'100,
 };
 
 inline ProcessorID toProcessID(UInt32 v)

@@ -650,7 +650,7 @@ namespace DB
     {
         arrow_fields.reserve(header.columns());
         header_columns.reserve(header.columns());
-        for (auto column : header.getColumnsWithTypeAndName())
+        for (size_t field_id = 1; auto column : header.getColumnsWithTypeAndName())
         {
             if (!low_cardinality_as_dictionary)
             {
@@ -659,7 +659,12 @@ namespace DB
             }
             bool is_column_nullable = false;
             auto arrow_type = getArrowType(column.type, column.column, column.name, format_name, &is_column_nullable);
-            arrow_fields.emplace_back(std::make_shared<arrow::Field>(column.name, arrow_type, is_column_nullable));
+            /// proton: starts
+            /// FIXME field_id is needed for Iceberg, we need to ensure that the field_ids match the ones defined in the iceberg table schema.
+            auto kv_metadata = std::make_shared<arrow::KeyValueMetadata>();
+            kv_metadata->Append("PARQUET:field_id", fmt::format("{}", field_id)); /// field_id starts from 1
+            arrow_fields.emplace_back(std::make_shared<arrow::Field>(column.name, arrow_type, is_column_nullable, std::move(kv_metadata)));
+            /// proton: ends
             header_columns.emplace_back(std::move(column));
         }
     }

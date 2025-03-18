@@ -170,4 +170,7 @@ private:
     size_t result_rows = 0;
     size_t result_bytes = 0;
 };
+
+using OutputFormatPtr = std::shared_ptr<IOutputFormat>;
+
 }

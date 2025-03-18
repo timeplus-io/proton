@@ -32,6 +32,8 @@
 #include <Disks/IO/AsynchronousReadIndirectBufferFromRemoteFS.h>
 #include <Disks/IO/ReadBufferFromRemoteFSGather.h>
 #include <Disks/ObjectStorages/StoredObject.h>
+#include <Storages/NamedCollections/NamedCollectionsHelpers.h>
+#include <Storages/NamedCollections/NamedCollections.h>
 
 #include <IO/ReadBufferFromS3.h>
 #include <IO/WriteBufferFromS3.h>
@@ -66,8 +68,6 @@
 namespace fs = std::filesystem;
 
 
-static const String PARTITION_ID_WILDCARD = "{_partition_id}";
-
 namespace ProfileEvents
 {
     extern const Event S3DeleteObjects;
@@ -76,6 +76,27 @@ namespace ProfileEvents
 
 namespace DB
 {
+
+static const String PARTITION_ID_WILDCARD = "{_partition_id}";
+
+static const std::unordered_set<std::string_view> required_configuration_keys = {
+    "url",
+};
+static std::unordered_set<std::string_view> optional_configuration_keys = {
+    "format",
+    "compression",
+    "structure",
+    "access_key_id",
+    "secret_access_key",
+    "filename",
+    "use_environment_credentials",
+    "max_single_read_retries",
+    "min_upload_part_size",
+    "upload_part_size_multiply_factor",
+    "upload_part_size_multiply_parts_count_threshold",
+    "max_single_part_upload_size",
+    "max_connections",
+};
 
 namespace ErrorCodes
 {
@@ -230,7 +251,7 @@ private:
                         .last_modification_time = row.GetLastModified().Millis() / 1000,
                     };
 
-                if (object_infos)
+                if (object_infos != nullptr)
                     (*object_infos)[fs::path(globbed_uri.bucket) / key] = info;
 
                 temp_buffer.emplace_back(std::move(key), std::move(info));
@@ -275,7 +296,7 @@ private:
         /// Set iterator only after the whole batch is processed
         buffer_iter = buffer.begin();
 
-        if (read_keys)
+        if (read_keys != nullptr)
         {
             read_keys->reserve(read_keys->size() + buffer.size());
             for (const auto & [key, _] : buffer)
@@ -411,7 +432,7 @@ public:
             }
         }
 
-        if (read_keys_)
+        if (read_keys_ != nullptr)
             *read_keys_ = all_keys;
 
         for (auto && key : all_keys)
@@ -420,7 +441,7 @@ public:
 
             /// To avoid extra requests update total_size only if object_infos != nullptr
             /// (which means we eventually need this info anyway, so it should be ok to do it now)
-            if (object_infos_)
+            if (object_infos_ != nullptr)
             {
                 info = S3::getObjectInfo(client_, bucket, key, version_id_, true, false);
                 total_size += info->size;
@@ -502,7 +523,7 @@ StorageS3Source::StorageS3Source(
     const ColumnsDescription & columns_,
     UInt64 max_block_size_,
     const S3Settings::RequestSettings & request_settings_,
-    const String compression_hint_,
+    const String & compression_hint_,
     const std::shared_ptr<const Aws::S3::S3Client> & client_,
     const String & bucket_,
     const String & version_id_,
@@ -673,7 +694,7 @@ Chunk StorageS3Source::generate()
 
             const auto & file_path = reader.getPath();
             size_t total_size = file_iterator->getTotalSize();
-            if (num_rows && total_size)
+            if ((num_rows != 0u) && (total_size != 0u))
             {
                 updateRowsProgressApprox(
                     *this, chunk, total_size, total_rows_approx_accumulated, total_rows_count_times, total_rows_approx_max);
@@ -865,7 +886,7 @@ private:
     {
         S3::URI::validateBucket(str, {});
 
-        if (!DB::UTF8::isValidUTF8(reinterpret_cast<const UInt8 *>(str.data()), str.size()))
+        if (DB::UTF8::isValidUTF8(reinterpret_cast<const UInt8 *>(str.data()), str.size()) == 0u)
             throw Exception(ErrorCodes::CANNOT_PARSE_TEXT, "Incorrect non-UTF8 sequence in bucket name");
 
         validatePartitionKey(str, false);
@@ -880,7 +901,7 @@ private:
         if (str.empty() || str.size() > 1024)
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Incorrect key length (not empty, max 1023 characters), got: {}", str.size());
 
-        if (!DB::UTF8::isValidUTF8(reinterpret_cast<const UInt8 *>(str.data()), str.size()))
+        if (DB::UTF8::isValidUTF8(reinterpret_cast<const UInt8 *>(str.data()), str.size()) == 0u)
             throw Exception(ErrorCodes::CANNOT_PARSE_TEXT, "Incorrect non-UTF8 sequence in key");
 
         validatePartitionKey(str, true);
@@ -1168,10 +1189,7 @@ void StorageS3::truncate(const ASTPtr & /* query */, const StorageMetadataPtr &,
 void StorageS3::updateS3Configuration(ContextPtr ctx, StorageS3::S3Configuration & upd)
 {
     auto settings = ctx->getStorageS3Settings().getSettings(upd.uri.uri.toString());
-    if (upd.request_settings != settings.request_settings)
-        upd.request_settings = settings.request_settings;
-
-    upd.request_settings.updateFromSettingsIfEmpty(ctx->getSettings());
+    upd.request_settings = settings.request_settings;
 
     if (upd.client)
     {
@@ -1212,48 +1230,43 @@ void StorageS3::updateS3Configuration(ContextPtr ctx, StorageS3::S3Configuration
         upd.auth_settings.use_insecure_imds_request.value_or(ctx->getConfigRef().getBool("s3.use_insecure_imds_request", false)));
 }
 
-
-void StorageS3::processNamedCollectionResult(StorageS3Configuration & configuration, const std::vector<std::pair<String, ASTPtr>> & key_value_args)
+void StorageS3::processNamedCollectionResult(StorageS3Configuration & configuration, const NamedCollection & collection)
 {
-    for (const auto & [arg_name, arg_value] : key_value_args)
-    {
-        if (arg_name == "access_key_id")
-            configuration.auth_settings.access_key_id = checkAndGetLiteralArgument<String>(arg_value, "access_key_id");
-        else if (arg_name == "secret_access_key")
-            configuration.auth_settings.secret_access_key = checkAndGetLiteralArgument<String>(arg_value, "secret_access_key");
-        else if (arg_name == "filename")
-            configuration.url = std::filesystem::path(configuration.url) / checkAndGetLiteralArgument<String>(arg_value, "filename");
-        else if (arg_name == "use_environment_credentials")
-            configuration.auth_settings.use_environment_credentials = checkAndGetLiteralArgument<UInt8>(arg_value, "use_environment_credentials");
-        else if (arg_name == "max_single_read_retries")
-            configuration.request_settings.max_single_read_retries = checkAndGetLiteralArgument<UInt64>(arg_value, "max_single_read_retries");
-        else if (arg_name == "min_upload_part_size")
-            configuration.request_settings.min_upload_part_size = checkAndGetLiteralArgument<UInt64>(arg_value, "min_upload_part_size");
-        else if (arg_name == "upload_part_size_multiply_factor")
-            configuration.request_settings.upload_part_size_multiply_factor = checkAndGetLiteralArgument<UInt64>(arg_value, "upload_part_size_multiply_factor");
-        else if (arg_name == "upload_part_size_multiply_parts_count_threshold")
-            configuration.request_settings.upload_part_size_multiply_parts_count_threshold = checkAndGetLiteralArgument<UInt64>(arg_value, "upload_part_size_multiply_parts_count_threshold");
-        else if (arg_name == "max_single_part_upload_size")
-            configuration.request_settings.max_single_part_upload_size = checkAndGetLiteralArgument<UInt64>(arg_value, "max_single_part_upload_size");
-        else if (arg_name == "max_connections")
-            configuration.request_settings.max_connections = checkAndGetLiteralArgument<UInt64>(arg_value, "max_connections");
-        else
-            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
-                            "Unknown key-value argument `{}` for StorageS3, expected: url, [access_key_id, secret_access_key], name of used format and [compression_method].",
-                            arg_name);
-    }
-}
+    validateNamedCollection(collection, required_configuration_keys, optional_configuration_keys);
+    std::string filename;
 
+    configuration.request_settings = S3Settings::RequestSettings(collection);
+
+    for (const auto & key : collection)
+    {
+        if (key == "url")
+            configuration.url = collection.get<String>(key);
+        else if (key == "access_key_id")
+            configuration.auth_settings.access_key_id = collection.get<String>(key);
+        else if (key == "secret_access_key")
+            configuration.auth_settings.secret_access_key = collection.get<String>(key);
+        else if (key == "filename")
+            filename = collection.get<String>(key);
+        else if (key == "format")
+            configuration.format = collection.get<String>(key);
+        else if (key == "compression")
+            configuration.compression_method = collection.get<String>(key);
+        else if (key == "structure")
+            configuration.structure = collection.get<String>(key);
+        else if (key == "use_environment_credentials")
+            configuration.auth_settings.use_environment_credentials = collection.get<UInt64>(key);
+    }
+    if (!filename.empty())
+        configuration.url = std::filesystem::path(configuration.url) / filename;
+}
 
 StorageS3Configuration StorageS3::getConfiguration(ASTs & engine_args, ContextPtr local_context)
 {
     StorageS3Configuration configuration;
 
-    if (auto named_collection = getURLBasedDataSourceConfiguration(engine_args, local_context))
+    if (auto named_collection = tryGetNamedCollectionWithOverrides(engine_args))
     {
-        auto [common_configuration, storage_specific_args] = named_collection.value();
-        configuration.set(common_configuration);
-        processNamedCollectionResult(configuration, storage_specific_args);
+        processNamedCollectionResult(configuration, *named_collection);
     }
     else
     {

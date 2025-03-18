@@ -3,9 +3,9 @@
 #include "config.h"
 
 #if USE_AWS_S3
-#include <Storages/StorageS3Settings.h>
-#include <base/types.h>
-#include <IO/S3/Client.h>
+#    include <IO/S3/Client.h>
+#    include <Storages/StorageS3Settings.h>
+#    include <base/types.h>
 
 
 namespace DB::S3
@@ -18,6 +18,9 @@ struct ObjectInfo
 
     std::map<String, String> metadata = {}; /// Set only if getObjectInfo() is called with `with_metadata = true`.
 };
+
+Aws::S3::Model::HeadObjectOutcome
+headObject(const S3::Client & client, const String & bucket, const String & key, const String & version_id, bool for_disk_s3);
 
 ObjectInfo getObjectInfo(
     const S3::Client & client,

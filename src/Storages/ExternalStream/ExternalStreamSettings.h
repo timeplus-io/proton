@@ -27,6 +27,8 @@ class ASTStorage;
     M(String, message_key, "", "(Deprecated) An expression which will be evaluated on each row of data returned by the query to compute a string which will be used as the message key. This setting is deprecated, please define a `_tp_message_key` column in the external stream instead.", 0) \
     M(Bool, one_message_per_row, false, "If set to true, when send data to the Kafka external stream with row-based data format like `JSONEachRow`, it will produce one message per row.", 0) \
     M(String, region, "", "The AWS region to target.", 0) \
+    M(String, access_key_id, "", "The access key ID.", 0) \
+    M(String, secret_access_key, "", "The secret access key.", 0) \
     M(Bool, log_stats, false, "If set to true, print statistics to the logs. Note that, the statistics could contain quite a lot of data. The frequency of the statistics logs is control by the statistics.interval.ms property.", 0) \
     M(Milliseconds, consumer_stall_timeout_ms, 60 * 1000, "Define the amount of time when a consumer is not making any progress, then consider the consumer stalled, and then a new consumer will be created. Adjust the value based on how busy a topic is. Use small values for a busy topic to avoid big latency. Use big values for less busy topics to avoid disruption. Set to 0 to disable the behavior.", 0)
 
@@ -59,13 +61,17 @@ class ASTStorage;
     M(UInt64, memory_limit, 0, "Configure a limit on the amount of memory that will be allocated by this external stream. Setting this to 0 will disable the limit. By default this is disabled.", 0) \
     M(UInt64, io_threads, 1, "Set the number of IO threads to be used by the Pulsar client. Default is 1 thread.", 0)
 
+#define ICEBERG_EXTERNAL_STREAM_SETTINGS(M) \
+    M(String, iceberg_storage_endpoint, "", "Endpoint for data storage.", 0)
+
 #define ALL_EXTERNAL_STREAM_SETTINGS(M) \
     M(String, type, "", "External stream type", 0) \
     M(String, config_file, "", "External stream configuration file path", 0) \
     KAFKA_EXTERNAL_STREAM_SETTINGS(M) \
     LOG_FILE_EXTERNAL_STREAM_SETTINGS(M) \
     TIMEPLUS_EXTERNAL_STREAM_SETTINGS(M) \
-    PULSAR_EXTERNAL_STREAM_SETTINGS(M)
+    PULSAR_EXTERNAL_STREAM_SETTINGS(M) \
+    ICEBERG_EXTERNAL_STREAM_SETTINGS(M)
 
 #define LIST_OF_EXTERNAL_STREAM_SETTINGS(M) \
     ALL_EXTERNAL_STREAM_SETTINGS(M) \

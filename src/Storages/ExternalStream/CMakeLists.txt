@@ -6,6 +6,7 @@ add_headers_and_sources(external_stream Log)
 add_headers_and_sources(external_stream Kafka)
 add_headers_and_sources(external_stream Pulsar)
 add_headers_and_sources(external_stream Timeplus)
+add_headers_and_sources(external_stream Iceberg)
 
 add_library(external_stream ${external_stream_headers} ${external_stream_sources})
 
@@ -17,6 +18,14 @@ endif()
 
 if (TARGET ch_contrib::pulsar)
     target_link_libraries(external_stream PRIVATE ch_contrib::pulsar)
+endif()
+
+if (TARGET ch_contrib::avrocpp)
+    target_link_libraries(external_stream PRIVATE ch_contrib::avrocpp)
+endif()
+
+if (TARGET ch_contrib::parquet)
+    target_link_libraries(external_stream PRIVATE ch_contrib::parquet)
 endif()
 
 if (ENABLE_TESTS)

@@ -1,6 +1,8 @@
 #include <Databases/DatabaseFactory.h>
 
 #include <filesystem>
+#include <Databases/ApacheIceberg/DatabaseIceberg.h>
+#include <Databases/ApacheIceberg/DatabaseIcebergSettings.h>
 #include <Databases/DatabaseAtomic.h>
 #include <Databases/DatabaseDictionary.h>
 #include <Databases/DatabaseLazy.h>
@@ -83,13 +85,13 @@ DatabasePtr DatabaseFactory::getImpl(const ASTCreateQuery & create, const String
 
     static const std::unordered_set<std::string_view> database_engines{"Ordinary", "Atomic", "Memory",
         "Dictionary", "Lazy", "Replicated", "MySQL",
-        "PostgreSQL", "MaterializedPostgreSQL", "SQLite"};
+        "PostgreSQL", "MaterializedPostgreSQL", "SQLite", "Iceberg"}; /// proton: updated
 
     if (!database_engines.contains(engine_name))
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Database engine name `{}` does not exist", engine_name);
 
     static const std::unordered_set<std::string_view> engines_with_arguments{"MySQL",
-        "Lazy", "Replicated", "PostgreSQL", "MaterializedPostgreSQL", "SQLite"};
+        "Lazy", "Replicated", "PostgreSQL", "MaterializedPostgreSQL", "SQLite", "Iceberg"}; /// proton: updated
 
     static const std::unordered_set<std::string_view> engines_with_table_overrides{"MaterializedPostgreSQL"};
     bool engine_may_have_arguments = engines_with_arguments.contains(engine_name);
@@ -100,7 +102,7 @@ DatabasePtr DatabaseFactory::getImpl(const ASTCreateQuery & create, const String
     bool has_unexpected_element = engine_define->engine->parameters || engine_define->partition_by ||
                                   engine_define->primary_key || engine_define->order_by ||
                                   engine_define->sample_by;
-    bool may_have_settings = endsWith(engine_name, "MySQL") || engine_name == "Replicated" || engine_name == "MaterializedPostgreSQL";
+    bool may_have_settings = endsWith(engine_name, "MySQL") || engine_name == "Replicated" || engine_name == "MaterializedPostgreSQL" || engine_name == "Iceberg";
 
     if (has_unexpected_element || (!may_have_settings && engine_define->settings))
         throw Exception(ErrorCodes::UNKNOWN_ELEMENT_IN_AST,
@@ -130,6 +132,22 @@ DatabasePtr DatabaseFactory::getImpl(const ASTCreateQuery & create, const String
 
         const auto cache_expiration_time_seconds = safeGetLiteralValue<UInt64>(arguments[0], "Lazy");
         return std::make_shared<DatabaseLazy>(database_name, metadata_path, cache_expiration_time_seconds, context);
+    }
+    else if (engine_name == "Iceberg")
+    {
+        ASTs & engine_args = engine_define->engine->arguments->children;
+        if (engine_args.empty())
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Iceberg database require url argument");
+
+        for (auto & engine_arg : engine_args)
+            engine_arg = evaluateConstantExpressionOrIdentifierAsLiteral(engine_arg, context);
+
+        const auto url = safeGetLiteralValue<UInt64>(engine_args[0], "Iceberg");
+
+        DatabaseApacheIcebergSettings database_settings;
+        if (database_engine_define->settings != nullptr)
+            database_settings.loadFromQuery(*database_engine_define);
+        return std::make_shared<DatabaseApacheIceberg>(database_name, url, database_settings, database_engine_define->clone());
     }
 
     throw Exception("Unknown database engine: " + engine_name, ErrorCodes::UNKNOWN_DATABASE_ENGINE);

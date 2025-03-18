@@ -34,22 +34,7 @@ extern const int BAD_ARGUMENTS;
 std::unique_ptr<S3ObjectStorageSettings> getSettings(const Poco::Util::AbstractConfiguration & config, const String & config_prefix, ContextPtr context)
 {
     const Settings & settings = context->getSettingsRef();
-    S3Settings::RequestSettings request_settings;
-    request_settings.max_single_read_retries = config.getUInt64(config_prefix + ".s3_max_single_read_retries", settings.s3_max_single_read_retries);
-    request_settings.min_upload_part_size = config.getUInt64(config_prefix + ".s3_min_upload_part_size", settings.s3_min_upload_part_size);
-    request_settings.upload_part_size_multiply_factor = config.getUInt64(config_prefix + ".s3_upload_part_size_multiply_factor", settings.s3_upload_part_size_multiply_factor);
-    request_settings.upload_part_size_multiply_parts_count_threshold = config.getUInt64(config_prefix + ".s3_upload_part_size_multiply_parts_count_threshold", settings.s3_upload_part_size_multiply_parts_count_threshold);
-    request_settings.max_single_part_upload_size = config.getUInt64(config_prefix + ".s3_max_single_part_upload_size", settings.s3_max_single_part_upload_size);
-    request_settings.check_objects_after_upload = config.getUInt64(config_prefix + ".s3_check_objects_after_upload", settings.s3_check_objects_after_upload);
-    request_settings.max_unexpected_write_error_retries = config.getUInt64(config_prefix + ".s3_max_unexpected_write_error_retries", settings.s3_max_unexpected_write_error_retries);
-
-    // NOTE: it would be better to reuse old throttlers to avoid losing token bucket state on every config reload, which could lead to exceeding limit for short time. But it is good enough unless very high `burst` values are used.
-    if (UInt64 max_get_rps = config.getUInt64(config_prefix + ".s3_max_get_rps", settings.s3_max_get_rps))
-        request_settings.get_request_throttler = std::make_shared<Throttler>(
-            max_get_rps, config.getUInt64(config_prefix + ".s3_max_get_burst", settings.s3_max_get_burst ? settings.s3_max_get_burst : Throttler::default_burst_seconds * max_get_rps));
-    if (UInt64 max_put_rps = config.getUInt64(config_prefix + ".s3_max_put_rps", settings.s3_max_put_rps))
-        request_settings.put_request_throttler = std::make_shared<Throttler>(
-            max_put_rps, config.getUInt64(config_prefix + ".s3_max_put_burst", settings.s3_max_put_burst ? settings.s3_max_put_burst : Throttler::default_burst_seconds * max_put_rps));
+    S3Settings::RequestSettings request_settings(config, config_prefix, settings);
 
     return std::make_unique<S3ObjectStorageSettings>(
         request_settings,
@@ -122,7 +107,7 @@ std::shared_ptr<S3::ProxyConfiguration> getProxyConfiguration(const String & pre
 }
 
 
-std::unique_ptr<Aws::S3::S3Client> getClient(
+std::unique_ptr<S3::Client> getClient(
     const Poco::Util::AbstractConfiguration & config,
     const String & config_prefix,
     ContextPtr context,
@@ -158,6 +143,18 @@ std::unique_ptr<Aws::S3::S3Client> getClient(
     client_configuration.retryStrategy
         = std::make_shared<Aws::Client::DefaultRetryStrategy>(config.getUInt(config_prefix + ".retry_attempts", 10));
 
+    /*
+        *     const PocoHTTPClientConfiguration & cfg_,
+    bool is_virtual_hosted_style,
+    const String & access_key_id,
+    const String & secret_access_key,
+    const String & server_side_encryption_customer_key_base64,
+    ServerSideEncryptionKMSConfig sse_kms_config,
+    HTTPHeaderEntries headers,
+    CredentialsConfiguration credentials_configuration,
+    const String & session_token)
+
+    */
     return S3::ClientFactory::instance().create(
         client_configuration,
         uri.is_virtual_hosted_style,
@@ -165,8 +162,11 @@ std::unique_ptr<Aws::S3::S3Client> getClient(
         config.getString(config_prefix + ".secret_access_key", ""),
         config.getString(config_prefix + ".server_side_encryption_customer_key_base64", ""),
         {},
-        config.getBool(config_prefix + ".use_environment_credentials", config.getBool("s3.use_environment_credentials", false)),
-        config.getBool(config_prefix + ".use_insecure_imds_request", config.getBool("s3.use_insecure_imds_request", false)));
+        {},
+        {
+            .use_environment_credentials = config.getBool(config_prefix + ".use_environment_credentials", config.getBool("s3.use_environment_credentials", false)),
+            .use_insecure_imds_request = config.getBool(config_prefix + ".use_insecure_imds_request", config.getBool("s3.use_insecure_imds_request", false))
+        });
 }
 
 }

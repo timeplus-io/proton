@@ -67,6 +67,37 @@ public:
     virtual bool isIntegratedWithFilesystemCache() const { return false; }
 };
 
+/// Useful for reading in parallel.
+/// The created read buffers may outlive the factory.
+///
+/// There are 2 ways to use this:
+///  (1) Never call seek() or getFileSize(), read the file sequentially.
+///      For HTTP, this usually translates to just one HTTP request.
+///  (2) Call checkIfActuallySeekable(), then:
+///       a. If it returned false, go to (1). seek() and getFileSize() are not available (throw if called).
+///       b. If it returned true, seek() and getFileSize() are available, knock yourself out.
+///      For HTTP, checkIfActuallySeekable() sends a HEAD request and returns false if the web server
+///      doesn't support ranges (or doesn't support HEAD requests).
+class SeekableReadBufferFactory : public WithFileSize
+{
+public:
+    ~SeekableReadBufferFactory() override = default;
+
+    // We usually call setReadUntilPosition() and seek() on the returned buffer before reading.
+    // So it's recommended that the returned implementation be lazy, i.e. don't start reading
+    // before the first call to nextImpl().
+    virtual std::unique_ptr<SeekableReadBuffer> getReader() = 0;
+
+    virtual bool checkIfActuallySeekable() { return true; }
+};
+
 using SeekableReadBufferPtr = std::shared_ptr<SeekableReadBuffer>;
+
+using SeekableReadBufferFactoryPtr = std::unique_ptr<SeekableReadBufferFactory>;
+
+/// Wraps a reference to a SeekableReadBuffer into an unique pointer to SeekableReadBuffer.
+/// This function is like wrapReadBufferReference() but for SeekableReadBuffer.
+std::unique_ptr<SeekableReadBuffer> wrapSeekableReadBufferReference(SeekableReadBuffer & ref);
+std::unique_ptr<SeekableReadBuffer> wrapSeekableReadBufferPointer(SeekableReadBufferPtr ptr);
 
 }

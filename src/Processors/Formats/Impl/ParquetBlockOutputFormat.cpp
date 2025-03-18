@@ -39,9 +39,12 @@ void ParquetBlockOutputFormat::consume(Chunk chunk)
         auto sink = std::make_shared<ArrowBufferedOutputStream>(out);
 
         parquet::WriterProperties::Builder builder;
-#if USE_SNAPPY
+        /// proton: FIXME
+        /// Make compression configurable.
+#if 0 /// USE_SNAPPY
         builder.compression(parquet::Compression::SNAPPY);
 #endif
+        builder.compression(parquet::Compression::ZSTD);
         auto props = builder.build();
         auto result = parquet::arrow::FileWriter::Open(
             *arrow_table->schema(),

@@ -24,22 +24,6 @@ namespace DB::S3
 
 namespace
 {
-Aws::S3::Model::HeadObjectOutcome headObject(
-    const S3::Client & client, const String & bucket, const String & key, const String & version_id, bool for_disk_s3)
-{
-    ProfileEvents::increment(ProfileEvents::S3HeadObject);
-    if (for_disk_s3)
-        ProfileEvents::increment(ProfileEvents::DiskS3HeadObject);
-
-    S3::HeadObjectRequest req;
-    req.SetBucket(bucket);
-    req.SetKey(key);
-
-    if (!version_id.empty())
-        req.SetVersionId(version_id);
-
-    return client.HeadObject(req);
-}
 
 /// Performs a request to get the size and last modification time of an object.
 std::pair<std::optional<ObjectInfo>, Aws::S3::S3Error> tryGetObjectInfo(
@@ -60,6 +44,24 @@ std::pair<std::optional<ObjectInfo>, Aws::S3::S3Error> tryGetObjectInfo(
 
     return {object_info, {}};
 }
+
+}
+
+Aws::S3::Model::HeadObjectOutcome headObject(
+    const S3::Client & client, const String & bucket, const String & key, const String & version_id, bool for_disk_s3)
+{
+    ProfileEvents::increment(ProfileEvents::S3HeadObject);
+    if (for_disk_s3)
+        ProfileEvents::increment(ProfileEvents::DiskS3HeadObject);
+
+    S3::HeadObjectRequest req;
+    req.SetBucket(bucket);
+    req.SetKey(key);
+
+    if (!version_id.empty())
+        req.SetVersionId(version_id);
+
+    return client.HeadObject(req);
 }
 
 

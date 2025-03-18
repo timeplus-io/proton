@@ -2,7 +2,7 @@ set(ENABLE_AWS_S3_DEFAULT OFF)
 set(ENABLE_AWS_MSK_IAM_DEFAULT OFF) # proton: added
 
 if(ENABLE_LIBRARIES AND (OS_LINUX OR OS_DARWIN) AND TARGET OpenSSL::Crypto)
-    set(ENABLE_AWS_S3_DEFAULT OFF) # proton: added https://github.com/timeplus-io/proton/issues/918
+    set(ENABLE_AWS_S3_DEFAULT ON)
     set(ENABLE_AWS_MSK_IAM_DEFAULT ON) # proton: added
 endif()
 

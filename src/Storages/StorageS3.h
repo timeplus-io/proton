@@ -15,6 +15,7 @@
 #include <Processors/Executors/PullingPipelineExecutor.h>
 #include <Poco/URI.h>
 #include <Common/logger_useful.h>
+#include <IO/S3/getObjectInfo.h>
 #include <IO/S3Common.h>
 #include <IO/CompressionMethod.h>
 #include <Interpreters/Context.h>
@@ -34,6 +35,8 @@ namespace DB
 
 class PullingPipelineExecutor;
 class StorageS3SequentialSource;
+class NamedCollection;
+
 class StorageS3Source final : public ISource, WithContext
 {
 public:
@@ -133,7 +136,7 @@ public:
         const ColumnsDescription & columns_,
         UInt64 max_block_size_,
         const S3Settings::RequestSettings & request_settings_,
-        const String compression_hint_,
+        const String & compression_hint_,
         const std::shared_ptr<const Aws::S3::S3Client> & client_,
         const String & bucket,
         const String & version_id,
@@ -268,7 +271,7 @@ public:
         ContextPtr ctx,
         ObjectInfos * object_infos = nullptr);
 
-    static void processNamedCollectionResult(StorageS3Configuration & configuration, const std::vector<std::pair<String, ASTPtr>> & key_value_args);
+    static void processNamedCollectionResult(StorageS3Configuration & configuration, const NamedCollection & collection);
 
     struct S3Configuration
     {

@@ -139,4 +139,7 @@ IMPLEMENT_SETTING_ENUM(EscapingRule, ErrorCodes::BAD_ARGUMENTS,
      {"JSON", FormatSettings::EscapingRule::JSON},
      {"XML", FormatSettings::EscapingRule::XML},
      {"Raw", FormatSettings::EscapingRule::Raw}})
+
+IMPLEMENT_SETTING_ENUM(IcebergCatalogType, ErrorCodes::BAD_ARGUMENTS,
+    {{"rest", IcebergCatalogType::REST}})
 }

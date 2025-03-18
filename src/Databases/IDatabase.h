@@ -158,6 +158,10 @@ public:
 
     virtual void startupTables(ThreadPool & /*thread_pool*/, bool /*force_restore*/, bool /*force_attach*/) {}
 
+    /// proton: starts
+    virtual bool configureTableEngine(ASTCreateQuery &) const { return false; }
+    /// proton: ends
+
     /// Check the existence of the table in memory (attached).
     virtual bool isTableExist(const String & name, ContextPtr context) const = 0;
 

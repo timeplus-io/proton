@@ -78,6 +78,9 @@ list (REMOVE_ITEM clickhouse_common_io_sources Common/malloc.cpp Common/new_dele
 
 add_headers_and_sources(dbms Disks/IO)
 add_headers_and_sources(dbms Disks/ObjectStorages)
+
+add_headers_and_sources(dbms Storages/NamedCollections)
+
 if (USE_LIBPQXX)
     add_headers_and_sources(dbms Core/PostgreSQL)
 endif()
@@ -96,6 +99,8 @@ endif()
 if (TARGET ch_contrib::azure_sdk)
     add_headers_and_sources(dbms Disks/ObjectStorages/AzureBlobStorage)
 endif()
+
+add_headers_and_sources(dbms Databases/ApacheIceberg)
 
 add_headers_and_sources(dbms Disks/ObjectStorages/Cached)
 add_headers_and_sources(dbms Disks/ObjectStorages/Web)
@@ -208,6 +213,7 @@ add_object_library(clickhouse_server_http Server/HTTP)
 add_object_library(clickhouse_formats Formats)
 add_object_library(clickhouse_processors Processors)
 # proton : starts
+add_object_library(clickhouse_storages_iceberg Storages/Iceberg)
 add_object_library(clickhouse_processors_streaming Processors/Streaming)
 
 add_object_library(clickhouse_formats_avro Formats/Avro)
