@@ -950,8 +950,12 @@ void HTTPHandler::handleRequest(HTTPServerRequest & request, HTTPServerResponse 
 }
 
 /// proton: starts
-DynamicQueryHandler::DynamicQueryHandler(IServer & server_, const std::string & param_name_, bool snapshot_mode_)
-    : HTTPHandler(server_, "DynamicQueryHandler"), param_name(param_name_), snapshot_mode(snapshot_mode_)
+DynamicQueryHandler::DynamicQueryHandler(
+    IServer & server_, const std::string & param_name_, bool snapshot_mode_, bool is_clickhouse_compatible_)
+    : HTTPHandler(server_, "DynamicQueryHandler")
+    , param_name(param_name_)
+    , snapshot_mode(snapshot_mode_)
+    , is_clickhouse_compatible(is_clickhouse_compatible_)
 {
 }
 /// proton: ends
@@ -993,6 +997,9 @@ std::string DynamicQueryHandler::getQuery(HTTPServerRequest & request, HTMLForm 
     /// set query_mode to 'snapshot' if snapshot_mode is on
     if (snapshot_mode)
         context->setSetting("query_mode", Field("snapshot"));
+    
+    if(is_clickhouse_compatible)
+        context->setSetting("is_clickhouse_compatible", Field(true));
     /// proton: ends
 
     if (likely(!startsWith(request.getContentType(), "multipart/form-data")))

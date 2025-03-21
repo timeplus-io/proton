@@ -95,7 +95,10 @@ public:
     NamesAndTypes getNamesAndTypes() const;
     Names getNames() const;
     DataTypes getDataTypes() const;
-    Names getDataTypeNames() const;
+    /// proton: starts.
+    Names getDataTypeNames(bool is_clickhouse_compatible = false) const;
+    /// proton: starts.
+    std::unordered_map<String, size_t> getNamesToIndexesMap() const;
 
     /// Returns number of rows from first column in block, not equal to nullptr. If no columns, returns 0.
     size_t rows() const;

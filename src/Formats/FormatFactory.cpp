@@ -308,6 +308,10 @@ OutputFormatPtr FormatFactory::getOutputFormatParallelIfPossible(
 
     auto format_settings = _format_settings ? *_format_settings : getFormatSettings(context);
 
+    /// proton: starts.
+    format_settings.is_clickhouse_compatible = context->getSettingsRef().is_clickhouse_compatible;
+    /// proton: ends.
+
     const Settings & settings = context->getSettingsRef();
 
     if (settings.output_format_parallel_formatting && getCreators(name).supports_parallel_formatting

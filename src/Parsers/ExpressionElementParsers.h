@@ -151,14 +151,20 @@ protected:
 class ParserFunction : public IParserBase
 {
 public:
-    explicit ParserFunction(bool is_table_function_ = false)
-        : is_table_function(is_table_function_)
+    /// proton: starts
+    explicit ParserFunction(bool allow_function_parameters_ = true, bool is_table_function_ = false)
+        : allow_function_parameters(allow_function_parameters_), is_table_function(is_table_function_)
+    /// proton: ends
     {
     }
 
 protected:
     const char * getName() const override { return "function"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[ maybe_unused ]] bool hint) override;
+    /// proton: starts
+    String functionNameFromCamelToSnake(const String & name) const;
+    bool allow_function_parameters;
+    /// proton: ends
     bool is_table_function;
 };
 /// proton: ends.

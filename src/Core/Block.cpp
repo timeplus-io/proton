@@ -11,6 +11,9 @@
 #include <Columns/ColumnAggregateFunction.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnSparse.h>
+/// proton: starts
+#include "DataTypes/convertTypeToClickhouse.h"
+/// proton: ends
 
 #include <iterator>
 #include <base/sort.h>
@@ -658,13 +661,20 @@ DataTypes Block::getDataTypes() const
     return res;
 }
 
-Names Block::getDataTypeNames() const
+/// proton: starts.
+Names Block::getDataTypeNames(bool is_clickhouse_compatible) const
+/// proton: ends.
 {
     Names res;
     res.reserve(columns());
 
     for (const auto & elem : data)
         res.push_back(elem.type->getName());
+    
+    /// proton: starts.
+    if(is_clickhouse_compatible)
+        std::transform(res.begin(), res.end(), res.begin(), convertTypeToUpper);
+    /// proton: ends.
 
     return res;
 }

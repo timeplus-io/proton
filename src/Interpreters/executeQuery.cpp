@@ -76,6 +76,8 @@
 #include <Parsers/Streaming/ASTRecoverQuery.h>
 #include <Parsers/parseQueryPipe.h>
 #include <Storages/Streaming/StorageStream.h>
+#include <Common/thread_local_is_clickhouse_compatible.h> /// proton: update
+#include <base/scope_guard.h> /// proton: update
 /// proton: ends
 
 namespace ProfileEvents
@@ -474,13 +476,21 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     try
     {
         ParserQuery parser(end, settings.allow_settings_after_format_in_insert);
-
+        /// proton: starts
+        thread_local_is_clickhouse_compatible = context->getSettingsRef().is_clickhouse_compatible;
+        /// proton: ends
         /// TODO: parser should fail early when max_query_size limit is reached.
         /// proton: starts
         if (settings.enable_query_pipe)
             ast = parseQueryPipe(parser, begin, end, max_query_size, settings.max_parser_depth);
         else
             ast = parseQuery(parser, begin, end, "", max_query_size, settings.max_parser_depth);
+
+        /// proton: starts
+        {
+            SCOPE_EXIT({ thread_local_is_clickhouse_compatible = false; });
+        }
+        /// proton: ends
 
         if (const auto * recover_query = ast->as<Streaming::ASTRecoverQuery>())
         {

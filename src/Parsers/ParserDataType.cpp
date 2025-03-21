@@ -5,6 +5,9 @@
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ParserCreateQuery.h>
+///proton: starts
+#include <Common/thread_local_is_clickhouse_compatible.h>
+///proton: ends
 
 
 namespace DB
@@ -56,6 +59,19 @@ bool ParserDataType::parseImpl(Pos & pos, ASTPtr & node, Expected & expected, [[
     if (!name_parser.parse(pos, identifier, expected))
         return false;
     tryGetIdentifierNameInto(identifier, type_name);
+
+    /// proton: starts
+    if (thread_local_is_clickhouse_compatible)
+    {
+        String type_name_lower = Poco::toLower(type_name);
+        /// There are special type that cannot be directly changed to lowercase and need handle specially.
+        if (type_name_lower == "lowcardinality")
+            type_name_lower = "low_cardinality";
+        else if (type_name_lower == "fixedstring")
+            type_name_lower = "fixed_string";
+        type_name = type_name_lower;
+    }
+    /// proton: ends
 
     String type_name_upper = Poco::toUpper(type_name);
     String type_name_suffix;
