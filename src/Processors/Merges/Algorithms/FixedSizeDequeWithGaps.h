@@ -28,7 +28,7 @@ public:
         /// The number of gaps before current element. The number of gaps after last element stores into end cell.
         size_t gap;
         /// Store char[] instead of T in order to make ValueWithGap POD.
-        /// Call placement constructors after push and and destructors after pop.
+        /// Call placement constructors after push and destructors after pop.
         char value[sizeof(T)];
     };
 
