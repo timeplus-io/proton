@@ -19,7 +19,7 @@ class Session;
 class RestHTTPRequestHandler final : public HTTPRequestHandler
 {
 public:
-    RestHTTPRequestHandler(IServer & server_, const String & name);
+    RestHTTPRequestHandler(IServer & server_, const String & name, bool is_snapshot_mode_, bool is_clickhouse_compatible_mode_);
 
     void handleRequest(HTTPServerRequest & request, HTTPServerResponse & response) override;
 
@@ -29,6 +29,10 @@ private:
     /// Those settings are used only to extract a http request's parameters.
     /// See settings http_max_fields, http_max_field_name_size, http_max_field_value_size in HTMLForm.
     const Settings & default_settings;
+
+    bool is_snapshot_mode = false;
+    bool is_clickhouse_compatible_mode = false;
+
     Poco::Logger * log;
 
     // session is reset at the end of each request/response.

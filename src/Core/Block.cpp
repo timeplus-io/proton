@@ -11,13 +11,14 @@
 #include <Columns/ColumnAggregateFunction.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnSparse.h>
-/// proton: starts
-#include "DataTypes/convertTypeToClickhouse.h"
-/// proton: ends
 
 #include <iterator>
 #include <base/sort.h>
 #include <boost/algorithm/string.hpp>
+
+/// proton: starts
+#include <DataTypes/convertToClickHouseType.h>
+/// proton: ends
 
 
 namespace DB
@@ -661,20 +662,26 @@ DataTypes Block::getDataTypes() const
     return res;
 }
 
-/// proton: starts.
-Names Block::getDataTypeNames(bool is_clickhouse_compatible) const
-/// proton: ends.
+Names Block::getDataTypeNames() const
 {
     Names res;
     res.reserve(columns());
 
     for (const auto & elem : data)
         res.push_back(elem.type->getName());
-    
-    /// proton: starts.
-    if(is_clickhouse_compatible)
-        std::transform(res.begin(), res.end(), res.begin(), convertTypeToUpper);
-    /// proton: ends.
+
+    return res;
+}
+
+Names Block::getClickHouseDataTypeNames() const
+{
+    Names res;
+    res.reserve(columns());
+
+    for (const auto & elem : data)
+        res.push_back(elem.type->getName());
+
+    std::transform(res.begin(), res.end(), res.begin(), convertToClickHouseType);
 
     return res;
 }

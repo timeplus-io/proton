@@ -1,10 +1,13 @@
-#include "DataTypes/convertTypeToClickhouse.h"
-#include <Common/logger_useful.h>
+#include <DataTypes/convertToClickHouseType.h>
+
+#include <absl/container/flat_hash_map.h>
 
 namespace DB
 {
 
-std::unordered_map<std::string, std::string> typeMap
+namespace
+{
+const absl::flat_hash_map<std::string, std::string> type_map
     = {{"void", "Void"},
        {"bool", "Bool"},
        {"int8", "Int8"},
@@ -50,62 +53,68 @@ std::unordered_map<std::string, std::string> typeMap
        {"multipolygon", "MultiPolygon"}};
 
 /// This function converts the type name to uppercase
-std::string convertTypeToUpper(const std::string & input)
+std::string convertToClickHouseType(const std::string_view input)
 {
     std::string result;
-    size_t i = 0;
+    result.reserve(input.size() + 8);
 
-    while (i < input.size())
+    const size_t input_size = input.size();
+    for (size_t i = 0; i < input_size;)
     {
         size_t start = i;
 
-        while (i < input.size() && (std::isalnum(input[i]) || input[i] == '_'))
-            i++;
+        while (i < input_size && (std::isalnum(input[i]) || input[i] == '_'))
+            ++i;
 
-        std::string type_name = input.substr(start, i - start);
-
-        auto it = typeMap.find(type_name);
-        if (it != typeMap.end())
-        {
+        std::string_view type_name{input.data() + start, i - start};
+        if (auto it = type_map.find(type_name); it != type_map.end())
             result += it->second;
-        }
         else
-        {
-            /// If the type is not found in typeMap, log a warning and keep the original value. Unknown data type or not a data type keyword.
             result += type_name;
-        }
 
         /// Processing parameter part: If there are brackets, continue splicing and parsing the content
-        if (i < input.size() && input[i] == '(')
+        if (i < input_size && input[i] == '(')
         {
             result += '(';
-            i++; /// Skip '('
+
+            ++i; /// Skip '('
+
             int bracket_cnt = 1;
             size_t param_start = i;
-            while (i < input.size() && bracket_cnt > 0)
+
+            while (i < input_size && bracket_cnt > 0)
             {
                 if (input[i] == '(')
-                    bracket_cnt++;
+                    ++bracket_cnt;
                 else if (input[i] == ')')
-                    bracket_cnt--;
-                i++;
+                    --bracket_cnt;
+
+                ++i;
             }
 
             /// Recursively process the parameters in parentheses
-            std::string params = input.substr(param_start, i - param_start - 1);
-            result += convertTypeToUpper(params);
+            std::string_view params{input.data() + param_start, i - param_start - 1};
+            result += convertToClickHouseType(params);
+
             result += ')';
         }
 
         /// Skip other non-alphanumeric characters
-        while (i < input.size() && !std::isalnum(input[i]) && input[i] != '_')
+        while (i < input_size && !std::isalnum(input[i]) && input[i] != '_')
         {
             result += input[i];
-            i++;
+            ++i;
         }
     }
 
     return result;
+}
+
+}
+
+std::string convertToClickHouseType(const std::string & input)
+{
+    return convertToClickHouseType(std::string_view{input});
 }
 
 }

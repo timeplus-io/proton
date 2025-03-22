@@ -419,6 +419,12 @@ void RestHTTPRequestHandler::processQuery(
         request.get("x-timeplus-query-id", request.get("x-proton-request-id", request.get("x-proton-query-id", "")))));
     response.add("x-timeplus-query-id", context->getCurrentQueryId());
 
+    if (is_snapshot_mode)
+        context->setSetting("query_mode", Field("table"));
+
+    if (is_clickhouse_compatible_mode)
+        context->setSetting("is_clickhouse_compatible", Field(true));
+
     /// Setup idempotent key if it is passed by user
     String idem_key = request.get("x-timeplus-idempotent-id", request.get("x-proton-idempotent-id", ""));
     if (!idem_key.empty())
@@ -451,8 +457,13 @@ void RestHTTPRequestHandler::processQuery(
     LOG_DEBUG(log, "End of processing query_id={} user={}", context->getCurrentQueryId(), context->getUserName());
 }
 
-RestHTTPRequestHandler::RestHTTPRequestHandler(IServer & server_, const String & name)
-    : server(server_), default_settings(server.context()->getSettingsRef()), log(&Poco::Logger::get(name))
+RestHTTPRequestHandler::RestHTTPRequestHandler(
+    IServer & server_, const String & name, bool is_snapshot_mode_, bool is_clickhouse_compatible_mode_)
+    : server(server_)
+    , default_settings(server.context()->getSettingsRef())
+    , is_snapshot_mode(is_snapshot_mode_)
+    , is_clickhouse_compatible_mode(is_clickhouse_compatible_mode_)
+    , log(&Poco::Logger::get(name))
 {
 }
 

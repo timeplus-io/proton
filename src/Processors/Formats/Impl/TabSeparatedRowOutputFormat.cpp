@@ -44,8 +44,12 @@ void TabSeparatedRowOutputFormat::writePrefix()
     if (with_types)
     {
         /// proton: starts.
-        writeLine(header.getDataTypeNames(format_settings.is_clickhouse_compatible));
+        if (format_settings.is_clickhouse_compatible)
+            writeLine(header.getClickHouseDataTypeNames());
+        else
+            writeLine(header.getDataTypeNames());
         /// proton: ends.
+
         writeRowBetweenDelimiter();
     }
 }

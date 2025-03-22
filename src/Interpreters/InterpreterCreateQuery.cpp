@@ -459,9 +459,7 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
         if (col_decl.type)
         {
             /// proton: starts
-            bool is_clickhouse_compatible_ = false;
-            if (context_)
-                is_clickhouse_compatible_ = context_->getSettingsRef().is_clickhouse_compatible;
+            bool is_clickhouse_compatible_ = context_->getSettingsRef().is_clickhouse_compatible;
             column_type = DataTypeFactory::instance().get(col_decl.type, is_clickhouse_compatible_);
             /// proton: ends
 

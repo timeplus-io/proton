@@ -87,9 +87,7 @@ protected:
                 "Instead there is a column with the following structure: {}", getName(), column->dumpStructure());
 
         /// proton: starts
-        bool is_clickhouse_compatible = false;
-        if (context)
-            is_clickhouse_compatible = context->getSettingsRef().is_clickhouse_compatible;
+        bool is_clickhouse_compatible = context ? context->getSettingsRef().is_clickhouse_compatible : false;
         DataTypePtr type = DataTypeFactory::instance().get(type_col->getValue<String>(), is_clickhouse_compatible);
         /// proton: ends
 

@@ -181,7 +181,7 @@ HTTPRequestHandlerFactoryPtr createMetaStoreHandlerFactory(IServer & server, con
     auto factory = std::make_shared<HTTPRequestHandlerFactoryMain>(name);
     for (const auto * prefix : {"timeplusd", "proton"})
     {
-        auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(server, "metastore");
+        auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(server, "metastore", false, false);
         rest_handler->attachNonStrictPath(fmt::format("/{}/metastore", prefix));
         factory->addHandler(rest_handler);
     }
@@ -206,28 +206,36 @@ void addCommonDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IS
 }
 
 /// proton: starts
-void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server, AsynchronousMetrics & async_metrics, bool snapshot_mode_, bool is_clickhouse_compatible_)
-/// proton: ends
+void addDefaultHandlersFactory(
+    HTTPRequestHandlerFactoryMain & factory,
+    IServer & server,
+    AsynchronousMetrics & async_metrics,
+    bool snapshot_mode_,
+    bool is_clickhouse_compatible_mode_)
 {
     addCommonDefaultHandlersFactory(factory, server);
 
-    /// proton: start. Add rest request process handler
     {
-        auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(server, "proton");
+        bool snapshot_mode_copy = snapshot_mode_;
+        bool is_clickhouse_compatible_mode_copy = is_clickhouse_compatible_mode_;
+        auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(
+            server, "proton", std::move(snapshot_mode_copy), std::move(is_clickhouse_compatible_mode_copy));
         rest_handler->attachNonStrictPath("/proton");
         factory.addHandler(rest_handler);
     }
 
     {
-        auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(server, "timeplusd");
+        bool snapshot_mode_copy = snapshot_mode_;
+        bool is_clickhouse_compatible_mode_copy = is_clickhouse_compatible_mode_;
+        auto rest_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<RestHTTPRequestHandler>>(
+            server, "timeplusd", std::move(snapshot_mode_copy), std::move(is_clickhouse_compatible_mode_copy));
         rest_handler->attachNonStrictPath("/timeplusd");
         factory.addHandler(rest_handler);
     }
-    /// proton: end.
-
-    /// proton: starts
-    auto query_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<DynamicQueryHandler>>(server, "query", std::move(snapshot_mode_), std::move(is_clickhouse_compatible_));
+    auto query_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<DynamicQueryHandler>>(
+        server, "query", std::move(snapshot_mode_), std::move(is_clickhouse_compatible_mode_));
     /// proton: ends
+
     query_handler->allowPostAndGetParamsAndOptionsRequest();
     factory.addHandler(query_handler);
 
