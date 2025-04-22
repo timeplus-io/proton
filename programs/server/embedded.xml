@@ -96,7 +96,6 @@
     </quotas>
 
     <metastore_server>
-      <enable_ipv4>true</enable_ipv4>
       <http_port>9444</http_port>
       <server_id>1</server_id>
       <namespace_whitelist>
