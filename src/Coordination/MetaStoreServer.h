@@ -40,7 +40,7 @@ private:
 
     nuraft::ptr<nuraft::raft_server> raft_instance;
     nuraft::ptr<nuraft::asio_service> asio_service;
-    nuraft::ptr<nuraft::rpc_listener> asio_listener;
+    std::vector<nuraft::ptr<nuraft::rpc_listener>> asio_listeners;
 
     std::mutex append_entries_mutex;
 
@@ -52,6 +52,8 @@ private:
     Poco::Logger * log;
 
     std::unordered_set<std::string> namespace_whitelist;
+    bool enable_ipv6 = false;
+    std::vector<std::string> listen_hosts;
 
     nuraft::cb_func::ReturnCode callbackFunc(nuraft::cb_func::Type type, nuraft::cb_func::Param * param);
 

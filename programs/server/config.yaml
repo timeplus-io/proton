@@ -1087,6 +1087,7 @@ cluster_settings:
 
 # Metastore server config
 metastore_server:
+    enable_ipv6: true
     http_port: 9444
     server_id: 1
 
