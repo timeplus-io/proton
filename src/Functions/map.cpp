@@ -42,7 +42,47 @@ namespace ErrorCodes
 namespace
 {
 
+/// proton : starts
+DataTypePtr getReturnTypeImplForArrays(const DataTypes & arguments, const String & name)
+{
+    if (arguments.size() != 2)
+        throw Exception(
+            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+            "Function {} requires 2 arguments, but {} given",
+            name,
+            arguments.size());
+
+    auto get_nested_type = [&](const DataTypePtr & type)
+    {
+        DataTypePtr nested;
+        if (const auto * type_as_array = checkAndGetDataType<DataTypeArray>(type.get()))
+            nested = type_as_array->getNestedType();
+        else if (const auto * type_as_map = checkAndGetDataType<DataTypeMap>(type.get()))
+            nested = std::make_shared<DataTypeTuple>(type_as_map->getKeyValueTypes());
+        else
+            throw Exception(
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "Arguments of function {} must be Array or Map, but {} is given",
+                name,
+                type->getName());
+
+        return nested;
+    };
+
+    auto key_type = get_nested_type(arguments[0]);
+    auto value_type = get_nested_type(arguments[1]);
+
+    /// We accept Array(Nullable(T)) or Array(LowCardinality(Nullable(T))) as key types as long as the actual array doesn't contain NULL value(this is checked in executeImpl).
+    key_type = removeNullableOrLowCardinalityNullable(key_type);
+
+    DataTypes key_value_types{key_type, value_type};
+    return std::make_shared<DataTypeMap>(key_value_types);
+}
+/// proton : ends
+
 // map_cast(x, y, ...) is a function that allows you to make key-value pair
+// map_cast(array1, array2)
+// map_cast(map1, map2)
 class FunctionMap : public IFunction
 {
 public:
@@ -94,6 +134,12 @@ public:
             throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
                 "Function {} requires even number of arguments, but {} given", getName(), arguments.size());
 
+        /// proton : starts
+        if (checkAndGetDataType<DataTypeArray>(arguments[0].get()) || checkAndGetDataType<DataTypeMap>(arguments[0].get()))
+            /// Proxy to map_from_arrays
+            return getReturnTypeImplForArrays(arguments, getName());
+        /// proton : ends
+
         DataTypes keys;
         DataTypes values;
         for (size_t i = 0; i < arguments.size(); i += 2)
@@ -110,6 +156,12 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
+        /// proton : starts
+        if (checkAndGetDataType<DataTypeArray>(arguments[0].type.get()) || checkAndGetDataType<DataTypeMap>(arguments[0].type.get()))
+            /// Proxy to map_from_arrays
+            return function_map_from_arrays->build(arguments)->execute(arguments, result_type, input_rows_count, /*dry_run=*/false);
+        /// proton : ends
+
         size_t num_elements = arguments.size();
         if (num_elements == 0)
             return result_type->createColumnConstWithDefaultValue(input_rows_count);
@@ -162,38 +214,7 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 2)
-            throw Exception(
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
-                "Function {} requires 2 arguments, but {} given",
-                getName(),
-                arguments.size());
-
-        auto get_nested_type = [&](const DataTypePtr & type)
-        {
-            DataTypePtr nested;
-            if (const auto * type_as_array = checkAndGetDataType<DataTypeArray>(type.get()))
-                nested = type_as_array->getNestedType();
-            else if (const auto * type_as_map = checkAndGetDataType<DataTypeMap>(type.get()))
-                nested = std::make_shared<DataTypeTuple>(type_as_map->getKeyValueTypes());
-            else
-                throw Exception(
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-                    "Arguments of function {} must be Array or Map, but {} is given",
-                    getName(),
-                    type->getName());
-
-            return nested;
-        };
-
-        auto key_type = get_nested_type(arguments[0]);
-        auto value_type = get_nested_type(arguments[1]);
-
-        /// We accept Array(Nullable(T)) or Array(LowCardinality(Nullable(T))) as key types as long as the actual array doesn't contain NULL value(this is checked in executeImpl).
-        key_type = removeNullableOrLowCardinalityNullable(key_type);
-
-        DataTypes key_value_types{key_type, value_type};
-        return std::make_shared<DataTypeMap>(key_value_types);
+        return getReturnTypeImplForArrays(arguments, getName());
     }
 
     ColumnPtr executeImpl(
