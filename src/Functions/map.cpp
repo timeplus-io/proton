@@ -135,7 +135,7 @@ public:
                 "Function {} requires even number of arguments, but {} given", getName(), arguments.size());
 
         /// proton : starts
-        if (checkAndGetDataType<DataTypeArray>(arguments[0].get()) || checkAndGetDataType<DataTypeMap>(arguments[0].get()))
+        if (!arguments.empty() && (checkAndGetDataType<DataTypeArray>(arguments[0].get()) || checkAndGetDataType<DataTypeMap>(arguments[0].get())))
             /// Proxy to map_from_arrays
             return getReturnTypeImplForArrays(arguments, getName());
         /// proton : ends
@@ -157,7 +157,7 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
         /// proton : starts
-        if (checkAndGetDataType<DataTypeArray>(arguments[0].type.get()) || checkAndGetDataType<DataTypeMap>(arguments[0].type.get()))
+        if (!arguments.empty() && (checkAndGetDataType<DataTypeArray>(arguments[0].type.get()) || checkAndGetDataType<DataTypeMap>(arguments[0].type.get())))
             /// Proxy to map_from_arrays
             return function_map_from_arrays->build(arguments)->execute(arguments, result_type, input_rows_count, /*dry_run=*/false);
         /// proton : ends
