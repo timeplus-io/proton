@@ -1,6 +1,7 @@
 #include "config.h"
 
 #include <Formats/FormatFactory.h>
+#include <ADBC/ADBCDriver.h> // Pffb6
 
 
 namespace DB
@@ -247,7 +248,11 @@ void registerFormats()
     registerTSKVSchemaReader(factory);
     registerValuesSchemaReader(factory);
     registerTemplateSchemaReader(factory);
+
+    // Register the ADBC driver in the format factory
+    factory.registerInputFormat("ADBC", [](ReadBuffer & buf, const Block & sample, const RowInputFormatParams & params, const FormatSettings & format_settings) {
+        return std::make_shared<ADBC::ADBCDriver>(buf, sample, params, format_settings);
+    });
 }
 
 }
-

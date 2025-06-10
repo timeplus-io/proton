@@ -158,6 +158,37 @@ You should see data like the following:
 └─────────┴─────────┴──────────────────┴──────────────────┘
 ```
 
+### Using the ADBC Driver
+
+To use the ADBC driver for Arrow Flight SQL, follow these steps:
+
+1. Ensure that the `USE_ADBC` configuration option is enabled in your `config.h.in` file.
+2. Implement the ADBC driver in your code by including the necessary headers and creating an instance of the `ADBCDriver` class.
+3. Use the `ExecuteQuery` method of the `ADBCDriver` class to execute SQL queries and retrieve results as Arrow Tables.
+
+Example:
+
+```cpp
+#include <ADBC/ADBCDriver.h>
+#include <arrow/table.h>
+#include <iostream>
+
+int main() {
+    ADBC::ADBCDriver driver;
+    std::string query = "SELECT * FROM test_table";
+    std::shared_ptr<arrow::Table> result;
+
+    try {
+        result = driver.ExecuteQuery(query);
+        std::cout << "Query executed successfully. Number of rows: " << result->num_rows() << std::endl;
+    } catch (const std::runtime_error& e) {
+        std::cerr << "Error executing query: " << e.what() << std::endl;
+    }
+
+    return 0;
+}
+```
+
 ### ⏩ What's next?
 To see more examples of using Timeplus Proton, check out the [examples](https://github.com/timeplus-io/proton/tree/develop/examples) folder.
 
