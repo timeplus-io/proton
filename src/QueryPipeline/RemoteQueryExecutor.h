@@ -51,7 +51,7 @@ public:
 
     /// Takes a connection pool for a node (not cluster)
     RemoteQueryExecutor(
-        ConnectionPoolPtr node_pool,
+        ConnectionPoolPtr pool_,
         const String & query_,
         const Block & header_,
         ContextPtr context_,
