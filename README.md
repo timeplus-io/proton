@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="Timeplus Proton – A fastest SQL data pipeline engine" src="design/proton-logo-white-bg.png"/> <br/>
+  <img alt="Timeplus Proton – A fastest SQL data pipeline engine" src="design/timeplus-proton-logo.png"/> <br/>
   Fastest SQL pipeline engine for stream processing, analytics, observability and AI <br/><br/>
   📄 <a href="https://docs.timeplus.com" target="_blank">Documentation</a>&nbsp;&nbsp;
   🚀 <a href="https://demos.timeplus.com" target="_blank">Demo</a>&nbsp;&nbsp;
@@ -35,7 +35,7 @@
 
 ⚡ No JVM. No ZooKeeper. Zero dependencies. Just speed, control and scale.
 
-![Proton Architecture](https://docs.timeplus.com/assets/images/product_diagram_web-a2eefd92ab13ebc59c619434e2caba98.png)
+<img alt="Timeplus Architecture" src="design/timeplus-architecture-diagram-web.jpg"/>
 
 Get started in seconds
 ```shell
