@@ -1,9 +1,9 @@
 <p align="center">
   <img alt="Timeplus Proton – A fastest SQL data pipeline engine" src="design/timeplus-proton-logo.png"/> <br/>
   Fastest SQL pipeline engine for stream processing, analytics, observability and AI <br/><br/>
-  📄 <a href="https://docs.timeplus.com" target="_blank">Documentation</a>&nbsp;&nbsp;
-  🚀 <a href="https://demos.timeplus.com" target="_blank">Demo</a>&nbsp;&nbsp;
-  🌎 <a href="https://timeplus.com/" target="_blank">Timeplus</a> <br/><br/>
+  🌎 <a href="https://timeplus.com/" target="_blank">Website</a> &nbsp;&nbsp;
+  🚀 <a href="https://demos.timeplus.com" target="_blank">Demo</a>&nbsp;&nbsp;  
+  📄 <a href="https://docs.timeplus.com" target="_blank">Docs</a><br/><br/>
   <a href="https://github.com/timeplus-io/proton/"><img src="https://img.shields.io/github/stars/timeplus-io/proton?logo=github" /></a>&nbsp;
   <a href="https://github.com/timeplus-io/proton/pkgs/container/proton"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fjovezhong.github.io%2Fbackage%2Ftimeplus-io%2Fproton%2Fproton.json&query=%24.downloads&label=Docker%20Pull" /></a>&nbsp;
   <a href="https://github.com/timeplus-io/proton/releases"><img src="https://img.shields.io/github/v/release/timeplus-io/proton" alt="Release" /></a>&nbsp;
