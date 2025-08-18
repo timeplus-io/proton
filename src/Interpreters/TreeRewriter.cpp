@@ -41,6 +41,9 @@
 #include <Parsers/ASTInterpolateElement.h>
 #include <Parsers/queryToString.h>
 #include <Parsers/ASTCreateQuery.h>
+/// proton: starts.
+#include <Parsers/QueryParameterVisitor.h>
+/// proton: ends.
 
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -80,6 +83,9 @@ namespace ErrorCodes
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int UNKNOWN_IDENTIFIER;
     extern const int BAD_QUERY_PARAMETER;
+    /// proton: starts.
+    extern const int UNKNOWN_QUERY_PARAMETER;
+    /// proton: ends.
 }
 
 namespace
@@ -380,7 +386,28 @@ void translateQualifiedNames(ASTPtr & query, const ASTSelectQuery & select_query
 
     /// This may happen after expansion of COLUMNS('regexp').
     if (select_query.select()->children.empty())
+    {
+        /// proton: starts.
+        /// If the query still contains unresolved parameters, surface a clearer error with names.
+        NameSet unresolved_params = analyzeReceiveQueryParams(query);
+        if (!unresolved_params.empty())
+        {
+            std::stringstream ss;
+            ss << "Query parameter(s) are not set: ";
+            bool first = true;
+            for (const auto & name : unresolved_params)
+            {
+                if (!first)
+                    ss << ", ";
+                first = false;
+                ss << backQuote(name);
+            }
+            throw Exception::createRuntime(ErrorCodes::UNKNOWN_QUERY_PARAMETER, ss.str());
+        }
+        /// proton: ends.
+
         throw Exception(ErrorCodes::EMPTY_LIST_OF_COLUMNS_QUERIED, "Empty list of columns in SELECT query");
+    }	
 }
 
 // Replaces one avg/sum/count function with an appropriate expression with
