@@ -1144,15 +1144,14 @@ CallResult<uint64_t> PersistentMonoMap<KeyValue>::loadLogSegment(
         LOG_INFO(logger_, "Found complete {} log file={}, total_bytes={} entries={}", app_, filename, bytes, num_entries);
     }
 
-    entry_cache.resize(num_entries);
-    size_t cache_idx = 0;
     uint64_t file_offset = 0;
 
     std::vector<char> read_buf;
     read_buf.resize(KeyValue::exactSerializedSize() * std::min<size_t>(num_entries, 65536));
 
+    bool early_exit = false;
     uint64_t read_offset = 0;
-    while (read_offset < bytes)
+    while (read_offset < bytes && !early_exit)
     {
         auto r = log_segment.read(read_buf.data(), read_buf.size(), read_offset);
         if (r.hasError())
@@ -1171,39 +1170,51 @@ CallResult<uint64_t> PersistentMonoMap<KeyValue>::loadLogSegment(
 
         for (size_t i = 0; i < num_entries_read; ++i)
         {
-            assert(cache_idx < entry_cache.size());
-
-            entry_cache[cache_idx].entry.deserialize(rb, /*version=*/1);
-            entry_cache[cache_idx].offset = file_offset;
+            KeyValueWithLogOffset kvo;
+            kvo.entry.deserialize(rb, /*version=*/1);
+            kvo.offset = file_offset;
 
             /// Validation
-            if (cache_idx > 0 && (entry_cache[cache_idx - 1].entry > entry_cache[cache_idx].entry))
+            if (!entry_cache.empty() && (entry_cache.back().entry > kvo.entry))
             {
                 LOG_ERROR(
                     logger_,
-                    "{} log file={} has out of order entries at index={} with {} and index={} with {}",
+                    "{} log file={} has out of order entries at index={} with {} and index={} with {}. Truncating tail entries at "
+                    "file_offset={} entries_to_truncate={}",
                     app_,
                     filename,
-                    cache_idx - 1,
-                    entry_cache[cache_idx - 1].entry.string(),
-                    cache_idx,
-                    entry_cache[cache_idx].entry.string());
+                    entry_cache.size(),
+                    entry_cache.back().entry.string(),
+                    entry_cache.size() + 1,
+                    kvo.entry.string(),
+                    file_offset,
+                    num_entries - entry_cache.size());
 
-                return {0, DB::ErrorCodes::LOGICAL_ERROR};
+                /// In some cases, file system exhibited very weird behavior which returns garbage data after a hard power-off
+                /// In this case, we can safely truncate the tail entries
+                /// ref https://github.com/timeplus-io/proton-enterprise/issues/10316
+                log_segment.truncate(file_offset);
+                early_exit = true;
+                break;
             }
 
+            entry_cache.push_back(std::move(kvo));
             file_offset += entry_size;
-            ++cache_idx;
         }
 
         read_offset += r.result;
     }
 
-    assert(cache_idx == num_entries);
-    assert(cache_idx == entry_cache.size());
-    assert(file_offset == num_entries * KeyValue::exactSerializedSize());
+    assert((early_exit && entry_cache.size() < num_entries) || (!early_exit && entry_cache.size() == num_entries));
 
-    LOG_INFO(logger_, "Loaded {} log file={}, total_entries={}", app_, filename, num_entries);
+    LOG_INFO(
+        logger_,
+        "Loaded {} log file={}, total_entries_expected={} total_entries_loaded={}",
+        app_,
+        filename,
+        num_entries,
+        entry_cache.size());
+
     return {bytes, DB::ErrorCodes::OK};
 }
 
