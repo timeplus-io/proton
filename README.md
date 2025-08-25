@@ -6,8 +6,8 @@
 <p></p>
 <p><br></br></p>
 <picture align=center>
-    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/timeplus-io/docs/blob/main/static/img/timeplus-proton.svg">
-    <source media="(prefers-color-scheme: light)" srcset="https://github.com/timeplus-io/docs/blob/main/static/img/timeplus-proton-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="design/timeplus-proton_logo_white.svg">
+    <source media="(prefers-color-scheme: light)" srcset="design/timeplus-proton_logo_black.svg">
     <img alt="The Timeplus company logo." src="https://github.com/timeplus-io/docs/blob/main/static/img/timeplus_d.png">
 </picture>
 <br>Fastest SQL pipeline engine for stream processing, analytics, observability and AI</br>
