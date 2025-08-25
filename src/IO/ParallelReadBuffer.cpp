@@ -51,7 +51,15 @@ ParallelReadBuffer::ParallelReadBuffer(
 {
     LOG_TRACE(getLogger("ParallelReadBuffer"), "Parallel reading is used");
 
-    addReaders();
+    try
+    {
+        addReaders();
+    }
+    catch (const Exception &)
+    {
+        finishAndWait();
+        throw;
+    }
 }
 
 bool ParallelReadBuffer::addReaderToPool()
@@ -64,8 +72,9 @@ bool ParallelReadBuffer::addReaderToPool()
 
     auto worker = read_workers.emplace_back(std::make_shared<ReadWorker>(input, range_start, size));
 
-    ++active_working_readers;
     schedule([this, my_worker = std::move(worker)]() mutable { readerThreadFunction(std::move(my_worker)); }, Priority{});
+    /// increase number of workers only after we are sure that the reader was scheduled
+    ++active_working_readers;
 
     return true;
 }
@@ -116,9 +125,10 @@ off_t ParallelReadBuffer::seek(off_t offset, int whence)
             if (w->bytes_produced > diff)
             {
                 working_buffer = internal_buffer = Buffer(
-                    w->segment.data() + diff, w->segment.data() + w->bytes_produced);
+                    w->segment.data(), w->segment.data() + w->bytes_produced);
+                pos = working_buffer.begin() + diff;
                 w->bytes_consumed = w->bytes_produced;
-                current_position += w->start_offset + w->bytes_consumed;
+                current_position = w->start_offset + w->bytes_consumed;
                 addReaders();
                 return offset;
             }
