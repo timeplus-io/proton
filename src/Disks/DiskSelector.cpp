@@ -237,6 +237,8 @@ bool DiskSelector::loadDisksFromMetaStore(ContextPtr context)
         const auto * function_args_expr = assert_cast<const ASTExpressionList *>(ast_function.arguments.get());
         const auto & function_args = function_args_expr->children;
         auto disk_config = getDiskConfigurationFromAST(disk_desc->name, function_args, context);
+        /// Avoid inaccessable disk (eg, network issue for s3) loading exception on startup.
+        disk_config->setBool(disk_desc->name + ".skip_access_check", true);
         disks.emplace(disk_desc->name, factory.create(disk_desc->name, *disk_config, disk_desc->name, context, disks));
     }
 

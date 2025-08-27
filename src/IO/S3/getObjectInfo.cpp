@@ -67,7 +67,8 @@ std::pair<std::optional<ObjectInfo>, Aws::S3::S3Error> tryGetObjectInfo(
 
 bool isNotFoundError(Aws::S3::S3Errors error)
 {
-    return error == Aws::S3::S3Errors::RESOURCE_NOT_FOUND || error == Aws::S3::S3Errors::NO_SUCH_KEY;
+    return error == Aws::S3::S3Errors::RESOURCE_NOT_FOUND || error == Aws::S3::S3Errors::NO_SUCH_KEY
+        || error == Aws::S3::S3Errors::NO_SUCH_BUCKET;
 }
 
 ObjectInfo getObjectInfo(
