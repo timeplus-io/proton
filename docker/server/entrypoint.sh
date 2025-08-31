@@ -86,27 +86,27 @@ do
 done
 
 # if proton user is defined - create it (user "default" already exists out of box)
-if [ -n "$PROTON_USER" ] && [ "$PROTON_USER" != "default" ] || [ -n "$PROTON_PASSWORD" ]; then
+if [ -n "$PROTON_USER" ] && [ "$PROTON_USER" != "default" ]; then
     echo "$0: create new user '$PROTON_USER' instead 'default'"
     cat <<EOT > /etc/proton-server/users.d/default-user.xml
-    <clickhouse>
-      <!-- Docs: <https://proton.tech/docs/en/operations/settings/settings_users/> -->
-      <users>
-        <!-- Remove default user -->
-        <default remove="remove">
-        </default>
+<?xml version="1.0"?>
+<proton>
+  <users>
+    <!-- Remove default user -->
+    <default remove="remove">
+    </default>
 
-        <${PROTON_USER}>
-          <profile>default</profile>
-          <networks>
-            <ip>::/0</ip>
-          </networks>
-          <password>${PROTON_PASSWORD}</password>
-          <quota>default</quota>
-          <access_management>${PROTON_ACCESS_MANAGEMENT}</access_management>
-        </${PROTON_USER}>
-      </users>
-    </clickhouse>
+    <${PROTON_USER}>
+      <password>${PROTON_PASSWORD}</password>
+      <networks>
+        <ip>::/0</ip>
+      </networks>
+      <profile>default</profile>
+      <quota>default</quota>
+      <access_management>${PROTON_ACCESS_MANAGEMENT}</access_management>
+    </${PROTON_USER}>
+  </users>
+</proton>
 EOT
 fi
 
