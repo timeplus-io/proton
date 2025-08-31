@@ -1,9 +1,21 @@
+<div align=center>
+
+[![Website](https://img.shields.io/website?up_message=TIMEPLUS&down_message=DOWN&url=https%3A%2F%2Ftimeplus.com&style=for-the-badge)](https://timeplus.com)
+[![Demo](https://img.shields.io/website?label=Demo&up_color=blue&up_message=DEMO&down_message=DOWN&url=https%3A%2F%2Fdemos.timeplus.com&style=for-the-badge)](https://demos.timeplus.com)
+[![Apache 2.0 License](https://img.shields.io/badge/license-Apache%202.0-blueviolet?style=for-the-badge)](https://www.apache.org/licenses/LICENSE-2.0)
+<p></p>
+<p><br></br></p>
+<picture align=center>
+    <source media="(prefers-color-scheme: dark)" srcset="design/timeplus-proton_logo_white.svg">
+    <source media="(prefers-color-scheme: light)" srcset="design/timeplus-proton_logo_black.svg">
+    <img alt="The Timeplus company logo." src="https://github.com/timeplus-io/docs/blob/main/static/img/timeplus_d.png">
+</picture>
+<br>Fastest SQL pipeline engine for stream processing, analytics, observability and AI</br>
+<p><br></br></p>
+
+</div>
+
 <p align="center">
-  <img alt="Timeplus Proton – A fastest SQL data pipeline engine" src="design/timeplus-proton-logo.png"/> <br/>
-  Fastest SQL pipeline engine for stream processing, analytics, observability and AI <br/><br/>
-  📄 <a href="https://docs.timeplus.com" target="_blank">Documentation</a>&nbsp;&nbsp;
-  🚀 <a href="https://demos.timeplus.com" target="_blank">Demo</a>&nbsp;&nbsp;
-  🌎 <a href="https://timeplus.com/" target="_blank">Timeplus</a> <br/><br/>
   <a href="https://github.com/timeplus-io/proton/"><img src="https://img.shields.io/github/stars/timeplus-io/proton?logo=github" /></a>&nbsp;
   <a href="https://github.com/timeplus-io/proton/pkgs/container/proton"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fjovezhong.github.io%2Fbackage%2Ftimeplus-io%2Fproton%2Fproton.json&query=%24.downloads&label=Docker%20Pull" /></a>&nbsp;
   <a href="https://github.com/timeplus-io/proton/releases"><img src="https://img.shields.io/github/v/release/timeplus-io/proton" alt="Release" /></a>&nbsp;
@@ -11,21 +23,10 @@
   <a href="https://timeplus.com/slack"><img src="https://img.shields.io/badge/Join%20Slack-blue?logo=slack" alt="Slack" /></a>&nbsp;
   <a href="https://linkedin.com/company/timeplusinc"><img src="https://img.shields.io/badge/timeplusinc-0077B5?style=social&logo=linkedin" alt="follow on LinkedIn"/></a>&nbsp;
   <a href="https://twitter.com/intent/follow?screen_name=timeplusdata"><img src="https://img.shields.io/twitter/follow/timeplusdata?label=" alt="X" /></a>&nbsp;<img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=37571e92-69be-437f-b1c2-7b86d1e0ea55" />
-  <a href="https://github.com/timeplus-io/proton/blob/develop/LICENSE"><img src="https://img.shields.io/github/license/timeplus-io/proton?label=license&logo=github&color=blue" alt="License" /></a>&nbsp;
-</p>
-
-<p align="center">
-  <a href="#why-timeplus-proton"><strong>Why Timeplus Proton</strong></a> ·
-  <a href="#how-is-it-different-from-clickhouse"><strong>How is it different from ClickHouse</strong></a> ·
-  <a href="#use-cases"><strong>Use Cases</strong></a> ·
-  <a href="#demo"><strong>Demo</strong></a> ·
-  <a href="#deployment"><strong>Deployment</strong></a> ·
-  <a href="#whats-next"><strong>What's Next</strong></a> ·
-  <a href="#integrations"><strong>Integrations</strong></a> ·
-  <a href="#contributing"><strong>Contributing</strong></a> ·
-  <a href="#need-help"><strong>Need help?</strong></a>
 
 </p>
+
+
 
 ## What's Timeplus Proton
 
