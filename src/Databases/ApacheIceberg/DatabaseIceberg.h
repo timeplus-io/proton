@@ -18,7 +18,8 @@ public:
         const std::string & database_name_,
         const std::string & url_,
         const DatabaseApacheIcebergSettings & settings_,
-        ASTPtr database_engine_definition_);
+        ASTPtr database_engine_definition_,
+        bool attach);
 
     String getEngineName() const override { return "Iceberg"; }
     bool configureTableEngine(ASTCreateQuery &) const override;
