@@ -291,7 +291,7 @@ public:
     UInt64 writtenBytes(bool reset = true, bool external_ingress = false) override;
     UInt64 writtenRows(bool reset = true, bool external_ingress = false) override;
 
-    std::shared_ptr<Metrics> getMetrics() const;
+    Metrics getMetrics() const;
 
     /// Pause/Resume/Abort/Recover the background pipeline execution
     /// \return error code

@@ -173,9 +173,9 @@ Streaming::StreamingSourceMetricsPtrs StorageMaterializedView::getStreamingSourc
     return {};
 }
 
-std::shared_ptr<StorageMaterializedView::Metrics> StorageMaterializedView::getMetrics() const
+StorageMaterializedView::Metrics StorageMaterializedView::getMetrics() const
 {
-    return std::make_shared<Metrics>(Metrics{
+    return Metrics{
         .status = String{magic_enum::enum_name(getPipelineStatus())},
         .last_err_msg_and_ts = lastErrorMessageAndTimestamp(),
         .recover_times = getRetryTimes(),
@@ -184,6 +184,6 @@ std::shared_ptr<StorageMaterializedView::Metrics> StorageMaterializedView::getMe
         .ckpt_storage_size = getCheckpointSize(),
         .ckpt_request_metrics = getCheckpointRequestMetrics(),
         .source_metrics = getStreamingSourceMetrics(),
-    });
+    };
 }
 }

@@ -150,13 +150,13 @@ void addMaterializedViewLog(const StorageMaterializedView * mv, const AddElem & 
     const auto * mv_type = "materialized_view";
 
     const auto & storage_id = mv->getStorageID();
-    add_elem(storage_id, "status", 0, /*state_string_value=*/metrics->status, /*dimension=*/mv_type);
+    add_elem(storage_id, "status", 0, /*state_string_value=*/metrics.status, /*dimension=*/mv_type);
 
-    const auto & [last_mv_err, last_ts] = metrics->last_err_msg_and_ts;
+    const auto & [last_mv_err, last_ts] = metrics.last_err_msg_and_ts;
     /// encode last_ts in `state_value`
     add_elem(storage_id, "last_error_message", last_ts, /*state_string_value=*/last_mv_err, /*dimension=*/mv_type);
-    add_elem(storage_id, "recover_times", metrics->recover_times, /*state_string_value=*/"", /*dimension=*/mv_type);
-    add_elem(storage_id, "memory_usage", metrics->memory_usage, /*state_string_value=*/"", /*dimension=*/mv_type);
+    add_elem(storage_id, "recover_times", metrics.recover_times, /*state_string_value=*/"", /*dimension=*/mv_type);
+    add_elem(storage_id, "memory_usage", metrics.memory_usage, /*state_string_value=*/"", /*dimension=*/mv_type);
 
     /// CPU usage percentage (100% = 1 core, 200% = 2 cores, matches 'top' output)
     /// state_value: Store with 2 decimal precision (1650 = 16.50%)
@@ -169,28 +169,27 @@ void addMaterializedViewLog(const StorageMaterializedView * mv, const AddElem & 
         /*dimension=*/mv_type);
 
     /// Checkpoint metrics
-    add_elem(storage_id, "checkpoint_storage_size", metrics->ckpt_storage_size, /*state_string_value=*/"", /*dimension=*/mv_type);
-    if (metrics->ckpt_request_metrics)
+    add_elem(storage_id, "checkpoint_storage_size", metrics.ckpt_storage_size, /*state_string_value=*/"", /*dimension=*/mv_type);
+    if (metrics.ckpt_request_metrics)
     {
         add_elem(
             storage_id,
             "last_checkpoint_bytes",
-            metrics->ckpt_request_metrics->total_bytes.load(),
+            metrics.ckpt_request_metrics->total_bytes.load(),
             /*state_string_value=*/"",
             /*dimension=*/mv_type);
         add_elem(
             storage_id,
             "last_checkpoint_elapsed_ms",
-            metrics->ckpt_request_metrics->stopwatch.elapsedMilliseconds(),
+            metrics.ckpt_request_metrics->stopwatch.elapsedMilliseconds(),
             /*state_string_value=*/"",
             /*dimension=*/mv_type);
     }
 
     /// Source stream metrics
-    for (const auto & s_metrics : metrics->source_metrics)
+    for (const auto & s_metrics : metrics.source_metrics)
     {
-        const auto source
-            = s_metrics->description.empty() ? s_metrics->name : fmt::format("{}[{}]", s_metrics->name, s_metrics->description);
+        const auto & source = s_metrics->description.empty() ? s_metrics->name : s_metrics->description;
 
         auto [low_sn, high_sn] = s_metrics->low_high_sn_range;
         if (low_sn >= 0)
