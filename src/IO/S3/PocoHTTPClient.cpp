@@ -5,7 +5,7 @@
 
 #if USE_AWS_MSK_IAM || USE_AWS_S3 /// proton: updated
 
-#include "PocoHTTPClient.h"
+#include <IO/S3/PocoHTTPClient.h>
 
 #include <utility>
 #include <algorithm>
@@ -27,7 +27,7 @@
 #include <aws/core/utils/xml/XmlSerializer.h>
 #include <aws/core/monitoring/HttpClientMetrics.h>
 #include <aws/core/utils/ratelimiter/RateLimiterInterface.h>
-#include "Poco/StreamCopier.h"
+#include <Poco/StreamCopier.h>
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
 
@@ -457,11 +457,18 @@ void PocoHTTPClient::makeRequestInternalImpl(
             const std::string & query = target_uri.getRawQuery();
             const std::string reserved = "?#:;+@&=%"; /// Poco::URI::RESERVED_QUERY_PARAM without '/' plus percent sign.
             Poco::URI::encode(target_uri.getPath(), reserved, path_and_query);
+
             if (!query.empty())
             {
                 path_and_query += '?';
                 path_and_query += query;
             }
+
+            /// `target_uri.getPath()` could return an empty string, but a proper HTTP request must
+            /// always contain a non-empty URI in its first line (e.g. "POST / HTTP/1.1").
+            if (path_and_query.empty())
+                path_and_query = "/";
+
             poco_request.setURI(path_and_query);
             poco_request.setMethod(method);
 
@@ -469,7 +476,17 @@ void PocoHTTPClient::makeRequestInternalImpl(
             for (const auto & [header_name, header_value] : request.GetHeaders())
                 poco_request.set(header_name, header_value);
             for (const auto & [header_name, header_value] : extra_headers)
-                poco_request.set(boost::algorithm::to_lower_copy(header_name), header_value);
+            {
+                // AWS S3 canonical headers must include `Host`, `Content-Type` and any `x-amz-*`.
+                // These headers will be signed. Custom S3 headers specified in ClickHouse storage conf are added in `extra_headers`.
+                // At this point in the stack trace, request has already been signed and any `x-amz-*` extra headers was already added
+                // to the canonical headers list. Therefore, we should not add them again to the request.
+                // https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html
+                if (!header_name.starts_with("x-amz-"))
+                {
+                    poco_request.set(boost::algorithm::to_lower_copy(header_name), header_value);
+                }
+            }
 
             Poco::Net::HTTPResponse poco_response;
 
@@ -482,11 +499,11 @@ void PocoHTTPClient::makeRequestInternalImpl(
                 if (enable_s3_requests_logging)
                     LOG_TEST(log, "Writing request body.");
 
-                if (attempt > 0) /// rewind content body buffer.
-                {
-                    request.GetContentBody()->clear();
-                    request.GetContentBody()->seekg(0);
-                }
+                /// Rewind content body buffer.
+                /// NOTE: we should do that always (even if `attempt == 0`) because the same request can be retried also by AWS,
+                /// see retryStrategy in Aws::Client::ClientConfiguration.
+                request.GetContentBody()->clear();
+                request.GetContentBody()->seekg(0);
 
                 setTimeouts(*session, getTimeouts(method, first_attempt, /*first_byte*/ false));
                 auto size = Poco::StreamCopier::copyStream(*request.GetContentBody(), request_body_stream);
@@ -494,11 +511,11 @@ void PocoHTTPClient::makeRequestInternalImpl(
                     LOG_TEST(log, "Written {} bytes to request body", size);
             }
 
+            setTimeouts(*session, getTimeouts(method, first_attempt, /*first_byte*/ false));
+
             if (enable_s3_requests_logging)
                 LOG_TEST(log, "Receiving response...");
             auto & response_body_stream = session->receiveResponse(poco_response);
-
-            setTimeouts(*session, getTimeouts(method, first_attempt, /*first_byte*/ false));
 
             watch.stop();
             addMetric(request, S3MetricType::Microseconds, watch.elapsedMicroseconds());
@@ -525,7 +542,6 @@ void PocoHTTPClient::makeRequestInternalImpl(
                     LOG_TEST(log, "Redirecting request to new location: {}", location);
 
                 addMetric(request, S3MetricType::Redirects);
-
                 continue;
             }
 

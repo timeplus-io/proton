@@ -102,6 +102,19 @@ void verifyClientConfiguration(const Aws::Client::ClientConfiguration & client_c
     assert_cast<const Client::RetryStrategy &>(*client_config.retryStrategy);
 }
 
+void addAdditionalAMZHeadersToCanonicalHeadersList(
+    Aws::AmazonWebServiceRequest & request,
+    const HTTPHeaderEntries & extra_headers
+)
+{
+    for (const auto & [name, value] : extra_headers)
+    {
+        if (name.starts_with("x-amz-"))
+        {
+            request.SetAdditionalCustomHeaderValue(name, value);
+        }
+    }
+}
 }
 
 std::unique_ptr<Client> Client::create(
@@ -131,6 +144,22 @@ std::unique_ptr<Client> Client::clone() const
     return std::unique_ptr<Client>(new Client(*this, client_configuration));
 }
 
+namespace
+{
+
+ProviderType deduceProviderType(const std::string & url)
+{
+    if (url.contains(".amazonaws.com"))
+        return ProviderType::AWS;
+
+    if (url.contains("storage.googleapis.com"))
+        return ProviderType::GCS;
+
+    return ProviderType::UNKNOWN;
+}
+
+}
+
 Client::Client(
     size_t max_redirects_,
     ServerSideEncryptionKMSConfig sse_kms_config_,
@@ -153,8 +182,27 @@ Client::Client(
     endpoint_provider->GetBuiltInParameters().GetParameter("Region").GetString(explicit_region);
     endpoint_provider->GetBuiltInParameters().GetParameter("Endpoint").GetString(initial_endpoint);
 
-    provider_type = getProviderTypeFromURL(initial_endpoint);
+    provider_type = deduceProviderType(initial_endpoint);
     LOG_TRACE(log, "Provider type: {}", toString(provider_type));
+
+    if (provider_type == ProviderType::GCS)
+    {
+        /// GCS can operate in 2 modes for header and query params names:
+        /// - with both x-amz and x-goog prefixes allowed (but cannot mix different prefixes in same request)
+        /// - only with x-goog prefix
+        /// first mode is allowed only with HMAC (or unsigned requests) so when we
+        /// find credential keys we can simply behave as the underlying storage is S3
+        /// otherwise, we need to be aware we are making requests to GCS
+        /// and replace all headers with a valid prefix when needed
+        if (credentials_provider)
+        {
+            auto credentials = credentials_provider->GetAWSCredentials();
+            if (credentials.IsEmpty())
+                api_mode = ApiMode::GCS;
+        }
+    }
+
+    LOG_TRACE(log, "API mode of the S3 client: {}", api_mode);
 
     detect_region = provider_type == ProviderType::AWS && explicit_region == Aws::Region::AWS_GLOBAL;
 
@@ -240,11 +288,13 @@ template void Client::setKMSHeaders<CreateMultipartUploadRequest>(CreateMultipar
 template void Client::setKMSHeaders<CopyObjectRequest>(CopyObjectRequest & request) const;
 template void Client::setKMSHeaders<PutObjectRequest>(PutObjectRequest & request) const;
 
-Model::HeadObjectOutcome Client::HeadObject(const HeadObjectRequest & request) const
+Model::HeadObjectOutcome Client::HeadObject(HeadObjectRequest & request) const
 {
     const auto & bucket = request.GetBucket();
 
-    request.setProviderType(provider_type);
+    request.setApiMode(api_mode);
+
+    addAdditionalAMZHeadersToCanonicalHeadersList(request, client_configuration.extra_headers);
 
     if (auto region = getRegionForBucket(bucket); !region.empty())
     {
@@ -322,34 +372,34 @@ Model::HeadObjectOutcome Client::HeadObject(const HeadObjectRequest & request) c
 /// For each request, we wrap the request functions from Aws::S3::Client with doRequest
 /// doRequest calls virtuall function from Aws::S3::Client while DB::S3::Client has not virtual calls for each request type
 
-Model::ListObjectsV2Outcome Client::ListObjectsV2(const ListObjectsV2Request & request) const
+Model::ListObjectsV2Outcome Client::ListObjectsV2(ListObjectsV2Request & request) const
 {
     return doRequest(request, [this](const Model::ListObjectsV2Request & req) { return ListObjectsV2(req); });
 }
 
-Model::ListObjectsOutcome Client::ListObjects(const ListObjectsRequest & request) const
+Model::ListObjectsOutcome Client::ListObjects(ListObjectsRequest & request) const
 {
     return doRequest(request, [this](const Model::ListObjectsRequest & req) { return ListObjects(req); });
 }
 
-Model::GetObjectOutcome Client::GetObject(const GetObjectRequest & request) const
+Model::GetObjectOutcome Client::GetObject(GetObjectRequest & request) const
 {
     return doRequest(request, [this](const Model::GetObjectRequest & req) { return GetObject(req); });
 }
 
-Model::AbortMultipartUploadOutcome Client::AbortMultipartUpload(const AbortMultipartUploadRequest & request) const
+Model::AbortMultipartUploadOutcome Client::AbortMultipartUpload(AbortMultipartUploadRequest & request) const
 {
     return doRequest(
         request, [this](const Model::AbortMultipartUploadRequest & req) { return AbortMultipartUpload(req); });
 }
 
-Model::CreateMultipartUploadOutcome Client::CreateMultipartUpload(const CreateMultipartUploadRequest & request) const
+Model::CreateMultipartUploadOutcome Client::CreateMultipartUpload(CreateMultipartUploadRequest & request) const
 {
     return doRequest(
         request, [this](const Model::CreateMultipartUploadRequest & req) { return CreateMultipartUpload(req); });
 }
 
-Model::CompleteMultipartUploadOutcome Client::CompleteMultipartUpload(const CompleteMultipartUploadRequest & request) const
+Model::CompleteMultipartUploadOutcome Client::CompleteMultipartUpload(CompleteMultipartUploadRequest & request) const
 {
     auto outcome = doRequest(
         request, [this](const Model::CompleteMultipartUploadRequest & req) { return CompleteMultipartUpload(req); });
@@ -379,37 +429,37 @@ Model::CompleteMultipartUploadOutcome Client::CompleteMultipartUpload(const Comp
     return outcome;
 }
 
-Model::CopyObjectOutcome Client::CopyObject(const CopyObjectRequest & request) const
+Model::CopyObjectOutcome Client::CopyObject(CopyObjectRequest & request) const
 {
     return doRequest(request, [this](const Model::CopyObjectRequest & req) { return CopyObject(req); });
 }
 
-Model::PutObjectOutcome Client::PutObject(const PutObjectRequest & request) const
+Model::PutObjectOutcome Client::PutObject(PutObjectRequest & request) const
 {
     return doRequest(request, [this](const Model::PutObjectRequest & req) { return PutObject(req); });
 }
 
-Model::UploadPartOutcome Client::UploadPart(const UploadPartRequest & request) const
+Model::UploadPartOutcome Client::UploadPart(UploadPartRequest & request) const
 {
     return doRequest(request, [this](const Model::UploadPartRequest & req) { return UploadPart(req); });
 }
 
-Model::UploadPartCopyOutcome Client::UploadPartCopy(const UploadPartCopyRequest & request) const
+Model::UploadPartCopyOutcome Client::UploadPartCopy(UploadPartCopyRequest & request) const
 {
     return doRequest(request, [this](const Model::UploadPartCopyRequest & req) { return UploadPartCopy(req); });
 }
 
-Model::DeleteObjectOutcome Client::DeleteObject(const DeleteObjectRequest & request) const
+Model::DeleteObjectOutcome Client::DeleteObject(DeleteObjectRequest & request) const
 {
     return doRequest(request, [this](const Model::DeleteObjectRequest & req) { Expect404ResponseScope scope; return DeleteObject(req); });
 }
 
-Model::DeleteObjectsOutcome Client::DeleteObjects(const DeleteObjectsRequest & request) const
+Model::DeleteObjectsOutcome Client::DeleteObjects(DeleteObjectsRequest & request) const
 {
     return doRequest(request, [this](const Model::DeleteObjectsRequest & req) { Expect404ResponseScope scope; return DeleteObjects(req); });
 }
 
-Client::ComposeObjectOutcome Client::ComposeObject(const ComposeObjectRequest & request) const
+Client::ComposeObjectOutcome Client::ComposeObject(ComposeObjectRequest & request) const
 {
     auto request_fn = [this](const ComposeObjectRequest & req)
     {
@@ -440,10 +490,11 @@ Client::ComposeObjectOutcome Client::ComposeObject(const ComposeObjectRequest & 
 
 template <typename RequestType, typename RequestFn>
 std::invoke_result_t<RequestFn, RequestType>
-Client::doRequest(const RequestType & request, RequestFn request_fn) const
+Client::doRequest(RequestType & request, RequestFn request_fn) const
 {
+    addAdditionalAMZHeadersToCanonicalHeadersList(request, client_configuration.extra_headers);
     const auto & bucket = request.GetBucket();
-    request.setProviderType(provider_type);
+    request.setApiMode(api_mode);
 
     if (auto region = getRegionForBucket(bucket); !region.empty())
     {
@@ -524,9 +575,23 @@ Client::doRequest(const RequestType & request, RequestFn request_fn) const
     throw Exception(ErrorCodes::TOO_MANY_REDIRECTS, "Too many redirects");
 }
 
-ProviderType Client::getProviderType() const
+bool Client::supportsMultiPartCopy() const
 {
-    return provider_type;
+    return provider_type != ProviderType::GCS;
+}
+
+void Client::BuildHttpRequest(const Aws::AmazonWebServiceRequest& request,
+                      const std::shared_ptr<Aws::Http::HttpRequest>& httpRequest) const
+{
+    Aws::S3::S3Client::BuildHttpRequest(request, httpRequest);
+
+    if (api_mode == ApiMode::GCS)
+    {
+        /// some GCS requests don't like S3 specific headers that the client sets
+        /// all "x-amz-*" headers have to be either converted or deleted
+        /// note that "amz-sdk-invocation-id" and "amz-sdk-request" are preserved
+        httpRequest->DeleteHeader("x-amz-api-version");
+    }
 }
 
 /// proton: starts
@@ -560,6 +625,8 @@ std::string Client::getRegionForBucket(const std::string & bucket, bool force_de
     LOG_INFO(log, "Resolving region for bucket {}", bucket);
     Aws::S3::Model::HeadBucketRequest req;
     req.SetBucket(bucket);
+
+    addAdditionalAMZHeadersToCanonicalHeadersList(req, client_configuration.extra_headers);
 
     std::string region;
     auto outcome = HeadBucket(req);

@@ -197,29 +197,32 @@ public:
 
     bool bucketExists(const std::string & bucket) const; /// proton: added
 
-    Model::HeadObjectOutcome HeadObject(const HeadObjectRequest & request) const;
-    Model::ListObjectsV2Outcome ListObjectsV2(const ListObjectsV2Request & request) const;
-    Model::ListObjectsOutcome ListObjects(const ListObjectsRequest & request) const;
-    Model::GetObjectOutcome GetObject(const GetObjectRequest & request) const;
+    Model::HeadObjectOutcome HeadObject(HeadObjectRequest & request) const;
+    Model::ListObjectsV2Outcome ListObjectsV2(ListObjectsV2Request & request) const;
+    Model::ListObjectsOutcome ListObjects(ListObjectsRequest & request) const;
+    Model::GetObjectOutcome GetObject(GetObjectRequest & request) const;
 
-    Model::AbortMultipartUploadOutcome AbortMultipartUpload(const AbortMultipartUploadRequest & request) const;
-    Model::CreateMultipartUploadOutcome CreateMultipartUpload(const CreateMultipartUploadRequest & request) const;
-    Model::CompleteMultipartUploadOutcome CompleteMultipartUpload(const CompleteMultipartUploadRequest & request) const;
-    Model::UploadPartOutcome UploadPart(const UploadPartRequest & request) const;
-    Model::UploadPartCopyOutcome UploadPartCopy(const UploadPartCopyRequest & request) const;
+    Model::AbortMultipartUploadOutcome AbortMultipartUpload(AbortMultipartUploadRequest & request) const;
+    Model::CreateMultipartUploadOutcome CreateMultipartUpload(CreateMultipartUploadRequest & request) const;
+    Model::CompleteMultipartUploadOutcome CompleteMultipartUpload(CompleteMultipartUploadRequest & request) const;
+    Model::UploadPartOutcome UploadPart(UploadPartRequest & request) const;
+    Model::UploadPartCopyOutcome UploadPartCopy(UploadPartCopyRequest & request) const;
 
-    Model::CopyObjectOutcome CopyObject(const CopyObjectRequest & request) const;
-    Model::PutObjectOutcome PutObject(const PutObjectRequest & request) const;
-    Model::DeleteObjectOutcome DeleteObject(const DeleteObjectRequest & request) const;
-    Model::DeleteObjectsOutcome DeleteObjects(const DeleteObjectsRequest & request) const;
+    Model::CopyObjectOutcome CopyObject(CopyObjectRequest & request) const;
+    Model::PutObjectOutcome PutObject(PutObjectRequest & request) const;
+    Model::DeleteObjectOutcome DeleteObject(DeleteObjectRequest & request) const;
+    Model::DeleteObjectsOutcome DeleteObjects(DeleteObjectsRequest & request) const;
 
     using ComposeObjectOutcome = Aws::Utils::Outcome<Aws::NoResult, Aws::S3::S3Error>;
-    ComposeObjectOutcome ComposeObject(const ComposeObjectRequest & request) const;
+    ComposeObjectOutcome ComposeObject(ComposeObjectRequest & request) const;
 
     using Aws::S3::S3Client::EnableRequestProcessing;
     using Aws::S3::S3Client::DisableRequestProcessing;
 
-    ProviderType getProviderType() const;
+    void BuildHttpRequest(const Aws::AmazonWebServiceRequest& request,
+                          const std::shared_ptr<Aws::Http::HttpRequest>& httpRequest) const override;
+
+    bool supportsMultiPartCopy() const;
 
     void cancel() const
     {
@@ -261,7 +264,7 @@ private:
 
     template <typename RequestType, typename RequestFn>
     std::invoke_result_t<RequestFn, RequestType>
-    doRequest(const RequestType & request, RequestFn request_fn) const;
+    doRequest(RequestType & request, RequestFn request_fn) const;
 
     void updateURIForBucket(const std::string & bucket, S3::URI new_uri) const;
     std::optional<S3::URI> getURIFromError(const Aws::S3::S3Error & error) const;
@@ -282,7 +285,12 @@ private:
     std::string explicit_region;
     mutable bool detect_region = true;
 
+    /// provider type can determine if some functionality is supported
+    /// but for same provider, we would need to generate different headers depending on the
+    /// mode
+    /// E.g. GCS can work in AWS mode in some cases and accept headers with x-amz prefix
     ProviderType provider_type{ProviderType::UNKNOWN};
+    ApiMode api_mode{ApiMode::AWS};
 
     mutable std::shared_ptr<ClientCache> cache;
 

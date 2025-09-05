@@ -488,7 +488,7 @@ namespace
             client_ptr->setKMSHeaders(request);
         }
 
-        void processPutRequest(const S3::PutObjectRequest & request)
+        void processPutRequest(S3::PutObjectRequest & request)
         {
             size_t max_retries = std::max(request_settings.max_unexpected_write_error_retries, 1UL);
             for (size_t retries = 1;; ++retries)
@@ -617,7 +617,7 @@ namespace
             , src_key(src_key_)
             , offset(src_offset_)
             , size(src_size_)
-            , supports_multipart_copy(S3::supportsMultiPartCopy(client_ptr_->getProviderType()))
+            , supports_multipart_copy(client_ptr_->supportsMultiPartCopy())
             , read_settings(read_settings_)
         {
         }
@@ -678,7 +678,7 @@ namespace
             client_ptr->setKMSHeaders(request);
         }
 
-        void processCopyRequest(const S3::CopyObjectRequest & request)
+        void processCopyRequest(S3::CopyObjectRequest & request)
         {
             size_t max_retries = std::max(request_settings.max_unexpected_write_error_retries, 1UL);
             for (size_t retries = 1;; ++retries)
