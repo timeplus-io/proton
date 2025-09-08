@@ -4,19 +4,19 @@
 
 namespace DB::Streaming
 {
-ManyAggregatedData::ManyAggregatedData(AggregatorType aggregator_type, const std::string & id)
-    : variants(1), watermarks(1, INVALID_WATERMARK)
+ManyAggregatedData::ManyAggregatedData(AggregatorType aggregator_type, const std::string & id_)
+    : id(id_), variants(1), watermarks(1, INVALID_WATERMARK)
 {
     switch (aggregator_type)
     {
         case AggregatorType::Memory:
         {
-            variants[0] = std::make_shared<MemoryAggregatedDataVariants>();
+            variants[0] = std::make_shared<MemoryAggregatedDataVariants>(id_);
             break;
         }
         case AggregatorType::Hybrid:
         {
-            variants[0] = std::make_shared<HybridAggregatedDataVariants>(id);
+            variants[0] = std::make_shared<HybridAggregatedDataVariants>(id_);
             break;
         }
     }
@@ -30,18 +30,18 @@ ManyAggregatedData::ManyAggregatedData(AggregatorType aggregator_type, const std
 ManyAggregatedData::ManyAggregatedData(AggregatorType aggregator_type, size_t num_threads)
     : variants(num_threads), watermarks(num_threads, INVALID_WATERMARK)
 {
-    for (size_t id = 0; auto & elem : variants)
+    for (size_t i = 0; auto & elem : variants)
     {
         switch (aggregator_type)
         {
             case AggregatorType::Memory:
             {
-                elem = std::make_shared<MemoryAggregatedDataVariants>();
+                elem = std::make_shared<MemoryAggregatedDataVariants>(fmt::format("{}", i++));
                 break;
             }
             case AggregatorType::Hybrid:
             {
-                elem = std::make_shared<HybridAggregatedDataVariants>(fmt::format("{}", id++));
+                elem = std::make_shared<HybridAggregatedDataVariants>(fmt::format("{}", i++));
                 break;
             }
         }

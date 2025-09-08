@@ -254,7 +254,7 @@ void WatermarkStamper::processWatermarkImpl(Chunk & chunk)
                 event_ts_watermark = calculateWatermarkPerRow(max_event_ts);
         }
 
-        if (unlikely(event_ts < event_ts_watermark))
+        if (event_ts < event_ts_watermark)
         {
             filter[i] = 0;
             ++late_events_in_chunk;

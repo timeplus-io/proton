@@ -753,7 +753,8 @@ void InterpreterSelectQuery::finalCheckAndOptimizeForStreamingQuery()
 
         if (query_analyzer->hasStreamingJoin() && interpreter_subquery
             && isChangelogDataStream(interpreter_subquery->getDataStreamSemantic()))
-            interpreter_subquery->assertNoNonDeterministicFunctions(required_columns, "The joined left subquery with changelog data stream");
+            interpreter_subquery->assertNoNonDeterministicFunctions(
+                required_columns, "The joined left subquery with changelog data stream");
 
         /// For now, for the following scenarios, we disable backfill from historic data store
         /// 1) User select some virtual columns which is only available in streaming store, like `_tp_sn`, `_tp_index_time`
@@ -878,6 +879,18 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlanBeforeJoin(QueryPl
     if (!has_streaming_window_aggr || has_user_defined_emit_strategy)
         return;
 
+    auto can_push_down_shuffle = [&](const Names & shuffle_columns) {
+        if (!analysis_result.hasJoin())
+            return true;
+
+        bool is_stream_join_table = !typeid_cast<Streaming::IHashJoin *>(analysis_result.join.get());
+        /// Check all `partition by` key columns are from left stream
+        const auto & header = query_plan.getCurrentDataStream().header;
+        bool only_shuffling_left_stream = std::ranges::all_of(shuffle_columns, [&](const auto & key) { return header.has(key); });
+
+        return is_stream_join_table && only_shuffling_left_stream;
+    };
+
     if (analysis_result.hasPartitionBy())
     {
         /// FIXME: Refactor watermark for substream
@@ -886,22 +899,26 @@ void InterpreterSelectQuery::buildStreamingProcessingQueryPlanBeforeJoin(QueryPl
         /// So we allow do shuffling ahead for some special cases:
         /// 1) Non-join query
         /// 2) Streaming join table, and all partition by key columns are from left stream
-        if (analysis_result.hasJoin())
+        if (can_push_down_shuffle(analysis_result.before_partition_by->getRequiredColumnsNames()))
         {
-            bool is_stream_join_table = !typeid_cast<Streaming::IHashJoin *>(analysis_result.join.get());
-            /// Check all `partition by` key columns are from left stream
-            const auto & header = query_plan.getCurrentDataStream().header;
-            bool only_shuffling_left_stream = std::ranges::all_of(
-                analysis_result.before_partition_by->getRequiredColumnsNames(), [&](const auto & key) { return header.has(key); });
-            if (!(is_stream_join_table && only_shuffling_left_stream))
-                throw Exception(
-                    ErrorCodes::NOT_IMPLEMENTED,
-                    "The join query with partition by clause doesn't support to use '{}' window function",
-                    magic_enum::enum_name(query_info.streaming_window_params->type));
+            executeSubstreamShuffling(query_plan, analysis_result.before_partition_by, analysis_result.partition_by_keys);
+            substream_shuffled_before_join = true;
         }
-
-        executeSubstreamShuffling(query_plan, analysis_result.before_partition_by, analysis_result.partition_by_keys);
-        substream_shuffled_before_join = true;
+        else
+        {
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED,
+                "The join query with partition by clause doesn't support to use '{}' window function",
+                magic_enum::enum_name(query_info.streaming_window_params->type));
+        }
+    }
+    else if (analysis_result.hasShuffleBy())
+    {
+        if (can_push_down_shuffle(analysis_result.before_shuffle_by->getRequiredColumnsNames()))
+        {
+            executeLightShuffling(query_plan, analysis_result.before_shuffle_by, analysis_result.shuffle_by_keys);
+            light_shuffled = true;
+        }
     }
 
     buildWatermarkQueryPlan(query_plan);
@@ -1331,9 +1348,12 @@ void InterpreterSelectQuery::executeLightShuffling(QueryPlan & query_plan, const
 {
     executeExpression(query_plan, expression, "Before SHUFFLE BY");
 
+    const auto & settings_ref = context->getSettingsRef();
     auto key_positions = keyPositions(query_plan.getCurrentDataStream().header, keys);
     query_plan.addStep(std::make_unique<LightShufflingStep>(
-        query_plan.getCurrentDataStream(), std::move(key_positions), context->getSettingsRef().max_threads.value));
+        query_plan.getCurrentDataStream(),
+        std::move(key_positions),
+        settings_ref.num_target_shards.value != 0 ? settings_ref.num_target_shards.value : settings_ref.max_threads.value));
 }
 
 }

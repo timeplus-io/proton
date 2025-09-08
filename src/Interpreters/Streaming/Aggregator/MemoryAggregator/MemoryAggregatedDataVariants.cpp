@@ -14,8 +14,8 @@ extern const int BAD_VERSION;
 
 namespace Streaming
 {
-MemoryAggregatedDataVariants::MemoryAggregatedDataVariants(bool enable_recycle)
-    : aggregates_pools(1, std::make_shared<Arena>()), aggregates_pool(aggregates_pools.back().get())
+MemoryAggregatedDataVariants::MemoryAggregatedDataVariants(std::string id_, bool enable_recycle)
+    : id(std::move(id_)), aggregates_pools(1, std::make_shared<Arena>()), aggregates_pool(aggregates_pools.back().get())
 {
     aggregates_pool->enableRecycle(enable_recycle);
 }
@@ -180,7 +180,7 @@ void MemoryAggregatedDataVariants::serialize(WriteBuffer & wb, const IAggregator
     if (type == MemoryAggregatedDataVariants::Type::without_key)
         state_serializer(without_key, wb);
 
-    /// [aggr-func-state-in-hash-map]
+        /// [aggr-func-state-in-hash-map]
 #define M(NAME, IS_TWO_LEVEL) \
     else if (type == MemoryAggregatedDataVariants::Type::NAME) \
     { \
@@ -313,7 +313,7 @@ void MemoryAggregatedDataVariants::deserialize(ReadBuffer & rb, const IAggregato
     if (type == MemoryAggregatedDataVariants::Type::without_key)
         state_deserializer(without_key, rb, aggregates_pool);
 
-    /// [aggr-func-state-in-hash-map]
+        /// [aggr-func-state-in-hash-map]
 #define M(NAME, IS_TWO_LEVEL) \
     else if (type == MemoryAggregatedDataVariants::Type::NAME) \
     { \

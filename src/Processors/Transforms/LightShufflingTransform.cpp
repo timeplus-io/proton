@@ -6,10 +6,6 @@
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int LOGICAL_ERROR;
-}
 
 UInt16 bestTotalOutputStreams(size_t num_output_streams)
 {
@@ -91,8 +87,7 @@ IProcessor::Status LightShufflingTransform::prepare(const PortNumbers &, const P
         iter = waiting_outputs.erase(iter);
     }
 
-    auto drained = std::all_of(
-        shuffled_output_chunks.begin(), shuffled_output_chunks.end(), [](const auto & shuffled_chunks) { return shuffled_chunks.empty(); });
+    auto drained = std::ranges::all_of(shuffled_output_chunks, [](const auto & shuffled_chunks) { return shuffled_chunks.empty(); });
 
     /// We choose to drain all of the buffered / shuffled chunks to avoid buffer too many shuffled chunks
     if (!drained)

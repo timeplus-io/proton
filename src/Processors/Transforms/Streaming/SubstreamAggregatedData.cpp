@@ -22,7 +22,7 @@ SubstreamAggregatedData::SubstreamAggregatedData(
     {
         case AggregatorType::Memory:
         {
-            variants = std::make_shared<MemoryAggregatedDataVariants>();
+            variants = std::make_shared<MemoryAggregatedDataVariants>(DB::toString(id));
             break;
         }
         case AggregatorType::Hybrid:

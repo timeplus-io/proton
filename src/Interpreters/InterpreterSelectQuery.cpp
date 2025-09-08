@@ -1626,7 +1626,7 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, std::optional<P
                 /// Data is already shuffled (on file system)
                 light_shuffled = true;
             }
-            else if (expressions.hasShuffleBy())
+            else if (expressions.hasShuffleBy() && !light_shuffled)
             {
                 executeLightShuffling(query_plan, expressions.before_shuffle_by, expressions.shuffle_by_keys);
                 light_shuffled = true;

@@ -30,10 +30,10 @@ LightShufflingStep::LightShufflingStep(const DataStream & input_stream_, std::ve
 void LightShufflingStep::transformPipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
 {
     auto num_input_streams = pipeline.getNumStreams();
-    auto num_outputs = std::max(num_input_streams, max_num_outputs);
-    num_outputs = bestTotalOutputStreams(num_outputs);
+    /// auto num_outputs = std::max(num_input_streams, max_num_outputs);
+    auto num_outputs = bestTotalOutputStreams(max_num_outputs);
 
-    assert(num_outputs > 0 && (num_outputs & (num_outputs - 1)) == 0);
+    chassert(num_outputs > 0 && (num_outputs & (num_outputs - 1)) == 0);
 
     if (num_input_streams == 1 && num_outputs == 1)
     {

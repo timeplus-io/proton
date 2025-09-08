@@ -1,8 +1,6 @@
 #include <Interpreters/Streaming/Aggregator/MemoryAggregator/MemoryAggregator.h>
 
 #include <AggregateFunctions/AggregateFunctionState.h>
-#include <Compression/CompressedWriteBuffer.h>
-#include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Formats/NativeWriter.h>
@@ -463,7 +461,7 @@ MemoryAggregator::prepareVariantsToMerge(ManyIAggregatedDataVariants & many_data
         /// When do streaming merging, we shall not touch existing memory arenas and
         /// all memory arenas merge to the first empty one, so we need create a new resulting arena
         /// at position 0.
-        auto result_variants = std::make_shared<MemoryAggregatedDataVariants>(false);
+        auto result_variants = std::make_shared<MemoryAggregatedDataVariants>(/*id_=*/"result", false);
         result_variants->aggregator = this;
         initDataVariants(*result_variants);
         initStatesForWithoutKey(*result_variants);
@@ -562,7 +560,7 @@ std::vector<Block> MemoryAggregator::convertBlockToTwoLevel(const Block & block)
     if (!block)
         return {};
 
-    MemoryAggregatedDataVariants data;
+    MemoryAggregatedDataVariants data{/*id_=*/"temp"};
     data.aggregator = this;
 
     ColumnRawPtrs key_columns(params->keys_size);

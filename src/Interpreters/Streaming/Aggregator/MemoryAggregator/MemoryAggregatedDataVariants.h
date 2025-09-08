@@ -40,15 +40,17 @@ class MemoryAggregator;
 
 SERDE struct MemoryAggregatedDataVariants final : public IAggregatedDataVariants
 {
-    explicit MemoryAggregatedDataVariants(bool enable_recycle = true);
+    MemoryAggregatedDataVariants(std::string id_, bool enable_recycle = true);
     ~MemoryAggregatedDataVariants() override;
 
-    std::string_view getID() const noexcept override { return ""; }
+    std::string_view getID() const noexcept override { return id; }
     bool empty() const noexcept override { return type == Type::EMPTY; }
     AggregatorType aggregatorType() const noexcept override { return AggregatorType::Memory; }
 
     void serialize(WriteBuffer & wb, const IAggregator & aggregator_) const override;
     void deserialize(ReadBuffer & rb, const IAggregator & aggregator_) override;
+
+    std::string id;
 
     /** Working with states of aggregate functions in the pool is arranged in the following (inconvenient) way:
       * - when aggregating, states are created in the pool using IAggregateFunction::create (inside - `placement new` of arbitrary structure);

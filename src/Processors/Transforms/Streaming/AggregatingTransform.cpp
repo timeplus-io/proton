@@ -432,7 +432,7 @@ void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
 
     std::unique_lock<std::mutex> lock(many_data->finalizing_mutex, std::try_to_lock);
     if (!lock.owns_lock())
-        return; /// Anothor thread is finalizing, so we try in next `work()`
+        return; /// Another thread is finalizing, so we try in next `work()`
 
     /// After acquired the lock, we need to prepare and check whether `try_finalizing_watermark` has been finalized in by another AggregatingTransform
     if (!prepareFinalization(*try_finalizing_watermark))
@@ -447,7 +447,7 @@ void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
     if (*try_finalizing_watermark == INVALID_WATERMARK)
         try_finalizing_watermark = MIN_WATERMARK;
 
-    /// Blocking all variants's processing of AggregatingTransform
+    /// Blocking all variants' processing of AggregatingTransform
     auto lock_holders = lockAllDataVariants();
     if (isCancelled())
         return;
@@ -463,9 +463,12 @@ void AggregatingTransform::finalizeAlignment(const ChunkContextPtr & chunk_ctx)
 
         LOG_INFO(
             logger,
-            "Took {} milliseconds to finalize {} shard aggregation, finalized watermark={} aggregated_chunks={} aggregated_rows={}",
+            "Took {} milliseconds to finalize {} shard aggregation, current_variant={} variant_id={} finalized watermark={} "
+            "aggregated_chunks={} aggregated_rows={}",
             elapsed_ms,
             many_data->variants.size(),
+            current_variant,
+            many_data->id,
             many_data->finalized_watermark.load(std::memory_order_relaxed),
             aggr_chunks,
             aggr_rows);
@@ -487,7 +490,9 @@ bool AggregatingTransform::propagateWatermarkAndClearExpiredStates()
             setAggregatedResult(res);
         }
         else
-            assert(finalized_watermark == aggregated_chunks.back().getWatermark());
+        {
+            chassert(finalized_watermark == aggregated_chunks.back().getWatermark());
+        }
 
         clearExpiredState(finalized_watermark);
         propagated_watermark = finalized_watermark;
@@ -566,7 +571,12 @@ void AggregatingTransform::logAggregatingMetricsWithoutLock(Int64 start_ts)
 
     auto end_ts = MonotonicMilliseconds::now();
     LOG_INFO(
-        logger, "Took {} milliseconds to log metrics. Aggregated data metrics: {}", end_ts - start_ts, aggregated_data_metrics.string());
+        logger,
+        "Took {} milliseconds to log metrics, current_variant={} variant_id={}. Aggregated data metrics: {}",
+        end_ts - start_ts,
+        current_variant,
+        many_data->id,
+        aggregated_data_metrics.string());
 
     many_data->last_log_ts.store(end_ts, std::memory_order_relaxed);
 }
@@ -578,7 +588,7 @@ std::vector<std::unique_lock<std::timed_mutex>> AggregatingTransform::lockAllDat
     for (auto & mutex : many_data->variants_mutexes)
         lock_holders.emplace_back(*mutex, std::try_to_lock);
 
-    /// Lock for each varitants mutex
+    /// Lock for each variants mutex
     bool all_locks_acquired = true;
     do
     {

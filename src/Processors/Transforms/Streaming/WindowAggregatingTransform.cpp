@@ -47,18 +47,16 @@ bool WindowAggregatingTransform::needFinalization(Int64 min_watermark) const
     /// 1) some lagged events arrived after timeout, we skip finalized windows and remove them later
     /// 2) if we only emit finalized windows, skip intermediate windows
     auto last_finalized_window_end = many_data->finalized_window_end.load(std::memory_order_relaxed);
-    for (auto iter = local_windows_with_buckets.begin(); iter != local_windows_with_buckets.end();)
+    for (auto iter = local_windows_with_buckets.begin(); iter != local_windows_with_buckets.end(); ++iter)
     {
-        bool is_invalid_window = iter->window.end <= last_finalized_window_end;
-        is_invalid_window |= only_emit_finalized_windows && iter->window.end > min_watermark;
-        if (is_invalid_window)
-            iter = local_windows_with_buckets.erase(iter);
-        else
-            ++iter;
+
+        bool is_invalid_window
+            = iter->window.end <= last_finalized_window_end || (only_emit_finalized_windows && iter->window.end > min_watermark);
+        if (!is_invalid_window)
+            return true;
     }
 
-    /// Has windows to finalize
-    return !local_windows_with_buckets.empty();
+    return false;
 }
 
 bool WindowAggregatingTransform::prepareFinalization(Int64 min_watermark)

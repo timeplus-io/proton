@@ -18,6 +18,8 @@ class AggregatingTransform;
 
 SERDE struct ManyAggregatedData
 {
+    std::string id;
+
     /// Reference to all transforms
     std::vector<AggregatingTransform *> aggregating_transforms;
 

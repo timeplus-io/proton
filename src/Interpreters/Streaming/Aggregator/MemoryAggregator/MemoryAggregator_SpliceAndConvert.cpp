@@ -257,7 +257,7 @@ Block MemoryAggregator::spliceAndConvertToBlock(IAggregatedDataVariants & data_v
 
     bool need_splice = gcd_buckets.size() > 1;
     Arena * arena = variants.aggregates_pool;
-    MemoryAggregatedDataVariants res{/*enable_recycle=*/false}; /// This data variants is temporary, disable recycle
+    MemoryAggregatedDataVariants res{/*id_=*/"result", /*enable_recycle=*/false}; /// This data variants is temporary, disable recycle
     if (need_splice)
     {
         res.aggregator = this;
@@ -664,7 +664,7 @@ Block MemoryAggregator::spliceAndConvertUpdatesToBlock(
     chassert(variants.isTimeBucketTwoLevel());
     chassert(needTrackUpdates());
 
-    MemoryAggregatedDataVariants res;
+    MemoryAggregatedDataVariants res{/*id_=*/"result"};
     res.aggregator = this;
     initDataVariants(res);
     chassert(res.type == variants.type);
