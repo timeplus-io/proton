@@ -22,7 +22,6 @@
 #include <Interpreters/Context.h>
 
 #include <Common/assert_cast.h>
-
 #include <Common/logger_useful.h>
 
 namespace DB
@@ -123,19 +122,12 @@ std::unique_ptr<Client> Client::create(
     const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> & credentials_provider,
     const PocoHTTPClientConfiguration & client_configuration,
     Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy sign_payloads,
-    bool use_virtual_addressing,
-    std::shared_ptr<RetryContext> retry_context_)
+    const ClientSettings & client_settings,
+    std::shared_ptr<RetryContext> retry_context_)    /// proton: updates
 {
     verifyClientConfiguration(client_configuration);
-
     return std::unique_ptr<Client>(
-        new Client(
-            max_redirects_,
-            std::move(sse_kms_config_),
-            credentials_provider,
-            client_configuration,
-            sign_payloads,
-            use_virtual_addressing,
+        new Client(max_redirects_, std::move(sse_kms_config_), credentials_provider, client_configuration, sign_payloads, client_settings,
             std::move(retry_context_))); /// proton: added retry_context_
 }
 
@@ -166,16 +158,16 @@ Client::Client(
     const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> & credentials_provider_,
     const PocoHTTPClientConfiguration & client_configuration_,
     Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy sign_payloads_,
-    bool use_virtual_addressing_,
-    std::shared_ptr<Client::RetryContext> retry_context_)
-    : Aws::S3::S3Client(credentials_provider_, client_configuration_, sign_payloads_, use_virtual_addressing_)
+    const ClientSettings & client_settings_,
+    std::shared_ptr<Client::RetryContext> retry_context_)    /// proton: updates
+    : Aws::S3::S3Client(credentials_provider_, client_configuration_, sign_payloads_, client_settings_.use_virtual_addressing)
     , credentials_provider(credentials_provider_)
     , client_configuration(client_configuration_)
     , sign_payloads(sign_payloads_)
-    , use_virtual_addressing(use_virtual_addressing_)
+    , client_settings(client_settings_)
     , max_redirects(max_redirects_)
     , sse_kms_config(std::move(sse_kms_config_))
-    , retry_context(std::move(retry_context_))
+    , retry_context(std::move(retry_context_))    /// proton: updates
     , log(getLogger("S3Client"))
 {
     auto * endpoint_provider = dynamic_cast<Aws::S3::Endpoint::S3DefaultEpProviderBase *>(accessEndpointProvider().get());
@@ -213,12 +205,12 @@ Client::Client(
 Client::Client(
     const Client & other, const PocoHTTPClientConfiguration & client_configuration_)
     : Aws::S3::S3Client(other.credentials_provider, client_configuration_, other.sign_payloads,
-                        other.use_virtual_addressing)
+                        other.client_settings.use_virtual_addressing)
     , initial_endpoint(other.initial_endpoint)
     , credentials_provider(other.credentials_provider)
     , client_configuration(client_configuration_)
     , sign_payloads(other.sign_payloads)
-    , use_virtual_addressing(other.use_virtual_addressing)
+    , client_settings(other.client_settings)
     , explicit_region(other.explicit_region)
     , detect_region(other.detect_region)
     , provider_type(other.provider_type)
@@ -404,27 +396,44 @@ Model::CompleteMultipartUploadOutcome Client::CompleteMultipartUpload(CompleteMu
     auto outcome = doRequest(
         request, [this](const Model::CompleteMultipartUploadRequest & req) { return CompleteMultipartUpload(req); });
 
-    if (!outcome.IsSuccess() || provider_type != ProviderType::GCS)
-        return outcome;
-
     const auto & key = request.GetKey();
     const auto & bucket = request.GetBucket();
 
-    /// For GCS we will try to compose object at the end, otherwise we cannot do a native copy
-    /// for the object (e.g. for backups)
-    /// We don't care if the compose fails, because the upload was still successful, only the
-    /// performance for copying the object will be affected
-    S3::ComposeObjectRequest compose_req;
-    compose_req.SetBucket(bucket);
-    compose_req.SetKey(key);
-    compose_req.SetComponentNames({key});
-    compose_req.SetContentType("binary/octet-stream");
-    auto compose_outcome = ComposeObject(compose_req);
+    if (!outcome.IsSuccess()
+        && outcome.GetError().GetErrorType() == Aws::S3::S3Errors::NO_SUCH_UPLOAD)
+    {
+        auto check_request = HeadObjectRequest()
+                                 .WithBucket(bucket)
+                                 .WithKey(key);
+        auto check_outcome = HeadObject(check_request);
 
-    if (compose_outcome.IsSuccess())
-        LOG_TRACE(log, "Composing object was successful");
-    else
-        LOG_INFO(log, "Failed to compose object. Message: {}, Key: {}, Bucket: {}", compose_outcome.GetError().GetMessage(), key, bucket);
+        /// if the key exists, than MultipartUpload has been completed at some of the retries
+        /// rewrite outcome with success status
+        if (check_outcome.IsSuccess())
+            outcome = Aws::S3::Model::CompleteMultipartUploadOutcome(Aws::S3::Model::CompleteMultipartUploadResult());
+    }
+
+    if (outcome.IsSuccess() && provider_type == ProviderType::GCS && client_settings.gcs_issue_compose_request)
+    {
+        /// For GCS we will try to compose object at the end, otherwise we cannot do a native copy
+        /// for the object (e.g. for backups)
+        /// We don't care if the compose fails, because the upload was still successful, only the
+        /// performance for copying the object will be affected
+        S3::ComposeObjectRequest compose_req;
+        compose_req.SetBucket(bucket);
+        compose_req.SetKey(key);
+        compose_req.SetComponentNames({key});
+        compose_req.SetContentType("binary/octet-stream");
+        auto compose_outcome = ComposeObject(compose_req);
+
+        if (compose_outcome.IsSuccess())
+            LOG_TRACE(log, "Composing object was successful");
+        else
+            LOG_INFO(
+                log,
+                "Failed to compose object. Message: {}, Key: {}, Bucket: {}",
+                compose_outcome.GetError().GetMessage(), key, bucket);
+    }
 
     return outcome;
 }
@@ -495,6 +504,8 @@ Client::doRequest(RequestType & request, RequestFn request_fn) const
     addAdditionalAMZHeadersToCanonicalHeadersList(request, client_configuration.extra_headers);
     const auto & bucket = request.GetBucket();
     request.setApiMode(api_mode);
+    if (client_settings.disable_checksum)
+        request.disableChecksum();
 
     if (auto region = getRegionForBucket(bucket); !region.empty())
     {
@@ -714,6 +725,17 @@ void Client::updateURIForBucket(const std::string & bucket, S3::URI new_uri) con
     cache->uri_for_bucket_cache.emplace(bucket, std::move(new_uri));
 }
 
+ClientCache::ClientCache(const ClientCache & other)
+{
+    {
+        std::lock_guard lock(other.region_cache_mutex);
+        region_for_bucket_cache = other.region_for_bucket_cache;
+    }
+    {
+        std::lock_guard lock(other.uri_cache_mutex);
+        uri_for_bucket_cache = other.uri_for_bucket_cache;
+    }
+}
 
 void ClientCache::clearCache()
 {
@@ -785,7 +807,7 @@ ClientFactory & ClientFactory::instance()
 
 std::unique_ptr<S3::Client> ClientFactory::create( // NOLINT
     const PocoHTTPClientConfiguration & cfg_,
-    bool is_virtual_hosted_style,
+    ClientSettings client_settings,
     const String & access_key_id,
     const String & secret_access_key,
     const String & server_side_encryption_customer_key_base64,
@@ -857,13 +879,17 @@ std::unique_ptr<S3::Client> ClientFactory::create( // NOLINT
         std::move(client_configuration.retryStrategy),
         retry_context); /// proton: added retry_context
 
+    /// Use virtual addressing if endpoint is not specified.
+    if (client_configuration.endpointOverride.empty())
+        client_settings.use_virtual_addressing = true;
+
     return Client::create(
         client_configuration.s3_max_redirects,
         std::move(sse_kms_config),
         provider, /// proton: updated -> credentials_provider,
         client_configuration, // Client configuration.
         Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-        is_virtual_hosted_style || client_configuration.endpointOverride.empty(), /// Use virtual addressing if endpoint is not specified.
+        client_settings,
         std::move(retry_context)); /// proton: added retry_context
 }
 

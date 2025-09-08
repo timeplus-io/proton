@@ -1237,11 +1237,14 @@ bool StorageS3::Configuration::update(ContextPtr context)
 
 void StorageS3::Configuration::connect(ContextPtr context)
 {
+    const Settings & global_settings = context->getGlobalContext()->getSettingsRef();
+    const Settings & local_settings = context->getSettingsRef();
+
     S3::PocoHTTPClientConfiguration client_configuration = S3::ClientFactory::instance().createClientConfiguration(
         auth_settings.region,
         context->getRemoteHostFilter(),
-        static_cast<unsigned>(context->getGlobalContext()->getSettingsRef().s3_max_redirects),
-        context->getGlobalContext()->getSettingsRef().enable_s3_requests_logging,
+        static_cast<unsigned>(global_settings.s3_max_redirects),
+        global_settings.enable_s3_requests_logging,
         /* for_disk_s3 = */ false,
         request_settings.get_request_throttler,
         request_settings.put_request_throttler);
@@ -1257,10 +1260,16 @@ void StorageS3::Configuration::connect(ContextPtr context)
     client_configuration.retryStrategy
         = std::make_shared<Aws::Client::DefaultRetryStrategy>(request_settings.retry_attempts);
 
+    S3::ClientSettings client_settings{
+        .use_virtual_addressing = url.is_virtual_hosted_style,
+        .disable_checksum = local_settings.s3_disable_checksum,
+        .gcs_issue_compose_request = context->getConfigRef().getBool("s3.gcs_issue_compose_request", false),
+    };
+
     auto credentials = Aws::Auth::AWSCredentials(auth_settings.access_key_id, auth_settings.secret_access_key);
     client = S3::ClientFactory::instance().create(
         client_configuration,
-        url.is_virtual_hosted_style,
+        client_settings,
         credentials.GetAWSAccessKeyId(),
         credentials.GetAWSSecretKey(),
         auth_settings.server_side_encryption_customer_key_base64,

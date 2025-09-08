@@ -16,6 +16,8 @@
 
 namespace ProfileEvents
 {
+    extern const Event WriteBufferFromS3RequestsErrors;
+
     extern const Event S3CreateMultipartUpload;
     extern const Event S3CompleteMultipartUpload;
     extern const Event S3PutObject;
@@ -85,22 +87,30 @@ namespace
         BlobStorageLogWriterPtr blob_storage_log;
         const LoggerPtr log;
 
+        /// Represents a task uploading a single part.
+        /// Keep this struct small because there can be thousands of parts.
+        /// For example, `UploadPartTask` must not contain a read buffer or `S3::UploadPartRequest`
+        /// because such read buffer can consume about 1MB memory and it could cause memory issues when the number of parts is big enough.
         struct UploadPartTask
         {
-            std::unique_ptr<Aws::AmazonWebServiceRequest> req;
-            bool is_finished = false;
+            size_t part_number;
+            size_t part_offset;
+            size_t part_size;
             String tag;
-            std::exception_ptr exception;
+            bool is_finished = false;
         };
 
+        size_t num_parts;
         size_t normal_part_size;
         String multipart_upload_id;
         std::atomic<bool> multipart_upload_aborted = false;
         Strings part_tags;
 
         std::list<UploadPartTask> TSA_GUARDED_BY(bg_tasks_mutex) bg_tasks;
-        int num_added_bg_tasks TSA_GUARDED_BY(bg_tasks_mutex) = 0;
-        int num_finished_bg_tasks TSA_GUARDED_BY(bg_tasks_mutex) = 0;
+        size_t num_added_bg_tasks TSA_GUARDED_BY(bg_tasks_mutex) = 0;
+        size_t num_finished_bg_tasks TSA_GUARDED_BY(bg_tasks_mutex) = 0;
+        size_t num_finished_parts TSA_GUARDED_BY(bg_tasks_mutex) = 0;
+        std::exception_ptr bg_exception TSA_GUARDED_BY(bg_tasks_mutex);
         std::mutex bg_tasks_mutex;
         std::condition_variable bg_tasks_condvar;
 
@@ -137,13 +147,18 @@ namespace
                                            dest_bucket, dest_key, /* local_path_ */ {}, /* data_size */ 0,
                                            outcome.IsSuccess() ? nullptr : &outcome.GetError());
 
-            if (outcome.IsSuccess())
+            if (!outcome.IsSuccess())
             {
-                multipart_upload_id = outcome.GetResult().GetUploadId();
-                LOG_TRACE(log, "Multipart upload has created. Bucket: {}, Key: {}, Upload id: {}", dest_bucket, dest_key, multipart_upload_id);
-            }
-            else
+                ProfileEvents::increment(ProfileEvents::WriteBufferFromS3RequestsErrors, 1);
                 throw S3Exception(outcome.GetError().GetMessage(), outcome.GetError().GetErrorType());
+            }
+            multipart_upload_id = outcome.GetResult().GetUploadId();
+            if (multipart_upload_id.empty())
+            {
+                ProfileEvents::increment(ProfileEvents::WriteBufferFromS3RequestsErrors, 1);
+                throw Exception(ErrorCodes::S3_ERROR, "Invalid CreateMultipartUpload result: missing UploadId.");
+            }
+            LOG_TRACE(log, "Multipart upload was created. Bucket: {}, Key: {}, Upload id: {}", dest_bucket, dest_key, multipart_upload_id);
         }
 
         void completeMultipartUpload()
@@ -241,20 +256,32 @@ namespace
             size_t position = start_offset;
             size_t end_position = start_offset + size;
 
-            for (size_t part_number = 1; position < end_position; ++part_number)
+            try
             {
-                if (multipart_upload_aborted)
-                    break; /// No more part uploads.
+                for (size_t part_number = 1; position < end_position; ++part_number)
+                {
+                    if (multipart_upload_aborted)
+                        break; /// No more part uploads.
 
-                size_t next_position = std::min(position + normal_part_size, end_position);
-                size_t part_size = next_position - position; /// `part_size` is either `normal_part_size` or smaller if it's the final part.
+                    size_t next_position = std::min(position + normal_part_size, end_position);
+                    size_t part_size = next_position - position; /// `part_size` is either `normal_part_size` or smaller if it's the final part.
 
-                uploadPart(part_number, position, part_size);
+                    uploadPart(part_number, position, part_size);
 
-                position = next_position;
+                    position = next_position;
+                }
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, fmt::format("While performing multipart upload of {}", dest_key));
+                // Multipart upload failed because it wasn't possible to schedule all the tasks.
+                // To avoid execution of already scheduled tasks we abort MultipartUpload.
+                abortMultipartUpload();
+                waitForAllBackgroundTasks();
+                throw;
             }
 
-            waitForAllBackGroundTasks();
+            waitForAllBackgroundTasks();
             completeMultipartUpload();
         }
 
@@ -275,7 +302,7 @@ namespace
                 throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "max_upload_part_size must not be less than min_upload_part_size");
 
             size_t part_size = min_upload_part_size;
-            size_t num_parts = (total_size + part_size - 1) / part_size;
+            num_parts = (total_size + part_size - 1) / part_size;
 
             if (num_parts > max_part_number)
             {
@@ -314,7 +341,7 @@ namespace
 
         void uploadPart(size_t part_number, size_t part_offset, size_t part_size)
         {
-            LOG_TRACE(log, "Writing part. Bucket: {}, Key: {}, Upload_id: {}, Size: {}", dest_bucket, dest_key, multipart_upload_id, part_size);
+            LOG_TRACE(log, "Writing part #{} of {}. Bucket: {}, Key: {}, Upload_id: {}, Size: {}", part_number, num_parts, dest_bucket, dest_key, multipart_upload_id, part_size);
 
             if (!part_size)
             {
@@ -329,6 +356,9 @@ namespace
                 {
                     std::lock_guard lock(bg_tasks_mutex);
                     task = &bg_tasks.emplace_back();
+                    task->part_number = part_number;
+                    task->part_offset = part_offset;
+                    task->part_size = part_size;
                     ++num_added_bg_tasks;
                 }
 
@@ -347,8 +377,6 @@ namespace
 
                 try
                 {
-                    task->req = fillUploadPartRequest(part_number, part_offset, part_size);
-
                     schedule([this, task, task_finish_notify]()
                     {
                         try
@@ -357,7 +385,12 @@ namespace
                         }
                         catch (...)
                         {
-                            task->exception = std::current_exception();
+                            std::lock_guard lock(bg_tasks_mutex);
+                            if (!bg_exception)
+                            {
+                                tryLogCurrentException(log, fmt::format("While writing part #{}", task->part_number));
+                                bg_exception = std::current_exception(); /// The exception will be rethrown after all background tasks stop working.
+                            }
                         }
                         task_finish_notify();
                     }, Priority{});
@@ -371,7 +404,9 @@ namespace
             else
             {
                 UploadPartTask task;
-                task.req = fillUploadPartRequest(part_number, part_offset, part_size);
+                task.part_number = part_number;
+                task.part_offset = part_offset;
+                task.part_size = part_size;
                 processUploadTask(task);
                 part_tags.push_back(task.tag);
             }
@@ -382,17 +417,21 @@ namespace
             if (multipart_upload_aborted)
                 return; /// Already aborted.
 
-            auto tag = processUploadPartRequest(*task.req);
+            auto request = makeUploadPartRequest(task.part_number, task.part_offset, task.part_size);
+            auto tag = processUploadPartRequest(*request);
 
             std::lock_guard lock(bg_tasks_mutex); /// Protect bg_tasks from race
             task.tag = tag;
-            LOG_TRACE(log, "Writing part finished. Bucket: {}, Key: {}, Upload_id: {}, Etag: {}, Parts: {}", dest_bucket, dest_key, multipart_upload_id, task.tag, bg_tasks.size());
+            ++num_finished_parts;
+            LOG_TRACE(log, "Finished writing part #{}. Bucket: {}, Key: {}, Upload_id: {}, Etag: {}, Finished parts: {} of {}",
+                      task.part_number, dest_key, multipart_upload_id, task.tag, bg_tasks.size(), num_finished_parts, num_parts);
         }
 
-        virtual std::unique_ptr<Aws::AmazonWebServiceRequest> fillUploadPartRequest(size_t part_number, size_t part_offset, size_t part_size) = 0;
+        /// These functions can be called from multiple threads, so derived class needs to take care about synchronization.
+        virtual std::unique_ptr<Aws::AmazonWebServiceRequest> makeUploadPartRequest(size_t part_number, size_t part_offset, size_t part_size) const = 0;
         virtual String processUploadPartRequest(Aws::AmazonWebServiceRequest & request) = 0;
 
-        void waitForAllBackGroundTasks()
+        void waitForAllBackgroundTasks()
         {
             if (!schedule)
                 return;
@@ -401,22 +440,21 @@ namespace
             /// Suppress warnings because bg_tasks_mutex is actually hold, but tsa annotations do not understand std::unique_lock
             bg_tasks_condvar.wait(lock, [this]() {return TSA_SUPPRESS_WARNING_FOR_READ(num_added_bg_tasks) == TSA_SUPPRESS_WARNING_FOR_READ(num_finished_bg_tasks); });
 
-            auto & tasks = TSA_SUPPRESS_WARNING_FOR_WRITE(bg_tasks);
-            for (auto & task : tasks)
+            auto exception = TSA_SUPPRESS_WARNING_FOR_READ(bg_exception);
+            if (exception)
             {
-                if (task.exception)
-                {
-                    /// abortMultipartUpload() might be called already, see processUploadPartRequest().
-                    /// However if there were concurrent uploads at that time, those part uploads might or might not succeed.
-                    /// As a result, it might be necessary to abort a given multipart upload multiple times in order to completely free
-                    /// all storage consumed by all parts.
-                    abortMultipartUpload();
+                /// abortMultipartUpload() might be called already, see processUploadPartRequest().
+                /// However if there were concurrent uploads at that time, those part uploads might or might not succeed.
+                /// As a result, it might be necessary to abort a given multipart upload multiple times in order to completely free
+                /// all storage consumed by all parts.
+                abortMultipartUpload();
 
-                    std::rethrow_exception(task.exception);
-                }
-
-                part_tags.push_back(task.tag);
+                std::rethrow_exception(exception);
             }
+
+            const auto & tasks = TSA_SUPPRESS_WARNING_FOR_READ(bg_tasks);
+            for (const auto & task : tasks)
+                part_tags.push_back(task.tag);
         }
     };
 
@@ -551,7 +589,7 @@ namespace
 
         void performMultipartUpload() { UploadHelper::performMultipartUpload(offset, size); }
 
-        std::unique_ptr<Aws::AmazonWebServiceRequest> fillUploadPartRequest(size_t part_number, size_t part_offset, size_t part_size) override
+        std::unique_ptr<Aws::AmazonWebServiceRequest> makeUploadPartRequest(size_t part_number, size_t part_offset, size_t part_size) const override
         {
             auto read_buffer = std::make_unique<LimitSeekableReadBuffer>(create_read_buffer(), part_offset, part_size);
 
@@ -763,7 +801,7 @@ namespace
 
         void performMultipartUploadCopy() { UploadHelper::performMultipartUpload(offset, size); }
 
-        std::unique_ptr<Aws::AmazonWebServiceRequest> fillUploadPartRequest(size_t part_number, size_t part_offset, size_t part_size) override
+        std::unique_ptr<Aws::AmazonWebServiceRequest> makeUploadPartRequest(size_t part_number, size_t part_offset, size_t part_size) const override
         {
             auto request = std::make_unique<S3::UploadPartCopyRequest>();
 

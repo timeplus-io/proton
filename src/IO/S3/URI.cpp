@@ -51,7 +51,7 @@ URI::URI(const std::string & uri_)
     /// Case when bucket name and key represented in the path of S3 URL.
     /// E.g. (https://s3.region.amazonaws.com/bucket-name/key)
     /// https://docs.aws.amazon.com/AmazonS3/latest/dev/VirtualHosting.html#path-style-access
-    static const RE2 path_style_pattern("^/([^/]*)/(.*)");
+    static const RE2 path_style_pattern("^/([^/]*)(?:/?(.*))");
 
     uri = Poco::URI(uri_);
 
@@ -124,7 +124,6 @@ URI::URI(const std::string & uri_)
         {
             endpoint = uri.getScheme() + "://" + name + endpoint_authority_from_uri;
         }
-        validateBucket(bucket, uri);
 
         if (!uri.getPath().empty())
         {
@@ -142,7 +141,6 @@ URI::URI(const std::string & uri_)
     {
         is_virtual_hosted_style = false;
         endpoint = uri.getScheme() + "://" + uri.getAuthority();
-        validateBucket(bucket, uri);
     }
     else
     {
@@ -155,14 +153,15 @@ URI::URI(const std::string & uri_)
         if (!uri.getPath().empty())
             key = uri.getPath().substr(1);
     }
+
+    validateBucket(bucket, uri);
+    validateKey(key, uri);
 }
 
 void URI::addRegionToURI(const std::string &region)
 {
     if (auto pos = endpoint.find(".amazonaws.com"); pos != std::string::npos)
-    {
         endpoint = endpoint.substr(0, pos) + "." + region + endpoint.substr(pos);
-    }
 }
 
 void URI::validateBucket(const String & bucket, const Poco::URI & uri)
@@ -175,6 +174,37 @@ void URI::validateBucket(const String & bucket, const Poco::URI & uri)
             "Bucket name length is out of bounds in virtual hosted style S3 URI: {}{}",
             quoteString(bucket),
             !uri.empty() ? " (" + uri.toString() + ")" : "");
+}
+
+void URI::validateKey(const String & key, const Poco::URI & uri)
+{
+    auto onError = [&]()
+    {
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            "Invalid S3 key: {}{}",
+            quoteString(key),
+            !uri.empty() ? " (" + uri.toString() + ")" : "");
+    };
+
+
+    // this shouldn't happen ever because the regex should not catch this
+    if (key.size() == 1 && key[0] == '/')
+    {
+       onError();
+    }
+
+    // the current regex impl allows something like "bucket-name/////".
+    // bucket: bucket-name
+    // key: ////
+    // throw exception in case such thing is found
+    for (size_t i = 1; i < key.size(); i++)
+    {
+        if (key[i - 1] == '/' && key[i] == '/')
+        {
+            onError();
+        }
+    }
 }
 
 }

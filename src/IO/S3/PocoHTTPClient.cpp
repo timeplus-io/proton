@@ -33,6 +33,7 @@
 
 #include <boost/algorithm/string.hpp>
 
+
 static const int SUCCESS_RESPONSE_MIN = 200;
 static const int SUCCESS_RESPONSE_MAX = 299;
 
@@ -82,6 +83,7 @@ namespace DB::ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
     extern const int TOO_MANY_REDIRECTS;
+    extern const int DNS_ERROR;
 }
 
 namespace DB::S3
@@ -576,13 +578,12 @@ void PocoHTTPClient::makeRequestInternalImpl(
                 const static std::string_view needle = "<Error>";
                 if (auto it = std::search(response_string.begin(), response_string.end(), std::default_searcher(needle.begin(), needle.end())); it != response_string.end())
                 {
-                    LOG_WARNING(log, "Response for request contain <Error> tag in body, settings internal server error (500 code)");
+                    LOG_WARNING(log, "Response for the request contains an <Error> tag in the body, will treat it as an internal server error (code 500)");
                     response->SetResponseCode(Aws::Http::HttpResponseCode::INTERNAL_SERVER_ERROR);
 
                     addMetric(request, S3MetricType::Errors);
                     if (error_report)
                         error_report(request_configuration);
-
                 }
 
                 /// Set response from string
@@ -590,9 +591,9 @@ void PocoHTTPClient::makeRequestInternalImpl(
             }
             else
             {
-
                 if (status_code == 429 || status_code == 503)
-                { // API throttling
+                {
+                    /// API throttling
                     addMetric(request, S3MetricType::Throttling);
                 }
                 else if (status_code >= 300)
@@ -610,9 +611,19 @@ void PocoHTTPClient::makeRequestInternalImpl(
         }
         throw Exception(ErrorCodes::TOO_MANY_REDIRECTS, "Too many redirects while trying to access {}", request.GetUri().GetURIString());
     }
+    catch (const NetException & e)
+    {
+        LOG_DEBUG(log, "Failed to make request to: {}: {}", uri, getCurrentExceptionMessage(/* with_stacktrace */ true));
+
+        response->SetClientErrorType(e.code() == ErrorCodes::DNS_ERROR ? Aws::Client::CoreErrors::ENDPOINT_RESOLUTION_FAILURE : Aws::Client::CoreErrors::NETWORK_CONNECTION);
+        response->SetClientErrorMessage(getCurrentExceptionMessage(false));
+
+        addMetric(request, S3MetricType::Errors);
+    }
     catch (...)
     {
-        tryLogCurrentException(log, fmt::format("Failed to make request to: {}", uri));
+        LOG_DEBUG(log, "Failed to make request to: {}: {}", uri, getCurrentExceptionMessage(/* with_stacktrace */ true));
+
         response->SetClientErrorType(Aws::Client::CoreErrors::NETWORK_CONNECTION);
         response->SetClientErrorMessage(getCurrentExceptionMessage(false));
 

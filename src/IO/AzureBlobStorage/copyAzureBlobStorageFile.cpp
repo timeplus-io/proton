@@ -83,7 +83,6 @@ namespace
             size_t part_size;
             std::vector<std::string> block_ids;
             bool is_finished = false;
-            std::exception_ptr exception;
         };
 
         size_t normal_part_size;
@@ -92,6 +91,7 @@ namespace
         std::list<UploadPartTask> TSA_GUARDED_BY(bg_tasks_mutex) bg_tasks;
         int num_added_bg_tasks TSA_GUARDED_BY(bg_tasks_mutex) = 0;
         int num_finished_bg_tasks TSA_GUARDED_BY(bg_tasks_mutex) = 0;
+        std::exception_ptr bg_exception TSA_GUARDED_BY(bg_tasks_mutex);
         std::mutex bg_tasks_mutex;
         std::condition_variable bg_tasks_condvar;
 
@@ -137,7 +137,7 @@ namespace
             }
             catch (...)
             {
-                tryLogCurrentException(__PRETTY_FUNCTION__);
+                tryLogCurrentException(log, fmt::format("While performing multipart upload of blob {} in container {}", dest_blob, dest_container_for_logging));
                 waitForAllBackgroundTasks();
                 throw;
             }
@@ -193,7 +193,12 @@ namespace
                         }
                         catch (...)
                         {
-                            task->exception = std::current_exception();
+                            std::lock_guard lock(bg_tasks_mutex);
+                            if (!bg_exception)
+                            {
+                                tryLogCurrentException(log, "While writing part");
+                                bg_exception = std::current_exception(); /// The exception will be rethrown after all background tasks stop working.
+                            }
                         }
                         task_finish_notify();
                     }, Priority{});
@@ -249,13 +254,13 @@ namespace
             /// Suppress warnings because bg_tasks_mutex is actually hold, but tsa annotations do not understand std::unique_lock
             bg_tasks_condvar.wait(lock, [this]() {return TSA_SUPPRESS_WARNING_FOR_READ(num_added_bg_tasks) == TSA_SUPPRESS_WARNING_FOR_READ(num_finished_bg_tasks); });
 
-            auto & tasks = TSA_SUPPRESS_WARNING_FOR_WRITE(bg_tasks);
-            for (auto & task : tasks)
-            {
-                if (task.exception)
-                    std::rethrow_exception(task.exception);
+            auto exception = TSA_SUPPRESS_WARNING_FOR_READ(bg_exception);
+            if (exception)
+                std::rethrow_exception(exception);
+
+            const auto & tasks = TSA_SUPPRESS_WARNING_FOR_READ(bg_tasks);
+            for (const auto & task : tasks)
                 block_ids.insert(block_ids.end(),task.block_ids.begin(), task.block_ids.end());
-            }
         }
     };
 }

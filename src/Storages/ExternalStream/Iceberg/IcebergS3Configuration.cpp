@@ -36,9 +36,15 @@ void IcebergS3Configuration::createClient(const ContextPtr & ctx)
     if (!headers_from_ast.empty())
         headers.insert(headers.end(), headers_from_ast.begin(), headers_from_ast.end());
 
+    S3::ClientSettings client_settings{
+        .use_virtual_addressing = url.is_virtual_hosted_style,
+        .disable_checksum = ctx->getSettingsRef().s3_disable_checksum,
+        .gcs_issue_compose_request = ctx->getConfigRef().getBool("s3.gcs_issue_compose_request", false),
+    };
+
     client = DB::S3::ClientFactory::instance().create(
         client_configuration,
-        url.is_virtual_hosted_style,
+        client_settings,
         auth_settings.access_key_id,
         auth_settings.secret_access_key,
         auth_settings.server_side_encryption_customer_key_base64,

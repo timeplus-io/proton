@@ -1486,9 +1486,15 @@ void StorageS3::updateConfiguration(ContextPtr ctx, StorageS3::Configuration & u
     client_configuration.retryStrategy
         = std::make_unique<Aws::Client::StandardRetryStrategy>(upd.request_settings.max_aws_request_failure_retries);
 
+    S3::ClientSettings client_settings{
+        .use_virtual_addressing = upd.url.is_virtual_hosted_style,
+        .disable_checksum = ctx->getSettingsRef().s3_disable_checksum,
+        .gcs_issue_compose_request = ctx->getConfigRef().getBool("s3.gcs_issue_compose_request", false),
+    };
+
     upd.client = DB::S3::ClientFactory::instance().create(
         client_configuration,
-        upd.url.is_virtual_hosted_style,
+        client_settings,
         credentials.GetAWSAccessKeyId(),
         credentials.GetAWSSecretKey(),
         upd.auth_settings.server_side_encryption_customer_key_base64,
