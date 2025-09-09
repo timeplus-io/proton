@@ -102,7 +102,7 @@ public:
 
     Packet receivePacket() override;
 
-    Packet receivePacketUnlocked(AsyncCallback async_callback, bool is_draining) override;
+    Packet receivePacketUnlocked(AsyncCallback async_callback) override;
 
     void disconnect() override;
 
@@ -174,12 +174,12 @@ private:
     std::queue<int> offsets_queue;
 
     /// The current number of valid connections to the replicas of this shard.
-    size_t active_connection_count;
+    size_t active_connection_count = 0;
 
     /// We count offsets in which we can't change replica anymore,
     /// it's needed to cancel choosing new replicas when we
     /// disabled replica changing in all offsets.
-    size_t offsets_with_disabled_changing_replica;
+    size_t offsets_with_disabled_changing_replica = 0;
 
     Pipeline pipeline_for_new_replicas;
 
@@ -197,12 +197,6 @@ private:
     Epoll epoll;
     ContextPtr context;
     const Settings & settings;
-
-    /// The following two fields are from settings but can be referenced outside the lifetime of
-    /// settings when connection is drained asynchronously.
-    Poco::Timespan drain_timeout;
-    bool allow_changing_replica_until_first_data_packet;
-
     ThrottlerPtr throttler;
     bool sent_query = false;
     bool cancelled = false;

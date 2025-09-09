@@ -44,7 +44,7 @@ struct RemoteQueryExecutorRoutine
         {
             while (true)
             {
-                read_context.packet = connections.receivePacketUnlocked(ReadCallback{read_context, sink}, false /* is_draining */);
+                read_context.packet = connections.receivePacketUnlocked(ReadCallback{read_context, sink});
                 sink = std::move(sink).resume();
             }
         }

@@ -983,8 +983,8 @@ Packet Connection::receivePacket()
             case Protocol::Server::ReadTaskRequest:
                 return res;
 
-            case Protocol::Server::MergeTreeAllRangesAnnounecement:
-                res.announcement = receiveInitialParallelReadAnnounecement();
+            case Protocol::Server::MergeTreeAllRangesAnnouncement:
+                res.announcement = receiveInitialParallelReadAnnouncement();
                 return res;
 
             case Protocol::Server::MergeTreeReadTaskRequest:
@@ -1148,7 +1148,7 @@ ParallelReadRequest Connection::receiveParallelReadRequest() const
     return request;
 }
 
-InitialAllRangesAnnouncement Connection::receiveInitialParallelReadAnnounecement() const
+InitialAllRangesAnnouncement Connection::receiveInitialParallelReadAnnouncement() const
 {
     InitialAllRangesAnnouncement announcement;
     announcement.deserialize(*in);

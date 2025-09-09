@@ -225,7 +225,7 @@ void ReadFromRemote::addLazyPipe(Pipes & pipes, const ClusterProxy::SelectStream
             my_scalars["_shard_num"]
                 = Block{{DataTypeUInt32().createColumnConst(1, my_shard.shard_info.shard_num), std::make_shared<DataTypeUInt32>(), "_shard_num"}};
             auto remote_query_executor = std::make_shared<RemoteQueryExecutor>(
-                my_shard.shard_info.pool, std::move(connections), query_string, header, my_context, my_throttler, my_scalars, my_external_tables, my_stage);
+                std::move(connections), query_string, header, my_context, my_throttler, my_scalars, my_external_tables, my_stage);
 
             auto pipe = createRemoteSourcePipe(remote_query_executor, add_agg_info, add_totals, add_extremes, async_read, UUIDHelpers::Nil, is_streaming);
             QueryPipelineBuilder builder;

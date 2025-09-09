@@ -3,14 +3,19 @@
 #include <IO/Progress.h>
 #include <Processors/IProcessor.h>
 
+#include <atomic>
+#include <mutex>
+
+
 namespace DB
 {
 
 class ISource : public IProcessor
 {
 private:
+    std::mutex read_progress_mutex;
     ReadProgressCounters read_progress;
-    bool read_progress_was_set = false;
+    std::atomic_bool read_progress_was_set = false;
     bool auto_progress;
 
 protected:
@@ -46,8 +51,8 @@ public:
     /// Default implementation for all the sources.
     std::optional<ReadProgress> getReadProgress() final;
 
-    void addTotalRowsApprox(size_t value) { read_progress.total_rows_approx += value; }
-    void addTotalBytes(size_t value) { read_progress.total_bytes += value; }
+    void addTotalRowsApprox(size_t value);
+    void addTotalBytes(size_t value);
 
     /// proton: starts.
     void setProgressCallback(ProgressCallback callback) { progress_callback.swap(callback); }

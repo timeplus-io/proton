@@ -59,7 +59,6 @@
 #include <Formats/registerFormats.h>
 #include <Storages/registerStorages.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
-#include <QueryPipeline/ConnectionCollector.h>
 #include <Databases/registerDatabases.h>
 #include <Dictionaries/registerDictionaries.h>
 #include <Disks/registerDisks.h>
@@ -863,8 +862,6 @@ try
             return metrics;
         }
     );
-
-    ConnectionCollector::init(global_context, server_settings.max_threads_for_connection_collector);
 
     Settings::checkNoSettingNamesAtTopLevel(config(), config_path);
 

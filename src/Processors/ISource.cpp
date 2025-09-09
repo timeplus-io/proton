@@ -71,12 +71,14 @@ void ISource::progress(size_t read_rows, size_t read_bytes)
 {
     //std::cerr << "========= Progress " << read_rows << " from " << getName() << std::endl << StackTrace().toString() << std::endl;
     read_progress_was_set = true;
+    std::lock_guard lock(read_progress_mutex);
     read_progress.read_rows += read_rows;
     read_progress.read_bytes += read_bytes;
 }
 
 std::optional<ISource::ReadProgress> ISource::getReadProgress()
 {
+    std::lock_guard lock(read_progress_mutex);
     if (finished && read_progress.read_bytes == 0 && read_progress.read_bytes == 0 && read_progress.total_rows_approx == 0)
         return {};
 
@@ -90,6 +92,17 @@ std::optional<ISource::ReadProgress> ISource::getReadProgress()
     return ReadProgress{res_progress, empty_limits};
 }
 
+void ISource::addTotalRowsApprox(size_t value)
+{
+    std::lock_guard lock(read_progress_mutex);
+    read_progress.total_rows_approx += value;
+}
+
+void ISource::addTotalBytes(size_t value)
+{
+    std::lock_guard lock(read_progress_mutex);
+    read_progress.total_bytes += value;
+}
 
 void ISource::work()
 {
