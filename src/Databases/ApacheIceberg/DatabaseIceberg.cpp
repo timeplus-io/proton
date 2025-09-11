@@ -98,7 +98,7 @@ DatabaseApacheIceberg::DatabaseApacheIceberg(
         throw DB::Exception(DB::ErrorCodes::UNKNOWN_DATABASE, "Namespace {} does not exist in the catalog", getDatabaseName());
 }
 
-void DatabaseApacheIceberg::initCatalog()
+void DatabaseApacheIceberg::initCatalog() const
 {
     switch (settings[DatabaseApacheIcebergSetting::catalog_type].value)
     {
@@ -188,6 +188,10 @@ void DatabaseApacheIceberg::parseStorageCredentials()
 
 Apache::Iceberg::CatalogPtr DatabaseApacheIceberg::getCatalog() const
 {
+    std::lock_guard lock(catalog_impl_mutex);
+    if (catalog_impl == nullptr)
+        initCatalog();
+
     return catalog_impl;
 }
 
@@ -282,17 +286,29 @@ DatabaseTablesIteratorPtr
 DatabaseApacheIceberg::getTablesIterator(ContextPtr context_, const FilterByNameFunction & filter_by_table_name) const
 {
     Tables tables;
-    auto catalog = getCatalog();
-    const auto iceberg_tables = catalog->getTables(getDatabaseName());
 
-    for (const auto & table_name : iceberg_tables)
+    /// Do not allow to throw here, because this might be, for example, a query to system.tables.
+    /// It must not fail on case of some postgres error unless get_tables_ignore_error is false.
+    try
     {
-        if (filter_by_table_name && !filter_by_table_name(table_name))
-            continue;
+        auto catalog = getCatalog();
+        const auto iceberg_tables = catalog->getTables(getDatabaseName());
 
-        auto storage = tryGetTable(table_name, context_);
-        [[maybe_unused]] bool inserted = tables.emplace(table_name, storage).second;
-        chassert(inserted);
+        for (const auto & table_name : iceberg_tables)
+        {
+            if (filter_by_table_name && !filter_by_table_name(table_name))
+                continue;
+
+            auto storage = tryGetTable(table_name, context_);
+            [[maybe_unused]] bool inserted = tables.emplace(table_name, storage).second;
+            chassert(inserted);
+        }
+    }
+    catch (...)
+    {
+        if (!context_->getSettingsRef().get_tables_ignore_error)
+            throw;
+        tryLogCurrentException(__PRETTY_FUNCTION__);
     }
 
     return std::make_unique<DatabaseTablesSnapshotIterator>(std::move(tables), getDatabaseName());

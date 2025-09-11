@@ -53,7 +53,7 @@ protected:
 private:
     void validateSettings();
     void parseStorageCredentials();
-    void initCatalog();
+    void initCatalog() const;
     /*std::shared_ptr<StorageObjectStorage::Configuration> getConfiguration(DatabaseIcebergStorageType type) const;*/
     std::string getStorageEndpointForTable(const Apache::Iceberg::TableMetadata & table_metadata) const;
 
@@ -64,6 +64,7 @@ private:
     /// Database engine definition taken from initial CREATE DATABASE query.
     const ASTPtr database_engine_definition;
 
+    mutable std::mutex catalog_impl_mutex;
     mutable Apache::Iceberg::CatalogPtr catalog_impl;
 
     std::shared_ptr<Apache::Iceberg::IStorageCredentials> storage_credentials;
