@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Cluster/Protocol/AlterTaskRequestData.h>
+#include <Cluster/Protocol/TaskDescriptor.h>
 #include <Cluster/Requests/Request.h>
 
 
@@ -17,7 +18,7 @@ public:
         std::string name,
         DB::UUID id,
         uint32_t data_version_,
-        uint32_t status,
+        protocol::TaskStatus status,
         const std::string & created_by,
         NodeID initiator,
         int64_t timeout_ms,

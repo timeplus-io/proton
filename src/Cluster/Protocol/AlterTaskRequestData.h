@@ -4,6 +4,7 @@
 #include <Cluster/Common/Nulls.h>
 #include <Cluster/Common/utils.h>
 #include <Cluster/Protocol/ProtocolData.h>
+#include <Cluster/Protocol/TaskDescriptor.h>
 
 #include <base/ClockUtils.h>
 
@@ -29,7 +30,7 @@ struct AlterTaskRequestData final : public ProtocolData
         DB::UUID id_,
         uint32_t data_version_,
         AlterType type_,
-        uint32_t status_,
+        protocol::TaskStatus status_,
         std::string requested_by_,
         NodeID initiator_,
         int64_t timeout_ms_)
@@ -70,7 +71,7 @@ public:
     uint32_t data_version;
 
     AlterType type;
-    uint32_t status;
+    TaskStatus status;
 
     NodeID initiator = Nulls::NullNodeID;
     int64_t timeout_ms;

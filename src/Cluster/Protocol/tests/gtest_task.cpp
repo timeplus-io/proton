@@ -1,10 +1,10 @@
 #include <Cluster/Protocol/AlterTaskRequestData.h>
 #include <Cluster/Protocol/AlterTaskResponseData.h>
 #include <Cluster/Protocol/CreateTaskRequestData.h>
+#include <Cluster/Protocol/InternalProtocol.h>
+#include <Cluster/Protocol/TaskDescriptor.h>
 #include <Cluster/Requests/AlterTaskRequest.h>
 #include <Cluster/Requests/AlterTaskResponse.h>
-
-#include <Cluster/Protocol/InternalProtocol.h>
 #include <Core/UUID.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -45,7 +45,7 @@ TEST(Task, TaskDescriptor)
 
     task.sql = "SELECT ${col1} FROM ${col2}";
 
-    task.status = 1;
+    task.status = TaskStatus::Disabled;
 
     std::string buf_str;
     {
@@ -119,7 +119,7 @@ TEST(Task, AlterTaskRequestData)
     DB::UUID uuid = DB::UUIDHelpers::generateV4();
     uint32_t data_version = 42;
     AlterTaskRequestData::AlterType type = AlterTaskRequestData::AlterType::STATUS;
-    uint32_t status = 109;
+    TaskStatus status = TaskStatus::Disabled;
     std::string requested_by = "tester";
     NodeID initiator = 12345;
     int64_t timeout_ms = 3000;
@@ -202,7 +202,7 @@ TEST(Task, AlterTaskRequestUpdateStatus)
     const std::string name = "task_name_1417";
     const auto uuid = DB::UUIDHelpers::generateV4();
     uint32_t data_version = 5;
-    uint32_t status = 2;
+    TaskStatus status = TaskStatus::Disabled;
     const std::string created_by = "tester";
     NodeID initiator = 0x42;
     int64_t timeout_ms = 5000;

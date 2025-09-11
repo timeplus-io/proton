@@ -87,6 +87,7 @@ public:
 
         PAUSE_TASK,
         RESUME_TASK,
+        EXECUTE_TASK,
 
         INSTALL_PYTHON_PACKAGE,
         UNINSTALL_PYTHON_PACKAGE,

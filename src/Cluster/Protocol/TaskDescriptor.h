@@ -14,6 +14,14 @@ class ReadBuffer;
 
 namespace cluster::protocol
 {
+
+enum class TaskStatus : uint8_t
+{
+    Enabled = 0,
+    Disabled = 1,
+
+};
+
 SERDE struct TaskDescriptor
 {
 public:
@@ -35,6 +43,11 @@ public:
     [[nodiscard]] std::string string() const;
 
     [[nodiscard]] bool isValid() const noexcept;
+
+    uint64_t getTimeoutMS() const
+    {
+        return std::max<uint64_t>(static_cast<uint64_t>(timeout_unit.toSeconds() * 1000 * timeout), 10'000);
+    }
 
     /// `schema_version` is version used in serde. Bump up it when the on-disk schema is changed.
     constexpr static uint32_t schema_version = 1;
@@ -67,7 +80,7 @@ public:
 
     std::string sql;
 
-    uint32_t status{0}; /// 0 - enabled; 1 - disabled
+    TaskStatus status{TaskStatus::Enabled};
 };
 
 using TaskDescriptorPtr = std::shared_ptr<TaskDescriptor>;

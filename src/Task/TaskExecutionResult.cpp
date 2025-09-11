@@ -1,4 +1,4 @@
-#include <Task/TaskExecutionState.h>
+#include <Task/TaskExecutionResult.h>
 
 #include <Bootstrap/Globals.h>
 #include <Interpreters/Context.h>
@@ -18,15 +18,15 @@ namespace DB
 {
 namespace ErrorCodes
 {
+extern const int INCORRECT_DATA;
 extern const int OK;
 extern const int UNKNOWN_EXCEPTION;
-extern const int INCORRECT_DATA;
 }
 
 namespace Task
 {
 
-cluster::CallResultV<Checkpoint> parseCheckpoint(std::string checkpoint_str)
+cluster::CallResultV<Checkpoint> parseCheckpoint(const std::string & checkpoint_str)
 {
     using ReturnType = cluster::CallResultV<Checkpoint>;
 
@@ -57,9 +57,9 @@ cluster::CallResultV<Checkpoint> parseCheckpoint(std::string checkpoint_str)
     }
 }
 
-int saveTaskExecutionState(UUID id, uint32_t data_version, const TaskExecutionState & state)
+int saveTaskExecutionResult(StorageID id, uint32_t version, const TaskExecutionResult & result)
 {
-    const auto & checkpoint = state.checkpoint;
+    const auto & checkpoint = result.checkpoint;
 
     Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
     for (const auto & [key, value] : checkpoint)
@@ -70,33 +70,38 @@ int saveTaskExecutionState(UUID id, uint32_t data_version, const TaskExecutionSt
 
     WriteBufferFromOwnString buf;
     writeString(
-        "INSERT INTO system.task_execution_state (id, version, checkpoint, last_execution_node, last_execution_start, last_execution_end, "
+        "INSERT INTO system.task_execution_state (database, name, uuid, version, checkpoint, last_execution_node, last_execution_start, last_execution_end, "
         "last_execution_result) VALUES ",
         buf);
 
     writeChar('(', buf);
+    writeQuotedString(id.database_name, buf);
+    writeChar(',', buf);
+
+    writeQuotedString(id.table_name, buf);
+    writeChar(',', buf);
+
     writeChar('\'', buf);
-    writeUUIDText(id, buf);
+    writeUUIDText(id.uuid, buf);
     writeChar('\'', buf);
     writeChar(',', buf);
 
-    writeIntText(data_version, buf);
+    writeIntText(version, buf);
     writeChar(',', buf);
 
     writeQuotedString(ss.str(), buf);
     writeChar(',', buf);
 
-    auto node_id = Globals::getNodeID();
-    writeIntText(node_id, buf);
+    writeIntText(result.execution_node, buf);
     writeChar(',', buf);
 
-    writeIntText(state.execution_start, buf);
+    writeIntText(result.execution_start, buf);
     writeChar(',', buf);
 
-    writeIntText(state.execution_end, buf);
+    writeIntText(result.execution_end, buf);
     writeChar(',', buf);
 
-    writeQuotedString(state.error.string(), buf);
+    writeQuotedString(result.displayError(), buf);
     writeChar(')', buf);
 
     buf.finalize();
@@ -128,10 +133,10 @@ int saveTaskExecutionState(UUID id, uint32_t data_version, const TaskExecutionSt
     return ErrorCodes::OK;
 }
 
-cluster::CallResultV<TaskExecutionState> loadTaskExecutionState(UUID id, uint32_t data_version, const std::string & checkpoint_init_values)
+cluster::CallResultV<TaskExecutionResult> loadTaskExecutionResult(UUID id, uint32_t data_version, const std::string & checkpoint_init_values)
 {
     auto load_query = fmt::format(
-        "SELECT checkpoint FROM table(system.task_execution_state) WHERE id = '{}' AND version = {}", toString(id), data_version);
+        "SELECT checkpoint FROM table(system.task_execution_state) WHERE uuid = '{}' AND version = {}", toString(id), data_version);
 
     LOG_DEBUG(getLogger("TaskExecutionState"), "Load task execution state: {}", load_query);
 
@@ -151,15 +156,15 @@ cluster::CallResultV<TaskExecutionState> loadTaskExecutionState(UUID id, uint32_
     catch (const Exception & ex)
     {
         LOG_ERROR(getLogger("TaskExecutionState"), "Failed to query checkpoint: {}", ex.displayText());
-        return cluster::CallResultV<TaskExecutionState>{cluster::Error{ex.code(), ex.displayText()}};
+        return cluster::CallResultV<TaskExecutionResult>{cluster::Error{ex.code(), ex.displayText()}};
     }
     catch (...)
     {
         tryLogCurrentException(__PRETTY_FUNCTION__);
-        return cluster::CallResultV<TaskExecutionState>{cluster::Error{ErrorCodes::UNKNOWN_EXCEPTION}};
+        return cluster::CallResultV<TaskExecutionResult>{cluster::Error{ErrorCodes::UNKNOWN_EXCEPTION}};
     }
 
-    if (ckpt_json_str.empty())
+    if (ckpt_json_str.empty() || ckpt_json_str == "{}")
     {
         if (checkpoint_init_values.empty())
             return {};
@@ -170,12 +175,12 @@ cluster::CallResultV<TaskExecutionState> loadTaskExecutionState(UUID id, uint32_
     if (maybe_checkpoint.hasError())
     {
         LOG_ERROR(getLogger("TaskExecutionState"), "Failed to parse loaded checkpoint as JSON: checkpoint={}", ckpt_json_str);
-        return cluster::CallResultV<TaskExecutionState>{std::move(maybe_checkpoint.err)};
+        return cluster::CallResultV<TaskExecutionResult>{std::move(maybe_checkpoint.err)};
     }
 
-    TaskExecutionState state;
+    TaskExecutionResult state;
     state.checkpoint = std::move(maybe_checkpoint.result);
-    return cluster::CallResultV<TaskExecutionState>{std::move(state)};
+    return cluster::CallResultV<TaskExecutionResult>{std::move(state)};
 }
 }
 }

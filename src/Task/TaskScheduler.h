@@ -1,8 +1,7 @@
 #pragma once
 
 #include <Cluster/Common/TimeWheel/TimerService.h>
-#include <Core/UUID.h>
-#include <Task/TaskExecutionState.h>
+#include <Task/TaskInfo.h>
 #include <Common/Logger.h>
 
 #include <boost/core/noncopyable.hpp>
@@ -41,21 +40,21 @@ public:
     void onTaskCreated(const cluster::protocol::TaskDescriptor & task);
     void onTaskDeleted(const UUID & task_id);
 
+    bool isActiveScheduler();
+
     cluster::protocol::TaskDescriptorPtr getTaskDescriptor(const UUID & task_id);
-
-    void onTaskExecutionComplete(const cluster::protocol::TaskDescriptorPtr & task, std::optional<TaskExecutionState> state);
-
-    bool isExecutor();
-
-    cluster::protocol::TaskDescriptorPtrs getTasks(const std::string & ns) const;
+    std::vector<TaskInfoPtr> getTasks(const std::string & ns) const;
 
 private:
     void loadTaskDescriptors();
     void addOrUpdateTaskUnlocked(cluster::protocol::TaskDescriptorPtr task);
-    void scheduleTask(const cluster::protocol::TaskDescriptor & task);
 
-    mutable std::mutex task_descriptors_mutex;
-    std::unordered_map<UUID, cluster::protocol::TaskDescriptorPtr> task_descriptors;
+    void scheduleTask(const TaskInfoPtr & task);
+    void executeTask(const TaskInfoPtr & task);
+    bool isTaskValid(const cluster::protocol::TaskDescriptorPtr & task);
+
+    mutable std::mutex tasks_info_mutex;
+    std::unordered_map<UUID, TaskInfoPtr> tasks_info;
     std::unordered_set<UUID> deleted_tasks;
 
     size_t max_scheduled_tasks;

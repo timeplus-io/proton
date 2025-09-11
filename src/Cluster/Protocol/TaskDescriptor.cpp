@@ -42,7 +42,7 @@ void TaskDescriptor::serialize(DB::WriteBuffer & wb, uint16_t /*data_version_*/)
 
     DB::writeStringBinary(sql, wb);
 
-    DB::writeVarUInt(status, wb);
+    DB::writeVarUInt(static_cast<uint8_t>(status), wb);
 }
 
 void TaskDescriptor::deserialize(DB::ReadBuffer & rb, uint16_t /*data_version_*/)
@@ -80,7 +80,9 @@ void TaskDescriptor::deserialize(DB::ReadBuffer & rb, uint16_t /*data_version_*/
 
     DB::readStringBinary(sql, rb);
 
-    DB::readVarUInt(status, rb);
+    uint8_t status_int;
+    DB::readVarUInt(status_int, rb);
+    status = static_cast<TaskStatus>(status_int);
 }
 
 size_t TaskDescriptor::approximateSerializedSize() const noexcept

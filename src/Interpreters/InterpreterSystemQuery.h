@@ -1,11 +1,13 @@
 #pragma once
 
+#include <Cluster/Protocol/ProtocolData.h>
+#include <Cluster/Protocol/TaskDescriptor.h>
+#include <Disks/IVolume.h>
 #include <Interpreters/IInterpreter.h>
+#include <Interpreters/StorageID.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IStorage_fwd.h>
-#include <Interpreters/StorageID.h>
 #include <Common/ActionLock.h>
-#include <Disks/IVolume.h>
 
 
 namespace Poco { class Logger; }
@@ -53,7 +55,8 @@ private:
     BlockIO executeShowLoggers(const ASTSystemQuery & system);
     void executePauseTask(const ASTSystemQuery & system);
     void executeResumeTask(const ASTSystemQuery & system);
-    void updateTaskStatus(String database, const String & task_name, uint32_t new_status);
+    BlockIO executeExecuteTask(const ASTSystemQuery & system);
+    void updateTaskStatus(String database, const String & task_name, bool enable);
     #if !USE_PYTHON_UDF
     [[noreturn]] void executeInstallPythonPackage(const ASTSystemQuery & system);
     [[noreturn]] void executeUninstallPythonPackage(const ASTSystemQuery & system);

@@ -1,0 +1,144 @@
+#include <Interpreters/InterpreterSystemQuery.h>
+
+#include <Access/ContextAccess.h>
+#include <Bootstrap/Globals.h>
+#include <Cluster/MetaStore/MetaStore.h>
+#include <Cluster/Requests/AlterTaskRequest.h>
+#include <Cluster/Requests/GetTaskRequest.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnsDateTime.h>
+#include <Columns/IColumn.h>
+#include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeString.h>
+#include <Interpreters/Context.h>
+#include <Parsers/ASTSystemQuery.h>
+#include <Processors/Sources/SourceFromSingleChunk.h>
+#include <QueryPipeline/QueryPipeline.h>
+#include <Task/TaskExecution.h>
+
+
+namespace DB
+{
+
+namespace ErrorCodes
+{
+extern const int CANNOT_CREATE_TASK;
+}
+
+void InterpreterSystemQuery::updateTaskStatus(String database, const String & task_name, bool enable)
+{
+    if (database.empty())
+        database = getContext()->getCurrentDatabase();
+
+    getContext()->checkAccess(AccessType::SYSTEM_TASK, database, task_name);
+
+    const auto & meta_store = Globals::getMetaStore();
+    auto req = std::make_shared<cluster::GetTaskRequest>(
+        database,
+        task_name,
+        /*versions_requested=*/1,
+        meta_store.nodeID(),
+        /*consistent_read=*/false,
+        /*timeout_ms=*/10000,
+        /*request_version=*/1);
+
+    auto resp = meta_store.getTask(std::move(req));
+    if (resp->hasError())
+        throw Exception(
+            resp->error().error_code, "Failed to load task {} in database {}, error={{{}}}", task_name, database, resp->error().string());
+
+    if (resp->data().descs.size() != 1)
+        throw Exception(
+            resp->error().error_code,
+            "Get invalid number of TaskDescriptor: database={} task={} "
+            "descriptors={}",
+            database,
+            task_name,
+            resp->data().descs.size());
+
+    const auto new_status = enable ? cluster::protocol::TaskStatus::Enabled : cluster::protocol::TaskStatus::Disabled;
+    auto & desc = resp->data().descs[0];
+    if (desc->status == new_status)
+        return;
+
+    auto alter_task_req = std::make_shared<cluster::AlterTaskRequest>(
+        desc->ns,
+        desc->name,
+        desc->id,
+        desc->data_version,
+        new_status,
+        getContext()->getUserName(),
+        meta_store.nodeID(),
+        /*timeout_ms=*/10000,
+        /*request_version=*/1);
+
+    auto alter_task_resp = meta_store.alterTask(std::move(alter_task_req));
+    if (alter_task_resp->hasError())
+    {
+        const auto & err = alter_task_resp->error();
+        throw Exception(
+            ErrorCodes::CANNOT_CREATE_TASK,
+            "Failed to set task status: database={} task={} "
+            "new_status={} error={{{}}}",
+            database,
+            task_name,
+            new_status,
+            err.error_message);
+    }
+}
+
+void InterpreterSystemQuery::executePauseTask(const ASTSystemQuery & system)
+{
+    updateTaskStatus(system.getDatabase(), system.getTable(), false);
+}
+
+void InterpreterSystemQuery::executeResumeTask(const ASTSystemQuery & system)
+{
+    updateTaskStatus(system.getDatabase(), system.getTable(), true);
+}
+
+BlockIO InterpreterSystemQuery::executeExecuteTask(const ASTSystemQuery & system)
+{
+    auto database = system.getDatabase();
+    if (database.empty())
+        database = getContext()->getCurrentDatabase();
+
+    Task::TaskExecution task_execution(StorageID(database, system.getTable()));
+    auto result = task_execution.execute(getContext());
+
+    /// start, end, checkpoint, result
+    auto start_col = ColumnDateTime64::create(0, 3);
+    auto end_col = ColumnDateTime64::create(0, 3);
+    auto checkpoint_key_col = ColumnString::create();
+    auto checkpoint_val_col = ColumnString::create();
+    auto checkpoint_offset_col = ColumnArray::ColumnOffsets::create();
+    auto result_col = ColumnString::create();
+
+    /// Provision block from task execution result
+    start_col->insert(DateTime64(result.execution_start));
+    end_col->insert(DateTime64(result.execution_end));
+    for (const auto & [k, v] : result.checkpoint)
+    {
+        checkpoint_key_col->insert(k);
+        checkpoint_val_col->insert(v);
+    }
+    checkpoint_offset_col->insert(checkpoint_key_col->size());
+    result_col->insert(result.displayError());
+
+    Block result_block{
+        {std::move(start_col), std::make_shared<DataTypeDateTime64>(3), "start"},
+        {std::move(end_col), std::make_shared<DataTypeDateTime64>(3), "end"},
+        {ColumnMap::create(
+             ColumnPtr(std::move(checkpoint_key_col)),
+             ColumnPtr(std::move(checkpoint_val_col)),
+             ColumnPtr(std::move(checkpoint_offset_col))),
+         std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>()),
+         "checkpoint"},
+        {std::move(result_col), std::make_shared<DataTypeString>(), "result"},
+    };
+
+    BlockIO res;
+    res.pipeline = QueryPipeline(std::make_shared<SourceFromSingleChunk>(std::move(result_block)));
+    return res;
+}
+}

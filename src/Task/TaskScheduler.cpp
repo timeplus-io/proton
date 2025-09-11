@@ -6,9 +6,11 @@
 #include <Cluster/Protocol/TaskDescriptor.h>
 #include <Cluster/Requests/ListTasksRequest.h>
 #include <Cluster/Requests/ListTasksResponse.h>
-#include <Task/TaskExecution.h>
-#include <Task/TaskExecutionState.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/executeSelectQuery.h>
+#include <Common/CurrentThread.h>
 #include <base/ClockUtils.h>
+#include <base/scope_guard.h>
 #include <base/sleep.h>
 
 
@@ -42,7 +44,6 @@ void TaskScheduler::shutdown()
         return;
 
     timer.shutdown();
-
     LOG_INFO(logger, "Stopped");
 }
 
@@ -62,7 +63,7 @@ void TaskScheduler::loadTaskDescriptors()
             continue;
         }
 
-        std::scoped_lock lk{task_descriptors_mutex};
+        std::scoped_lock lk{tasks_info_mutex};
         for (auto & task : resp->data().descs)
         {
             addOrUpdateTaskUnlocked(std::move(task));
@@ -76,7 +77,7 @@ void TaskScheduler::onTaskCreated(const cluster::protocol::TaskDescriptor & task
 {
     {
         auto task_ptr = std::make_shared<cluster::protocol::TaskDescriptor>(task);
-        std::scoped_lock lk{task_descriptors_mutex};
+        std::scoped_lock lk{tasks_info_mutex};
         addOrUpdateTaskUnlocked(std::move(task_ptr));
     }
 
@@ -86,8 +87,8 @@ void TaskScheduler::onTaskCreated(const cluster::protocol::TaskDescriptor & task
 void TaskScheduler::onTaskDeleted(const UUID & task_id)
 {
     {
-        std::scoped_lock lk{task_descriptors_mutex};
-        auto removed = task_descriptors.erase(task_id);
+        std::scoped_lock lk{tasks_info_mutex};
+        auto removed = tasks_info.erase(task_id);
         if (removed == 0)
         {
             /// In case task_descriptors add removed task later (from loadTaskDescriptors)
@@ -100,37 +101,40 @@ void TaskScheduler::onTaskDeleted(const UUID & task_id)
 
 void TaskScheduler::addOrUpdateTaskUnlocked(cluster::protocol::TaskDescriptorPtr task)
 {
-    auto [iter, inserted] = task_descriptors.insert({task->id, task});
-    if (!inserted && iter->second->data_version < task->data_version)
+    auto task_info = std::make_shared<TaskInfo>(task);
+    auto [iter, inserted] = tasks_info.insert({task->id, task_info});
+    if (!inserted)
     {
-        iter->second = task;
+        if (iter->second->descriptor->data_version >= task->data_version)
+            return;
+        iter->second = task_info;
     }
 
-    scheduleTask(*task);
+    scheduleTask(task_info);
 }
 
 cluster::protocol::TaskDescriptorPtr TaskScheduler::getTaskDescriptor(const UUID & task_id)
 {
-    std::scoped_lock lk{task_descriptors_mutex};
+    std::scoped_lock lk{tasks_info_mutex};
     if (auto iter = deleted_tasks.find(task_id); iter != deleted_tasks.end())
     {
-        task_descriptors.erase(task_id);
+        tasks_info.erase(task_id);
         deleted_tasks.erase(iter);
         return nullptr;
     }
 
-    if (auto iter = task_descriptors.find(task_id); iter != task_descriptors.end())
-        return iter->second;
+    if (auto iter = tasks_info.find(task_id); iter != tasks_info.end())
+        return iter->second->descriptor;
 
     return nullptr;
 }
 
-bool TaskScheduler::isExecutor()
+bool TaskScheduler::isActiveScheduler()
 {
     return true;
 }
 
-void TaskScheduler::scheduleTask(const cluster::protocol::TaskDescriptor & task)
+void TaskScheduler::scheduleTask(const TaskInfoPtr & task)
 {
     if (stopped.test())
         return;
@@ -141,56 +145,97 @@ void TaskScheduler::scheduleTask(const cluster::protocol::TaskDescriptor & task)
         LOG_ERROR(
             logger,
             "Cannot schedule more tasks. Task is removed from scheduling: ns={} name={} max_scheduled_tasks={}",
-            task.ns,
-            task.name,
+            task->descriptor->ns,
+            task->descriptor->name,
             max_scheduled_tasks);
         --scheduled_tasks;
         return;
     }
 
     /// TODO: Support cron
-    const auto interval_sec = static_cast<Int64>(task.interval * task.interval_unit.toSeconds());
+    const auto interval_sec = static_cast<Int64>(task->descriptor->interval * task->descriptor->interval_unit.toSeconds());
     const auto current_sec = UTCSeconds::now();
     const auto next_run_sec = (current_sec / interval_sec + 1) * interval_sec;
     const auto schedule_time_sec = std::max(next_run_sec - current_sec, static_cast<Int64>(1));
 
-    LOG_INFO(logger, "Schedule task {}.{} in {} sec.", task.ns, task.name, schedule_time_sec);
+    LOG_INFO(logger, "Schedule task {}.{} in {} sec.", task->descriptor->ns, task->descriptor->name, schedule_time_sec);
 
-    auto task_exec = std::make_shared<TaskExecution>(task.id, task.data_version, shared_from_this(), next_run_sec);
     [[maybe_unused]] auto task_entry = timer.add(
         schedule_time_sec * 1000,
-        [task_exec_ = std::move(task_exec)]() { task_exec_->execute(); },
+        [this, task, next_run_sec]() {
+            /// Make sure execution starts strictly after the scheduled run time to avoid same task scheduled twice due to timer inaccuracy.
+            auto now = UTCSeconds::now();
+            if (now < next_run_sec)
+                sleepForSeconds(next_run_sec - now);
+
+            executeTask(task);
+        },
         /*repeat=*/false);
 }
 
-void TaskScheduler::onTaskExecutionComplete(const cluster::protocol::TaskDescriptorPtr & task, std::optional<TaskExecutionState> state)
+bool TaskScheduler::isTaskValid(const cluster::protocol::TaskDescriptorPtr & task)
 {
-    if (state)
+    const auto latest_task_descriptor = getTaskDescriptor(task->id);
+    return latest_task_descriptor != nullptr && latest_task_descriptor->data_version == task->data_version;
+}
+
+void TaskScheduler::executeTask(const TaskInfoPtr & task)
+{
+    bool reschedule = true;
+
+    SCOPE_EXIT({
+        --scheduled_tasks;
+        if (reschedule)
+            scheduleTask(task);
+    });
+
+    if (!isTaskValid(task->descriptor))
     {
-        chassert(task);
-        auto error = saveTaskExecutionState(task->id, task->data_version, *state);
-        if (error != ErrorCodes::OK)
-            LOG_ERROR(
-                logger, "Failed to save task execution state: id={} version={} error={}", toString(task->id), task->data_version, error);
+        LOG_DEBUG(logger, "Skip execution as task is removed or staled: task={}.{}", task->descriptor->ns, task->descriptor->name);
+        reschedule = false;
+        return;
     }
 
-    --scheduled_tasks;
-    if (task)
+    if (!isActiveScheduler())
     {
-        scheduleTask(*task);
+        LOG_DEBUG(logger, "Skip task execution on inactive scheduler: task={}.{}", task->descriptor->ns, task->descriptor->name);
+        reschedule = true;
+        return;
+    }
+
+    LOG_INFO(logger, "Task execution start: task={}.{} local=true", task->descriptor->ns, task->descriptor->name);
+    try
+    {
+        std::string query = fmt::format("SYSTEM EXECUTE TASK {}.{}", task->descriptor->ns, task->descriptor->name);
+        auto query_context = Context::createCopy(Globals::getGlobalContext().getGlobalContext());
+        query_context->makeQueryContext();
+        query_context->setCurrentQueryId("");
+
+        CurrentThread::QueryScope query_scope{query_context};
+        executeNonInsertQuery(query, query_context, /*callback=*/{}, /*internal=*/false);
+
+        LOG_INFO(logger, "Task execution end: task={}.{}", task->descriptor->ns, task->descriptor->name);
+    }
+    catch (const Exception & ex)
+    {
+        LOG_ERROR(logger, "Task execution fail: task={}.{} error={}", task->descriptor->ns, task->descriptor->name, ex.message());
+    }
+    catch (...)
+    {
+        tryLogCurrentException(logger);
     }
 }
 
-cluster::protocol::TaskDescriptorPtrs TaskScheduler::getTasks(const std::string & ns) const
+std::vector<TaskInfoPtr> TaskScheduler::getTasks(const std::string & ns) const
 {
-    cluster::protocol::TaskDescriptorPtrs tasks;
+    std::vector<TaskInfoPtr> tasks;
 
-    std::scoped_lock lk{task_descriptors_mutex};
-    for (const auto & [id, task] : task_descriptors)
+    std::scoped_lock lk{tasks_info_mutex};
+    for (const auto & [id, task] : tasks_info)
     {
         if (!deleted_tasks.contains(id))
         {
-            if (ns.empty() || task->ns == ns)
+            if (ns.empty() || task->descriptor->ns == ns)
                 tasks.push_back(task);
         }
     }

@@ -48,6 +48,7 @@ const std::unordered_set<std::string_view> ENABLED_COMMANDS{
 
     "PAUSE_TASK",
     "RESUME_TASK",
+    "EXECUTE_TASK",
 
     "INSTALL_PYTHON_PACKAGE",
     "UNINSTALL_PYTHON_PACKAGE",
@@ -505,8 +506,10 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         case Type::PAUSE_TASK:
             [[fallthrough]];
         case Type::RESUME_TASK:
+            [[fallthrough]];
+        case Type::EXECUTE_TASK:
         {
-            /// SYSTEM PAUSE/RESUME TASK ns.task_name
+            /// SYSTEM PAUSE/RESUME/EXECUTE TASK ns.task_name
             if (!parseDatabaseAndTableAsAST(pos, expected, res->database, res->table))
                 return false;
             break;

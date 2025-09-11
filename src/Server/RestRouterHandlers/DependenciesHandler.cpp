@@ -147,22 +147,23 @@ void DependenciesHandler::loadTasks(const String & ns, const String & name) cons
 {
     for (const auto task_infos = Task::getTaskInfos(ns); const auto & task_info : task_infos)
     {
-        if (!name.empty() && task_info.id.table_name != name)
+        const auto & desc = task_info->descriptor;
+        if (!name.empty() && desc->name != name)
             continue;
 
-        auto task_fullname = getFullName(task_info.id);
+        auto task_fullname = getFullName(desc->ns, desc->name);
 
-        if (task_info.target_table.has_value())
+        if (task_info->target_table.has_value())
         {
-            const auto target_table_fullname = getFullName(task_info.target_table.value());
+            const auto target_table_fullname = getFullName(task_info->target_table.value());
             if (!visited_streams.contains(target_table_fullname))
-                unvisited_streams.push_back(task_info.target_table.value());
+                unvisited_streams.push_back(task_info->target_table.value());
 
             dependencies->dependencies.push_back(std::make_shared<Relation>(task_fullname, "Task", target_table_fullname, ""));
             dependencies->data_flow.push_back(std::make_shared<Relation>(task_fullname, "Task", target_table_fullname, ""));
         }
 
-        for (const auto & source_id : task_info.source_tables)
+        for (const auto & source_id : task_info->source_tables)
         {
             auto source_table_fullname = getFullName(source_id);
             if (!visited_streams.contains(source_table_fullname))

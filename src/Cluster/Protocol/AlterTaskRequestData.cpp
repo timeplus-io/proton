@@ -4,6 +4,7 @@
 #include <IO/WriteHelpers.h>
 
 #include <fmt/format.h>
+#include <magic_enum.hpp>
 
 
 namespace cluster::protocol
@@ -15,7 +16,7 @@ void AlterTaskRequestData::serialize(DB::WriteBuffer & wb, uint16_t /*version*/)
     DB::writeBinary(id, wb);
     DB::writeVarUInt(data_version, wb);
     DB::writeVarUInt(static_cast<uint8_t>(type), wb);
-    DB::writeVarUInt(status, wb);
+    DB::writeVarUInt(static_cast<uint8_t>(status), wb);
 
     DB::writeVarUInt(initiator, wb);
     DB::writeVarInt(timeout_ms, wb);
@@ -30,7 +31,9 @@ void AlterTaskRequestData::doDeserialize(DB::ReadBuffer & rb, uint16_t /*version
     DB::readBinary(id, rb);
     DB::readVarUInt(data_version, rb);
     DB::readVarUInt(reinterpret_cast<uint8_t &>(type), rb);
-    DB::readVarUInt(status, rb);
+    uint8_t status_int;
+    DB::readVarUInt(status_int, rb);
+    status = static_cast<TaskStatus>(status_int);
 
     DB::readVarUInt(initiator, rb);
     DB::readVarInt(timeout_ms, rb);
@@ -44,7 +47,7 @@ std::string AlterTaskRequestData::doString() const
     switch (type)
     {
         case AlterType::STATUS:
-            description = fmt::format("status={}", initiator);
+            description = fmt::format("status={}", magic_enum::enum_name(status));
             break;
     }
 
