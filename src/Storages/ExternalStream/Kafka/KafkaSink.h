@@ -7,16 +7,9 @@
 #include <Processors/Sinks/SinkToStorage.h>
 #include <Storages/ExternalStream/ExternalStreamCounter.h>
 #include <Storages/ExternalStream/Kafka/Kafka.h>
-#include <Common/CurrentMetrics.h>
-#include <Common/ThreadPool.h>
 
 #include <rdkafka.h>
 
-namespace CurrentMetrics
-{
-extern const Metric LocalThread;
-extern const Metric LocalThreadActive;
-}
 
 namespace DB::ExternalStream
 {
@@ -54,7 +47,7 @@ public:
         const Block & header,
         DB::Kafka::ProducerPtr producer_,
         UInt64 connection_timeout_ms_,
-        bool refresh_topic_partitions,
+        bool refresh_topic_partitions_,
         ExternalStreamCounterPtr external_stream_counter_,
         LoggerPtr logger_,
         ContextPtr context);
@@ -85,12 +78,12 @@ private:
     DB::Kafka::ProducerPtr producer;
 
     UInt64 connection_timeout_ms{0};
+    bool refresh_topic_partitions{false};
     UInt64 checkpoint_timeout_ms{0};
     Int32 partition_cnt{0};
     bool one_message_per_row{false};
     Int32 topic_refresh_interval_ms{0};
 
-    std::optional<ThreadPool> background_jobs;
     std::atomic_flag is_finished{false};
 
     std::unique_ptr<MessageQueueFormatExecutor> format_executor;
@@ -104,6 +97,8 @@ private:
     [[maybe_unused]] UInt64 rows_in_current_message{0};
     size_t current_batch_row{0};
     Int32 next_partition{0};
+
+    Stopwatch metadata_refresh_stopwatch;
 
     struct State
     {

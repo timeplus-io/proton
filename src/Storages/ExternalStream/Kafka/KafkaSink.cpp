@@ -211,13 +211,14 @@ KafkaSink::KafkaSink(
     const Block & header,
     ProducerPtr producer_,
     UInt64 connection_timeout_ms_,
-    bool refresh_topic_partitions,
+    bool refresh_topic_partitions_,
     ExternalStreamCounterPtr external_stream_counter_,
     LoggerPtr logger_,
     ContextPtr context)
     : SinkToStorage(header, ProcessorID::ExternalTableDataSinkID)
     , producer(std::move(producer_))
     , connection_timeout_ms(connection_timeout_ms_)
+    , refresh_topic_partitions(refresh_topic_partitions_)
     , checkpoint_timeout_ms(context->getSettingsRef().insert_timeout_ms)
     , partition_cnt(producer->getPartitionCount(connection_timeout_ms))
     , one_message_per_row(kafka.produceOneMessagePerRow())
@@ -272,40 +273,6 @@ KafkaSink::KafkaSink(
     else
     {
         partitioner = std::make_unique<ChunkSharder>();
-    }
-
-    if (refresh_topic_partitions)
-    {
-        background_jobs.emplace(CurrentMetrics::LocalThread, CurrentMetrics::LocalThreadActive, 1);
-        /// Fetch partition count regularly, so that it can send data to new partitions.
-        background_jobs->scheduleOrThrowOnError([this, refresh_interval_ms = static_cast<UInt64>(topic_refresh_interval_ms)]() {
-            LOG_INFO(logger, "Start topic partition count refreshing job");
-            auto metadata_refresh_stopwatch = Stopwatch();
-            /// Use a small sleep interval to avoid blocking operation for a long just (in case refresh_interval_ms is big).
-            auto sleep_ms = std::min(UInt64(500), refresh_interval_ms);
-            while (true)
-            {
-                if (is_finished.test())
-                    break;
-
-                sleepForMilliseconds(sleep_ms);
-                /// Fetch topic metadata for partition updates
-                if (metadata_refresh_stopwatch.elapsedMilliseconds() < refresh_interval_ms)
-                    continue;
-
-                metadata_refresh_stopwatch.restart();
-
-                try
-                {
-                    partition_cnt = producer->getPartitionCount(connection_timeout_ms);
-                }
-                catch (...) /// do not break the loop until finished
-                {
-                    LOG_WARNING(logger, "Failed to describe topic, error code: {}", getCurrentExceptionMessage(true, true));
-                }
-            }
-            LOG_INFO(logger, "Stopped topic partition count refreshing job");
-        });
     }
 }
 
@@ -410,6 +377,22 @@ void KafkaSink::consume(Chunk chunk)
     }
     else /// message key column is not used
     {
+        if (refresh_topic_partitions && metadata_refresh_stopwatch.elapsedMilliseconds() > static_cast<UInt64>(topic_refresh_interval_ms))
+        {
+            LOG_DEBUG(logger, "Topic partition count refresh start");
+            try
+            {
+                partition_cnt = producer->getPartitionCount(connection_timeout_ms);
+            }
+            catch (...)
+            {
+                /// Ignore exception in getting topic metadata
+                LOG_WARNING(logger, "Failed to describe topic, error code: {}", getCurrentExceptionMessage(true, true));
+            }
+            metadata_refresh_stopwatch.restart();
+            LOG_DEBUG(logger, "Topic partition count refresh end: partition_count={}", partition_cnt);
+        }
+
         auto blocks = partitioner->shard(std::move(block), partition_cnt);
 
         for (auto & block_with_shard : blocks)
@@ -448,9 +431,6 @@ void KafkaSink::onFinish()
     LOG_INFO(logger, "Stopping producing messages");
 
     producer->stop();
-
-    if (background_jobs)
-        background_jobs->wait();
 
     format_executor->finish();
 
