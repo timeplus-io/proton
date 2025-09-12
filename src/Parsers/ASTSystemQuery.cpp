@@ -210,7 +210,8 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState &, 
     /// proton: starts.
     else if (
         type == Type::PAUSE_STREAM || type == Type::RESUME_STREAM || type == Type::RECOVER_STREAM || type == Type::PAUSE_MATERIALIZED_VIEW
-        || type == Type::RESUME_MATERIALIZED_VIEW || type == Type::ABORT_MATERIALIZED_VIEW || type == Type::RECOVER_MATERIALIZED_VIEW)
+        || type == Type::RESUME_MATERIALIZED_VIEW || type == Type::ABORT_MATERIALIZED_VIEW || type == Type::RECOVER_MATERIALIZED_VIEW
+        || type == Type::PAUSE_TASK || type == Type::RESUME_TASK || type == Type::EXECUTE_TASK)
     {
         if (table)
             print_database_table();
