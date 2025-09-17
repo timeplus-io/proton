@@ -27,4 +27,6 @@ public:
     std::string getCollectionName() const;
 };
 
+using ASTCreateNamedCollectionQueryPtr = std::shared_ptr<ASTCreateNamedCollectionQuery>;
+
 }

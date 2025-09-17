@@ -1,7 +1,10 @@
 #pragma once
+
 #include <Common/NamedCollections/NamedCollections.h>
 #include <Common/NamedCollections/NamedCollectionsMetadataStorage.h>
 #include <Common/logger_useful.h>
+#include <Core/BackgroundSchedulePoolTaskHolder.h>
+#include <boost/noncopyable.hpp>
 
 namespace DB
 {
@@ -34,6 +37,8 @@ public:
 
     void updateFromSQL(const ASTAlterNamedCollectionQuery & query);
 
+    bool usesReplicatedStorage();
+
     void loadIfNot();
 
     void shutdown();
@@ -42,12 +47,12 @@ protected:
     mutable NamedCollectionsMap loaded_named_collections;
     mutable std::mutex mutex;
 
-    LoggerPtr log = getLogger("NamedCollectionFactory");
+    const LoggerPtr log = getLogger("NamedCollectionFactory");
 
     bool loaded = false;
     std::atomic<bool> shutdown_called = false;
     std::unique_ptr<NamedCollectionsMetadataStorage> metadata_storage;
-    BackgroundSchedulePool::TaskHolder update_task;
+    BackgroundSchedulePoolTaskHolder update_task;
 
     bool loadIfNot(std::lock_guard<std::mutex> & lock);
 

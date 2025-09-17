@@ -1,8 +1,8 @@
 #include <Common/NamedCollections/NamedCollectionConfiguration.h>
 #include <Poco/Util/XMLConfiguration.h>
 #include <Common/Exception.h>
-#include <Common/SettingsChanges.h>
 #include <Common/FieldVisitorToString.h>
+#include <Common/SettingsChanges.h>
 #include <magic_enum.hpp>
 
 

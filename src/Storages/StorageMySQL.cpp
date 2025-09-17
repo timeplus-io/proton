@@ -4,12 +4,13 @@
 #if USE_MYSQL
 
 #include <Core/Settings.h>
+#include <Interpreters/evaluateConstantExpression.h>
+#include <Interpreters/Context.h>
 #include <DataTypes/DataTypeString.h>
 #include <Databases/MySQL/FetchTablesColumnsList.h>
 #include <Formats/FormatFactory.h>
 #include <IO/Operators.h>
 #include <IO/WriteHelpers.h>
-#include <Interpreters/evaluateConstantExpression.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTLiteral.h>
 #include <Processors/Formats/IOutputFormat.h>
