@@ -158,6 +158,16 @@ void addMaterializedViewLog(const StorageMaterializedView * mv, const AddElem & 
     add_elem(storage_id, "recover_times", metrics->recover_times, /*state_string_value=*/"", /*dimension=*/mv_type);
     add_elem(storage_id, "memory_usage", metrics->memory_usage, /*state_string_value=*/"", /*dimension=*/mv_type);
 
+    /// CPU usage percentage (100% = 1 core, 200% = 2 cores, matches 'top' output)
+    /// state_value: Store with 2 decimal precision (1650 = 16.50%)
+    /// state_string_value: Store human-readable format (e.g., "16.5%")
+    add_elem(
+        storage_id,
+        "cpu_usage_percent",
+        static_cast<UInt64>(metrics.cpu_usage_percentage * 100),
+        /*state_string_value=*/fmt::format("{:.1f}%", metrics.cpu_usage_percentage),
+        /*dimension=*/mv_type);
+
     /// Checkpoint metrics
     add_elem(storage_id, "checkpoint_storage_size", metrics->ckpt_storage_size, /*state_string_value=*/"", /*dimension=*/mv_type);
     if (metrics->ckpt_request_metrics)

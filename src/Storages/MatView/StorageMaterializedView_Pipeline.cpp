@@ -323,6 +323,10 @@ void StorageMaterializedView::PipelineState::resetPipeline()
 
         last_streaming_source_metrics.store(std::move(sources_metrics));
     }
+
+    /// Reset CPU tracking to avoid misleading spikes after pause/resume
+    last_cpu_microseconds.store(0, std::memory_order_relaxed);
+    last_elapsed_microseconds.store(0, std::memory_order_relaxed);
 }
 
 bool StorageMaterializedView::initPipeline(bool recovering)

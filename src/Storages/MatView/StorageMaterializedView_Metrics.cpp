@@ -7,6 +7,12 @@
 
 #include <ranges>
 
+namespace ProfileEvents
+{
+extern const Event UserTimeMicroseconds;
+extern const Event SystemTimeMicroseconds;
+}
+
 namespace DB
 {
 Int64 StorageMaterializedView::getMetricTime(bool reset)
@@ -71,6 +77,52 @@ Int64 StorageMaterializedView::getMemoryUsage() const
     return query_status_info.memory_usage;
 }
 
+Float64 StorageMaterializedView::getCPUUsagePercentage() const
+{
+    /// Calculate real-time CPU usage using delta tracking.
+    /// This shows instantaneous usage like 'top' rather than lifetime average.
+    auto query_context_holder = pipeline_state.query_context;
+    auto block_io = pipeline_state.io.load();
+    if (!block_io || !block_io->process_list_entry)
+        return 0.0;
+
+    auto query_status_info = block_io->process_list_entry->getQueryStatus()->getInfo(
+        /*get_thread_list=*/false, /*get_profile_events=*/true, /*get_settings=*/false);
+
+    if (!query_status_info.profile_counters || query_status_info.elapsed_microseconds == 0)
+        return 0.0;
+
+    /// Get current CPU usage from ProfileEvents
+    const auto & counters = *query_status_info.profile_counters;
+    Int64 user_time = counters[ProfileEvents::UserTimeMicroseconds];
+    Int64 system_time = counters[ProfileEvents::SystemTimeMicroseconds];
+    Int64 current_cpu_microseconds = user_time + system_time;
+    Int64 current_elapsed_microseconds = query_status_info.elapsed_microseconds;
+
+    /// Get previous values for delta calculation
+    Int64 prev_cpu = pipeline_state.last_cpu_microseconds.load(std::memory_order_relaxed);
+    Int64 prev_elapsed = pipeline_state.last_elapsed_microseconds.load(std::memory_order_relaxed);
+
+    /// Update stored values for next calculation
+    pipeline_state.last_cpu_microseconds.store(current_cpu_microseconds, std::memory_order_relaxed);
+    pipeline_state.last_elapsed_microseconds.store(current_elapsed_microseconds, std::memory_order_relaxed);
+
+    /// First sample or after reset - return 0 to avoid misleading spike
+    if (prev_elapsed == 0 || current_elapsed_microseconds <= prev_elapsed)
+        return 0.0;
+
+    /// Calculate delta-based CPU percentage (real-time usage)
+    Int64 cpu_delta = current_cpu_microseconds - prev_cpu;
+    Int64 elapsed_delta = current_elapsed_microseconds - prev_elapsed;
+
+    /// Handle edge cases: negative delta (shouldn't happen) or no time passed
+    if (cpu_delta < 0 || elapsed_delta <= 0)
+        return 0.0;
+
+    /// Real-time CPU percentage: 100% = 1 core, 200% = 2 cores, etc.
+    return (static_cast<Float64>(cpu_delta) / static_cast<Float64>(elapsed_delta)) * 100.0;
+}
+
 UInt64 StorageMaterializedView::getCheckpointSize() const
 {
     if (!curr_ckpt_ctx)
@@ -128,6 +180,7 @@ std::shared_ptr<StorageMaterializedView::Metrics> StorageMaterializedView::getMe
         .last_err_msg_and_ts = lastErrorMessageAndTimestamp(),
         .recover_times = getRetryTimes(),
         .memory_usage = getMemoryUsage(),
+        .cpu_usage_percentage = getCPUUsagePercentage(),
         .ckpt_storage_size = getCheckpointSize(),
         .ckpt_request_metrics = getCheckpointRequestMetrics(),
         .source_metrics = getStreamingSourceMetrics(),

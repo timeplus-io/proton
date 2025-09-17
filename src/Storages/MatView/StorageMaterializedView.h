@@ -162,6 +162,10 @@ private:
         std::atomic<uint64_t> written_bytes;
         std::atomic<uint64_t> written_rows;
 
+        /// For delta-based CPU tracking (real-time usage)
+        mutable std::atomic<Int64> last_cpu_microseconds{0};
+        mutable std::atomic<Int64> last_elapsed_microseconds{0};
+
         std::vector<std::string> processors_last_error_message;
     };
 
@@ -171,6 +175,7 @@ private:
         std::pair<String, Int64> last_err_msg_and_ts;
         Int64 recover_times;
         Int64 memory_usage;
+        Float64 cpu_usage_percentage;
         UInt64 ckpt_storage_size;
         CheckpointRequestMetricsPtr ckpt_request_metrics;
         Streaming::StreamingSourceMetricsPtrs source_metrics;
@@ -342,6 +347,8 @@ private:
 
     /// Internal Metrics methods
     Int64 getMemoryUsage() const;
+    /// Returns CPU utilization percentage (100% = 1 core)
+    Float64 getCPUUsagePercentage() const;
     Streaming::StreamingSourceMetricsPtrs getStreamingSourceMetrics() const;
     CheckpointRequestMetricsPtr getCheckpointRequestMetrics() const;
     UInt64 getLogStoreDiskSize() const;
