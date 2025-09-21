@@ -168,6 +168,20 @@ void addMaterializedViewLog(const StorageMaterializedView * mv, const AddElem & 
         /*state_string_value=*/fmt::format("{:.1f}%", metrics.cpu_usage_percentage),
         /*dimension=*/mv_type);
 
+    /// Thread IDs for the MatView execution
+    /// state_value: Store thread count
+    /// state_string_value: Store comma-separated thread IDs
+    if (!metrics.thread_ids.empty())
+    {
+        add_elem(
+            storage_id,
+            "thread_ids",
+            metrics.thread_ids.size(),
+            /*state_string_value=*/fmt::format("{}", fmt::join(metrics.thread_ids, ",")),
+            /*dimension=*/mv_type);
+    }
+
+
     /// Checkpoint metrics
     add_elem(storage_id, "checkpoint_storage_size", metrics.ckpt_storage_size, /*state_string_value=*/"", /*dimension=*/mv_type);
     if (metrics.ckpt_request_metrics)

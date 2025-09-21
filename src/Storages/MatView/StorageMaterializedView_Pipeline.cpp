@@ -327,6 +327,9 @@ void StorageMaterializedView::PipelineState::resetPipeline()
     /// Reset CPU tracking to avoid misleading spikes after pause/resume
     last_cpu_microseconds.store(0, std::memory_order_relaxed);
     last_elapsed_microseconds.store(0, std::memory_order_relaxed);
+
+    /// Clear cached static pipeline data
+    cached_thread_ids.clear();
 }
 
 bool StorageMaterializedView::initPipeline(bool recovering)
@@ -673,6 +676,16 @@ void StorageMaterializedView::buildBackgroundPipeline()
 
         /// Other threads may call `shutdown` to cancel the pipeline execution (via `process_list_entry->cancelQuery(true)`)
         chassert(io && io->process_list_entry && io->pipeline.initialized());
+
+        /// Collect static pipeline data once (thread IDs)
+        /// These don't change during pipeline execution, so cache them to avoid repeated collection
+        if (io->process_list_entry)
+        {
+            auto static_info = io->process_list_entry->getQueryStatus()->getInfo(
+                /*get_thread_list=*/true, /*get_profile_events=*/false, /*get_settings=*/false);
+            pipeline_state.cached_thread_ids = std::move(static_info.thread_ids);
+        }
+
         pipeline_state.io.store(io);
         pipeline_state.validated.store(true);
         pipeline_state.validated.notify_all();

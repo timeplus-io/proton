@@ -55,8 +55,10 @@ UInt64 StorageMaterializedView::writtenRows(bool reset, [[maybe_unused]] bool ex
         return pipeline_state.written_rows.load(std::memory_order_relaxed);
 }
 
-Int64 StorageMaterializedView::getMemoryUsage() const
+StorageMaterializedView::PipelineMetrics StorageMaterializedView::getPipelineMetrics() const
 {
+    PipelineMetrics metrics;
+
     /// https://github.com/timeplus-io/proton-enterprise/issues/6170
     /// When the query pipeline recovers from an exception,
     /// it resets the `BlockIO` and query context objects.
@@ -69,58 +71,51 @@ Int64 StorageMaterializedView::getMemoryUsage() const
     auto query_context_holder = pipeline_state.query_context;
     auto block_io = pipeline_state.io.load();
     if (!block_io || !block_io->process_list_entry)
-        return 0;
+        return metrics;
 
-    auto query_status_info = block_io->process_list_entry->getQueryStatus()->getInfo(
-        /*get_thread_list=*/false, /*get_profile_events=*/false, /*get_settings=*/false);
-
-    return query_status_info.memory_usage;
-}
-
-Float64 StorageMaterializedView::getCPUUsagePercentage() const
-{
-    /// Calculate real-time CPU usage using delta tracking.
-    /// This shows instantaneous usage like 'top' rather than lifetime average.
-    auto query_context_holder = pipeline_state.query_context;
-    auto block_io = pipeline_state.io.load();
-    if (!block_io || !block_io->process_list_entry)
-        return 0.0;
-
+    /// Get dynamic metrics only (memory and CPU) - skip static thread_list
     auto query_status_info = block_io->process_list_entry->getQueryStatus()->getInfo(
         /*get_thread_list=*/false, /*get_profile_events=*/true, /*get_settings=*/false);
 
-    if (!query_status_info.profile_counters || query_status_info.elapsed_microseconds == 0)
-        return 0.0;
+    /// Memory usage (dynamic - changes constantly)
+    metrics.memory_usage = query_status_info.memory_usage;
 
-    /// Get current CPU usage from ProfileEvents
-    const auto & counters = *query_status_info.profile_counters;
-    Int64 user_time = counters[ProfileEvents::UserTimeMicroseconds];
-    Int64 system_time = counters[ProfileEvents::SystemTimeMicroseconds];
-    Int64 current_cpu_microseconds = user_time + system_time;
-    Int64 current_elapsed_microseconds = query_status_info.elapsed_microseconds;
+    /// Use cached static data (thread IDs)
+    /// These are collected once when pipeline is built and never change
+    metrics.thread_ids = pipeline_state.cached_thread_ids;
 
-    /// Get previous values for delta calculation
-    Int64 prev_cpu = pipeline_state.last_cpu_microseconds.load(std::memory_order_relaxed);
-    Int64 prev_elapsed = pipeline_state.last_elapsed_microseconds.load(std::memory_order_relaxed);
+    /// CPU usage calculation (dynamic - real-time delta tracking)
+    if (query_status_info.profile_counters && query_status_info.elapsed_microseconds > 0)
+    {
+        const auto & counters = *query_status_info.profile_counters;
+        Int64 user_time = counters[ProfileEvents::UserTimeMicroseconds];
+        Int64 system_time = counters[ProfileEvents::SystemTimeMicroseconds];
+        Int64 current_cpu_microseconds = user_time + system_time;
+        Int64 current_elapsed_microseconds = query_status_info.elapsed_microseconds;
 
-    /// Update stored values for next calculation
-    pipeline_state.last_cpu_microseconds.store(current_cpu_microseconds, std::memory_order_relaxed);
-    pipeline_state.last_elapsed_microseconds.store(current_elapsed_microseconds, std::memory_order_relaxed);
+        /// Get previous values for delta calculation
+        Int64 prev_cpu = pipeline_state.last_cpu_microseconds.load(std::memory_order_relaxed);
+        Int64 prev_elapsed = pipeline_state.last_elapsed_microseconds.load(std::memory_order_relaxed);
 
-    /// First sample or after reset - return 0 to avoid misleading spike
-    if (prev_elapsed == 0 || current_elapsed_microseconds <= prev_elapsed)
-        return 0.0;
+        /// Update stored values for next calculation
+        pipeline_state.last_cpu_microseconds.store(current_cpu_microseconds, std::memory_order_relaxed);
+        pipeline_state.last_elapsed_microseconds.store(current_elapsed_microseconds, std::memory_order_relaxed);
 
-    /// Calculate delta-based CPU percentage (real-time usage)
-    Int64 cpu_delta = current_cpu_microseconds - prev_cpu;
-    Int64 elapsed_delta = current_elapsed_microseconds - prev_elapsed;
+        /// Calculate delta-based CPU percentage (real-time usage)
+        if (prev_elapsed > 0 && current_elapsed_microseconds > prev_elapsed)
+        {
+            Int64 cpu_delta = current_cpu_microseconds - prev_cpu;
+            Int64 elapsed_delta = current_elapsed_microseconds - prev_elapsed;
 
-    /// Handle edge cases: negative delta (shouldn't happen) or no time passed
-    if (cpu_delta < 0 || elapsed_delta <= 0)
-        return 0.0;
+            if (cpu_delta >= 0 && elapsed_delta > 0)
+            {
+                /// Real-time CPU percentage: 100% = 1 core, 200% = 2 cores, etc.
+                metrics.cpu_usage_percentage = (static_cast<Float64>(cpu_delta) / static_cast<Float64>(elapsed_delta)) * 100.0;
+            }
+        }
+    }
 
-    /// Real-time CPU percentage: 100% = 1 core, 200% = 2 cores, etc.
-    return (static_cast<Float64>(cpu_delta) / static_cast<Float64>(elapsed_delta)) * 100.0;
+    return metrics;
 }
 
 UInt64 StorageMaterializedView::getCheckpointSize() const
@@ -175,12 +170,16 @@ Streaming::StreamingSourceMetricsPtrs StorageMaterializedView::getStreamingSourc
 
 StorageMaterializedView::Metrics StorageMaterializedView::getMetrics() const
 {
+    /// Get all pipeline metrics in a single efficient call
+    auto pipeline_metrics = getPipelineMetrics();
+
     return Metrics{
         .status = String{magic_enum::enum_name(getPipelineStatus())},
         .last_err_msg_and_ts = lastErrorMessageAndTimestamp(),
         .recover_times = getRetryTimes(),
-        .memory_usage = getMemoryUsage(),
-        .cpu_usage_percentage = getCPUUsagePercentage(),
+        .memory_usage = pipeline_metrics.memory_usage,
+        .cpu_usage_percentage = pipeline_metrics.cpu_usage_percentage,
+        .thread_ids = std::move(pipeline_metrics.thread_ids),
         .ckpt_storage_size = getCheckpointSize(),
         .ckpt_request_metrics = getCheckpointRequestMetrics(),
         .source_metrics = getStreamingSourceMetrics(),
