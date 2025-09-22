@@ -657,6 +657,7 @@ void SystemLog<LogElement>::prepareTable()
             {
                 auto query_context = Context::createCopy(context);
                 query_context->makeQueryContext();
+                query_context->setSetting("enable_dependency_check", false);
 
                 String query = fmt::format("DROP STREAM IF EXISTS {}", table_id.getFullTableName());
                 executeNonInsertQuery(
