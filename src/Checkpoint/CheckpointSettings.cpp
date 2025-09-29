@@ -60,15 +60,15 @@ void CheckpointSettings::deserialize(VersionType version, ReadBuffer & rb)
         // Convert any old type values to File
         type = CheckpointType::File;
 
-        storage_type = cluster::deserializeEnum<CheckpointStorageType>(rb);
+        replication_type = cluster::deserializeEnum<CheckpointReplicationType>(rb);
         readVarUInt(interval, rb);
 
         // Always use LocalFileSystem
-        storage_type = CheckpointStorageType::LocalFileSystem;
+        replication_type = CheckpointReplicationType::LocalFileSystem;
 
         /// Repair raw settings
-        std::string storage_type_str = "local_file_system"; // Always local
-        raw_settings = fmt::format("type={};storage_type={};interval={};", "file", storage_type_str, interval);
+        std::string replication_type_str = "local_file_system"; // Always local
+        raw_settings = fmt::format("type={};replication_type={};interval={};", "file", replication_type_str, interval);
     }
 }
 
@@ -88,19 +88,19 @@ CheckpointType CheckpointSettings::parseCheckpointType(std::string_view ckpt_typ
     return iter->second;
 }
 
-CheckpointStorageType CheckpointSettings::parseCheckpointStorageType(std::string_view ckpt_storage_type_str)
+CheckpointReplicationType CheckpointSettings::parseCheckpointReplicationType(std::string_view ckpt_replication_type_str)
 {
     // Accept any valid input but always use LocalFileSystem
     static const std::unordered_set<std::string_view> valid_types{"auto", "local_file_system", "nativelog", "shared"};
 
-    if (!valid_types.contains(ckpt_storage_type_str))
+    if (!valid_types.contains(ckpt_replication_type_str))
         throw Exception(
             ErrorCodes::INVALID_SETTING_VALUE,
-            "Unknown checkpoint storage type '{}', expected one of 'auto', 'local_file_system', 'nativelog', 'shared'",
-            ckpt_storage_type_str);
+            "Unknown checkpoint replication type '{}', expected one of 'auto', 'local_file_system', 'nativelog', 'shared'",
+            ckpt_replication_type_str);
 
     // Always return LocalFileSystem
-    return CheckpointStorageType::LocalFileSystem;
+    return CheckpointReplicationType::LocalFileSystem;
 }
 
 void CheckpointSettings::parseImpl()
@@ -144,8 +144,11 @@ void CheckpointSettings::parseImpl()
     if (auto iter = settings_map.find("type"); iter != settings_map.end())
         type = parseCheckpointType(iter->second);
 
-    if (auto iter = settings_map.find("storage_type"); iter != settings_map.end())
-        storage_type = parseCheckpointStorageType(iter->second);
+    /// storage_type is deprecated, use replication_type instead
+    if (auto iter = settings_map.find("replication_type"); iter != settings_map.end())
+        replication_type = parseCheckpointReplicationType(iter->second);
+    else if (iter = settings_map.find("storage_type"); iter != settings_map.end())
+        replication_type = parseCheckpointReplicationType(iter->second);
 
     if (auto iter = settings_map.find("interval"); iter != settings_map.end())
         interval = std::stoul(iter->second);

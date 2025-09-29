@@ -34,7 +34,7 @@ void StorageMaterializedView::prepareCheckpoint()
 
     if (!curr_ckpt_ctx)
     {
-        const auto & ckpt_storage = ckpt_coordinator.getCheckpointStorage(CheckpointStorageType::LocalFileSystem);
+        const auto & ckpt_storage = ckpt_coordinator.getCheckpointStorage(CheckpointReplicationType::LocalFileSystem);
         auto ckpt_ctx = std::make_shared<CheckpointContext>(getInnerQueryId(), ckpt_storage, &ckpt_coordinator);
         curr_ckpt_ctx = std::move(ckpt_ctx);
     }

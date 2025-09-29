@@ -28,7 +28,7 @@ BlockIO InterpreterUnsubscribeQuery::execute()
     {
         /// Unsubscribe query only supports with local filesystem checkpoint storage
         auto & coordinator = Globals::getCheckpointCoordinator();
-        auto ckpt_ctx = std::make_shared<CheckpointContext>(query_id, coordinator.getCheckpointStorage(CheckpointStorageType::LocalFileSystem), &coordinator);
+        auto ckpt_ctx = std::make_shared<CheckpointContext>(query_id, coordinator.getCheckpointStorage(CheckpointReplicationType::LocalFileSystem), &coordinator);
         coordinator.removeCheckpoint(std::move(ckpt_ctx));
     }
 

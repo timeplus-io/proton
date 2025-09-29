@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Checkpoint/CheckpointRequestMetrics.h>
-#include <Checkpoint/CheckpointStorageType.h>
+#include <Checkpoint/CheckpointReplicationType.h>
 #include <Checkpoint/LogStoreCheckpointContext.h>
 #include <Cluster/Common/ExponentialBackoff.h>
 #include <Cluster/Common/NodeID.h>

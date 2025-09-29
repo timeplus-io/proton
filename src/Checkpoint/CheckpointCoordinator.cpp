@@ -33,7 +33,7 @@ CheckpointCoordinator::CheckpointCoordinator(CheckpointConfig config_)
     : config(std::move(config_)), logger(getLogger("CheckpointCoordinator"))
 {
     local_ckpt_storage
-        = assert_cast<const LocalFileSystemCheckpointStorage *>(&getCheckpointStorage(CheckpointStorageType::LocalFileSystem));
+        = assert_cast<const LocalFileSystemCheckpointStorage *>(&getCheckpointStorage(CheckpointReplicationType::LocalFileSystem));
 
     const auto & path_str = config.path;
 
@@ -115,21 +115,21 @@ void CheckpointCoordinator::shutdown()
 void CheckpointCoordinator::validateCheckpointSettings(
     const CheckpointSettingsPtr & ckpt_settings, [[maybe_unused]] const CheckpointContextPtr & ckpt_ctx)
 {
-    if (ckpt_settings->storage_type != CheckpointStorageType::LocalFileSystem)
+    if (ckpt_settings->replication_type != CheckpointReplicationType::LocalFileSystem)
     {
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Only LocalFileSystem checkpoint storage is supported");
     }
 }
 
-const CheckpointStorage & CheckpointCoordinator::getCheckpointStorage(CheckpointStorageType ckpt_storage_type) const
+const CheckpointStorage & CheckpointCoordinator::getCheckpointStorage(CheckpointReplicationType ckpt_replication_type) const
 {
     std::scoped_lock lock(ckpt_storages_mutex);
-    auto iter = ckpt_storages.find(ckpt_storage_type);
+    auto iter = ckpt_storages.find(ckpt_replication_type);
     if (iter != ckpt_storages.end())
         return *iter->second;
 
-    auto ckpt_storage = CheckpointStorageFactory::create(ckpt_storage_type, config);
-    auto [it, inserted] = ckpt_storages.emplace(ckpt_storage_type, std::move(ckpt_storage));
+    auto ckpt_storage = CheckpointStorageFactory::create(ckpt_replication_type, config);
+    auto [it, inserted] = ckpt_storages.emplace(ckpt_replication_type, std::move(ckpt_storage));
     chassert(inserted);
     return *it->second;
 }
@@ -143,14 +143,14 @@ void CheckpointCoordinator::registerQuery(
 {
     chassert(ckpt_ctx->epoch == 0);
     const auto & qid = ckpt_ctx->qid;
-    const auto & ckpt_storage = getCheckpointStorage(ckpt_settings->storage_type);
+    const auto & ckpt_storage = getCheckpointStorage(ckpt_settings->replication_type);
     if (!ckpt_storage.isLocal() && !ckpt_ctx->extra_ctx)
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
-            "Missing extra checkpoint context for non-local checkpoint storage '{}'",
-            ckpt_settings->storage_type);
+            "Missing extra checkpoint context for non-local checkpoint replication type '{}'",
+            ckpt_settings->replication_type);
 
-    ckpt_settings->storage_type = ckpt_storage.storageType(); /// Update storage type to the actual storage type (E.g. Auto -> NativeLog)
+    ckpt_settings->replication_type = ckpt_storage.replicationType(); /// Update replication type (E.g. Auto -> NativeLog)
 
     validateCheckpointSettings(ckpt_settings, ckpt_ctx);
 

@@ -93,7 +93,7 @@ public:
     /// \brief Trigger checkpoint for a query, and call the callback when the checkpoint is done.
     TriggerResult triggerCheckpointForQuery(const String & qid, std::function<void(CheckpointContextPtr)> && callback);
 
-    const CheckpointStorage & getCheckpointStorage(CheckpointStorageType ckpt_storage_type) const;
+    const CheckpointStorage & getCheckpointStorage(CheckpointReplicationType ckpt_replication_type) const;
 
 
     UInt64 getStorageSize(CheckpointContextPtr ckpt_ctx) const;
@@ -143,7 +143,7 @@ private:
     CheckpointConfig config;
 
     mutable std::mutex ckpt_storages_mutex;
-    mutable absl::flat_hash_map<CheckpointStorageType, std::unique_ptr<const CheckpointStorage>>
+    mutable absl::flat_hash_map<CheckpointReplicationType, std::unique_ptr<const CheckpointStorage>>
         ckpt_storages TSA_GUARDED_BY(ckpt_storages_mutex);
     const LocalFileSystemCheckpointStorage * local_ckpt_storage; /// Used for async checkpointing
 

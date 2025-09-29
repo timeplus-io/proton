@@ -16,7 +16,7 @@ extern const int NOT_IMPLEMENTED;
 extern const int INVALID_CONFIG_PARAMETER;
 }
 
-std::unique_ptr<CheckpointStorage> CheckpointStorageFactory::create(CheckpointStorageType type, const CheckpointConfig & config)
+std::unique_ptr<CheckpointStorage> CheckpointStorageFactory::create(CheckpointReplicationType type, const CheckpointConfig & config)
 {
     /// Only support LocalFileSystem storage
     static auto logger = getLogger("CheckpointStorageFactory");

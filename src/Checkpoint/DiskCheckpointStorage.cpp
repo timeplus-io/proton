@@ -117,7 +117,7 @@ int64_t DiskCheckpointStorage::getLastCommittedEpoch(CheckpointContextPtr ckpt_c
         return 0;
 
     /// We'd like to touch the ckpt dir to extend its TTL
-    if (storageType() == CheckpointStorageType::LocalFileSystem)
+    if (replicationType() == CheckpointReplicationType::LocalFileSystem)
         disk->setLastModified(ckpt_dir, Poco::Timestamp::fromEpochTime(time(nullptr)));
 
     /// 1) Loop the directory to figure out largest committed checkpoint epoch
@@ -194,12 +194,12 @@ void DiskCheckpointStorage::removeExpired(
     uint64_t ttl_secs, bool delete_marked, std::function<bool(const std::string &)> delete_precheck) const
 {
     /// FIXME: So far only local file system supports this feature
-    if (storageType() != CheckpointStorageType::LocalFileSystem)
+    if (replicationType() != CheckpointReplicationType::LocalFileSystem)
         return;
 
     auto disk = getDisk(/*extra_ckpt_ctx=*/nullptr);
 
-    LOG_INFO(logger, "Scanning delete-marked and expired checkpoints in {}, ttl={}s", storageType(), ttl_secs);
+    LOG_INFO(logger, "Scanning delete-marked and expired checkpoints in {}, ttl={}s", replicationType(), ttl_secs);
 
     iterateDirectory(disk, "", [&](const fs::path & path, bool is_dir) {
         if (!is_dir)
@@ -231,7 +231,7 @@ void DiskCheckpointStorage::removeExpired(
 void DiskCheckpointStorage::removeOldCheckpoints() const
 {
     /// FIXME: So far only local file system supports this feature
-    if (storageType() != CheckpointStorageType::LocalFileSystem)
+    if (replicationType() != CheckpointReplicationType::LocalFileSystem)
         return;
 
     auto disk = getDisk(/*extra_ckpt_ctx=*/nullptr);

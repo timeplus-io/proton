@@ -16,7 +16,7 @@ public:
             local_disk->createDirectories("");
     }
 
-    CheckpointStorageType storageType() const override { return CheckpointStorageType::LocalFileSystem; }
+    CheckpointReplicationType replicationType() const override { return CheckpointReplicationType::LocalFileSystem; }
 
     bool isLocal() const override { return true; }
 

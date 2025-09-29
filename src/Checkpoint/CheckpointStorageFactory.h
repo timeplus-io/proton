@@ -7,6 +7,6 @@ namespace DB
 {
 struct CheckpointStorageFactory final
 {
-    static std::unique_ptr<CheckpointStorage> create(CheckpointStorageType type, const CheckpointConfig & config);
+    static std::unique_ptr<CheckpointStorage> create(CheckpointReplicationType type, const CheckpointConfig & config);
 };
 }

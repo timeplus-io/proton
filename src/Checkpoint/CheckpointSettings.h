@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Checkpoint/CheckpointStorageType.h>
+#include <Checkpoint/CheckpointReplicationType.h>
 #include <Checkpoint/CheckpointStrategy.h>
 #include <Checkpoint/CheckpointType.h>
 
@@ -22,7 +22,7 @@ struct CheckpointSettings
 
     /// Parsed settings
     CheckpointType type = CheckpointType::Auto;
-    CheckpointStorageType storage_type = CheckpointStorageType::LocalFileSystem;
+    CheckpointReplicationType replication_type = CheckpointReplicationType::LocalFileSystem;
     CheckpointStrategy strategy{};
 
     UInt64 interval = 0;
@@ -34,7 +34,7 @@ struct CheckpointSettings
     void deserialize(VersionType version, ReadBuffer & rb);
 
     static CheckpointType parseCheckpointType(std::string_view ckpt_type_str);
-    static CheckpointStorageType parseCheckpointStorageType(std::string_view ckpt_storage_type_str);
+    static CheckpointReplicationType parseCheckpointReplicationType(std::string_view ckpt_replication_type_str);
     static CheckpointSettingsPtr parse(const std::string & settings_str);
 
     static constexpr VersionType VERSION = 2;

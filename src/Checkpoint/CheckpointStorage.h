@@ -2,7 +2,7 @@
 
 #include <Checkpoint/Checkpoint.h>
 #include <Checkpoint/CheckpointContextFwd.h>
-#include <Checkpoint/CheckpointStorageType.h>
+#include <Checkpoint/CheckpointReplicationType.h>
 #include <Checkpoint/DiskPath.h>
 
 #include <Core/PathSize.h>
@@ -54,7 +54,7 @@ public:
     /// \return checkpoint type if exists, otherwise std::nullopt
     virtual std::optional<CheckpointType> exists(const std::string & key, CheckpointContextPtr cpt_ctx) const = 0;
 
-    virtual CheckpointStorageType storageType() const = 0;
+    virtual CheckpointReplicationType replicationType() const = 0;
 
     virtual uint64_t getStorageSize(CheckpointContextPtr ckpt_ctx) const = 0;
     virtual PathSizes getStorageStat(CheckpointContextPtr ckpt_ctx) const = 0;

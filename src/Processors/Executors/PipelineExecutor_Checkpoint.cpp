@@ -26,7 +26,7 @@ void PipelineExecutor::registerCheckpoint(ExecuteMode exec_mode_, CheckpointCont
         auto & ckpt_coordinator = Globals::getCheckpointCoordinator();
         ckpt_ctx = std::make_shared<CheckpointContext>(
             process_list_element->getClientInfo().current_query_id,
-            ckpt_coordinator.getCheckpointStorage(CheckpointStorageType::LocalFileSystem),
+            ckpt_coordinator.getCheckpointStorage(CheckpointReplicationType::LocalFileSystem),
             &ckpt_coordinator);
     }
 
@@ -136,7 +136,7 @@ std::pair<Int64, CheckpointSettingsPtr> PipelineExecutor::recover(CheckpointCont
         ckpt_settings = CheckpointSettings::parse(process_list_element->getContext()->getSettingsRef().checkpoint_settings);
 
     /// Recover query states from checkpoint
-    const auto & ckpt_storage = ckpt_coordinator.getCheckpointStorage(ckpt_settings->storage_type);
+    const auto & ckpt_storage = ckpt_coordinator.getCheckpointStorage(ckpt_settings->replication_type);
     auto recovered_epoch = ckpt_storage.getLastCommittedEpoch(ckpt_ctx);
     if (recovered_epoch > 0)
         graph->recover(ckpt_ctx->cloneWithEpoch(recovered_epoch));

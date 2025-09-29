@@ -119,7 +119,7 @@ std::pair<String, ASTPtr> handleRecoverQuery(const Streaming::ASTRecoverQuery * 
     auto query_id = literal->value.get<String>();
     auto & coordinator = Globals::getCheckpointCoordinator();
     /// Subscribe/Recover query only supports with local filesystem checkpoint storage
-    auto ckpt_ctx = std::make_shared<CheckpointContext>(query_id, coordinator.getCheckpointStorage(CheckpointStorageType::LocalFileSystem), &coordinator);
+    auto ckpt_ctx = std::make_shared<CheckpointContext>(query_id, coordinator.getCheckpointStorage(CheckpointReplicationType::LocalFileSystem), &coordinator);
     auto query = coordinator.getQuery(std::move(ckpt_ctx));
 
     const char * begin = query.data();
