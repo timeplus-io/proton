@@ -47,7 +47,7 @@ public:
         const String & query,
         CheckpointSettingsPtr ckpt_settings,
         std::weak_ptr<PipelineExecutor> executor,
-        std::optional<Int64> recovered_ckpt_epoch);
+        std::optional<CheckpointEpoch> recovered_ckpt_epoch);
 
     void deregisterQuery(const String & qid);
 

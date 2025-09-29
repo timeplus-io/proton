@@ -442,7 +442,6 @@ void IntrospectionStateLog::doCollectStates(AddElem add_elem, ContextPtr local_c
 {
     /// List all storages [in the specified database]
     Databases databases = DatabaseCatalog::instance().getDatabases();
-    auto node_id = local_context->getNodeID();
 
     uint32_t num_running_mvs = 0, num_running_shards = 0;
     for (const auto & [database_name, database] : databases)

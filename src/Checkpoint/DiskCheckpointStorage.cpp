@@ -49,20 +49,20 @@ void DiskCheckpointStorage::preCheckpoint(CheckpointContextPtr ckpt_ctx) const
                 disk->logName());
             clearDirectory(disk, ckpt_dir);
         }
+        /// Always clear ckpt root dir for initialization
+        else if (ckpt_ctx->epoch.empty())
+        {
+            LOG_INFO(logger, "Directory '{}' already exists on disk {}, clear all contents for initialization", ckpt_dir, disk->logName());
+            clearDirectory(disk, ckpt_dir);
+        }
         /// No committed-mark file for specified epoch
-        else if (ckpt_ctx->epoch > 0 && !disk->exists(ckpt_dir / COMMITTED_FILE))
+        else if (!disk->exists(ckpt_dir / COMMITTED_FILE))
         {
             LOG_INFO(
                 logger,
                 "Directory '{}' already exists on disk {}, but it doesn't be committed, so clear all contents",
                 ckpt_dir,
                 disk->logName());
-            clearDirectory(disk, ckpt_dir);
-        }
-        /// Always clear ckpt root dir for initialization
-        else if (ckpt_ctx->epoch == 0)
-        {
-            LOG_INFO(logger, "Directory '{}' already exists on disk {}, clear all contents for initialization", ckpt_dir, disk->logName());
             clearDirectory(disk, ckpt_dir);
         }
         else
@@ -108,40 +108,40 @@ void DiskCheckpointStorage::commit(CheckpointContextPtr ckpt_ctx) const
     }
 }
 
-int64_t DiskCheckpointStorage::getLastCommittedEpoch(CheckpointContextPtr ckpt_ctx) const
+CheckpointEpoch DiskCheckpointStorage::getLastCommittedEpoch(CheckpointContextPtr ckpt_ctx) const
 {
     auto disk = getDisk(ckpt_ctx);
     fs::path ckpt_dir(ckpt_ctx->qid);
 
     if (!disk->exists(ckpt_dir) || disk->exists(ckpt_dir / DELETE_FILE))
-        return 0;
+        return CheckpointEpoch{.epoch = 0};
 
     /// We'd like to touch the ckpt dir to extend its TTL
     if (replicationType() == CheckpointReplicationType::LocalFileSystem)
         disk->setLastModified(ckpt_dir, Poco::Timestamp::fromEpochTime(time(nullptr)));
 
     /// 1) Loop the directory to figure out largest committed checkpoint epoch
-    int64_t max_epoch = 0;
+    CheckpointEpoch max_epoch;
     iterateDirectory(disk, ckpt_dir, [&](const fs::path & path, bool is_dir) {
         if (!is_dir)
             return;
 
         try
         {
-            /// Two cases: 1) '.../path/1' 2) '.../path/1/'
-            int64_t epoch = std::stoll(path.has_stem() ? path.stem().string() : path.parent_path().stem().string());
+            /// Two cases: 1) '.../path/1_{ulid}' 2) '.../path/1_{ulid}/'
+            auto curr_epoch = CheckpointEpoch::parse(path.has_stem() ? path.stem().string() : path.parent_path().stem().string());
             /// check if `committed` exists
-            if (epoch > max_epoch && disk->exists(path / COMMITTED_FILE))
-                max_epoch = epoch;
+            if (curr_epoch > max_epoch && disk->exists(path / COMMITTED_FILE))
+                 max_epoch = curr_epoch;
         }
-        catch (const std::invalid_argument & e)
+        catch (...)
         {
             LOG_WARNING(
                 logger,
                 "Directory '{}' was not a checkpoint epoch directory on disk {}, skip it. Epoch convert error: {}",
                 path,
                 disk->logName(),
-                e.what());
+                getCurrentExceptionMessage(true));
         }
     });
 
@@ -152,7 +152,7 @@ void DiskCheckpointStorage::remove(CheckpointContextPtr ckpt_ctx) const
 {
     auto disk = getDisk(ckpt_ctx);
     auto ckpt_dir = ckpt_ctx->queryCheckpointDir();
-    if (ckpt_ctx->epoch <= 0)
+    if (ckpt_ctx->epoch.empty())
     {
         /// Remove the whole ckpt dir for the query
         LOG_INFO(logger, "Remove checkpoint '{}' for query={}", ckpt_dir.c_str(), ckpt_ctx->qid);
@@ -165,16 +165,16 @@ void DiskCheckpointStorage::remove(CheckpointContextPtr ckpt_ctx) const
         if (!is_dir)
             return;
 
-        int64_t epoch = 0;
+        CheckpointEpoch epoch;
         try
         {
-            /// Two cases: '.../path/1' or '.../path/1/'
-            epoch = std::stoll(path.has_stem() ? path.stem().string() : path.parent_path().stem().string());
+            /// Two cases: '.../path/1_{ulid}' or '.../path/1_{ulid}/'
+            epoch = CheckpointEpoch::parse(path.has_stem() ? path.stem().string() : path.parent_path().stem().string());
         }
-        catch (const std::invalid_argument & e)
+        catch (...)
         {
             /// Found a directory which is not an epoch number directory, delete this folder
-            LOG_WARNING(logger, "Remove unknown format checkpoint epoch directory '{}' on disk {}: {}", path, disk->logName(), e.what());
+            LOG_WARNING(logger, "Remove unknown format checkpoint epoch directory '{}' on disk {}: {}", path, disk->logName(), getCurrentExceptionMessage(true));
             disk->removeRecursive(path);
             return;
         }

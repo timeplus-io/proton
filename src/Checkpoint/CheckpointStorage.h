@@ -2,6 +2,7 @@
 
 #include <Checkpoint/Checkpoint.h>
 #include <Checkpoint/CheckpointContextFwd.h>
+#include <Checkpoint/CheckpointEpoch.h>
 #include <Checkpoint/CheckpointReplicationType.h>
 #include <Checkpoint/DiskPath.h>
 
@@ -36,7 +37,7 @@ public:
     virtual void commit(CheckpointContextPtr ckpt_ctx) const = 0;
 
     /// Get and set the last checkpoint epoch via query id
-    virtual int64_t getLastCommittedEpoch(CheckpointContextPtr ckpt_ctx) const = 0;
+    virtual CheckpointEpoch getLastCommittedEpoch(CheckpointContextPtr ckpt_ctx) const = 0;
 
     /// Get all key names of the checkpoint
     virtual std::set<std::string> getKeyNames(CheckpointContextPtr ckpt_ctx) const = 0;

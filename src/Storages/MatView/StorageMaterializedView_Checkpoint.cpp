@@ -40,6 +40,6 @@ void StorageMaterializedView::prepareCheckpoint()
     }
 
     auto last_committed_epoch = curr_ckpt_ctx->storage.getLastCommittedEpoch(curr_ckpt_ctx);
-    pipeline_state.exec_mode = last_committed_epoch > 0 ? ExecuteMode::Recover : ExecuteMode::Subscribe;
+    pipeline_state.exec_mode = last_committed_epoch.empty() ? ExecuteMode::Subscribe : ExecuteMode::Recover;
 }
 }

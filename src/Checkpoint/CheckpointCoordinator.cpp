@@ -139,9 +139,9 @@ void CheckpointCoordinator::registerQuery(
     const String & query,
     CheckpointSettingsPtr ckpt_settings,
     std::weak_ptr<PipelineExecutor> executor,
-    std::optional<Int64> recovered_ckpt_epoch)
+    std::optional<CheckpointEpoch> recovered_ckpt_epoch)
 {
-    chassert(ckpt_ctx->epoch == 0);
+    chassert(ckpt_ctx->epoch.empty());
     const auto & qid = ckpt_ctx->qid;
     const auto & ckpt_storage = getCheckpointStorage(ckpt_settings->replication_type);
     if (!ckpt_storage.isLocal() && !ckpt_ctx->extra_ctx)
@@ -314,7 +314,7 @@ void CheckpointCoordinator::doRemoveCheckpoint(CheckpointContextPtr ckpt_ctx) no
         if (!ckpt_ctx->storage.isLocal())
             local_ckpt_storage->remove(ckpt_ctx);
 
-        if (ckpt_ctx->epoch == 0)
+        if (ckpt_ctx->epoch.empty())
             LOG_INFO(logger, "Cleaned checkpoints for query={}", ckpt_ctx->qid);
     }
     catch (...)

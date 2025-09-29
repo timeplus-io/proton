@@ -3,6 +3,7 @@
 #include <Checkpoint/LocalFileSystemCheckpointStorage.h>
 #include <Checkpoint/LogStoreCheckpointContext.h>
 
+#include <Common/Random.h>
 #include <Common/Stopwatch.h>
 #include <Common/setThreadName.h>
 
@@ -131,7 +132,7 @@ void CheckpointCoordinator::triggerLastCheckpointAndFlush()
     }
 
     /// <query_id, triggered_epoch>
-    std::vector<std::pair<std::string, Int64>> triggered_queries;
+    std::vector<std::pair<std::string, CheckpointEpoch>> triggered_queries;
     triggered_queries.reserve(ckpt_ctxes.size());
 
     while (true)
@@ -305,7 +306,7 @@ CheckpointCoordinator::TriggerResult CheckpointCoordinator::doTriggerCheckpoint(
                     {
                         /// Update last committed epoch in memory
                         iter->second->last_epoch = last_committed_epoch;
-                        iter->second->current_epoch = 0;
+                        iter->second->current_epoch.reset();
                         iter->second->ack_nodes = iter->second->ack_nodes_readonly;
                         updated = true;
                     }
@@ -343,7 +344,7 @@ void CheckpointCoordinator::removeOldOrExpiredCheckpoints() noexcept
             ckpt_ctxes_to_remove.reserve(queries.size());
             for (const auto & [qid, query] : queries)
             {
-                if (query->last_epoch > 1)
+                if (query->last_epoch.epoch > 1)
                     ckpt_ctxes_to_remove.emplace_back(query->ctx->cloneWithEpoch(query->last_epoch));
             }
         }
@@ -499,7 +500,7 @@ void CheckpointCoordinator::resetCurrentCheckpointEpoch(const String & qid)
             /// Already canceled the query
             return;
 
-        iter->second->current_epoch = 0;
+        iter->second->current_epoch.reset();
         iter->second->ack_nodes = iter->second->ack_nodes_readonly;
     }
 }

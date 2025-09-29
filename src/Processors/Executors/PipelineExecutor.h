@@ -6,6 +6,7 @@
 
 /// proton : starts
 #include <Checkpoint/CheckpointContextFwd.h>
+#include <Checkpoint/CheckpointEpoch.h>
 #include <Core/ExecuteMode.h>
 /// proton : ends
 
@@ -92,7 +93,7 @@ public:
 
 private:
     /// Recover the query graph from storage
-    std::pair<Int64, CheckpointSettingsPtr> recover(CheckpointContextPtr ckpt_ctx);
+    std::pair<CheckpointEpoch, CheckpointSettingsPtr> recover(CheckpointContextPtr ckpt_ctx);
     /// proton: ends.
 
 private:

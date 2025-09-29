@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Checkpoint/CheckpointEpoch.h>
 #include <Checkpoint/CheckpointRequestContext.h>
 #include <Checkpoint/ExtraCheckpointContext.h>
 
@@ -55,7 +56,7 @@ struct CheckpointContext final : public std::enable_shared_from_this<CheckpointC
     {
         /// processor checkpoint epoch starts with 1
         /// graph persistent is epoch 0
-        if (epoch > 0)
+        if (!epoch.empty())
             return fmt::format("{}/{}", qid, epoch);
         else
             return qid;
@@ -63,10 +64,10 @@ struct CheckpointContext final : public std::enable_shared_from_this<CheckpointC
 
     std::filesystem::path queryCheckpointDir() const { return qid; }
 
-    CheckpointContextPtr cloneWithEpoch(int64_t new_epoch, CheckpointRequestContextPtr request_ctx_ = {}) const
+    CheckpointContextPtr cloneWithEpoch(CheckpointEpoch ckpt_epoch, CheckpointRequestContextPtr request_ctx_ = {}) const
     {
         auto new_ckpt_ctx = std::make_shared<CheckpointContext>(*this);
-        new_ckpt_ctx->epoch = new_epoch;
+        new_ckpt_ctx->epoch = ckpt_epoch;
         if (request_ctx_)
             new_ckpt_ctx->request_ctx.swap(request_ctx_);
         return new_ckpt_ctx;
@@ -81,7 +82,7 @@ struct CheckpointContext final : public std::enable_shared_from_this<CheckpointC
     }
 
     /// Checkpoint epoch / monotonically increasing
-    int64_t epoch = 0;
+    CheckpointEpoch epoch;
 
     std::string qid;
 

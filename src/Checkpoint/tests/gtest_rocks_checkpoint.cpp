@@ -39,12 +39,12 @@ TEST(RocksCheckpoint, Basic)
     local_fs_ckpt_storage.preCheckpoint(ckpt_ctx); /// Epoch 0 to create checkpoint dir
 
     auto verify_case = [&](CheckpointPtr ckpt, Int64 epoch) {
-        ckpt_ctx->epoch = epoch;
+        ckpt_ctx->epoch = CheckpointEpoch{.epoch = epoch};
 
         local_fs_ckpt_storage.preCheckpoint(ckpt_ctx);
         local_fs_ckpt_storage.checkpoint("key", std::move(ckpt), ckpt_ctx);
         local_fs_ckpt_storage.commit(ckpt_ctx);
-        ASSERT_EQ(local_fs_ckpt_storage.getLastCommittedEpoch(ckpt_ctx), epoch);
+        ASSERT_EQ(local_fs_ckpt_storage.getLastCommittedEpoch(ckpt_ctx).epoch, epoch);
 
         auto recovered_rocks_path = base_dir / fmt::format("recovered_rocks{}", epoch);
         auto recovered_ckpt = local_fs_ckpt_storage.recover("key", ckpt_ctx);
@@ -114,11 +114,11 @@ TEST(RocksCheckpoint, Incremental)
         = std::make_shared<CheckpointContext>("qid_1", local_fs_ckpt_storage, /*no_use*/ reinterpret_cast<CheckpointCoordinator *>(0x1));
 
     auto verify_case = [&](CheckpointPtr ckpt, Int64 epoch) {
-        ckpt_ctx->epoch = epoch;
+        ckpt_ctx->epoch = CheckpointEpoch{.epoch = epoch};
         local_fs_ckpt_storage.preCheckpoint(ckpt_ctx);
         local_fs_ckpt_storage.checkpoint("key", std::move(ckpt), ckpt_ctx);
         local_fs_ckpt_storage.commit(ckpt_ctx);
-        ASSERT_EQ(local_fs_ckpt_storage.getLastCommittedEpoch(ckpt_ctx), epoch);
+        ASSERT_EQ(local_fs_ckpt_storage.getLastCommittedEpoch(ckpt_ctx).epoch, epoch);
 
         auto recovered_rocks_path = base_dir / fmt::format("recovered_rocks{}", epoch);
         auto recovered_ckpt = local_fs_ckpt_storage.recover("key", ckpt_ctx);
@@ -142,7 +142,7 @@ TEST(RocksCheckpoint, Incremental)
     {
         CheckpointPtr ckpt = std::make_shared<RocksCheckpoint>(1, rocks);
 
-        ckpt_ctx->epoch = 3; /// prev epoch before changing
+        ckpt_ctx->epoch = CheckpointEpoch{.epoch = 3}; /// prev epoch before changing
         ASSERT_TRUE(ckpt->enableIncremental(local_fs_ckpt_storage.recover("key", ckpt_ctx)));
         verify_case(ckpt, 4);
     }
@@ -151,7 +151,7 @@ TEST(RocksCheckpoint, Incremental)
     {
         CheckpointPtr ckpt = std::make_shared<RocksCheckpoint>(1, rocks);
 
-        ckpt_ctx->epoch = 4; /// prev epoch before changing
+        ckpt_ctx->epoch = CheckpointEpoch{.epoch = 4}; /// prev epoch before changing
         auto prev_ckpt = local_fs_ckpt_storage.recover("key", ckpt_ctx);
         ASSERT_TRUE(ckpt->enableIncremental(prev_ckpt));
 
@@ -166,7 +166,7 @@ TEST(RocksCheckpoint, Incremental)
     {
         CheckpointPtr ckpt = std::make_shared<RocksCheckpoint>(1, rocks);
 
-        ckpt_ctx->epoch = 5; /// prev epoch before changing
+        ckpt_ctx->epoch = CheckpointEpoch{.epoch = 5}; /// prev epoch before changing
         auto prev_ckpt = local_fs_ckpt_storage.recover("key", ckpt_ctx);
         ASSERT_TRUE(ckpt->enableIncremental(prev_ckpt));
 

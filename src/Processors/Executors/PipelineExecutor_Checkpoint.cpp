@@ -30,7 +30,7 @@ void PipelineExecutor::registerCheckpoint(ExecuteMode exec_mode_, CheckpointCont
             &ckpt_coordinator);
     }
 
-    std::optional<Int64> recovered_epoch;
+    std::optional<CheckpointEpoch> recovered_epoch;
     CheckpointSettingsPtr ckpt_settings;
     if (exec_mode_ == ExecuteMode::Recover)
         std::tie(recovered_epoch, ckpt_settings) = recover(ckpt_ctx);
@@ -97,7 +97,7 @@ void PipelineExecutor::triggerCheckpoint(CheckpointContextPtr ckpt_ctx)
     graph->triggerCheckpoint(std::move(ckpt_ctx));
 }
 
-std::pair<Int64, CheckpointSettingsPtr> PipelineExecutor::recover(CheckpointContextPtr ckpt_ctx)
+std::pair<CheckpointEpoch, CheckpointSettingsPtr> PipelineExecutor::recover(CheckpointContextPtr ckpt_ctx)
 {
     Stopwatch stopwatch;
     auto & ckpt_coordinator = Globals::getCheckpointCoordinator();
@@ -138,7 +138,7 @@ std::pair<Int64, CheckpointSettingsPtr> PipelineExecutor::recover(CheckpointCont
     /// Recover query states from checkpoint
     const auto & ckpt_storage = ckpt_coordinator.getCheckpointStorage(ckpt_settings->replication_type);
     auto recovered_epoch = ckpt_storage.getLastCommittedEpoch(ckpt_ctx);
-    if (recovered_epoch > 0)
+    if (!recovered_epoch.empty())
         graph->recover(ckpt_ctx->cloneWithEpoch(recovered_epoch));
 
     LOG_INFO(

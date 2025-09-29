@@ -44,7 +44,7 @@ public:
     void commit(CheckpointContextPtr ckpt_ctx) const override;
 
     /// Get the last checkpoint epoch for a query id
-    int64_t getLastCommittedEpoch(CheckpointContextPtr ckpt_ctx) const override;
+    CheckpointEpoch getLastCommittedEpoch(CheckpointContextPtr ckpt_ctx) const override;
 
     std::set<std::string> getKeyNames(CheckpointContextPtr ckpt_ctx) const override;
 

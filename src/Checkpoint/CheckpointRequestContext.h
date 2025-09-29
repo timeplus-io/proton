@@ -15,8 +15,8 @@ namespace DB
 class PipelineExecutor;
 struct CheckpointRequestContext
 {
-    /// Unique identifier for the checkpoint request
-    UUID uuid = UUIDHelpers::generateV4();
+    /// Used for incremental checkpoint
+    CheckpointEpoch last_epoch;
 
     /// The executor that will be checkpointed. This executor is only active during the checkpoint trigger phase.
     CheckpointableExecutorHolder executor;

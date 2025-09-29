@@ -22,6 +22,7 @@
 namespace DB
 {
 struct BlockIO;
+struct CheckpointEpoch;
 
 /// \StorageMaterializedView contains 2 major components:
 /// 1) A long running streaming query pipeline.

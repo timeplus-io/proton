@@ -34,12 +34,12 @@ TEST(FileCheckpoint, Basic)
     local_fs_ckpt_storage.preCheckpoint(ckpt_ctx); /// Epoch 0 to create checkpoint dir
 
     /// Epoch 1
-    ckpt_ctx->epoch = 1;
+    ckpt_ctx->epoch = CheckpointEpoch{.epoch = 1};
     local_fs_ckpt_storage.preCheckpoint(ckpt_ctx);
     CheckpointPtr ckpt = std::make_shared<FileCheckpoint>(1, [](WriteBuffer & wb) { writeStringBinary("hello world!", wb); });
     local_fs_ckpt_storage.checkpoint("key1", std::move(ckpt), ckpt_ctx);
     local_fs_ckpt_storage.commit(ckpt_ctx);
-    ASSERT_EQ(local_fs_ckpt_storage.getLastCommittedEpoch(ckpt_ctx), 1);
+    ASSERT_EQ(local_fs_ckpt_storage.getLastCommittedEpoch(ckpt_ctx).epoch, 1);
 
     ckpt = local_fs_ckpt_storage.recover("key1", ckpt_ctx);
     ASSERT_EQ(ckpt->getVersion(), 1);
@@ -51,7 +51,7 @@ TEST(FileCheckpoint, Basic)
     });
 
     /// Epoch2 (No commit) (Compressed)
-    ckpt_ctx->epoch = 2;
+    ckpt_ctx->epoch = CheckpointEpoch{.epoch = 2};
     local_fs_ckpt_storage.preCheckpoint(ckpt_ctx);
     ckpt = std::make_shared<FileCheckpoint>(
         2,
@@ -73,24 +73,24 @@ TEST(FileCheckpoint, Basic)
     });
 
     /// Epoch3
-    ckpt_ctx->epoch = 3;
+    ckpt_ctx->epoch = CheckpointEpoch{.epoch = 3};
     local_fs_ckpt_storage.preCheckpoint(ckpt_ctx);
     local_fs_ckpt_storage.commit(ckpt_ctx);
-    ASSERT_EQ(local_fs_ckpt_storage.getLastCommittedEpoch(ckpt_ctx), 3);
+    ASSERT_EQ(local_fs_ckpt_storage.getLastCommittedEpoch(ckpt_ctx).epoch, 3);
 
     /// Remove all ckpt before epoch 3
-    ckpt_ctx->epoch = 3;
+    ckpt_ctx->epoch = CheckpointEpoch{.epoch = 3};
     local_fs_ckpt_storage.remove(ckpt_ctx);
-    ASSERT_EQ(local_fs_ckpt_storage.getLastCommittedEpoch(ckpt_ctx), 3);
+    ASSERT_EQ(local_fs_ckpt_storage.getLastCommittedEpoch(ckpt_ctx).epoch, 3);
 
     /// Epoch 1 was removed
-    ckpt_ctx->epoch = 1;
+    ckpt_ctx->epoch = CheckpointEpoch{.epoch = 1};
     ASSERT_FALSE(local_fs_ckpt_storage.checkpointDirExists(ckpt_ctx));
 
     /// Remove all
-    ckpt_ctx->epoch = 0;
+    ckpt_ctx->epoch = CheckpointEpoch{.epoch = 0};
     local_fs_ckpt_storage.remove(ckpt_ctx);
-    ASSERT_EQ(local_fs_ckpt_storage.getLastCommittedEpoch(ckpt_ctx), 0);
+    ASSERT_EQ(local_fs_ckpt_storage.getLastCommittedEpoch(ckpt_ctx).epoch, 0);
 }
 
 TEST(FileCheckpoint, Serder)

@@ -23,9 +23,6 @@ public:
     DiskPtr getDisk(CheckpointContextPtr) const override { return local_disk; }
 
     void preCommit(CheckpointContextPtr ckpt_ctx) const;
-
-    std::optional<UUID> tryGetPreCommittedUUID(CheckpointContextPtr ckpt_ctx) const;
-
     bool preCommitted(CheckpointContextPtr ckpt_ctx) const;
 
 private:
