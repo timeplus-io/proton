@@ -1,4 +1,5 @@
 #include <Disks/ObjectStorages/AzureBlobStorage/AzureObjectStorage.h>
+#include <Common/Exception.h>
 
 #if USE_AZURE_BLOB_STORAGE
 
@@ -254,36 +255,22 @@ std::unique_ptr<WriteBufferFromFileBase> AzureObjectStorage::writeObject( /// NO
         settings.get());
 }
 
-/// Remove file. Throws exception if file doesn't exists or it's a directory.
-void AzureObjectStorage::removeObject(const StoredObject & object)
-{
-    const auto & path = object.remote_path;
-    LOG_TEST(log, "Removing single object: {}", path);
-    auto client_ptr = client.get();
-    auto delete_info = client_ptr->DeleteBlob(path);
-    if (!delete_info.Value.Deleted)
-        throw Exception(ErrorCodes::AZURE_BLOB_STORAGE_ERROR, "Failed to delete file in AzureBlob Storage: {}", path);
-}
-
-void AzureObjectStorage::removeObjects(const StoredObjects & objects)
-{
-    auto client_ptr = client.get();
-    for (const auto & object : objects)
-    {
-        LOG_TEST(log, "Removing object: {} (total: {})", object.remote_path, objects.size());
-        auto delete_info = client_ptr->DeleteBlob(object.remote_path);
-        if (!delete_info.Value.Deleted)
-            throw Exception(
-                ErrorCodes::AZURE_BLOB_STORAGE_ERROR, "Failed to delete file (path: {}) in AzureBlob Storage, reason: {}",
-                object.remote_path, delete_info.RawResponse ? delete_info.RawResponse->GetReasonPhrase() : "Unknown");
-    }
-}
-
 void AzureObjectStorage::removeObjectIfExists(const StoredObject & object)
 {
     auto client_ptr = client.get();
-    LOG_TEST(log, "Removing single object: {}", object.remote_path);
-    auto delete_info = client_ptr->DeleteBlob(object.remote_path);
+    try
+    {
+        LOG_TEST(log, "Removing single object: {}", object.absolute_path);
+        auto delete_info = client_ptr->DeleteBlob(object.absolute_path);
+    }
+    catch (const Azure::Storage::StorageException & e)
+    {
+        /// If object doesn't exist...
+        if (e.StatusCode == Azure::Core::Http::HttpStatusCode::NotFound)
+            return;
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        throw;
+    }
 }
 
 void AzureObjectStorage::removeObjectsIfExist(const StoredObjects & objects)
@@ -291,11 +278,21 @@ void AzureObjectStorage::removeObjectsIfExist(const StoredObjects & objects)
     auto client_ptr = client.get();
     for (const auto & object : objects)
     {
-        removeObjectIfExists(object);
+        try
+        {
+            auto delete_info = client_ptr->DeleteBlob(object.absolute_path);
+        }
+        catch (const Azure::Storage::StorageException & e)
+        {
+            /// If object doesn't exist...
+            if (e.StatusCode == Azure::Core::Http::HttpStatusCode::NotFound)
+                return;
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            throw;
+        }
     }
 
 }
-
 
 ObjectMetadata AzureObjectStorage::getObjectMetadata(const std::string & path) const
 {

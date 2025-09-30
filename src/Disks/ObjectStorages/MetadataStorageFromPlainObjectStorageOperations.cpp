@@ -65,7 +65,7 @@ void MetadataStorageFromPlainObjectStorageCreateDirectoryOperation::undo(std::un
     if (write_finalized)
     {
         path_map.erase(path);
-        object_storage->removeObject(StoredObject(object_key.serialize(), path / PREFIX_PATH_FILE_NAME));
+        object_storage->removeObjectIfExists(StoredObject(object_key.serialize(), path / PREFIX_PATH_FILE_NAME));
     }
     else if (write_created)
         object_storage->removeObjectIfExists(StoredObject(object_key.serialize(), path / PREFIX_PATH_FILE_NAME));
@@ -164,7 +164,7 @@ void MetadataStorageFromPlainObjectStorageRemoveDirectoryOperation::execute(std:
     key_prefix = path_it->second;
     auto object_key = ObjectStorageKey::createAsRelative(key_prefix, PREFIX_PATH_FILE_NAME);
     auto object = StoredObject(object_key.serialize(), path / PREFIX_PATH_FILE_NAME);
-    object_storage->removeObject(object);
+    object_storage->removeObjectIfExists(object);
     path_map.erase(path_it);
 }
 

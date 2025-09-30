@@ -135,7 +135,7 @@ std::unique_ptr<WriteBufferFromFileBase> LocalObjectStorage::writeObject( /// NO
     return std::make_unique<WriteBufferFromFile>(object.remote_path, buf_size);
 }
 
-void LocalObjectStorage::removeObject(const StoredObject & object)
+void LocalObjectStorage::removeObject(const StoredObject & object) const
 {
     /// For local object storage files are actually removed when "metadata" is removed.
     if (!exists(object))
@@ -145,7 +145,7 @@ void LocalObjectStorage::removeObject(const StoredObject & object)
         throwFromErrnoWithPath("Cannot unlink file " + object.remote_path, object.remote_path, ErrorCodes::CANNOT_UNLINK);
 }
 
-void LocalObjectStorage::removeObjects(const StoredObjects & objects)
+void LocalObjectStorage::removeObjects(const StoredObjects & objects) const
 {
     for (const auto & object : objects)
         removeObject(object);

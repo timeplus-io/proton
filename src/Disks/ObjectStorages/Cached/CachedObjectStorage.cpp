@@ -106,7 +106,6 @@ std::unique_ptr<WriteBufferFromFileBase> CachedObjectStorage::writeObject( /// N
     if (cache_on_write)
     {
         auto key = getCacheKey(object.remote_path);
-
         return std::make_unique<CachedOnDiskWriteBufferFromFile>(
             std::move(implementation_buffer),
             cache,
@@ -126,19 +125,6 @@ void CachedObjectStorage::removeCacheIfExists(const std::string & path_key_for_c
 
     /// Add try catch?
     cache->removeKeyIfExists(getCacheKey(path_key_for_cache));
-}
-
-void CachedObjectStorage::removeObject(const StoredObject & object)
-{
-    object_storage->removeObject(object);
-}
-
-void CachedObjectStorage::removeObjects(const StoredObjects & objects)
-{
-    for (const auto & object : objects)
-        removeCacheIfExists(object.remote_path);
-
-    object_storage->removeObjects(objects);
 }
 
 void CachedObjectStorage::removeObjectIfExists(const StoredObject & object)

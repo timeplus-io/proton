@@ -7,11 +7,11 @@
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
 
-#include <QueryPipeline/Pipe.h>
-#include <Processors/ISimpleTransform.h>
-#include <Processors/Formats/IOutputFormat.h>
-#include <Processors/Executors/CompletedPipelineExecutor.h>
 #include <Interpreters/Context.h>
+#include <Processors/Executors/CompletedPipelineExecutor.h>
+#include <Processors/Formats/IOutputFormat.h>
+#include <Processors/ISimpleTransform.h>
+#include <QueryPipeline/Pipe.h>
 
 /// proton: starts
 #include <Processors/Formats/IRowInputFormat.h>
@@ -25,10 +25,10 @@ namespace ErrorCodes
 {
     extern const int UNSUPPORTED_METHOD;
     extern const int TIMEOUT_EXCEEDED;
-    extern const int CANNOT_FCNTL;
     extern const int CANNOT_READ_FROM_FILE_DESCRIPTOR;
-    extern const int CANNOT_POLL;
     extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
+    extern const int CANNOT_FCNTL;
+    extern const int CANNOT_POLL;
 }
 
 static bool tryMakeFdNonBlocking(int fd)
@@ -75,28 +75,22 @@ static bool pollFd(int fd, size_t timeout_milliseconds, int events)
     pfd.events = events;
     pfd.revents = 0;
 
-    Stopwatch watch;
-
     int res;
 
     while (true)
     {
+        Stopwatch watch;
         res = poll(&pfd, 1, static_cast<int>(timeout_milliseconds));
 
         if (res < 0)
         {
-            if (errno == EINTR)
-            {
-                watch.stop();
-                timeout_milliseconds -= watch.elapsedMilliseconds();
-                watch.start();
-
-                continue;
-            }
-            else
-            {
+            if (errno != EINTR)
                 throwFromErrno("Cannot poll", ErrorCodes::CANNOT_POLL);
-            }
+
+            const auto elapsed = watch.elapsedMilliseconds();
+            if (timeout_milliseconds <= elapsed)
+                break;
+            timeout_milliseconds -= elapsed;
         }
         else
         {
