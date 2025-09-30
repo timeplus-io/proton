@@ -31,6 +31,9 @@ struct StreamStateLogElement
     void appendToBlock(MutableColumns & columns) const;
 };
 
+using AddElem
+    = std::function<void(const StorageID & storage_id, std::string_view name, UInt64 value, String string_value, String dimension)>;
+
 class StreamStateLog : public SystemLog<StreamStateLogElement>
 {
     using SystemLog<StreamStateLogElement>::SystemLog;
@@ -50,8 +53,11 @@ public:
     void stopCollectStates();
 
 private:
+    friend class StorageSystemLocalSystemStates;
+
     void collectStates();
-    void doCollectStates();
+
+    static void doCollectStates(AddElem add_elem, ContextPtr local_context);
 
     size_t collect_interval_milliseconds;
     std::atomic_flag stopped;

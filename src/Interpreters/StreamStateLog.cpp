@@ -62,9 +62,6 @@ StreamStateLogElement makeStreamStateLogElement(
     return elem;
 }
 
-using AddElem = std::function<void(
-    const StorageID &, /*state_name*/ std::string_view, /*state_value*/ UInt64, /*state_string_value*/ String, /*dimension*/ String)>;
-
 void addStreamLog(const StorageStream * stream, const AddElem & add_elem)
 {
     const auto & storage_id = stream->getStorageID();
@@ -425,9 +422,17 @@ void StreamStateLog::shutdown()
 
 void StreamStateLog::collectStates()
 {
+    auto local_context = getContext();
+    auto node_id = local_context->getNodeID();
+
+    auto add_elem
+        = [this, node_id](const StorageID & storage_id, std::string_view name, UInt64 value, String string_value, String dimension) {
+              this->add(makeStreamStateLogElement(node_id, storage_id, name, value, std::move(string_value), std::move(dimension)));
+          };
+
     try
     {
-        doCollectStates();
+        doCollectStates(add_elem, std::move(local_context));
     }
     catch (...)
     {
@@ -435,17 +440,12 @@ void StreamStateLog::collectStates()
     }
 }
 
-void StreamStateLog::doCollectStates()
+
+void StreamStateLog::doCollectStates(AddElem add_elem, ContextPtr local_context)
 {
     /// List all storages [in the specified database]
     Databases databases = DatabaseCatalog::instance().getDatabases();
-    auto context = getContext();
-    auto node_id = context->getNodeID();
-
-    auto add_elem
-        = [this, node_id](const StorageID & storage_id, std::string_view name, UInt64 value, String string_value, String dimension) {
-              this->add(makeStreamStateLogElement(node_id, storage_id, name, value, std::move(string_value), std::move(dimension)));
-          };
+    auto node_id = local_context->getNodeID();
 
     uint32_t num_running_mvs = 0, num_running_shards = 0;
     for (const auto & [database_name, database] : databases)
@@ -456,55 +456,49 @@ void StreamStateLog::doCollectStates()
         if (!database->canContainMergeTreeTables())
             continue;
 
-        for (auto iterator = database->getTablesIterator(context); iterator->isValid(); iterator->next())
+        for (auto iterator = database->getTablesIterator(local_context); iterator->isValid(); iterator->next())
         {
             const auto & storage = iterator->table();
             if (!storage || !storage->isReady() || storage->isVirtualStorage())
                 continue;
 
-            try
+            if (const auto * storage_stream = dynamic_cast<StorageStream *>(storage.get()))
             {
-                if (const auto * storage_stream = dynamic_cast<StorageStream *>(storage.get()))
+                addStreamLog(storage_stream, add_elem);
+                num_running_shards += static_cast<uint32_t>(storage_stream->getPhysicalShards());
+            }
+            else if (const auto * storage_external_stream = dynamic_cast<StorageExternalStream *>(storage.get()))
+            {
+                addExternalStreamLog(storage_external_stream, add_elem);
+            }
+            else if (const auto * storage_materialized_view = dynamic_cast<StorageMaterializedView *>(storage.get()))
+            {
+                addMaterializedViewLog(storage_materialized_view, node_id, add_elem);
+                num_running_mvs += storage_materialized_view->isRunning();
+                if (storage_materialized_view->usesInnerStorage())
                 {
-                    addStreamLog(storage_stream, add_elem);
-                    num_running_shards += storage_stream->getShards();
-                }
-                else if (const auto * storage_external_stream = dynamic_cast<StorageExternalStream *>(storage.get()))
-                {
-                    addExternalStreamLog(storage_external_stream, add_elem);
-                }
-                else if (const auto * storage_materialized_view = dynamic_cast<StorageMaterializedView *>(storage.get()))
-                {
-                    addMaterializedViewLog(storage_materialized_view, add_elem);
-                    num_running_mvs += storage_materialized_view->isRunning();
-                    if (storage_materialized_view->usesInnerStorage())
+                    if (const auto & inner_storage = storage_materialized_view->tryGetTargetTable())
                     {
-                        if (const auto & inner_storage = storage_materialized_view->tryGetTargetTable())
-                        {
-                            if (const auto * inner_stream = dynamic_cast<StorageStream *>(inner_storage.get()))
-                                num_running_shards += static_cast<uint32_t>(inner_stream->getPhysicalShards());
-                        }
+                        if (const auto * inner_stream = dynamic_cast<StorageStream *>(inner_storage.get()))
+                            num_running_shards += static_cast<uint32_t>(inner_stream->getPhysicalShards());
                     }
                 }
-                else if (auto * storage_alert = dynamic_cast<StorageAlert *>(storage.get()))
-                {
-                    addAlertLog(storage_alert, add_elem);
-                }
             }
-            catch (const Exception & ex)
+            else if (auto * storage_alert = dynamic_cast<StorageAlert *>(storage.get()))
             {
-                LOG_ERROR(log, "Failed to collect stream states for {}, error={}", storage->getStorageID().getNameForLogs(), ex.message());
+                addAlertLog(storage_alert, add_elem);
             }
         }
     }
 
-    const_cast<Context *>(getContext().get())->setTotalMaterializedViews(num_running_mvs);
-    const_cast<Context *>(getContext().get())->setTotalShards(num_running_shards);
+    auto * mutable_context = const_cast<Context *>(local_context.get());
+    mutable_context->setTotalMaterializedViews(num_running_mvs);
+    mutable_context->setTotalShards(num_running_shards);
 
-    addDictionaryLog(context, add_elem);
+    addDictionaryLog(local_context, add_elem);
 
 #if USE_PYTHON_UDF
-    addPythonPackageLog(context, add_elem);
+    addPythonPackageLog(local_context, add_elem);
 #endif
 }
 
