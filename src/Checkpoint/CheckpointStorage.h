@@ -56,12 +56,28 @@ public:
 
     virtual CheckpointReplicationType replicationType() const = 0;
 
-    virtual uint64_t getStorageSize(CheckpointContextPtr ckpt_ctx) const = 0;
+    uint64_t getStorageSize(CheckpointContextPtr ckpt_ctx) const
+    {
+        auto now_sec = DB::MonotonicSeconds::now();
+        if (now_sec - last_cached_ts >= 30 * 60) /// 30 mins
+        {
+            cached_storage_size = doGetStorageSize(std::move(ckpt_ctx));
+            last_cached_ts = now_sec;
+        }
+        return cached_storage_size;
+    }
+
     virtual PathSizes getStorageStat(CheckpointContextPtr ckpt_ctx) const = 0;
 
     virtual bool isLocal() const { return false; }
 
+private:
+    virtual uint64_t doGetStorageSize(CheckpointContextPtr ckpt_ctx) const = 0;
+
 protected:
+    mutable uint64_t cached_storage_size = 0;
+    mutable int64_t last_cached_ts = 0;
+
     LoggerPtr logger;
 };
 }

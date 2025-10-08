@@ -433,7 +433,6 @@ void StreamStateLog::collectStates()
     try
     {
         doCollectStates(add_elem, std::move(local_context));
-        flush(/*force=*/true);
     }
     catch (...)
     {

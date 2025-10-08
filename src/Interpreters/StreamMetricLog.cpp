@@ -118,7 +118,6 @@ void StreamMetricLog::collectMetrics()
     {
         setThreadName("SMCollector");
         doCollectMetrics();
-        flush(/*force=*/true);
     }
     catch (...)
     {

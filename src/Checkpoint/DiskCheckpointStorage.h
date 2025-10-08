@@ -59,9 +59,11 @@ public:
 
     std::optional<CheckpointType> exists(const std::string & key, CheckpointContextPtr ckpt_ctx) const override;
 
-    uint64_t getStorageSize(CheckpointContextPtr ckpt_ctx) const override;
     PathSizes getStorageStat(CheckpointContextPtr ckpt_ctx) const override;
 
     bool checkpointDirExists(CheckpointContextPtr ckpt_ctx) const;
+
+private:
+    uint64_t doGetStorageSize(CheckpointContextPtr ckpt_ctx) const override;
 };
 }
