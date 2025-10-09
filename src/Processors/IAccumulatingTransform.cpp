@@ -104,6 +104,7 @@ void IAccumulatingTransform::work()
     {
         /// proton: starts.
         metrics.processed_bytes += current_input_chunk.bytes();
+        metrics.processed_rows += current_input_chunk.rows();
         /// proton: ends.
 
         consume(std::move(current_input_chunk));

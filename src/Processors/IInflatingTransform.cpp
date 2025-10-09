@@ -88,6 +88,7 @@ void IInflatingTransform::work()
 
         /// proton: starts.
         metrics.processed_bytes += current_chunk.bytes();
+        metrics.processed_rows += current_chunk.rows();
         /// proton: ends.
 
         consume(std::move(current_chunk));

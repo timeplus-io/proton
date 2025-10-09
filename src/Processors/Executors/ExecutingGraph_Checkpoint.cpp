@@ -217,6 +217,7 @@ String ExecutingGraph::getStats() const
 
         metrices.set("processing_time_ns", metric.processing_time_ns);
         metrices.set("processed_bytes", metric.processed_bytes);
+        metrices.set("processed_rows", metric.processed_rows);
 
         if (metric.last_processed_sn_range.has_value())
         {

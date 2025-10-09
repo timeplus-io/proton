@@ -94,6 +94,7 @@ void IOutputFormat::work()
         case Main:
             /// proton: starts.
             metrics.processed_bytes += current_chunk.bytes();
+            metrics.processed_rows += current_chunk.rows();
             /// proton: ends.
             result_rows += current_chunk.getNumRows();
             result_bytes += current_chunk.allocatedBytes();

@@ -154,6 +154,7 @@ void AggregatingTransformWithSubstream::work()
     Stopwatch stopwatch;
     auto chunk_bytes = current_chunk.bytes();
     metrics.processed_bytes += chunk_bytes;
+    metrics.processed_rows += num_rows;
 
     if (likely(!is_consume_finished))
     {

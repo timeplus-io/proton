@@ -127,6 +127,7 @@ public:
 
             /// proton: starts.
             metrics.processed_bytes += state.input_chunk.chunk.bytes();
+            metrics.processed_rows += state.input_chunk.chunk.rows();
             /// proton: ends.
 
             algorithm.consume(state.input_chunk, state.next_input_to_read);

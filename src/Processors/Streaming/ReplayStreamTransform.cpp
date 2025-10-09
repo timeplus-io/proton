@@ -155,6 +155,7 @@ void ReplayStreamTransform::work()
 {
     auto start_ns = MonotonicNanoseconds::now();
     metrics.processed_bytes += input_chunk.bytes();
+    metrics.processed_rows += input_chunk.rows();
     if (input_chunk)
     {
         if (input_chunk.hasRows())

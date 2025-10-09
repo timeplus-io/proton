@@ -106,6 +106,7 @@ void ISource::work()
             /// proton: starts.
             metrics.processing_time_ns += MonotonicNanoseconds::now() - start_ns;
             metrics.processed_bytes += chunk->bytes();
+            metrics.processed_bytes += chunk->rows();
             /// proton: ends.
 
             current_chunk.chunk = std::move(*chunk);

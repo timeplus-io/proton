@@ -89,6 +89,7 @@ void ISimpleTransform::work()
     /// proton: starts.
     auto start_ns = MonotonicNanoseconds::now();
     metrics.processed_bytes += input_data.chunk.bytes();
+    metrics.processed_rows += input_data.chunk.rows();
     /// proton: ends.
     try
     {

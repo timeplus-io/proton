@@ -5,9 +5,9 @@
 #include <Common/Stopwatch.h>
 
 /// proton: starts.
+#include <Checkpoint/CheckpointContextFwd.h>
 #include <Processors/ProcessorID.h>
 #include <Common/ProfileEvents.h>
-#include <Checkpoint/CheckpointContextFwd.h>
 
 #include <map>
 /// proton: ends.
@@ -16,8 +16,8 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int NOT_IMPLEMENTED;
+extern const int LOGICAL_ERROR;
+extern const int NOT_IMPLEMENTED;
 }
 
 class IQueryPlanStep;
@@ -34,6 +34,7 @@ struct ProcessorMetrics
 {
     int64_t processing_time_ns = 0;
     uint64_t processed_bytes = 0;
+    uint64_t processed_rows = 0;
 
     std::optional<std::pair<int64_t, int64_t>> last_processed_sn_range;
     std::string last_error_message;
@@ -209,10 +210,7 @@ public:
       *
       * Method work can be executed in parallel for different processors.
       */
-    virtual void work()
-    {
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method 'work' is not implemented for {} processor", getName());
-    }
+    virtual void work() { throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method 'work' is not implemented for {} processor", getName()); }
 
     /** Executor must call this method when 'prepare' returned Async.
       * This method cannot access any ports. It should use only data that was prepared by 'prepare' method.
@@ -254,7 +252,7 @@ public:
 
     /// Additional method which is called in case if ports were updated while work() method.
     /// May be used to stop execution in rare cases.
-    virtual void onUpdatePorts() {}
+    virtual void onUpdatePorts() { }
 
     virtual ~IProcessor() = default;
 
@@ -336,7 +334,7 @@ public:
     /// Set limits for current storage.
     /// Different limits may be applied to different storages, we need to keep it per processor.
     /// This method is need to be override only for sources.
-    virtual void setStorageLimits(const std::shared_ptr<const StorageLimitsList> & /*storage_limits*/) {}
+    virtual void setStorageLimits(const std::shared_ptr<const StorageLimitsList> & /*storage_limits*/) { }
 
     /// This method is called for every processor without input ports.
     /// Processor can return a new progress for the last read operation.
@@ -386,7 +384,7 @@ protected:
     /// proton: ends.
 
 protected:
-    virtual void onCancel() noexcept {}
+    virtual void onCancel() noexcept { }
 
     std::atomic<bool> is_cancelled{false};
 

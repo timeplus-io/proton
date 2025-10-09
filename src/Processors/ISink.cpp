@@ -50,6 +50,7 @@ void ISink::work()
         /// proton: starts.
         auto start_ns = MonotonicNanoseconds::now();
         metrics.processed_bytes += current_chunk.bytes();
+        metrics.processed_bytes += current_chunk.rows();
 
         if (current_chunk.requestCheckpoint())
             checkpoint(current_chunk.getCheckpointContext());
