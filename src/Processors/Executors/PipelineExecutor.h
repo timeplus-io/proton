@@ -72,7 +72,8 @@ public:
     bool checkpointRegistered() const;
     bool requireExplicitCancel() const { return checkpointRegistered(); }
 
-    String getStats() const;
+    /// Pipeline DAG stats, proton: added
+    String getStats(const std::vector<UInt64> & thread_ids) const;
 
     bool hasProcessedNewDataSinceLastCheckpoint() const noexcept;
 

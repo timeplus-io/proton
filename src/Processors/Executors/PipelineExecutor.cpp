@@ -424,9 +424,9 @@ String PipelineExecutor::dumpPipeline() const
 }
 
 /// proton: starts.
-String PipelineExecutor::getStats() const
+String PipelineExecutor::getStats(const std::vector<UInt64> & thread_ids) const
 {
-    return graph->getStats();
+    return graph->getStats(thread_ids);
 }
 /// proton: ends.
 }

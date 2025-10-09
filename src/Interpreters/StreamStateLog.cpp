@@ -165,16 +165,14 @@ void addMaterializedViewLog(const StorageMaterializedView * mv, const AddElem & 
         /*state_string_value=*/fmt::format("{:.1f}%", metrics.cpu_usage_percentage),
         /*dimension=*/mv_type);
 
-    /// Thread IDs for the MatView execution
-    /// state_value: Store thread count
-    /// state_string_value: Store comma-separated thread IDs
-    if (!metrics.thread_ids.empty())
+    auto pipeline_metrics = mv->getPipelineMetrics();
+    if (!pipeline_metrics.empty())
     {
         add_elem(
             storage_id,
-            "thread_ids",
-            metrics.thread_ids.size(),
-            /*state_string_value=*/fmt::format("{}", fmt::join(metrics.thread_ids, ",")),
+            "pipeline",
+            /*state_value*/0,
+            /*state_string_value=*/pipeline_metrics,
             /*dimension=*/mv_type);
     }
 

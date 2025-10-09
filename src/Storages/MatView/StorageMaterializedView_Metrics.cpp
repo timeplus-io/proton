@@ -55,9 +55,9 @@ UInt64 StorageMaterializedView::writtenRows(bool reset, [[maybe_unused]] bool ex
         return pipeline_state.written_rows.load(std::memory_order_relaxed);
 }
 
-StorageMaterializedView::PipelineMetrics StorageMaterializedView::getPipelineMetrics() const
+StorageMaterializedView::PipelineResourceMetrics StorageMaterializedView::getPipelineResourceMetrics() const
 {
-    PipelineMetrics metrics;
+    PipelineResourceMetrics metrics;
 
     /// https://github.com/timeplus-io/proton-enterprise/issues/6170
     /// When the query pipeline recovers from an exception,
@@ -70,19 +70,16 @@ StorageMaterializedView::PipelineMetrics StorageMaterializedView::getPipelineMet
     /// of the query context object.
     auto query_context_holder = pipeline_state.query_context;
     auto block_io = pipeline_state.io.load();
-    if (!block_io || !block_io->process_list_entry)
+    auto process_list_entry = block_io->process_list_entry;
+    if (!block_io || !process_list_entry)
         return metrics;
 
     /// Get dynamic metrics only (memory and CPU) - skip static thread_list
-    auto query_status_info = block_io->process_list_entry->getQueryStatus()->getInfo(
-        /*get_thread_list=*/false, /*get_profile_events=*/true, /*get_settings=*/false);
+    auto query_status_info = process_list_entry->getQueryStatus()->getInfo(
+        /*get_thread_list=*/false, /*get_profile_events=*/true, /*get_settings=*/false, /*get_pipeline_metrics=*/false);
 
     /// Memory usage (dynamic - changes constantly)
     metrics.memory_usage = query_status_info.memory_usage;
-
-    /// Use cached static data (thread IDs)
-    /// These are collected once when pipeline is built and never change
-    metrics.thread_ids = pipeline_state.cached_thread_ids;
 
     /// CPU usage calculation (dynamic - real-time delta tracking)
     if (query_status_info.profile_counters && query_status_info.elapsed_microseconds > 0)
@@ -171,18 +168,28 @@ Streaming::StreamingSourceMetricsPtrs StorageMaterializedView::getStreamingSourc
 StorageMaterializedView::Metrics StorageMaterializedView::getMetrics() const
 {
     /// Get all pipeline metrics in a single efficient call
-    auto pipeline_metrics = getPipelineMetrics();
+    auto pipeline_resource_metrics = getPipelineResourceMetrics();
 
     return Metrics{
         .status = String{magic_enum::enum_name(getPipelineStatus())},
         .last_err_msg_and_ts = lastErrorMessageAndTimestamp(),
         .recover_times = getRetryTimes(),
-        .memory_usage = pipeline_metrics.memory_usage,
-        .cpu_usage_percentage = pipeline_metrics.cpu_usage_percentage,
-        .thread_ids = std::move(pipeline_metrics.thread_ids),
+        .memory_usage = pipeline_resource_metrics.memory_usage,
+        .cpu_usage_percentage = pipeline_resource_metrics.cpu_usage_percentage,
         .ckpt_storage_size = getCheckpointSize(),
         .ckpt_request_metrics = getCheckpointRequestMetrics(),
         .source_metrics = getStreamingSourceMetrics(),
     };
 }
+
+String StorageMaterializedView::getPipelineMetrics() const
+{
+    auto block_io = pipeline_state.io.load();
+    auto process_list_entry = block_io->process_list_entry;
+    if (!block_io || !process_list_entry)
+        return "";
+
+    return process_list_entry->getQueryStatus()->getPipelineMetric(pipeline_state.cached_thread_ids);
+}
+
 }

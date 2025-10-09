@@ -179,7 +179,6 @@ private:
         Int64 recover_times;
         Int64 memory_usage;
         Float64 cpu_usage_percentage;
-        std::vector<UInt64> thread_ids;
         UInt64 ckpt_storage_size;
         CheckpointRequestMetricsPtr ckpt_request_metrics;
         Streaming::StreamingSourceMetricsPtrs source_metrics;
@@ -297,6 +296,9 @@ public:
 
     Metrics getMetrics() const;
 
+    /// In json string
+    String getPipelineMetrics() const;
+
     /// Pause/Resume/Abort/Recover the background pipeline execution
     /// \return error code
     int pause(int64_t timeout_ms);
@@ -349,16 +351,15 @@ private:
 
     void logToDLQ(const std::vector<std::shared_ptr<Streaming::ISource>> &);
 
-    struct PipelineMetrics
+    struct PipelineResourceMetrics
     {
         Int64 memory_usage = 0;
         Float64 cpu_usage_percentage = 0.0;
-        std::vector<UInt64> thread_ids;
     };
 
     /// Internal Metrics methods
     /// Get all pipeline metrics in a single call (efficient)
-    PipelineMetrics getPipelineMetrics() const;
+    PipelineResourceMetrics getPipelineResourceMetrics() const;
     Streaming::StreamingSourceMetricsPtrs getStreamingSourceMetrics() const;
     CheckpointRequestMetricsPtr getCheckpointRequestMetrics() const;
     UInt64 getLogStoreDiskSize() const;

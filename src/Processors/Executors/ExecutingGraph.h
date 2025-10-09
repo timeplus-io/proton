@@ -163,7 +163,7 @@ public:
     void cancel();
 
     /// proton: start.
-    String getStats() const;
+    String getStats(const std::vector<UInt64> & thread_ids) const;
 
     /// Serialize the graph
     void serialize(WriteBuffer & wb) const;

@@ -465,16 +465,23 @@ bool QueryStatus::checkTimeLimitSoft()
 }
 
 /// proton: starts.
-String QueryStatus::getPipelineMetric() const
+String QueryStatus::getPipelineMetric(const std::vector<UInt64> & thread_ids) const
 {
     std::unique_lock lock(executors_mutex, std::try_to_lock);
     if (!lock.owns_lock())
         return "";
 
     if (!executors.empty())
-        return executors.begin()->first->getStats();
+        return executors.begin()->first->getStats(thread_ids);
 
     return "";
+}
+
+String QueryStatus::getPipelineMetric() const
+{
+    if (thread_group)
+        return getPipelineMetric(thread_group->getInvolvedThreadIds());
+    return getPipelineMetric({});
 }
 /// proton: ends.
 
@@ -530,8 +537,10 @@ void ProcessList::killAllQueries()
 }
 
 
-QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_events, bool get_settings) const
+QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_events, bool get_settings, bool get_pipeline_metrics) const
 {
+    auto context = getContext();
+
     QueryStatusInfo res{};
 
     res.query             = query;
@@ -557,24 +566,25 @@ QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_even
             res.profile_counters = std::make_shared<ProfileEvents::Counters::Snapshot>(thread_group->performance_counters.getPartiallyAtomicSnapshot());
     }
 
-    if (get_settings && getContext())
+    if (get_settings && context)
     {
-        res.query_settings = std::make_shared<Settings>(getContext()->getSettingsRef());
-        res.current_database = getContext()->getCurrentDatabase();
+        res.query_settings = std::make_shared<Settings>(context->getSettingsRef());
+        res.current_database = context->getCurrentDatabase();
     }
 
     /// proton: starts.
-    if (getContext()->getPipelineMetricLog())
+    if (get_pipeline_metrics)
         res.pipeline_metrics = getPipelineMetric();
 
-    res.creator = getContext()->getCreator();
+    if (context)
+        res.creator = context->getCreator();
     /// proton: ends.
 
     return res;
 }
 
 
-ProcessList::Info ProcessList::getInfo(bool get_thread_list, bool get_profile_events, bool get_settings) const
+ProcessList::Info ProcessList::getInfo(bool get_thread_list, bool get_profile_events, bool get_settings, bool get_pipeline_metrics) const
 {
     Info per_query_infos;
 
@@ -582,7 +592,7 @@ ProcessList::Info ProcessList::getInfo(bool get_thread_list, bool get_profile_ev
 
     per_query_infos.reserve(processes.size());
     for (const auto & process : processes)
-        per_query_infos.emplace_back(process->getInfo(get_thread_list, get_profile_events, get_settings));
+        per_query_infos.emplace_back(process->getInfo(get_thread_list, get_profile_events, get_settings, get_pipeline_metrics));
 
     return per_query_infos;
 }

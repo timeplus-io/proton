@@ -190,7 +190,7 @@ void ExecutingGraph::triggerCheckpoint(CheckpointContextPtr ckpt_ctx)
         node->processor->checkpoint(ckpt_ctx);
 }
 
-String ExecutingGraph::getStats() const
+String ExecutingGraph::getStats(const std::vector<UInt64> & thread_ids) const
 {
     Poco::JSON::Object status;
     Poco::JSON::Array node_list;
@@ -233,6 +233,12 @@ String ExecutingGraph::getStats() const
     }
     status.set("nodes", node_list);
     status.set("edges", edges);
+
+    Poco::JSON::Array thread_id_objects;
+    for (auto thread_id : thread_ids)
+        thread_id_objects.add(thread_id);
+
+    status.set("thread_ids", thread_id_objects);
 
     std::ostringstream oss; // STYLE_CHECK_ALLOW_STD_STRING_STREAM
     status.stringify(oss);
