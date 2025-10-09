@@ -58,6 +58,10 @@ struct CheckpointableQuery
     std::shared_ptr<std::atomic_flag> async_replication_finished;
 
     bool is_lightweight = false;
+
+    /// Cached ckpt storage size
+    uint64_t cached_storage_size = 0;
+    int64_t last_cached_ts = 0;
 };
 using CheckpointableQueryPtr = std::unique_ptr<CheckpointableQuery>;
 }

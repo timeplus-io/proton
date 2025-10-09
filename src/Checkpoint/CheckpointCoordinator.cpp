@@ -388,7 +388,30 @@ UInt64 CheckpointCoordinator::getStorageSize(CheckpointContextPtr ckpt_ctx) cons
     if (!ckpt_ctx)
         return 0;
 
-    return ckpt_ctx->storage.getStorageSize(ckpt_ctx);
+    /// Return cached storage size if exists and not expired (30 mins)
+    {
+        std::scoped_lock lock(mutex);
+        auto iter = queries.find(ckpt_ctx->qid);
+        if (iter == queries.end())
+            return 0;
+    
+        if (DB::MonotonicSeconds::now() - iter->second->last_cached_ts <= 30 * 60) /// 30 mins
+            return iter->second->cached_storage_size;
+    }
+
+    auto storage_size = ckpt_ctx->storage.getStorageSize(ckpt_ctx);
+
+    /// Update cached storage size
+    {
+        std::scoped_lock lock(mutex);
+        auto iter = queries.find(ckpt_ctx->qid);
+        if (iter != queries.end())
+        {
+            iter->second->cached_storage_size = storage_size;
+            iter->second->last_cached_ts = DB::MonotonicSeconds::now();
+        }
+    }
+    return storage_size;
 }
 
 PathSizes CheckpointCoordinator::getStorageStat(CheckpointContextPtr ckpt_ctx) const
